@@ -1,0 +1,11 @@
+node_modules
+dist
+.astro
+coverage
+*.log
+
+# Локальная база PGlite
+.data
+
+# Секреты
+.env
