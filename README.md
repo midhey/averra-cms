@@ -36,5 +36,8 @@ apps/
   api/        # Hono + Drizzle, локально база — PGlite
   admin/      # React + Vite
   renderer/   # Astro: JSON сайта → статический HTML
-packages/     # общие схемы, блоки и токены — появятся на этапе 1
+packages/
+  schema/     # Zod-схемы: блоки, страница, тема
+  tokens/     # тема → CSS-переменные
+  blocks/     # React-компоненты блоков
 ```
