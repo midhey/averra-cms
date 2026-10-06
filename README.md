@@ -46,6 +46,12 @@ pnpm dev
 
 Рендерер берёт данные из API, поэтому для `pnpm build` API должен быть запущен. Сайт выбирается переменной `CMS_SITE_ID`, без неё берётся первый. Адрес API задаёт `CMS_API_URL`, по умолчанию `http://localhost:4000`.
 
+## MCP
+
+`apps/mcp` — MCP-сервер, через который нейронка собирает лендинги. Инструменты: `list_blocks`, `list_sites`, `get_page`, `save_draft` и `publish_page`. Входные схемы инструментов — те же Zod-схемы, что проверяют страницы в API, поэтому кривой блок не пройдёт ни там, ни там.
+
+Сервер описан в `.mcp.json` и запускается на закреплённой в проекте Node (`node_modules/.bin/node.exe`, путь под Windows). Чтобы подключить его к Claude Code, открой новую сессию в папке проекта и разреши сервер `cms`. MCP работает через API, так что сначала запусти `pnpm dev`.
+
 Astro по умолчанию отправляет анонимную телеметрию. Отключить её: `pnpm --filter @cms/renderer exec astro telemetry disable`.
 
 ## Структура
@@ -55,6 +61,7 @@ apps/
   api/        # Hono + Drizzle, локально база — PGlite
   admin/      # React + Vite
   renderer/   # Astro: JSON сайта → статический HTML
+  mcp/        # MCP-сервер для нейронок поверх API
 packages/
   schema/     # Zod-схемы: блоки, страница, тема
   tokens/     # тема → CSS-переменные
