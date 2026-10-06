@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./testing": "./src/testing.ts"
   },
   "devEngines": {
     "runtime": {
@@ -31,7 +32,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "drizzle-kit": "^0.31.11",
-    "tsx": "^4.23.15",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

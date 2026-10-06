@@ -1,22 +1,13 @@
 import type { PageContentInput } from '@cms/schema'
 import { testClient } from 'hono/testing'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApp } from '../../app'
-import { createDb } from '../../db/client'
-import { migrateDb } from '../../db/migrate'
-import { seedDemo } from '../../db/seed'
+import { afterAll, describe, expect, it } from 'vitest'
+import { createTestApi } from '../../testing'
 
-const { db, close } = createDb()
-const sites = testClient(createApp({ db, log: () => {} })).api.sites
-let siteId = ''
-
-beforeAll(async () => {
-  await migrateDb(db)
-  await seedDemo(db)
-  const [site] = await (await sites.$get()).json()
-  if (!site) throw new Error('Демо-сайт не создался')
-  siteId = site.id
-})
+const { app, close } = await createTestApi()
+const sites = testClient(app).api.sites
+const [site] = await (await sites.$get()).json()
+if (!site) throw new Error('Демо-сайт не создался')
+const siteId = site.id
 
 afterAll(close)
 

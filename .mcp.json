@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cms": {
+      "command": "node_modules/.bin/node.exe",
+      "args": ["apps/mcp/node_modules/tsx/dist/cli.mjs", "apps/mcp/src/index.ts"]
+    }
+  }
+}
