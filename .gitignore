@@ -9,3 +9,6 @@ coverage
 
 # Секреты
 .env
+
+# Локальный конфиг превью Claude: пути конкретной машины
+.claude/launch.json

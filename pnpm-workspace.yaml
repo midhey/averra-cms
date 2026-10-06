@@ -28,4 +28,7 @@ verifyDepsBeforeRun: warn
 # Остальные pnpm заблокирует и попросит решить явно
 allowBuilds:
   esbuild: true
+  # Скрипт pnpm только подменяет JS-запускалки нативным бинарником ради скорости.
+  # Нам хватает запускалок: корневые скрипты вызывают pnpm на закреплённой Node
+  pnpm: false
   sharp: true
