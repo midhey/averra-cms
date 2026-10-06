@@ -1,0 +1,18 @@
+.section {
+  padding: var(--space-12) var(--space-4);
+}
+
+@media (min-width: 40rem) {
+  .section {
+    padding-block: var(--space-16);
+  }
+}
+
+.section[data-tone="muted"] {
+  background: var(--color-surface);
+}
+
+.inner {
+  max-width: var(--container);
+  margin-inline: auto;
+}

@@ -15,10 +15,18 @@
     "typecheck": "astro check"
   },
   "dependencies": {
-    "astro": "^7.3.5"
+    "@astrojs/react": "^7.0.0",
+    "@cms/blocks": "workspace:*",
+    "@cms/schema": "workspace:*",
+    "@cms/tokens": "workspace:*",
+    "astro": "^7.3.5",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "typescript": "catalog:"
   }
 }

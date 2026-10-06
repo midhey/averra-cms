@@ -1,15 +1,22 @@
 ---
-// На этапе 1 здесь будет страница, собранная из JSON и блоков
+import { Page } from '@cms/blocks'
+import '@cms/blocks/base.css'
+import { demoPage, PageContent } from '@cms/schema'
+import { defaultTheme, themeToCss } from '@cms/tokens'
+
+// Пока показываем демо-лендинг. На шаге 4 рендерер будет брать сайт из API
+const content = PageContent.parse(demoPage)
+const themeCss = themeToCss(defaultTheme)
 ---
 
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Рендерер</title>
+    <title>Ремонт квартир под ключ</title>
+    <style is:inline set:html={themeCss}></style>
   </head>
   <body>
-    <h1>Рендерер работает</h1>
-    <p>На этапе 1 здесь появится лендинг, собранный из JSON.</p>
+    <Page content={content} />
   </body>
 </html>
