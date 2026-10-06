@@ -2,22 +2,21 @@
 import { Page } from '@cms/blocks'
 import '@cms/blocks/base.css'
 import { themeToCss } from '@cms/tokens'
-import type { InferGetStaticPropsType } from 'astro'
 import { loadSnapshot } from '../lib/snapshot'
 
+// Главная страница сайта хранится со slug «index» и открывается по корню
 export async function getStaticPaths() {
-  const { site, pages } = await loadSnapshot()
-  // Главная страница сайта хранится со slug «index» и открывается по корню
-  return pages.map((page) => ({
-    params: { slug: page.slug === 'index' ? undefined : page.slug },
-    props: { page, theme: site.theme },
-  }))
+  const { pages } = await loadSnapshot()
+  return pages.map((page) => ({ params: { slug: page.slug === 'index' ? undefined : page.slug } }))
 }
 
-type Props = InferGetStaticPropsType<typeof getStaticPaths>
-
-const { page, theme } = Astro.props
-const themeCss = themeToCss(theme)
+// Содержимое грузим здесь, а не в getStaticPaths: в dev-режиме этот код выполняется
+// на каждый запрос, и опубликованные правки видны после обновления страницы
+const { site, pages } = await loadSnapshot()
+const slug = Astro.params.slug ?? 'index'
+const page = pages.find((candidate) => candidate.slug === slug)
+if (!page) throw new Error(`Страница «${slug}» не опубликована`)
+const themeCss = themeToCss(site.theme)
 ---
 
 <html lang="ru">
