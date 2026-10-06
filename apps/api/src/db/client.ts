@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 export function createDb(dataDir?: string) {
   const client = new PGlite(dataDir)
   return {
-    db: drizzle({ client }),
+    db: drizzle({ client, casing: 'snake_case' }),
     close: () => client.close(),
   }
 }

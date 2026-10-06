@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import type { Db } from './db/client'
+import { sitesRoutes } from './modules/sites/routes'
 
 // Здесь не импортируем Node API (fs, process и т.п.): админка читает типы этого файла.
 // Всё платформенное создаётся в index.ts и приходит через deps
@@ -24,6 +25,7 @@ export function createApp({ db, log }: AppDeps) {
         return c.json({ status: 'error', db: 'down' } as const, 503)
       }
     })
+    .route('/sites', sitesRoutes({ db }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } }, 404))
 

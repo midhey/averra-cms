@@ -17,7 +17,8 @@
     "test": "pnpm -r test",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "db:generate": "pnpm --filter @cms/api db:generate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

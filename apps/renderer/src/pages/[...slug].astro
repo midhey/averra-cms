@@ -1,0 +1,33 @@
+---
+import { Page } from '@cms/blocks'
+import '@cms/blocks/base.css'
+import { themeToCss } from '@cms/tokens'
+import type { InferGetStaticPropsType } from 'astro'
+import { loadSnapshot } from '../lib/snapshot'
+
+export async function getStaticPaths() {
+  const { site, pages } = await loadSnapshot()
+  // Главная страница сайта хранится со slug «index» и открывается по корню
+  return pages.map((page) => ({
+    params: { slug: page.slug === 'index' ? undefined : page.slug },
+    props: { page, theme: site.theme },
+  }))
+}
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>
+
+const { page, theme } = Astro.props
+const themeCss = themeToCss(theme)
+---
+
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{page.title}</title>
+    <style is:inline set:html={themeCss}></style>
+  </head>
+  <body>
+    <Page content={page.content} />
+  </body>
+</html>

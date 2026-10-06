@@ -3,11 +3,15 @@ import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { loadConfig } from './config'
 import { createDb } from './db/client'
+import { migrateDb } from './db/migrate'
+import { seedDemo } from './db/seed'
 
 const config = loadConfig()
 
 mkdirSync(config.PGLITE_DIR, { recursive: true })
 const { db, close } = createDb(config.PGLITE_DIR)
+await migrateDb(db)
+if (config.NODE_ENV === 'development') await seedDemo(db)
 
 const app = createApp({ db, log: console.log })
 

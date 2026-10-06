@@ -1,0 +1,85 @@
+import type { PageContentInput } from '@cms/schema'
+import { testClient } from 'hono/testing'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createApp } from '../../app'
+import { createDb } from '../../db/client'
+import { migrateDb } from '../../db/migrate'
+import { seedDemo } from '../../db/seed'
+
+const { db, close } = createDb()
+const sites = testClient(createApp({ db, log: () => {} })).api.sites
+let siteId = ''
+
+beforeAll(async () => {
+  await migrateDb(db)
+  await seedDemo(db)
+  const [site] = await (await sites.$get()).json()
+  if (!site) throw new Error('Демо-сайт не создался')
+  siteId = site.id
+})
+
+afterAll(close)
+
+const newContent: PageContentInput = {
+  blocks: [{ id: 'hero', type: 'hero', props: { title: 'Новый заголовок' } }],
+}
+
+describe('сайты и страницы', () => {
+  it('отдаёт в снимке сайта опубликованный демо-лендинг', async () => {
+    const res = await sites[':siteId'].snapshot.$get({ param: { siteId } })
+    if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
+    const { pages } = await res.json()
+    expect(pages.map((page) => page.slug)).toEqual(['index'])
+    expect(pages[0]?.content.blocks).toHaveLength(3)
+  })
+
+  it('сохраняет черновик, не трогая опубликованную версию', async () => {
+    const param = { siteId, slug: 'index' }
+    const saved = await sites[':siteId'].pages[':slug'].$put({
+      param,
+      json: { title: 'Новый лендинг', content: newContent },
+    })
+    expect(saved.status).toBe(200)
+
+    const res = await sites[':siteId'].pages[':slug'].$get({ param })
+    if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
+    const page = await res.json()
+    expect(page.draft.blocks).toHaveLength(1)
+    expect(page.published?.blocks).toHaveLength(3)
+  })
+
+  it('публикует черновик, и он попадает в снимок сайта', async () => {
+    const param = { siteId, slug: 'index' }
+    const published = await sites[':siteId'].pages[':slug'].publish.$post({ param })
+    expect(published.status).toBe(200)
+
+    const res = await sites[':siteId'].snapshot.$get({ param: { siteId } })
+    if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
+    const { pages } = await res.json()
+    expect(pages[0]?.content.blocks[0]).toMatchObject({ props: { title: 'Новый заголовок' } })
+  })
+
+  it('не сохраняет небезопасную ссылку и показывает, какое поле не так', async () => {
+    const button = { label: 'Жми', href: 'javascript:alert(1)' }
+    const res = await sites[':siteId'].pages[':slug'].$put({
+      param: { siteId, slug: 'index' },
+      json: {
+        title: 'Взлом',
+        content: { blocks: [{ id: 'c', type: 'cta', props: { title: 'Жми', button } }] },
+      },
+    })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({
+      error: { code: 'validation', issues: [{ path: 'content.blocks.0.props.button.href' }] },
+    })
+  })
+
+  it('отвечает 400 на кривой id сайта и 404 на несуществующий', async () => {
+    const bad = await sites[':siteId'].snapshot.$get({ param: { siteId: 'not-a-uuid' } })
+    expect(bad.status).toBe(400)
+    const missing = await sites[':siteId'].snapshot.$get({
+      param: { siteId: '00000000-0000-4000-8000-000000000000' },
+    })
+    expect(missing.status).toBe(404)
+  })
+})
