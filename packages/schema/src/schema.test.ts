@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { BlockInstance, blocks, hero } from './blocks'
+import { demoPage } from './demo'
 import { PageContent } from './page'
 
 const validPage = {
@@ -45,6 +46,10 @@ describe('PageContent', () => {
   it('не принимает повторяющиеся id блоков', () => {
     const [first] = validPage.blocks
     expect(PageContent.safeParse({ blocks: [first, first] }).success).toBe(false)
+  })
+
+  it('демо-лендинг всегда проходит схему', () => {
+    expect(PageContent.safeParse(demoPage).success).toBe(true)
   })
 })
 
