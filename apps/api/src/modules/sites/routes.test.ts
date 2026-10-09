@@ -16,6 +16,13 @@ const newContent: PageContentInput = {
 }
 
 describe('сайты и страницы', () => {
+  it('отдаёт сайт с темой', async () => {
+    const res = await sites[':siteId'].$get({ param: { siteId } })
+    if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
+    const site = await res.json()
+    expect(site.theme.colors.accent).toMatch(/^#[0-9a-f]{6}$/i)
+  })
+
   it('отдаёт в снимке сайта опубликованный демо-лендинг', async () => {
     const res = await sites[':siteId'].snapshot.$get({ param: { siteId } })
     if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)

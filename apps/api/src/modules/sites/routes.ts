@@ -27,6 +27,13 @@ export function sitesRoutes({ db }: { db: Db }) {
     new Hono()
       .get('/', async (c) => c.json(await repo.list()))
 
+      .get('/:siteId', validate('param', SiteParams), async (c) => {
+        const { siteId } = c.req.valid('param')
+        const site = await repo.find(siteId)
+        if (!site) return c.json(notFound('Сайт не найден'), 404)
+        return c.json({ id: site.id, name: site.name, theme: site.theme })
+      })
+
       // Всё, что нужно рендереру для сборки: тема и опубликованные страницы
       .get('/:siteId/snapshot', validate('param', SiteParams), async (c) => {
         const { siteId } = c.req.valid('param')
