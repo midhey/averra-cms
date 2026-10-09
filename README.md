@@ -59,7 +59,7 @@ Astro по умолчанию отправляет анонимную телем
 ```
 apps/
   api/        # Hono + Drizzle, локально база — PGlite
-  admin/      # React + Vite
+  admin/      # React + Vite: редактор страницы с живым предпросмотром
   renderer/   # Astro: JSON сайта → статический HTML
   mcp/        # MCP-сервер для нейронок поверх API
 packages/
