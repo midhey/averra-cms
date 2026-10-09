@@ -4,7 +4,7 @@ import { demoPage, PageContent } from '@cms/schema'
 import { hc } from 'hono/client'
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { blockCatalog, cmsTools, formatApiError, SaveDraftInput } from './tools'
+import { blockCatalog, cmsTools, SaveDraftInput } from './tools'
 
 // Настоящая цепочка без сети: инструменты → типизированный клиент → API → база в памяти
 const { app, close } = await createTestApi()
@@ -49,19 +49,5 @@ describe('инструменты', () => {
       content: { blocks: [{ id: 'c', type: 'cta', props: { title: 'Жми', button } }] },
     })
     await expect(save).rejects.toThrow('content.blocks.0.props.button.href')
-  })
-})
-
-describe('formatApiError', () => {
-  it('раскладывает ошибку проверки по строкам', () => {
-    const body = {
-      error: {
-        message: 'Данные не прошли проверку',
-        issues: [{ path: 'title', message: 'Длинно' }],
-      },
-    }
-    expect(formatApiError(400, body)).toBe(
-      'API ответил 400: Данные не прошли проверку\n- title: Длинно',
-    )
   })
 })

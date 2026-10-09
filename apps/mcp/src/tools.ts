@@ -1,5 +1,5 @@
 import type { AppType } from '@cms/api'
-import { blocks, PageContent } from '@cms/schema'
+import { blocks, describeApiError, PageContent } from '@cms/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
@@ -41,24 +41,9 @@ export function blockCatalog() {
       type: block.type,
       title: block.title,
       props: z.toJSONSchema(block.props, { io: 'input' }),
+      example: block.example,
     })),
   }
-}
-
-const ApiError = z.object({
-  error: z.object({
-    message: z.string(),
-    issues: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
-  }),
-})
-
-/** Ошибка API в виде, понятном нейронке: что не так и в каком поле */
-export function formatApiError(status: number, body: unknown) {
-  const parsed = ApiError.safeParse(body)
-  if (!parsed.success) return `API ответил ${status}`
-  const { message, issues = [] } = parsed.data.error
-  const lines = issues.map((issue) => `- ${issue.path}: ${issue.message}`)
-  return [`API ответил ${status}: ${message}`, ...lines].join('\n')
 }
 
 async function unwrap(request: Promise<ClientResponse<unknown>>) {
@@ -69,7 +54,7 @@ async function unwrap(request: Promise<ClientResponse<unknown>>) {
     throw new Error('API не отвечает. Запусти его: pnpm dev', { cause })
   }
   const body: unknown = await res.json()
-  if (!res.ok) throw new Error(formatApiError(res.status, body))
+  if (!res.ok) throw new Error(describeApiError(res.status, body))
   return body
 }
 
