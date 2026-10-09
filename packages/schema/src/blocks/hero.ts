@@ -17,4 +17,9 @@ export const hero = defineBlock({
     subtitle: z.string().trim().max(300).optional().meta({ title: 'Подзаголовок' }),
     button: Button.optional().meta({ title: 'Кнопка' }),
   }),
+  example: {
+    title: 'Главная мысль страницы',
+    subtitle: 'Одно-два предложения о том, чем вы полезны клиенту.',
+    button: { label: 'Оставить заявку', href: '#contact' },
+  },
 })

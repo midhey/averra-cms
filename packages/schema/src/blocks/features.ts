@@ -14,4 +14,12 @@ export const features = defineBlock({
     columns: z.literal([2, 3, 4]).default(3).meta({ title: 'Колонок' }),
     items: z.array(FeatureItem).min(1).max(12).meta({ title: 'Пункты' }),
   }),
+  example: {
+    title: 'Почему выбирают нас',
+    items: [
+      { title: 'Первое преимущество', text: 'Коротко о том, чем оно полезно клиенту.' },
+      { title: 'Второе преимущество', text: 'Коротко о том, чем оно полезно клиенту.' },
+      { title: 'Третье преимущество', text: 'Коротко о том, чем оно полезно клиенту.' },
+    ],
+  },
 })

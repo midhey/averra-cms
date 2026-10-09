@@ -54,6 +54,10 @@ describe('PageContent', () => {
 })
 
 describe('каталог блоков', () => {
+  it('у каждого блока пример заполнения проходит его же схему', () => {
+    for (const block of blocks) expect(block.props.safeParse(block.example).success).toBe(true)
+  })
+
   it('совпадает с союзом, по которому проверяются страницы', () => {
     const inUnion = BlockInstance.options.map((option) => option.shape.type.value)
     expect(inUnion).toEqual(blocks.map((block) => block.type))

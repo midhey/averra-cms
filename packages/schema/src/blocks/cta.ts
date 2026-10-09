@@ -10,4 +10,9 @@ export const cta = defineBlock({
     text: z.string().trim().max(300).optional().meta({ title: 'Текст' }),
     button: Button.meta({ title: 'Кнопка' }),
   }),
+  example: {
+    title: 'Готовы начать?',
+    text: 'Оставьте заявку — ответим в течение часа.',
+    button: { label: 'Оставить заявку', href: 'mailto:hello@example.com' },
+  },
 })

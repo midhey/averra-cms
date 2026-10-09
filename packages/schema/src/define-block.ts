@@ -13,6 +13,8 @@ export function defineBlock<const Type extends string, Props extends z.ZodObject
   type: Type
   title: string
   props: Props
+  /** Пример заполнения: с ним блок появляется в редакторе, его же видит нейронка в каталоге */
+  example: z.input<Props>
 }) {
   return {
     ...definition,
