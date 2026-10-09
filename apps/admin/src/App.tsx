@@ -1,34 +1,43 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
+import { Editor, type EditorPage, type EditorSite } from './editor/Editor'
+import { messageOf } from './errors'
 
-type Status = 'loading' | 'up' | 'down'
-
-const labels: Record<Status, string> = {
-  loading: 'проверяем…',
-  up: 'работают',
-  down: 'недоступны',
-}
+type State =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; site: EditorSite; page: EditorPage }
 
 export function App() {
-  const [status, setStatus] = useState<Status>('loading')
+  const [state, setState] = useState<State>({ status: 'loading' })
 
   useEffect(() => {
-    const check = async () => {
-      try {
-        const res = await api.health.ready.$get()
-        const body = await res.json()
-        setStatus(body.db)
-      } catch {
-        setStatus('down')
-      }
-    }
-    void check()
+    loadFirstSite()
+      .then(({ site, page }) => setState({ status: 'ready', site, page }))
+      .catch((error: unknown) => setState({ status: 'error', message: messageOf(error) }))
   }, [])
 
   return (
-    <main>
-      <h1>Админка</h1>
-      <p>API и база: {labels[status]}</p>
-    </main>
+    <div className="admin">
+      {state.status === 'ready' ? (
+        <Editor site={state.site} page={state.page} />
+      ) : (
+        <p className="admin-message">{state.status === 'loading' ? 'Загружаю…' : state.message}</p>
+      )}
+    </div>
   )
+}
+
+// Пока редактор открывает главную страницу первого сайта. Навигация по сайтам — следующий шаг
+async function loadFirstSite() {
+  const [first] = await (await api.sites.$get()).json()
+  if (!first) throw new Error('В базе нет ни одного сайта')
+  const [siteRes, pageRes] = await Promise.all([
+    api.sites[':siteId'].$get({ param: { siteId: first.id } }),
+    api.sites[':siteId'].pages[':slug'].$get({ param: { siteId: first.id, slug: 'index' } }),
+  ])
+  if (siteRes.status !== 200 || pageRes.status !== 200) {
+    throw new Error('Не удалось загрузить сайт или его главную страницу')
+  }
+  return { site: await siteRes.json(), page: await pageRes.json() }
 }

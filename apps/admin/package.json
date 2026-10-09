@@ -12,12 +12,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@cms/blocks": "workspace:*",
+    "@cms/schema": "workspace:*",
+    "@cms/tokens": "workspace:*",
     "hono": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@cms/api": "workspace:*",
@@ -25,6 +30,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "catalog:",
-    "vite": "^8.3.2"
+    "vite": "^8.3.2",
+    "vitest": "catalog:"
   }
 }

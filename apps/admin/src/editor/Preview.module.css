@@ -1,0 +1,62 @@
+.preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+}
+
+/* Подпись для скринридеров: видна им, а не глазу */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.toolbar button {
+  padding: 4px 10px;
+  border: 1px solid #d0d4da;
+  border-radius: 999px;
+  background: #fff;
+  color: #5b6170;
+  cursor: pointer;
+}
+
+.toolbar button[aria-pressed="true"] {
+  border-color: #2f5bea;
+  background: #2f5bea;
+  color: #fff;
+}
+
+.stage {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 16px 16px;
+}
+
+.frameBox {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(22 24 29 / 0.12);
+}
+
+.frame {
+  display: block;
+  border: 0;
+  transform-origin: top left;
+}

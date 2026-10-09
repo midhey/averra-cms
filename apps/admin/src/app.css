@@ -1,0 +1,36 @@
+/* Глобальные стили админки. Всё под .admin: эти стили копируются в iframe предпросмотра
+   и не должны задевать сам лендинг */
+
+html,
+body {
+  margin: 0;
+}
+
+.admin {
+  min-height: 100vh;
+  background: #f4f5f7;
+  color: #16181d;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.admin *,
+.admin *::before,
+.admin *::after {
+  box-sizing: border-box;
+}
+
+.admin button,
+.admin input,
+.admin select,
+.admin textarea {
+  font: inherit;
+}
+
+.admin-message {
+  margin: 0;
+  padding: 24px;
+  color: #5b6170;
+  white-space: pre-line;
+}
