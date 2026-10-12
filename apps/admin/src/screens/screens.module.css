@@ -4,6 +4,11 @@
   padding: 24px 16px 48px;
 }
 
+.narrow {
+  max-width: 440px;
+  padding-top: 48px;
+}
+
 .screen h1 {
   margin: 12px 0 24px;
   font-size: 24px;

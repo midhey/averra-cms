@@ -7,6 +7,7 @@ body {
 }
 
 .admin {
+  --admin-header-height: 44px;
   min-height: 100vh;
   background: #f4f5f7;
   color: #16181d;

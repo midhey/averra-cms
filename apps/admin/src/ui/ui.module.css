@@ -88,3 +88,44 @@
   margin: 0;
   color: #c62828;
 }
+
+/* Высота задана явно: редактор занимает остаток экрана (calc от --admin-header-height) */
+.appHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--admin-header-height);
+  padding: 0 16px;
+  border-bottom: 1px solid #e3e5e9;
+  background: #16181d;
+  color: #fff;
+}
+
+.appName {
+  font-weight: 700;
+}
+
+.user {
+  overflow: hidden;
+  margin-left: auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appError {
+  color: #ffb4ab;
+}
+
+.appHeader button {
+  padding: 4px 10px;
+  border: 1px solid #5b6170;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.appHeader button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -6,13 +6,15 @@ import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
-import { queryKeys, sitesQuery } from '../queries'
+import { meQuery, queryKeys, sitesQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
 import styles from './screens.module.css'
 
 export function SitesScreen() {
   const { data: sites } = useSuspenseQuery(sitesQuery())
+  const { data: me } = useSuspenseQuery(meQuery())
+  const isOwner = me?.role === 'owner'
   const listHeadingId = useId()
 
   return (
@@ -27,7 +29,11 @@ export function SitesScreen() {
           Список сайтов
         </h2>
         {sites.length === 0 ? (
-          <p className={styles.empty}>Сайтов пока нет. Создайте первый.</p>
+          <p className={styles.empty}>
+            {isOwner
+              ? 'Сайтов пока нет. Создайте первый.'
+              : 'Доступа к сайтам пока нет. Его даёт владелец админки.'}
+          </p>
         ) : (
           <ul className={styles.siteList}>
             {sites.map((site) => (
@@ -41,7 +47,8 @@ export function SitesScreen() {
         )}
       </section>
 
-      <NewSiteForm />
+      {/* Сайты создаёт только владелец: участнику API ответил бы 403 */}
+      {isOwner && <NewSiteForm />}
     </main>
   )
 }

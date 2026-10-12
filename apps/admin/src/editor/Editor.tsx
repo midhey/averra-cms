@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, messageOf } from '../errors'
 import { pagePath } from '../pages-format'
+import { canPublish, type SiteAccess } from '../permissions'
 import { queryKeys } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { BlockList } from './BlockList'
@@ -21,7 +22,7 @@ import { Inspector } from './Inspector'
 import { Preview } from './Preview'
 import { validateBlocks } from './validation'
 
-export type EditorSite = { id: string; name: string; theme: Theme }
+export type EditorSite = { id: string; name: string; theme: Theme; access: SiteAccess }
 export type EditorPage = { slug: string; title: string; draft: PageContent }
 
 type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
@@ -158,14 +159,17 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
           <button type="button" onClick={save} disabled={!dirty || !canSave || busy}>
             Сохранить черновик
           </button>
-          <button
-            type="button"
-            className={styles.primary}
-            onClick={publish}
-            disabled={!canSave || busy}
-          >
-            Опубликовать
-          </button>
+          {/* Клиент публиковать не может: API ответит 403, кнопка только сбивала бы с толку */}
+          {canPublish(site.access) && (
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={publish}
+              disabled={!canSave || busy}
+            >
+              Опубликовать
+            </button>
+          )}
         </header>
         {titleError !== undefined && (
           <p id={titleErrorId} className={styles.pageErrors}>

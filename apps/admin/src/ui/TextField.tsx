@@ -10,10 +10,23 @@ type TextFieldProps = {
   hint?: string
   /** Неизменяемое начало значения, например «/» перед адресом страницы */
   prefix?: string
+  type?: 'text' | 'email' | 'password'
+  /** По умолчанию off: в формах админки подсказки браузера только мешают. Вход — исключение */
+  autoComplete?: string
 }
 
 /** Поле с подписью. Подсказка и ошибка связаны с полем: диктор прочитает их вместе с подписью */
-export function TextField({ label, name, value, onChange, error, hint, prefix }: TextFieldProps) {
+export function TextField({
+  label,
+  name,
+  value,
+  onChange,
+  error,
+  hint,
+  prefix,
+  type = 'text',
+  autoComplete = 'off',
+}: TextFieldProps) {
   const id = useId()
   const hintId = `${id}-hint`
   const errorId = `${id}-error`
@@ -33,11 +46,12 @@ export function TextField({ label, name, value, onChange, error, hint, prefix }:
         <input
           id={id}
           name={name}
+          type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy || undefined}
-          autoComplete="off"
+          autoComplete={autoComplete}
         />
       </div>
       {hint && (

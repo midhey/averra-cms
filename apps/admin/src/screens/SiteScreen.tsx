@@ -7,6 +7,7 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { formatDateTime, pagePath, pageState } from '../pages-format'
+import { canManagePages } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
@@ -23,6 +24,8 @@ export function SiteScreen() {
   const queryClient = useQueryClient()
   const pagesHeadingId = useId()
   const [notice, setNotice] = useState<Notice>()
+  // Клиент только правит черновики: создавать и удалять страницы ему API не даст
+  const managePages = canManagePages(site.access)
 
   const remove = useMutation({
     mutationFn: async ({ slug }: { slug: string; title: string }) => {
@@ -97,15 +100,17 @@ export function SiteScreen() {
                   {page.slug === MAIN_PAGE_SLUG ? (
                     <span className={styles.muted}>Главная</span>
                   ) : (
-                    <button
-                      type="button"
-                      className={styles.danger}
-                      aria-label={`Удалить страницу «${page.title}»`}
-                      disabled={remove.isPending}
-                      onClick={() => confirmRemove(page)}
-                    >
-                      Удалить
-                    </button>
+                    managePages && (
+                      <button
+                        type="button"
+                        className={styles.danger}
+                        aria-label={`Удалить страницу «${page.title}»`}
+                        disabled={remove.isPending}
+                        onClick={() => confirmRemove(page)}
+                      >
+                        Удалить
+                      </button>
+                    )
                   )}
                 </td>
               </tr>
@@ -124,7 +129,13 @@ export function SiteScreen() {
         )}
       </section>
 
-      <NewPageForm siteId={siteId} />
+      {managePages ? (
+        <NewPageForm siteId={siteId} />
+      ) : (
+        <p className={styles.muted}>
+          Вы можете править черновики страниц. Публикует их владелец или редактор сайта.
+        </p>
+      )}
     </main>
   )
 }
