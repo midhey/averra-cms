@@ -22,7 +22,7 @@ describe('health', () => {
   it('на неизвестный адрес отвечает 404 в едином формате ошибок', async () => {
     const res = await app.request('/api/nope', { headers: owner.headers })
     expect(res.status).toBe(404)
-    expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'Not found' } })
+    expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'Не найдено' } })
   })
 
   it('без входа не выдаёт даже, есть ли такой маршрут', async () => {

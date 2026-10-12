@@ -2,12 +2,13 @@ import { hero, type PageContentInput } from '@cms/schema'
 import { defaultTheme } from '@cms/tokens'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
+import { pages as pagesTable } from '../../db/schema'
 import { createTestApi } from '../../testing'
 
 // Создание сайтов, список, создание и удаление страниц.
 // Каждый тест заводит свой сайт: тесты не зависят ни от демо-сайта, ни друг от друга
 
-const { app, close, loginAs } = await createTestApi()
+const { app, db, close, loginAs } = await createTestApi()
 // Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
 const owner = await loginAs('owner')
 const sites = testClient(app, undefined, undefined, { headers: owner.headers }).api.sites
@@ -278,8 +279,13 @@ describe('создание страницы', () => {
       template: 'blog',
     })
     expect(res.status).toBe(400)
-    const body = (await res.json()) as { error: { issues: { path: string }[] } }
+    const body = (await res.json()) as { error: { issues: { path: string; message: string }[] } }
     expect(body.error.issues.map((issue) => issue.path).sort()).toEqual(['template', 'title'])
+    // Сообщения — те же, что админка показывает у поля до отправки (setupZodMessages)
+    const titleIssue = body.error.issues.find((issue) => issue.path === 'title')
+    expect(titleIssue?.message).toBe('Поле не может быть пустым')
+    const templateIssue = body.error.issues.find((issue) => issue.path === 'template')
+    expect(templateIssue?.message).toMatch(/^Неверный вариант/)
 
     const extra = await sendJson('POST', `/api/sites/${site.id}/pages`, {
       slug: 'a',
@@ -366,5 +372,58 @@ describe('удаление страницы', () => {
     expect(await bad.json()).toMatchObject({
       error: { code: 'validation', issues: [{ path: 'slug' }] },
     })
+  })
+})
+
+describe('страницы со старыми адресами', () => {
+  // До шага 2.1 PUT пускал адреса вроде «a-» и «--a». Такие страницы лежат в базе:
+  // их кладём напрямую, как оставил бы старый API
+  async function legacyPage(siteId: string, slug: string) {
+    const content = { blocks: [] }
+    await db.insert(pagesTable).values({ siteId, slug, title: `Старая ${slug}`, draft: content })
+  }
+
+  it('открываются, сохраняются, публикуются, видны в истории и удаляются', async () => {
+    const site = await newSite()
+    await legacyPage(site.id, 'a-')
+    expect((await getPage(site.id, 'a-')).title).toBe('Старая a-')
+
+    const saved = await sendJson('PUT', `/api/sites/${site.id}/pages/a-`, {
+      title: 'Поправили',
+      content: otherContent,
+    })
+    expect(saved.status).toBe(200)
+    const published = await sites[':siteId'].pages[':slug'].publish.$post({
+      param: { siteId: site.id, slug: 'a-' },
+    })
+    expect(published.status).toBe(200)
+    const history = await app.request(`/api/sites/${site.id}/pages/a-/revisions`, {
+      headers: owner.headers,
+    })
+    expect(history.status).toBe(200)
+
+    const removed = await sites[':siteId'].pages[':slug'].$delete({
+      param: { siteId: site.id, slug: 'a-' },
+    })
+    expect(removed.status).toBe(204)
+    expect(await slugsOf(site.id)).toEqual(['index'])
+  })
+
+  it('новую страницу со старым адресом не создать ни POST, ни PUT', async () => {
+    const site = await newSite()
+    const put = await sendJson('PUT', `/api/sites/${site.id}/pages/--a`, {
+      title: 'Новая',
+      content: { blocks: [] },
+    })
+    expect(put.status).toBe(400)
+    expect(await put.json()).toMatchObject({
+      error: {
+        code: 'validation',
+        issues: [{ path: 'slug', message: expect.stringMatching(/^Только латиница/) }],
+      },
+    })
+    const post = await sendJson('POST', `/api/sites/${site.id}/pages`, { slug: 'b-', title: 'Б' })
+    expect(post.status).toBe(400)
+    expect(await slugsOf(site.id)).toEqual(['index'])
   })
 })

@@ -5,6 +5,7 @@ import {
   fileExtension,
   type ImageProcessor,
   MAX_PIXELS,
+  MAX_VARIANT_SIDE,
   PROCESSING_CONCURRENCY,
   type ProcessedFile,
   type ProcessResult,
@@ -97,7 +98,14 @@ export function sharpProcessor({ concurrency = PROCESSING_CONCURRENCY } = {}): I
               ...(await Promise.all(
                 variantFormats(format).map((variantFormat) =>
                   encode(
-                    encodeVariant(input().resize({ width: variantWidth }), variantFormat),
+                    encodeVariant(
+                      input().resize({
+                        width: variantWidth,
+                        height: MAX_VARIANT_SIDE,
+                        fit: 'inside',
+                      }),
+                      variantFormat,
+                    ),
                     `${variantWidth}.${fileExtension(variantFormat)}`,
                     variantFormat,
                   ),

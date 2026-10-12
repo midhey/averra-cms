@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
+import { sessions } from '../db/schema'
 import { createTestApi, TEST_PASSWORD, testOrigins } from '../testing'
 
 // Вход, выход, cookie и закрытость API — через настоящие HTTP-запросы к app,
@@ -124,8 +126,65 @@ describe('вход', () => {
       body: JSON.stringify({ role: 'owner' }),
     })
     expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error: { code: 'field_not_allowed', message: 'Это поле так поменять нельзя' },
+    })
     const me = await app.request('/api/me', { headers: member.headers })
     expect(await me.json()).toMatchObject({ user: { role: 'member' } })
+  })
+
+  it('смена почты закрыта — ответ по-русски, код Better Auth как есть', async () => {
+    const member = await api.loginAs('client')
+    const res = await app.request('/api/auth/change-email', {
+      method: 'POST',
+      headers: { ...member.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ newEmail: 'other@example.test' }),
+    })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error: { code: 'change_email_disabled', message: 'Почту сменить нельзя' },
+    })
+  })
+
+  it('неизвестный эндпоинт под /api/auth — 404 «Не найдено», а не «Ошибка входа»', async () => {
+    const res = await app.request('/api/auth/no-such-endpoint', {
+      headers: { 'x-forwarded-for': freshIp() },
+    })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'Не найдено' } })
+  })
+})
+
+describe('продление сессии', () => {
+  it('Better Auth продлевает сессию, и новая cookie доходит до браузера через наш маршрут', async () => {
+    const { user, headers } = await api.loginAs('owner')
+    // Сессия выдана двое суток назад: срок 7 дней, Better Auth продлевает раз в сутки
+    const day = 24 * 60 * 60 * 1000
+    const expiresAt = new Date(Date.now() + 5 * day)
+    await api.db.update(sessions).set({ expiresAt }).where(eq(sessions.userId, user.id))
+
+    const res = await app.request('/api/sites', { headers })
+    expect(res.status).toBe(200)
+    const [cookie] = res.headers.getSetCookie()
+    expect(cookie).toMatch(/^better-auth\.session_token=/)
+    expect(cookie).toMatch(/Max-Age=604800/)
+    const [row] = await api.db.select().from(sessions).where(eq(sessions.userId, user.id))
+    expect(row?.expiresAt.getTime()).toBeGreaterThan(Date.now() + 6 * day)
+
+    // Свежая сессия cookie не трогает
+    const again = await app.request('/api/sites', { headers })
+    expect(again.headers.getSetCookie()).toEqual([])
+  })
+
+  it('протухшая сессия — 401, и cookie стирается', async () => {
+    const { user, headers } = await api.loginAs('owner')
+    await api.db
+      .update(sessions)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(sessions.userId, user.id))
+    const res = await app.request('/api/sites', { headers })
+    expect(res.status).toBe(401)
+    expect(res.headers.getSetCookie().join('\n')).toMatch(/better-auth\.session_token=;.*Max-Age=0/)
   })
 })
 

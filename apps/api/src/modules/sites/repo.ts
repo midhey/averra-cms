@@ -168,9 +168,10 @@ export function sitesRepo(db: Db) {
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
         .orderBy(asc(pages.slug))
       // published и published_title заполнены вместе — это держит CHECK в базе
-      // (pages_published_with_title), так что фильтр только сужает типы и страниц не теряет
+      // (pages_published_with_title), так что фильтр только сужает типы и страниц не теряет.
+      // Сравниваем с null, а не на истинность: пустой заголовок — тоже заголовок
       return rows.flatMap(({ slug, title, content }) =>
-        content && title ? [{ slug, title, content }] : [],
+        content !== null && title !== null ? [{ slug, title, content }] : [],
       )
     },
   }

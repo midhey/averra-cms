@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -34,6 +42,8 @@ describe('замок базы', () => {
     const error = await lockDb(dataDir).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(DbLockedError)
     expect((error as DbLockedError).pid).toBe(process.ppid)
+    // Подсказка называет файл: pid мог достаться постороннему процессу, и замок снимают руками
+    expect((error as DbLockedError).hint).toContain(`${dataDir}.lock`)
     expect(readFileSync(`${dataDir}.lock`, 'utf8')).toBe(String(process.ppid))
   })
 
@@ -56,5 +66,31 @@ describe('замок базы', () => {
     writeFileSync(`${dataDir}.lock`, String(process.ppid))
     unlock()
     expect(readFileSync(`${dataDir}.lock`, 'utf8')).toBe(String(process.ppid))
+  })
+
+  it('пустой свежий замок считает занятым: его прямо сейчас берёт другой процесс', async () => {
+    writeFileSync(`${dataDir}.lock`, '')
+    const error = await lockDb(dataDir).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(DbLockedError)
+    expect((error as DbLockedError).pid).toBeNull()
+    expect((error as DbLockedError).hint).toContain('удали файл замка')
+  })
+
+  it('пустой старый замок — мусор после сбоя, его забирает', async () => {
+    writeFileSync(`${dataDir}.lock`, 'не pid')
+    const old = new Date(Date.now() - 60_000)
+    utimesSync(`${dataDir}.lock`, old, old)
+    const unlock = await lockDb(dataDir)
+    expect(readFileSync(`${dataDir}.lock`, 'utf8')).toBe(String(process.pid))
+    unlock()
+  })
+
+  it('не оставляет временных файлов ни после захвата, ни после отказа', async () => {
+    const unlock = await lockDb(dataDir)
+    await expect(lockDb(dataDir)).resolves.toBeTypeOf('function')
+    unlock()
+    writeFileSync(`${dataDir}.lock`, String(process.ppid))
+    await lockDb(dataDir).catch(() => {})
+    expect(readdirSync(dir)).toEqual(['pglite.lock'])
   })
 })

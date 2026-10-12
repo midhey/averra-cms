@@ -50,14 +50,14 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))
     .route('/media', mediaFilesRoutes(deps))
 
-  app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } }, 404))
+  app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) {
       return c.json({ error: { code: 'http_error', message: err.message } }, err.status)
     }
     console.error(err)
-    return c.json({ error: { code: 'internal', message: 'Internal error' } }, 500)
+    return c.json({ error: { code: 'internal', message: 'Внутренняя ошибка сервера' } }, 500)
   })
 
   return app

@@ -3,7 +3,7 @@ import { crc32 } from 'node:zlib'
 import { demoSiteId, type PageContentInput } from '@cms/schema'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
-import { type ImageProcessor, MAX_PIXELS } from '../../media/processor'
+import { type ImageProcessor, MAX_PIXELS, MAX_VARIANT_SIDE } from '../../media/processor'
 import { sharpProcessor } from '../../media/sharp-processor'
 import { mediaKey } from '../../media/storage'
 import { createTestApi } from '../../testing'
@@ -228,6 +228,21 @@ describe('отказ в загрузке', () => {
     })
   })
 
+  it('очень высокая картинка (длинная инфографика) загружается: варианты ужаты до предела WebP', async () => {
+    // 200 × 20000: вариант шириной 200 вышел бы выше 16383 px, а больше WebP и AVIF не умеют.
+    // Раньше кодирование падало, и такая картинка получала 415 «файл повреждён»
+    const media = await uploaded(await upload(owner.headers, await picture(200, 20_000, 'jpeg')))
+    expect(media).toMatchObject({ width: 200, height: 20_000 })
+    expect(media.variants.length).toBeGreaterThan(0)
+    for (const variant of media.variants) {
+      expect(variant.height).toBeLessThanOrEqual(MAX_VARIANT_SIDE)
+      // Пропорции те же: ширина ужимается вместе с высотой
+      expect(Math.abs(variant.height / variant.width - 100)).toBeLessThan(1)
+    }
+    const widest = media.variants.filter((variant) => variant.format === 'webp').at(-1)
+    expect(widest?.height).toBe(MAX_VARIANT_SIDE)
+  })
+
   it('GIF → 415: принимаются только четыре формата', async () => {
     const gif = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#000' } })
       .gif()
@@ -337,7 +352,10 @@ describe('лимит размера', async () => {
     const res = await uploadSmall(new Uint8Array(noise))
     expect(res.status).toBe(413)
     expect(await res.json()).toMatchObject({
-      error: { code: 'payload_too_large', message: expect.stringMatching(/^Файл больше/) },
+      error: {
+        code: 'payload_too_large',
+        message: 'Файл больше 2 КБ. Уменьшите картинку и загрузите снова',
+      },
     })
     expect(processed).toBe(calls)
     expect((await library(small.app, smallOwner.headers)).items).toEqual([])

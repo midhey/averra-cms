@@ -1,4 +1,4 @@
-import { PageContent, PageSlug, PageTitle, Uuid } from '@cms/schema'
+import { ExistingPageSlug, PageContent, PageTitle, Uuid } from '@cms/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
@@ -10,7 +10,7 @@ import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
 import { revisionsRepo } from './repo'
 
-const PageParams = z.object({ siteId: Uuid(), slug: PageSlug })
+const PageParams = z.object({ siteId: Uuid(), slug: ExistingPageSlug })
 const RevisionParams = PageParams.extend({ revisionId: Uuid() })
 
 /**

@@ -16,10 +16,10 @@ export type MediaStorage = {
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
 /** Имя файла внутри папки картинки: 480.avif, original.jpg. Его составляет сервер */
-export const MEDIA_FILE_NAME = /^(original|\d{1,5})\.(avif|webp|jpg|png)$/
+const FILE_NAME = String.raw`(original|\d{1,5})\.(avif|webp|jpg|png)`
 
 /** Полный ключ: <siteId>/<mediaId>/<файл>. Ничего, кроме этого, хранилище не примет */
-export const MEDIA_KEY = new RegExp(`^${UUID}/${UUID}/(original|\\d{1,5})\\.(avif|webp|jpg|png)$`)
+export const MEDIA_KEY = new RegExp(`^${UUID}/${UUID}/${FILE_NAME}$`)
 
 /**
  * Ключ файла в хранилище. Все части — из базы и от сервера, а не из запроса, и всё равно

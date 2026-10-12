@@ -1,9 +1,11 @@
 import { demoPageTitle, type PageContentInput } from '@cms/schema'
+import { eq } from 'drizzle-orm'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
+import { pages as pagesTable } from '../../db/schema'
 import { createTestApi } from '../../testing'
 
-const { app, close, loginAs } = await createTestApi()
+const { app, db, close, loginAs } = await createTestApi()
 // Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
 const owner = await loginAs('owner')
 const sites = testClient(app, undefined, undefined, { headers: owner.headers }).api.sites
@@ -31,6 +33,24 @@ describe('сайты и страницы', () => {
     const { pages } = await res.json()
     expect(pages.map((page) => page.slug)).toEqual(['index'])
     expect(pages[0]?.content.blocks).toHaveLength(3)
+  })
+
+  it('страницу с пустым опубликованным заголовком из снимка не теряет', async () => {
+    // API такого заголовка не пропустит, а база (CHECK только на NULL) — да: ручная правка
+    const empty = { blocks: [] }
+    await db.insert(pagesTable).values({
+      siteId,
+      slug: 'empty-title',
+      title: '',
+      draft: empty,
+      published: empty,
+      publishedTitle: '',
+    })
+    const res = await sites[':siteId'].snapshot.$get({ param: { siteId } })
+    if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
+    const { pages } = await res.json()
+    expect(pages.find((page) => page.slug === 'empty-title')).toMatchObject({ title: '' })
+    await db.delete(pagesTable).where(eq(pagesTable.slug, 'empty-title'))
   })
 
   it('сохраняет черновик, не трогая опубликованную версию', async () => {

@@ -1,5 +1,6 @@
 import {
   collectMediaRefs,
+  ExistingPageSlug,
   MAIN_PAGE_SLUG,
   NewPage,
   NewSite,
@@ -16,14 +17,16 @@ import { can } from '../../auth/access'
 import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
-import { validate } from '../../validate'
+import { validate, validationError } from '../../validate'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from './repo'
 
 const SiteParams = z.object({ siteId: Uuid() })
 
-const PageParams = SiteParams.extend({ slug: PageSlug })
+// Адрес по мягкой схеме: страницы со старыми адресами тоже можно открыть, сохранить и удалить.
+// Новую страницу создают только по PageSlug (POST и PUT на свободный адрес)
+const PageParams = SiteParams.extend({ slug: ExistingPageSlug })
 
 const SaveDraft = z.strictObject({
   title: PageTitle,
@@ -127,12 +130,18 @@ export function sitesRoutes({ db }: { db: Db }) {
           if (missing.length > 0) {
             return c.json(conflict('На странице есть картинки не из медиатеки сайта', missing), 409)
           }
-          if (can(c.var.siteRole, 'page.create')) {
+          const newSlug = PageSlug.safeParse(slug)
+          if (can(c.var.siteRole, 'page.create') && newSlug.success) {
             return c.json(await repo.saveDraft(siteId, slug, title, content), 200)
           }
           const page = await repo.updateDraft(siteId, slug, title, content)
-          if (!page) return c.json(notFound('Страница не найдена'), 404)
-          return c.json(page, 200)
+          if (page) return c.json(page, 200)
+          // Старый адрес годится только для страницы, которая уже есть: новую с ним не создаём
+          if (!newSlug.success && can(c.var.siteRole, 'page.create')) {
+            const message = newSlug.error.issues[0]?.message ?? 'Неверный адрес'
+            return c.json(validationError([{ path: 'slug', message }]), 400)
+          }
+          return c.json(notFound('Страница не найдена'), 404)
         },
       )
 

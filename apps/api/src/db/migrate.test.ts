@@ -67,6 +67,24 @@ describe('миграция 0002_page_published_with_title', () => {
       `),
     ).rejects.toThrow(/pages_published_with_title/)
   })
+
+  it('заголовок без опубликованного содержимого сбрасывает, а не падает на проверке', async () => {
+    client = new PGlite()
+    await applyMigration(client, '0000_init')
+    await applyMigration(client, '0001_page_published_title')
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO pages (site_id, slug, title, draft, published, published_title) VALUES
+        ('${siteId}', 'half', 'Черновик', '{"blocks":[]}', NULL, 'Осталось от правки');
+    `)
+
+    await applyMigration(client, '0002_page_published_with_title')
+
+    const { rows } = await client.query<{ published_title: string | null }>(
+      'SELECT published_title FROM pages',
+    )
+    expect(rows).toEqual([{ published_title: null }])
+  })
 })
 
 describe('миграция 0003_auth', () => {
@@ -157,10 +175,47 @@ describe('миграция 0004_page_revisions', () => {
     await expect(client.exec(insert(1))).rejects.toThrow(/page_revisions_page_version_unique/)
     await expect(client.exec(insert(0))).rejects.toThrow(/page_revisions_version_positive/)
 
+    // Автор версии — человек или токен, но не оба сразу
+    const { rows: authors } = await client.query<{ user_id: string; token_id: string }>(`
+      WITH u AS (INSERT INTO users (name, email) VALUES ('Автор', 'a@example.test') RETURNING id)
+      INSERT INTO api_tokens (site_id, name, token_hash, created_by)
+      SELECT '${siteId}', 'mcp', 'hash', id FROM u RETURNING created_by AS user_id, id AS token_id
+    `)
+    const author = authors[0]
+    await expect(
+      client.exec(`
+        INSERT INTO page_revisions (site_id, page_id, version, title, content, published_by, published_by_token)
+        VALUES ('${siteId}', '${pageId}', 2, 'Т', '{"blocks":[]}', '${author?.user_id}', '${author?.token_id}')`),
+    ).rejects.toThrow(/page_revisions_one_author/)
+
     // Удаление страницы уносит её историю
     await client.exec(`DELETE FROM pages WHERE id = '${pageId}'`)
     const { rows: left } = await client.query('SELECT id FROM page_revisions')
     expect(left).toEqual([])
+  })
+
+  it('опубликованной странице без даты публикации ставит время её последней правки', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+    ]) {
+      await applyMigration(client, name)
+    }
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO pages (site_id, slug, title, draft, published, published_title, published_at, updated_at) VALUES
+        ('${siteId}', 'index', 'Т', '{"blocks":[]}', '{"blocks":[]}', 'Т', NULL, '2026-09-01T08:00:00Z');
+    `)
+
+    await applyMigration(client, '0004_page_revisions')
+
+    const { rows } = await client.query<{ published_at: Date }>(
+      'SELECT published_at FROM page_revisions',
+    )
+    expect(rows.map((row) => row.published_at.toISOString())).toEqual(['2026-09-01T08:00:00.000Z'])
   })
 })
 

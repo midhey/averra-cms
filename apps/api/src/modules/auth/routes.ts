@@ -13,6 +13,25 @@ const messages = new Map([
   ['EMAIL_PASSWORD_SIGN_UP_DISABLED', 'Регистрации нет: пользователей создаёт владелец'],
   ['INVALID_ORIGIN', 'Запрос пришёл не из админки'],
   ['MISSING_OR_NULL_ORIGIN', 'Запрос пришёл не из админки'],
+  ['FIELD_NOT_ALLOWED', 'Это поле так поменять нельзя'],
+  ['CHANGE_EMAIL_DISABLED', 'Почту сменить нельзя'],
+  ['EMAIL_CAN_NOT_BE_UPDATED', 'Почту сменить нельзя'],
+  ['PASSWORD_TOO_SHORT', 'Пароль слишком короткий'],
+  ['PASSWORD_TOO_LONG', 'Пароль слишком длинный'],
+  ['INVALID_PASSWORD', 'Неверный пароль'],
+  ['SESSION_EXPIRED', 'Сессия кончилась, войдите снова'],
+  ['USER_NOT_FOUND', 'Пользователь не найден'],
+  ['VALIDATION_ERROR', 'Данные не прошли проверку'],
+  ['BODY_MUST_BE_AN_OBJECT', 'Данные не прошли проверку'],
+])
+
+// Остальные коды Better Auth — английским текстом библиотеки. Код отдаём как есть,
+// а сообщение — общее по статусу ответа, но по-русски
+const fallbackMessages = new Map([
+  [400, 'Запрос не принят'],
+  [401, 'Нужно войти'],
+  [403, 'Нет доступа'],
+  [404, 'Не найдено'],
 ])
 
 async function asApiError(res: Response) {
@@ -23,8 +42,9 @@ async function asApiError(res: Response) {
       .json()
       .catch(() => null),
   )
-  let code = (body.data?.code ?? 'auth_error').toLowerCase()
-  let message = messages.get(body.data?.code ?? '') ?? body.data?.message ?? 'Ошибка входа'
+  let code = (body.data?.code ?? (res.status === 404 ? 'not_found' : 'auth_error')).toLowerCase()
+  let message =
+    messages.get(body.data?.code ?? '') ?? fallbackMessages.get(res.status) ?? 'Ошибка входа'
   if (res.status === 429) {
     code = 'rate_limited'
     const retryAfter = Number(res.headers.get('x-retry-after')) || 10

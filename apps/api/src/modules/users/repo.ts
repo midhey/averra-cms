@@ -17,11 +17,11 @@ export const NewUser = z.object({
     .string()
     .min(PASSWORD_LENGTH.min, `Пароль — от ${PASSWORD_LENGTH.min} символов`)
     .max(PASSWORD_LENGTH.max, `Пароль — до ${PASSWORD_LENGTH.max} символов`),
-  role: z.enum(['owner', 'member']).default('owner'),
+  role: z.enum(['owner', 'member'], 'Роль — owner или member').default('owner'),
 })
 export type NewUser = z.input<typeof NewUser>
 
-export const MemberRole = z.enum(['editor', 'client'])
+export const MemberRole = z.enum(['editor', 'client'], 'Роль на сайте — editor или client')
 
 export function usersRepo(db: Db, auth: Auth) {
   return {
