@@ -1,6 +1,7 @@
 import type { BlockType } from '@cms/schema'
 import { useMemo, useState } from 'react'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
+import { useMoveButtons } from '../ui/use-move-buttons'
 import styles from './BlockList.module.css'
 import { catalog, catalogEntry } from './catalog'
 import type { EditorBlock } from './draft'
@@ -78,7 +79,8 @@ type BlockItemProps = {
 }
 
 function BlockItem({ block, index, count, selected, invalid, ...actions }: BlockItemProps) {
-  const sortable = useSortableItem(block.id, 'блок')
+  const sortable = useSortableItem(block.id)
+  const arrows = useMoveButtons(index, count, actions.onMove)
 
   const remove = () => {
     if (window.confirm(`Удалить блок «${summaryOf(block)}»?`)) actions.onRemove(block.id)
@@ -92,7 +94,7 @@ function BlockItem({ block, index, count, selected, invalid, ...actions }: Block
       data-selected={selected}
       data-dragging={sortable.dragging}
     >
-      <DragHandle handle={sortable.handle} label="Перетащить блок" />
+      <DragHandle handle={sortable.handle} label={`Перетащить блок «${summaryOf(block)}»`} />
       <button type="button" className={styles.select} onClick={() => actions.onSelect(block.id)}>
         <span className={styles.type}>
           {catalogEntry(block.type).title}
@@ -101,20 +103,10 @@ function BlockItem({ block, index, count, selected, invalid, ...actions }: Block
         <span className={styles.summary}>{summaryOf(block)}</span>
       </button>
       <div className={styles.actions}>
-        <button
-          type="button"
-          aria-label="Поднять блок"
-          disabled={index === 0}
-          onClick={() => actions.onMove(index, index - 1)}
-        >
+        <button type="button" aria-label="Поднять блок" {...arrows.up}>
           ↑
         </button>
-        <button
-          type="button"
-          aria-label="Опустить блок"
-          disabled={index === count - 1}
-          onClick={() => actions.onMove(index, index + 1)}
-        >
+        <button type="button" aria-label="Опустить блок" {...arrows.down}>
           ↓
         </button>
         <button type="button" aria-label="Удалить блок" onClick={remove}>

@@ -1,5 +1,5 @@
 import { api } from '../api'
-import { apiRequestError } from '../errors'
+import { apiRequestError, NetworkError } from '../errors'
 import type { MediaItem } from './media-format'
 
 /**
@@ -49,8 +49,8 @@ export function uploadMedia(
         )
         return
       }
-      // Иначе сетевой сбой — TypeError, как у fetch: messageOf скажет, что API не отвечает
-      reject(new TypeError('Сетевой сбой при загрузке'))
+      // Иначе сетевой сбой: как у запросов через apiFetch
+      reject(new NetworkError())
     })
     const form = new FormData()
     form.append('file', file)

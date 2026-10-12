@@ -11,6 +11,7 @@ import { canManagePages } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
+import { usePageTitle } from '../ui/use-page-title'
 import styles from './screens.module.css'
 
 const route = getRouteApi('/sites/$siteId')
@@ -19,11 +20,19 @@ type Notice = { kind: 'done' | 'error'; text: string }
 
 export function SiteScreen() {
   const { siteId } = route.useParams()
+  // Другой сайт — другой экран: без key форма «Новая страница» и сообщение об удалении
+  // переехали бы с сайта на сайт (переход «Назад» между сайтами экран не пересоздаёт)
+  return <SitePages key={siteId} siteId={siteId} />
+}
+
+function SitePages({ siteId }: { siteId: string }) {
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
   const queryClient = useQueryClient()
   const pagesHeadingId = useId()
+  const pagesHeadingRef = useRef<HTMLHeadingElement>(null)
   const [notice, setNotice] = useState<Notice>()
+  usePageTitle(site.name, 'страницы')
   // Клиент только правит черновики: создавать и удалять страницы ему API не даст
   const managePages = canManagePages(site.access)
 
@@ -36,6 +45,9 @@ export function SiteScreen() {
       queryClient.removeQueries({ queryKey: queryKeys.page(siteId, slug) })
       await queryClient.invalidateQueries({ queryKey: queryKeys.pages(siteId), exact: true })
       setNotice({ kind: 'done', text: `Страница «${title}» удалена` })
+      // Кнопка «Удалить» пропала вместе со строкой: фокус ушёл бы в никуда, и человеку
+      // с клавиатуры пришлось бы идти с начала страницы. Ставим его на заголовок списка
+      pagesHeadingRef.current?.focus()
     },
     onError: (error, { title }) =>
       setNotice({ kind: 'error', text: `Не удалось удалить «${title}»: ${messageOf(error)}` }),
@@ -61,67 +73,75 @@ export function SiteScreen() {
       </header>
 
       <section aria-labelledby={pagesHeadingId} className={styles.section}>
-        <h2 id={pagesHeadingId}>Страницы</h2>
-        <table className={styles.table} aria-labelledby={pagesHeadingId}>
-          <thead>
-            <tr>
-              <th scope="col">Заголовок</th>
-              <th scope="col">Адрес</th>
-              <th scope="col">Состояние</th>
-              <th scope="col">Опубликована</th>
-              <th scope="col">
-                <span className={styles.visuallyHidden}>Действия</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {pages.map((page) => (
-              <tr key={page.slug}>
-                <td>
-                  <Link
-                    to="/sites/$siteId/pages/$slug"
-                    params={{ siteId, slug: page.slug }}
-                    className={styles.pageLink}
-                  >
-                    {page.title}
-                  </Link>
-                </td>
-                <td>
-                  <code>{pagePath(page.slug)}</code>
-                </td>
-                <td>
-                  <span className={styles.state} data-changed={page.hasUnpublishedChanges}>
-                    {pageState(page)}
-                  </span>
-                </td>
-                <td>
-                  {page.publishedAt === null ? (
-                    '—'
-                  ) : (
-                    <time dateTime={page.publishedAt}>{formatDateTime(page.publishedAt)}</time>
-                  )}
-                </td>
-                <td className={styles.rowActions}>
-                  {page.slug === MAIN_PAGE_SLUG ? (
-                    <span className={styles.muted}>Главная</span>
-                  ) : (
-                    managePages && (
-                      <button
-                        type="button"
-                        className={styles.danger}
-                        aria-label={`Удалить страницу «${page.title}»`}
-                        disabled={remove.isPending}
-                        onClick={() => confirmRemove(page)}
-                      >
-                        Удалить
-                      </button>
-                    )
-                  )}
-                </td>
+        <h2 id={pagesHeadingId} ref={pagesHeadingRef} tabIndex={-1}>
+          Страницы
+        </h2>
+        {/* Длинный адрес без пробелов не растягивает страницу: прокручивается только таблица */}
+        <div className={styles.tableScroll}>
+          <table className={styles.table} aria-labelledby={pagesHeadingId}>
+            <thead>
+              <tr>
+                <th scope="col">Заголовок</th>
+                <th scope="col">Адрес</th>
+                <th scope="col">Состояние</th>
+                <th scope="col">Опубликована</th>
+                {/* Клиенту действия недоступны: пустая колонка только сбивала бы с толку */}
+                {managePages && (
+                  <th scope="col">
+                    <span className={styles.visuallyHidden}>Действия</span>
+                  </th>
+                )}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {pages.map((page) => (
+                <tr key={page.slug}>
+                  <td>
+                    <Link
+                      to="/sites/$siteId/pages/$slug"
+                      params={{ siteId, slug: page.slug }}
+                      className={styles.pageLink}
+                    >
+                      {page.title}
+                    </Link>
+                  </td>
+                  <td>
+                    <code>{pagePath(page.slug)}</code>
+                  </td>
+                  <td>
+                    <span className={styles.state} data-changed={page.hasUnpublishedChanges}>
+                      {pageState(page)}
+                    </span>
+                  </td>
+                  <td>
+                    {page.publishedAt === null ? (
+                      '—'
+                    ) : (
+                      <time dateTime={page.publishedAt}>{formatDateTime(page.publishedAt)}</time>
+                    )}
+                  </td>
+                  {managePages && (
+                    <td className={styles.rowActions}>
+                      {page.slug === MAIN_PAGE_SLUG ? (
+                        <span className={styles.muted}>Главная</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.danger}
+                          aria-label={`Удалить страницу «${page.title}»`}
+                          disabled={remove.isPending}
+                          onClick={() => confirmRemove(page)}
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {notice?.kind === 'done' && (
           <p role="status" className={styles.notice}>
             {notice.text}

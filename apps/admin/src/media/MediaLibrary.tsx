@@ -1,4 +1,4 @@
-import { imageMimeTypes } from '@cms/schema'
+import { formatBytes, imageMimeTypes } from '@cms/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ChangeEvent, useId, useState } from 'react'
 import { api } from '../api'
@@ -7,8 +7,8 @@ import { mediaQuery, queryKeys } from '../queries'
 import styles from './MediaLibrary.module.css'
 import {
   deleteQuestion,
-  formatBytes,
   type MediaItem,
+  mediaLabel,
   mediaSummary,
   thumbnailUrl,
   tooLargeMessage,
@@ -168,7 +168,7 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
                   <button
                     type="button"
                     className={styles.primary}
-                    aria-label={`Выбрать «${media.originalName}»`}
+                    aria-label={`Выбрать ${mediaLabel(media)}`}
                     aria-pressed={media.id === selectedId}
                     onClick={() => onPick(media)}
                   >
@@ -179,7 +179,7 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
                   <button
                     type="button"
                     className={styles.danger}
-                    aria-label={`Удалить «${media.originalName}»`}
+                    aria-label={`Удалить ${mediaLabel(media)}`}
                     disabled={remove.isPending}
                     onClick={() => confirmRemove(media)}
                   >

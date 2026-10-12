@@ -21,7 +21,7 @@ const asImage = (value: unknown): ImageValue | undefined =>
  * Esc закрывает, а загрузить новую картинку можно прямо оттуда
  */
 export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }) {
-  const { schema, value, path, label, required, errors, onChange } = props
+  const { schema, value, path, label, errors, onChange } = props
   const image = asImage(value)
   const mediaId = typeof image?.mediaId === 'string' ? image.mediaId : undefined
   const alt = typeof image?.alt === 'string' ? image.alt : ''
@@ -59,10 +59,9 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
       // aria-invalid у группы полей не предусмотрен: ошибку читает aria-describedby, рамка — по data
       data-invalid={error ? true : undefined}
     >
-      <legend className={styles.legend}>
-        {label}
-        {!required && <span className={styles.optional}> · необязательно</span>}
-      </legend>
+      {/* Без пометки «необязательно»: обязательна ли картинка, решает не сама схема поля,
+          а соседние поля (у первого экрана — вариант split). Правило — в описании поля */}
+      <legend className={styles.legend}>{label}</legend>
       {schema.description && <p className={styles.hint}>{schema.description}</p>}
 
       {mediaId && (

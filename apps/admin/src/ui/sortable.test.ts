@@ -24,16 +24,20 @@ const active = (id: string) => ({ id }) as Active
 const over = (id: string) => ({ id }) as Over
 
 describe('объявления перетаскивания', () => {
-  const blocks = dragAnnouncements(
-    [
-      { id: 'hero-1', label: 'Ремонт под ключ' },
-      { id: 'features-1', label: 'Почему мы' },
-      { id: 'cta-1', label: 'Звоните' },
-    ],
-    'блок',
-  )
+  // Объявления помнят последнюю позицию, поэтому у каждого теста свой экземпляр:
+  // тест не должен зависеть от того, что до него вызвал соседний
+  const blockAnnouncements = () =>
+    dragAnnouncements(
+      [
+        { id: 'hero-1', label: 'Ремонт под ключ' },
+        { id: 'features-1', label: 'Почему мы' },
+        { id: 'cta-1', label: 'Звоните' },
+      ],
+      'блок',
+    )
 
   it('называют блок по имени и позицию «N из M»', () => {
+    const blocks = blockAnnouncements()
     expect(blocks.onDragStart({ active: active('features-1') })).toBe(
       'Блок «Почему мы» поднят. Позиция 2 из 3.',
     )
@@ -67,6 +71,9 @@ describe('объявления перетаскивания', () => {
   })
 
   it('отпущенный вне списка и отменённый блок остаются на месте', () => {
+    const blocks = blockAnnouncements()
+    // Как в dnd-kit: сначала подъём, потом наведение
+    blocks.onDragStart({ active: active('cta-1') })
     expect(blocks.onDragOver({ active: active('cta-1'), over: null })).toBe(
       'Блок «Звоните» вне списка.',
     )
@@ -86,6 +93,7 @@ describe('объявления перетаскивания', () => {
   it('подсказка объясняет клавиши по-русски', () => {
     const text = dragInstructions('блок')
     expect(text).toContain('переставить блок')
-    for (const key of ['пробел', 'Enter', 'стрелками', 'Escape']) expect(text).toContain(key)
+    // Tab тоже ставит пункт: так dnd-kit ведёт себя по умолчанию
+    for (const key of ['пробел', 'Enter', 'Tab', 'стрелками', 'Escape']) expect(text).toContain(key)
   })
 })

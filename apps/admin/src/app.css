@@ -28,10 +28,3 @@ body {
 .admin textarea {
   font: inherit;
 }
-
-.admin-message {
-  margin: 0;
-  padding: 24px;
-  color: #5b6170;
-  white-space: pre-line;
-}

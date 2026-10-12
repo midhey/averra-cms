@@ -1,3 +1,4 @@
+import { setupZodMessages } from '@cms/schema'
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
@@ -6,7 +7,6 @@ import './app.css'
 import { ApiRequestError } from './errors'
 import { queryKeys } from './queries'
 import { createAdminRouter } from './router'
-import { setupZodMessages } from './zod-messages'
 
 setupZodMessages()
 

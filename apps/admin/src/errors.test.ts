@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { ApiRequestError, apiRequestError, messageOf } from './errors'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  ApiRequestError,
+  apiFetch,
+  apiRequestError,
+  messageOf,
+  NetworkError,
+  screenErrorOf,
+} from './errors'
 
 const response = (status: number, body: unknown) => ({
   status,
@@ -45,7 +52,38 @@ describe('ошибка из ответа API', () => {
   })
 
   it('сетевой сбой объясняет, что API не запущен', () => {
-    expect(messageOf(new TypeError('Failed to fetch'))).toMatch(/API не отвечает/)
+    expect(messageOf(new NetworkError())).toMatch(/API не отвечает/)
     expect(messageOf(new ApiRequestError(404, 'Сайт не найден'))).toBe('Сайт не найден')
+  })
+})
+
+describe('сетевой сбой и поломка в коде', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('apiFetch превращает сбой fetch в NetworkError, а ответ отдаёт как есть', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(apiFetch('/api/me')).rejects.toBeInstanceOf(NetworkError)
+
+    const ok = new Response('{}', { status: 200 })
+    vi.stubGlobal('fetch', async () => ok)
+    await expect(apiFetch('/api/me')).resolves.toBe(ok)
+  })
+
+  it('отмена запроса — не сетевой сбой', async () => {
+    const aborted = new DOMException('Отменено', 'AbortError')
+    vi.stubGlobal('fetch', async () => {
+      throw aborted
+    })
+    await expect(apiFetch('/api/me')).rejects.toBe(aborted)
+  })
+
+  it('экран ошибки не выдаёт ошибку в коде за «API не отвечает»', () => {
+    const render = new TypeError("Cannot read properties of undefined (reading 'title')")
+    expect(screenErrorOf(render)).toMatch(/^Что-то сломалось в админке/)
+    expect(screenErrorOf(render)).not.toMatch(/API не отвечает/)
+    expect(screenErrorOf(new NetworkError())).toMatch(/^API не отвечает/)
+    expect(screenErrorOf(new ApiRequestError(404, 'Сайт не найден'))).toBe('Сайт не найден')
   })
 })

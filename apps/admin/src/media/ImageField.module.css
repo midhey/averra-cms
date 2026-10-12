@@ -14,11 +14,6 @@
   font-weight: 600;
 }
 
-.optional {
-  color: #8a909c;
-  font-weight: 400;
-}
-
 .hint {
   display: flex;
   justify-content: space-between;

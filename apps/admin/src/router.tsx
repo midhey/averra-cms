@@ -1,8 +1,10 @@
+import { ExistingPageSlug, Uuid } from '@cms/schema'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  notFound,
   Outlet,
   redirect,
 } from '@tanstack/react-router'
@@ -60,6 +62,18 @@ const loginRoute = createRoute({
   component: LoginScreen,
 })
 
+/**
+ * Кривой id сайта или адрес страницы в ссылке — это «не найдено», а не «данные не прошли
+ * проверку» от API. Проверяем теми же схемами, что API: страницы со старыми адресами открываются
+ */
+function checkSiteId(siteId: string) {
+  if (!Uuid().safeParse(siteId).success) throw notFound({ data: 'Сайт не найден' })
+}
+
+function checkSlug(slug: string) {
+  if (!ExistingPageSlug.safeParse(slug).success) throw notFound({ data: 'Страница не найдена' })
+}
+
 const sitesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -70,6 +84,7 @@ const sitesRoute = createRoute({
 const siteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId',
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
   loader: ({ context: { queryClient }, params: { siteId } }) =>
     Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
@@ -81,6 +96,7 @@ const siteRoute = createRoute({
 const mediaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/media',
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
   loader: ({ context: { queryClient }, params: { siteId } }) =>
     Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
@@ -92,6 +108,10 @@ const mediaRoute = createRoute({
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/pages/$slug',
+  beforeLoad: ({ params }) => {
+    checkSiteId(params.siteId)
+    checkSlug(params.slug)
+  },
   // Страница — всегда свежая из API, не из кеша: редактор берёт её в своё состояние один раз,
   // и устаревший черновик (например, после правки через MCP) при сохранении затёр бы новый
   loader: async ({ context: { queryClient }, params: { siteId, slug } }) => {
@@ -121,8 +141,9 @@ export function createAdminRouter(queryClient: QueryClient) {
     context: { queryClient },
     defaultPendingComponent: PendingScreen,
     defaultErrorComponent: ErrorScreen,
-    // Свежесть данных решает TanStack Query: роутер зовёт загрузчик на каждый переход,
-    // а ensureQueryData сама берёт кеш или идёт в API
+    // Предзагрузки по наведению нет (defaultPreload не задан). Если её включат, пусть и она
+    // не держит свой кеш: свежесть данных решает TanStack Query, ensureQueryData сама берёт
+    // кеш или идёт в API. Загрузчик на каждом переходе роутер зовёт и так (staleTime: 0)
     defaultPreloadStaleTime: 0,
   })
 }

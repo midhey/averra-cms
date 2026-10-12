@@ -9,6 +9,7 @@ import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { safeRedirect } from '../permissions'
 import { switchUser } from '../queries'
 import { TextField } from '../ui/TextField'
+import { usePageTitle } from '../ui/use-page-title'
 import styles from './screens.module.css'
 
 const route = getRouteApi('/login')
@@ -24,6 +25,7 @@ export function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [formError, setFormError] = useState<string>()
+  usePageTitle('Вход')
 
   const parsed = SignIn.safeParse({ email, password })
   const form = useFormErrors(zodFieldErrors(parsed.error))

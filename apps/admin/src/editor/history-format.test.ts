@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { authorLabel, restoredMessage, restoreQuestion, revisionLabel } from './history-format'
+import {
+  authorLabel,
+  restoredMessage,
+  restoreQuestion,
+  revisionLabel,
+  revisionPreview,
+} from './history-format'
 
 const revision = { version: 3, publishedAt: '2026-10-12T07:30:00.000Z' }
 
@@ -29,5 +35,17 @@ describe('подписи истории', () => {
       'Версия 3 возвращена в черновик. На сайт она попадёт после публикации',
     )
     expect(restoredMessage(revision, false)).toContain('владелец или редактор')
+  })
+
+  it('версию, которую не пропускают нынешние схемы блоков, в предпросмотр не пускает', () => {
+    const fine = { blocks: [{ id: 'hero', type: 'hero', props: { title: 'Привет' } }] }
+    expect(revisionPreview(fine)).toMatchObject({ content: { blocks: [{ id: 'hero' }] } })
+    for (const broken of [
+      { blocks: [{ id: 'x', type: 'nope', props: {} }] },
+      { blocks: [{ id: 'f', type: 'features', props: { title: 'Без пунктов' } }] },
+      null,
+    ]) {
+      expect(revisionPreview(broken)).toEqual({ error: expect.stringMatching(/нельзя показать/) })
+    }
   })
 })

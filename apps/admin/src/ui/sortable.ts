@@ -18,7 +18,7 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): reado
 
 /** Подсказка, которую диктор читает на ручке перетаскивания */
 export function dragInstructions(noun: SortableNoun) {
-  return `Чтобы переставить ${noun}, нажмите пробел или Enter, двигайте его стрелками вверх и вниз, затем снова нажмите пробел или Enter. Escape отменяет перестановку.`
+  return `Чтобы переставить ${noun}, нажмите пробел или Enter, двигайте его стрелками вверх и вниз, затем снова нажмите пробел, Enter или Tab. Escape отменяет перестановку.`
 }
 
 /**

@@ -1,18 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { messageOf } from '../errors'
 import { formatDateTime } from '../pages-format'
 import { revisionsQuery } from '../queries'
 import styles from './History.module.css'
-import { authorLabel, type RevisionAuthor } from './history-format'
+import { authorLabel, type HistoryRevision } from './history-format'
 
-export type HistoryRevision = {
-  id: string
-  version: number
-  title: string
-  publishedAt: string
-  author: RevisionAuthor
-}
+export type { HistoryRevision }
 
 type HistoryProps = {
   /** id панели: на него ссылается кнопка «История» через aria-controls */
@@ -35,9 +29,22 @@ export function History(props: HistoryProps) {
   const headingId = useId()
   const { data: revisions, error, isPending } = useQuery(revisionsQuery(siteId, slug))
   const selected = revisions?.find((revision) => revision.id === selectedId)
+  const panelRef = useRef<HTMLElement>(null)
+  const lastSelectedId = useRef(selectedId)
+
+  // «Вернуть в черновик» и «Показать черновик» пропадают вместе с выбором версии, и фокус
+  // ушёл бы в никуда: следующий Tab начался бы с начала страницы. Возвращаем его на версию
+  useEffect(() => {
+    const previous = lastSelectedId.current
+    lastSelectedId.current = selectedId
+    if (selectedId !== null || previous === null) return
+    const active = document.activeElement
+    if (active && active !== document.body && active.isConnected) return
+    panelRef.current?.querySelector<HTMLElement>(`[data-revision-id="${previous}"]`)?.focus()
+  }, [selectedId])
 
   return (
-    <aside id={id} className={styles.panel} aria-labelledby={headingId}>
+    <aside ref={panelRef} id={id} className={styles.panel} aria-labelledby={headingId}>
       <h2 id={headingId} className={styles.heading}>
         История публикаций
       </h2>
@@ -61,6 +68,7 @@ export function History(props: HistoryProps) {
               <button
                 type="button"
                 className={styles.item}
+                data-revision-id={revision.id}
                 aria-pressed={revision.id === selectedId}
                 onClick={() => onSelect(revision.id === selectedId ? null : revision)}
               >

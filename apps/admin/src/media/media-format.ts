@@ -1,6 +1,7 @@
-import { fileTooLargeMessage, type MediaMap } from '@cms/schema'
+import { fileTooLargeMessage, formatBytes, type MediaMap } from '@cms/schema'
 import type { InferResponseType } from 'hono/client'
 import type { api } from '../api'
+import { formatDateTime } from '../pages-format'
 
 /** Медиатека так, как её отдаёт API: картинки и лимит размера файла */
 export type MediaLibraryData = InferResponseType<
@@ -12,15 +13,6 @@ export type MediaLibraryData = InferResponseType<
 export type MediaItem = MediaLibraryData['items'][number]
 
 type Variant = Pick<MediaItem['variants'][number], 'format' | 'width' | 'url'>
-
-/** Вес файла по-человечески: 820 Б, 14 КБ, 2,4 МБ */
-export function formatBytes(bytes: number) {
-  const format = (value: number, unit: string) =>
-    `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value)} ${unit}`
-  if (bytes < 1024) return format(bytes, 'Б')
-  if (bytes < 1024 * 1024) return format(Math.round(bytes / 1024), 'КБ')
-  return format(bytes / 1024 / 1024, 'МБ')
-}
 
 /** Размеры и вес для подписи под превью: 1200 × 800 · 240 КБ */
 export const mediaSummary = (media: Pick<MediaItem, 'width' | 'height' | 'size'>) =>
@@ -65,6 +57,15 @@ export function mediaMapOf(
 export const tooLargeMessage = (file: Pick<File, 'size'>, maxBytes: number | undefined) =>
   maxBytes !== undefined && file.size > maxBytes ? fileTooLargeMessage(maxBytes) : undefined
 
-/** Подтверждение удаления: имя файла, чтобы не удалить не ту картинку из похожих превью */
-export const deleteQuestion = (media: Pick<MediaItem, 'originalName'>) =>
-  `Удалить картинку «${media.originalName}» из медиатеки? Вернуть её не получится.`
+type LabelledMedia = Pick<MediaItem, 'originalName' | 'width' | 'height' | 'createdAt'>
+
+/**
+ * Имя картинки для кнопок и вопросов: файл, размеры и когда загружена. Одного имени файла
+ * мало — iOS называет каждое фото image.jpg, и диктор не отличил бы одну кнопку от другой
+ */
+export const mediaLabel = (media: LabelledMedia, timeZone?: string) =>
+  `«${media.originalName}», ${media.width} × ${media.height}, ${formatDateTime(media.createdAt, timeZone)}`
+
+/** Подтверждение удаления: чтобы не удалить не ту картинку из похожих превью */
+export const deleteQuestion = (media: LabelledMedia, timeZone?: string) =>
+  `Удалить картинку ${mediaLabel(media, timeZone)} из медиатеки? Вернуть её не получится.`

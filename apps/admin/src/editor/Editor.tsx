@@ -12,11 +12,12 @@ import { canPublish, type SiteAccess } from '../permissions'
 import { mediaQuery, queryKeys, revisionQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { moveItem } from '../ui/sortable'
+import { usePageTitle } from '../ui/use-page-title'
 import { BlockList } from './BlockList'
 import { createBlock, type EditorBlock, insertBlock, removeBlock, updateBlockProps } from './draft'
 import styles from './Editor.module.css'
 import { History, type HistoryRevision } from './History'
-import { restoredMessage, restoreQuestion, revisionLabel } from './history-format'
+import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
 import { Preview } from './Preview'
 import { validateBlocks } from './validation'
@@ -41,6 +42,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Версия из истории в предпросмотре. Черновик в редакторе она не трогает
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
   const historyId = useId()
+  usePageTitle(title.trim() || pagePath(page.slug), 'редактор')
 
   // Медиатека сайта: из неё поле «картинка» выбирает, а предпросмотр берёт адреса вариантов
   const library = useQuery(mediaQuery(site.id))
@@ -60,7 +62,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   }, [validation.content])
 
   const dirty = snapshotOf(title, blocks) !== savedSnapshot
-  // Та же схема, что у API: сообщение об ошибке совпадёт с тем, что ответил бы сервер
+  // Та же схема, что у API: те же правила (пробелы — тоже пусто, не больше 120 символов).
+  // Сообщение совпадёт с ответом сервера, пока и тут и там включён setupZodMessages
   const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
   const titleValid = titleError === undefined
   const titleErrorId = useId()
@@ -119,6 +122,11 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     ...revisionQuery(site.id, page.slug, shownRevision?.id ?? ''),
     enabled: shownRevision !== null,
   })
+  // Снимок проверяем нынешними схемами: старую несовместимую версию блоки не нарисуют
+  const shownPreview = useMemo(
+    () => (shown.data && shownRevision ? revisionPreview(shown.data.content) : undefined),
+    [shown.data, shownRevision],
+  )
 
   const publishDraft = useMutation({
     mutationFn: async () => {
@@ -183,21 +191,28 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     setShownRevision(null)
   }
 
+  // Правка блоков меняет черновик: предпросмотр возвращается к нему, иначе показанная версия
+  // осталась бы с подписью «Черновик не изменился», хотя он уже изменился
+  const editBlocks = (next: readonly EditorBlock[]) => {
+    setBlocks(next)
+    setShownRevision(null)
+  }
+
   const addBlock = (type: BlockType) => {
     const block = createBlock(type, blocks)
-    setBlocks(insertBlock(blocks, block, selectedId ?? undefined))
+    editBlocks(insertBlock(blocks, block, selectedId ?? undefined))
     selectBlock(block.id)
   }
 
   const deleteBlock = (id: string) => {
-    setBlocks(removeBlock(blocks, id))
+    editBlocks(removeBlock(blocks, id))
     if (id === selectedId) setSelectedId(null)
   }
 
   const selected = blocks.find((block) => block.id === selectedId)
 
   return (
-    <div className={styles.editor}>
+    <main className={styles.editor}>
       {/* Именованная область: ориентир для диктора и место, где e2e ищет статус редактора.
           Живые области role="status" есть ещё у каждого списка с перетаскиванием */}
       <section className={styles.top} aria-label="Страница">
@@ -253,15 +268,15 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         selectedId={selectedId}
         invalidIds={invalidIds}
         onSelect={selectBlock}
-        onMove={(from, to) => setBlocks(moveItem(blocks, from, to))}
+        onMove={(from, to) => editBlocks(moveItem(blocks, from, to))}
         onRemove={deleteBlock}
         onAdd={addBlock}
       />
       <Preview
-        content={shown.data && shownRevision ? shown.data.content : previewContent}
+        content={shownPreview?.content ?? previewContent}
         theme={site.theme}
         media={media}
-        note={previewNote(shownRevision, shown)}
+        note={previewNote(shownRevision, shown, shownPreview?.error)}
       />
       {historyOpen ? (
         <History
@@ -283,7 +298,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
           widgets={widgets}
         />
       )}
-    </div>
+    </main>
   )
 }
 
@@ -291,10 +306,12 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
 function previewNote(
   revision: HistoryRevision | null,
   query: { isPending: boolean; error: Error | null },
+  incompatible?: string,
 ) {
   if (!revision) return undefined
   const label = revisionLabel(revision)
   if (query.error) return `${label}: не удалось загрузить — ${messageOf(query.error)}`
+  if (incompatible) return `${label}: ${incompatible}. В предпросмотре черновик`
   if (query.isPending) return `${label}: загружаю…`
   return `${label} — так страница выглядела на сайте. Черновик не изменился`
 }

@@ -1,6 +1,7 @@
 import { type ComponentType, type ReactNode, useId, useMemo } from 'react'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { moveItem } from '../ui/sortable'
+import { useMoveButtons } from '../ui/use-move-buttons'
 import { useItemKeys } from './item-keys'
 import { emptyValue, fieldKind, type JsonSchema } from './json-schema'
 import { getIn, type Path, pathKey, setIn } from './path'
@@ -217,6 +218,7 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
           <ListItem
             key={keys[index]}
             id={keys[index] ?? String(index)}
+            name={entries[index]?.label ?? `№ ${index + 1}`}
             index={index}
             count={items.length}
             canRemove={canRemove}
@@ -249,6 +251,8 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
 
 type ListItemProps = {
   id: string
+  /** Имя пункта для подписи ручки: заголовок или номер */
+  name: string
   index: number
   count: number
   canRemove: boolean
@@ -257,8 +261,10 @@ type ListItemProps = {
   children: ReactNode
 }
 
-function ListItem({ id, index, count, canRemove, onMove, onRemove, children }: ListItemProps) {
-  const sortable = useSortableItem(id, 'пункт')
+function ListItem(props: ListItemProps) {
+  const { id, name, index, count, canRemove, onMove, onRemove, children } = props
+  const sortable = useSortableItem(id)
+  const arrows = useMoveButtons(index, count, onMove)
   return (
     <div
       ref={sortable.ref}
@@ -267,26 +273,27 @@ function ListItem({ id, index, count, canRemove, onMove, onRemove, children }: L
       data-dragging={sortable.dragging}
     >
       <div className={styles.itemBar}>
-        <DragHandle handle={sortable.handle} label="Перетащить пункт" />
+        <DragHandle handle={sortable.handle} label={`Перетащить пункт «${name}»`} />
         <span>№ {index + 1}</span>
         <button
           type="button"
+          className={styles.itemAction}
           aria-label="Поднять пункт"
-          disabled={index === 0}
-          onClick={() => onMove(index, index - 1)}
+          {...arrows.up}
         >
           ↑
         </button>
         <button
           type="button"
+          className={styles.itemAction}
           aria-label="Опустить пункт"
-          disabled={index === count - 1}
-          onClick={() => onMove(index, index + 1)}
+          {...arrows.down}
         >
           ↓
         </button>
         <button
           type="button"
+          className={styles.itemAction}
           aria-label="Удалить пункт"
           disabled={!canRemove}
           onClick={() => onRemove(index)}

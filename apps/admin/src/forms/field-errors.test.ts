@@ -1,7 +1,6 @@
-import { NewPage } from '@cms/schema'
+import { NewPage, setupZodMessages } from '@cms/schema'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { setupZodMessages } from '../zod-messages'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from './field-errors'
 
 beforeAll(setupZodMessages)

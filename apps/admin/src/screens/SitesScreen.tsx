@@ -9,6 +9,7 @@ import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { meQuery, queryKeys, sitesQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
+import { usePageTitle } from '../ui/use-page-title'
 import styles from './screens.module.css'
 
 export function SitesScreen() {
@@ -16,6 +17,7 @@ export function SitesScreen() {
   const { data: me } = useSuspenseQuery(meQuery())
   const isOwner = me?.role === 'owner'
   const listHeadingId = useId()
+  usePageTitle('Сайты')
 
   return (
     <main className={styles.screen}>
@@ -117,7 +119,7 @@ function NewSiteForm() {
             form.clearServerError('name')
           }}
           error={form.errors.name}
-          hint="Его видно только в админке. Оформление у нового сайта — стандартная тема"
+          hint="Им же назовётся главная страница (заголовок можно поменять в редакторе). Оформление — стандартная тема"
         />
         {formError && (
           <p role="alert" className={styles.formError}>

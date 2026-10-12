@@ -2,7 +2,7 @@ import { Page } from '@cms/blocks'
 import baseCss from '@cms/blocks/base.css?inline'
 import type { MediaMap, PageContent, Theme } from '@cms/schema'
 import { themeToCss } from '@cms/tokens'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Component, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './Preview.module.css'
 
@@ -120,7 +120,13 @@ export function Preview({ content, theme, media, note }: PreviewProps) {
           />
         </div>
       </div>
-      {frameDocument && createPortal(<Page content={content} media={media} />, frameDocument.body)}
+      {frameDocument &&
+        createPortal(
+          <PreviewBoundary content={content}>
+            <Page content={content} media={media} />
+          </PreviewBoundary>,
+          frameDocument.body,
+        )}
     </section>
   )
 }
@@ -129,4 +135,30 @@ function styleElement(owner: Document, css: string) {
   const style = owner.createElement('style')
   style.textContent = css
   return style
+}
+
+type BoundaryProps = { content: PageContent; children: ReactNode }
+type BoundaryState = { failed: boolean; content: PageContent }
+
+/**
+ * Упавший блок ломает только предпросмотр, а не весь редактор с несохранёнными правками:
+ * без этой границы ошибку поймал бы экран ошибки роутера. Новое содержимое — новая попытка
+ */
+class PreviewBoundary extends Component<BoundaryProps, BoundaryState> {
+  override state: BoundaryState = { failed: false, content: this.props.content }
+
+  static getDerivedStateFromError(): Partial<BoundaryState> {
+    return { failed: true }
+  }
+
+  static getDerivedStateFromProps(props: BoundaryProps, state: BoundaryState) {
+    return props.content === state.content ? null : { failed: false, content: props.content }
+  }
+
+  override render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <p style={{ padding: 24, font: '16px system-ui' }}>Предпросмотр не получилось нарисовать</p>
+    )
+  }
 }

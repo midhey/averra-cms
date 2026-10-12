@@ -1,7 +1,8 @@
+import { formatBytes } from '@cms/schema'
 import { describe, expect, it } from 'vitest'
 import {
   deleteQuestion,
-  formatBytes,
+  mediaLabel,
   mediaMapOf,
   mediaSummary,
   thumbnailUrl,
@@ -65,9 +66,18 @@ describe('справочник для предпросмотра', () => {
 })
 
 it('вопрос перед удалением называет файл', () => {
-  expect(deleteQuestion({ originalName: 'кухня.jpg' })).toBe(
-    'Удалить картинку «кухня.jpg» из медиатеки? Вернуть её не получится.',
-  )
+  const photo = {
+    originalName: 'image.jpg',
+    width: 1600,
+    height: 1000,
+    createdAt: '2026-10-12T07:30:00.000Z',
+  }
+  const question = deleteQuestion(photo, 'Europe/Moscow')
+  expect(question).toMatch(/^Удалить картинку «image\.jpg», 1600 × 1000, .*10:30 из медиатеки\?/)
+  expect(question).toContain('Вернуть её не получится.')
+  // Одинаковые имена файлов (iOS) различаются размерами и временем загрузки
+  const other = { ...photo, width: 800, createdAt: '2026-10-12T08:00:00.000Z' }
+  expect(mediaLabel(other, 'Europe/Moscow')).not.toBe(mediaLabel(photo, 'Europe/Moscow'))
 })
 
 describe('размер до отправки', () => {

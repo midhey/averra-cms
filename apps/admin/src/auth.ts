@@ -1,11 +1,11 @@
 import type { SignIn } from '@cms/schema'
-import { apiRequestError } from './errors'
+import { apiFetch, apiRequestError } from './errors'
 
 // Вход и выход — эндпоинты Better Auth (/api/auth/*). Их нет в типах Hono RPC, поэтому
 // обычный fetch. Ошибки API отдаёт в том же формате ApiError, что и остальные маршруты
 
 async function post(path: string, body: unknown) {
-  const res = await fetch(`/api/auth/${path}`, {
+  const res = await apiFetch(`/api/auth/${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),

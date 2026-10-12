@@ -32,8 +32,38 @@ export async function apiRequestError(res: ErrorResponse) {
   return new ApiRequestError(res.status, message, issues)
 }
 
-/** Текст для человека из любой ошибки. Сетевой сбой fetch — это TypeError */
+/**
+ * До API не достучались. fetch сообщает об этом TypeError, но TypeError бывает и от ошибки
+ * в коде («Cannot read properties of undefined»): сетевой сбой оборачиваем в свой класс
+ * прямо у fetch, чтобы не выдавать любую поломку за «API не отвечает»
+ */
+export class NetworkError extends Error {
+  override name = 'NetworkError'
+  constructor(options?: ErrorOptions) {
+    super('API не отвечает. Запущен ли pnpm dev?', options)
+  }
+}
+
+/** fetch для запросов в API: сетевой сбой — NetworkError, остальное как есть */
+export const apiFetch: typeof fetch = async (input, init) => {
+  try {
+    return await fetch(input, init)
+  } catch (cause) {
+    if (cause instanceof TypeError) throw new NetworkError({ cause })
+    throw cause
+  }
+}
+
+/** Текст для человека из любой ошибки */
 export function messageOf(error: unknown) {
-  if (error instanceof TypeError) return 'API не отвечает. Запущен ли pnpm dev?'
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Что сказать на экране ошибки маршрута. Он ловит и ошибки загрузки, и поломки при отрисовке:
+ * ответ API и сетевой сбой объясняем как есть, а ошибку в коде не выдаём за ответ сервера
+ */
+export function screenErrorOf(error: unknown) {
+  if (error instanceof ApiRequestError || error instanceof NetworkError) return error.message
+  return `Что-то сломалось в админке. Обновите страницу; если не поможет — это ошибка: ${messageOf(error)}`
 }

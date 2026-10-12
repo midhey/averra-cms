@@ -78,8 +78,10 @@ export function SortableList({ entries, noun, onMove, children }: SortableListPr
 }
 
 /** Свойства пункта списка: на сам пункт — ref и style, на ручку — handle */
-export function useSortableItem(id: string, noun: SortableNoun) {
-  const sortable = useSortable({ id, attributes: { roleDescription: `перетаскиваемый ${noun}` } })
+export function useSortableItem(id: string) {
+  // Роль своими словами вместо «sortable» dnd-kit. Она заменяет «кнопка» и не должна повторять
+  // подпись ручки («Перетащить блок «…»»), поэтому про то, что это за элемент, а не про блок
+  const sortable = useSortable({ id, attributes: { roleDescription: 'ручка перетаскивания' } })
   const style: CSSProperties = {
     transform: CSS.Translate.toString(sortable.transform),
     transition: sortable.transition,

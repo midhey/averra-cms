@@ -1,7 +1,15 @@
+import { PageContent } from '@cms/schema'
+import type { InferResponseType } from 'hono/client'
+import type { api } from '../api'
 import { formatDateTime } from '../pages-format'
 
-/** Кто опубликовал, как его отдаёт API. null — автор неизвестен */
-export type RevisionAuthor = { kind: 'user' | 'token'; name: string } | null
+type RevisionsGet = (typeof api.sites)[':siteId']['pages'][':slug']['revisions']['$get']
+
+/** Версия из списка истории — как её отдаёт API (тип выводится из клиента, а не пишется руками) */
+export type HistoryRevision = InferResponseType<RevisionsGet, 200>[number]
+
+/** Кто опубликовал. null — автор неизвестен */
+export type RevisionAuthor = HistoryRevision['author']
 
 export type RevisionSummary = { version: number; publishedAt: string }
 
@@ -31,4 +39,16 @@ export function restoredMessage(revision: RevisionSummary, canPublish: boolean) 
     ? 'На сайт она попадёт после публикации'
     : 'На сайт её выложит владелец или редактор сайта'
   return `Версия ${revision.version} возвращена в черновик. ${next}`
+}
+
+/**
+ * Содержимое версии для предпросмотра. Снимок в истории старый, а блоки в коде меняются:
+ * версию, которую не пропускают нынешние схемы, не рисуем — компонент блока на ней упадёт.
+ * Вернуть её API тоже не даст (409), об этом и говорим
+ */
+export function revisionPreview(content: unknown) {
+  const parsed = PageContent.safeParse(content)
+  return parsed.success
+    ? { content: parsed.data }
+    : { error: 'Эту версию нельзя показать нынешними блоками, вернуть её в черновик тоже нельзя' }
 }
