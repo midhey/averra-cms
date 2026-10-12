@@ -1,5 +1,7 @@
-import { demoPage, demoPageTitle, MAIN_PAGE_SLUG, PageContent } from '@cms/schema'
+import { demoPage, demoPageTitle, demoSiteId, MAIN_PAGE_SLUG, PageContent } from '@cms/schema'
 import { defaultTheme } from '@cms/tokens'
+import type { Auth } from '../auth/auth'
+import { usersRepo } from '../modules/users/repo'
 import type { Db } from './client'
 import { pages, sites } from './schema'
 
@@ -10,7 +12,7 @@ export async function seedDemo(db: Db) {
 
   const [site] = await db
     .insert(sites)
-    .values({ name: 'Демо: ремонт квартир', theme: defaultTheme })
+    .values({ id: demoSiteId, name: 'Демо: ремонт квартир', theme: defaultTheme })
     .returning({ id: sites.id })
   if (!site) throw new Error('Не удалось создать демо-сайт')
 
@@ -24,4 +26,18 @@ export async function seedDemo(db: Db) {
     publishedTitle: demoPageTitle,
     publishedAt: new Date(),
   })
+}
+
+export type DevOwner = { email: string; password: string }
+
+/**
+ * Только для разработки: если в базе нет ни одного пользователя, создаёт владельца из
+ * DEV_OWNER_EMAIL / DEV_OWNER_PASSWORD. Возвращает, что получилось, — для строки в логе
+ */
+export async function seedDevOwner(db: Db, auth: Auth, owner: DevOwner | undefined) {
+  const users = usersRepo(db, auth)
+  if ((await users.count()) > 0) return 'exists' as const
+  if (!owner) return 'missing' as const
+  await users.create({ ...owner, name: 'Владелец (разработка)', role: 'owner' })
+  return 'created' as const
 }

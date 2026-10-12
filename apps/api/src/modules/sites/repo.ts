@@ -1,15 +1,28 @@
 import { MAIN_PAGE_SLUG, type PageContent, type Theme } from '@cms/schema'
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm'
+import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
-import { pages, sites } from '../../db/schema'
+import { pages, siteMembers, sites } from '../../db/schema'
 
 export function sitesRepo(db: Db) {
   const pageIs = (siteId: string, slug: string) =>
     and(eq(pages.siteId, siteId), eq(pages.slug, slug))
 
   return {
-    list() {
-      return db.select({ id: sites.id, name: sites.name }).from(sites).orderBy(asc(sites.createdAt))
+    /** Сайты, которые видит пришедший: владелец — все, участник — свои, токен — один свой */
+    list(actor: Actor) {
+      const columns = { id: sites.id, name: sites.name }
+      const order = asc(sites.createdAt)
+      if (actor.kind === 'token') {
+        return db.select(columns).from(sites).where(eq(sites.id, actor.siteId)).orderBy(order)
+      }
+      if (actor.user.role === 'owner') return db.select(columns).from(sites).orderBy(order)
+      return db
+        .select(columns)
+        .from(sites)
+        .innerJoin(siteMembers, eq(siteMembers.siteId, sites.id))
+        .where(eq(siteMembers.userId, actor.user.id))
+        .orderBy(order)
     },
 
     async find(siteId: string) {
@@ -84,6 +97,16 @@ export function sitesRepo(db: Db) {
         })
         .returning()
       if (!page) throw new Error('База не вернула сохранённую страницу')
+      return page
+    },
+
+    /** Меняет черновик только существующей страницы. Нет такой — undefined */
+    async updateDraft(siteId: string, slug: string, title: string, content: PageContent) {
+      const [page] = await db
+        .update(pages)
+        .set({ title, draft: content, updatedAt: new Date() })
+        .where(pageIs(siteId, slug))
+        .returning()
       return page
     },
 

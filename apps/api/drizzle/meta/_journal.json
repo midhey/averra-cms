@@ -22,6 +22,13 @@
       "when": 1791787113138,
       "tag": "0002_page_published_with_title",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791790838163,
+      "tag": "0003_auth",
+      "breakpoints": true
     }
   ]
 }

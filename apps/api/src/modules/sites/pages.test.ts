@@ -7,8 +7,10 @@ import { createTestApi } from '../../testing'
 // Создание сайтов, список, создание и удаление страниц.
 // Каждый тест заводит свой сайт: тесты не зависят ни от демо-сайта, ни друг от друга
 
-const { app, close } = await createTestApi()
-const sites = testClient(app).api.sites
+const { app, close, loginAs } = await createTestApi()
+// Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
+const owner = await loginAs('owner')
+const sites = testClient(app, undefined, undefined, { headers: owner.headers }).api.sites
 const [demo] = await (await sites.$get()).json()
 if (!demo) throw new Error('Демо-сайт не создался')
 
@@ -65,7 +67,7 @@ async function publishedSlugs(siteId: string) {
 const sendJson = (method: 'POST' | 'PUT', path: string, body: unknown) =>
   app.request(path, {
     method,
-    headers: { 'content-type': 'application/json' },
+    headers: { ...owner.headers, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
 

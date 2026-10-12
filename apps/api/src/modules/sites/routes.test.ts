@@ -3,8 +3,10 @@ import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../../testing'
 
-const { app, close } = await createTestApi()
-const sites = testClient(app).api.sites
+const { app, close, loginAs } = await createTestApi()
+// Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
+const owner = await loginAs('owner')
+const sites = testClient(app, undefined, undefined, { headers: owner.headers }).api.sites
 const [site] = await (await sites.$get()).json()
 if (!site) throw new Error('Демо-сайт не создался')
 const siteId = site.id

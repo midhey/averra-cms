@@ -68,3 +68,41 @@ describe('миграция 0002_page_published_with_title', () => {
     ).rejects.toThrow(/pages_published_with_title/)
   })
 })
+
+describe('миграция 0003_auth', () => {
+  const siteId = '00000000-0000-4000-8000-000000000001'
+
+  it('ложится на базу с контентом и держит роли проверками в базе', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+    ]) {
+      await applyMigration(client, name)
+    }
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO pages (site_id, slug, title, draft) VALUES ('${siteId}', 'index', 'Главная', '{"blocks":[]}');
+    `)
+
+    await applyMigration(client, '0003_auth')
+
+    const { rows } = await client.query<{ slug: string }>('SELECT slug FROM pages')
+    expect(rows).toEqual([{ slug: 'index' }])
+    const { rows: users } = await client.query<{ id: string; role: string }>(
+      `INSERT INTO users (name, email) VALUES ('Новый', 'new@example.test') RETURNING id, role`,
+    )
+    // Роль по умолчанию — участник без доступа: владельцем делают явно
+    expect(users[0]?.role).toBe('member')
+    await expect(client.exec(`UPDATE users SET role = 'admin'`)).rejects.toThrow(/users_role_valid/)
+    await expect(
+      client.exec(
+        `INSERT INTO site_members (site_id, user_id, role) VALUES ('${siteId}', '${users[0]?.id}', 'owner')`,
+      ),
+    ).rejects.toThrow(/site_members_role_valid/)
+    await expect(
+      client.exec(`INSERT INTO users (name, email) VALUES ('Дубль', 'new@example.test')`),
+    ).rejects.toThrow(/users_email_unique/)
+  })
+})
