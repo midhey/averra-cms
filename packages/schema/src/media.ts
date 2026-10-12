@@ -39,17 +39,25 @@ export const imageFormatOf: Readonly<Record<string, ImageFormat>> = Object.fromE
   ImageFormat.options.map((format) => [imageMimeTypes[format], format]),
 )
 
-/** Размер в мегабайтах для сообщений: 10 МБ, 2,5 МБ */
-const megabytes = (bytes: number) =>
-  `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(bytes / 1024 / 1024)} МБ`
+/**
+ * Вес по-человечески: 820 Б, 14 КБ, 2,4 МБ. Единица — по величине: лимит в 2 КБ (как в тестах)
+ * не превращается в «0 МБ». Одна функция на сообщения API и подписи админки
+ */
+export function formatBytes(bytes: number) {
+  const format = (value: number, unit: string) =>
+    `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value)} ${unit}`
+  if (bytes < 1024) return format(bytes, 'Б')
+  if (bytes < 1024 * 1024) return format(Math.round(bytes / 1024), 'КБ')
+  return format(bytes / 1024 / 1024, 'МБ')
+}
 
 /**
  * Сообщение «файл слишком большой». Одно на API и админку: админка проверяет размер ещё до
  * отправки и говорит то же, что сказал бы API
  */
 export const fileTooLargeMessage = (maxBytes: number) =>
-  `Файл больше ${megabytes(maxBytes)}. Уменьшите картинку и загрузите снова`
-export const fileSizeLimitHint = (maxBytes: number) => `Не больше ${megabytes(maxBytes)}`
+  `Файл больше ${formatBytes(maxBytes)}. Уменьшите картинку и загрузите снова`
+export const fileSizeLimitHint = (maxBytes: number) => `Не больше ${formatBytes(maxBytes)}`
 
 /** Вариант картинки так, как его видят рендерер и админка: формат, размеры и адрес файла */
 export const MediaVariantView = z.object({

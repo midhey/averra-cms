@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { hero } from './blocks'
-import { collectMediaRefs, Image } from './media'
+import {
+  collectMediaRefs,
+  fileSizeLimitHint,
+  fileTooLargeMessage,
+  formatBytes,
+  Image,
+} from './media'
 import { PageContent } from './page'
 
 const mediaId = '3f1c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'
@@ -107,5 +113,19 @@ describe('collectMediaRefs', () => {
     expect(
       collectMediaRefs({ blocks: [{ id: 'a', type: 'hero', props: { title: 'А' } }] }),
     ).toEqual([])
+  })
+})
+
+describe('сообщения о размере файла', () => {
+  it('единица — по величине: маленький лимит не становится «0 МБ»', () => {
+    expect(fileTooLargeMessage(2048)).toBe('Файл больше 2 КБ. Уменьшите картинку и загрузите снова')
+    expect(fileSizeLimitHint(10 * 1024 * 1024)).toBe('Не больше 10 МБ')
+    expect(fileSizeLimitHint(500)).toBe('Не больше 500 Б')
+  })
+
+  it('formatBytes: байты, килобайты и мегабайты с одной цифрой после запятой', () => {
+    expect(formatBytes(820)).toBe('820 Б')
+    expect(formatBytes(14 * 1024)).toBe('14 КБ')
+    expect(formatBytes(2.5 * 1024 * 1024)).toBe('2,5 МБ')
   })
 })

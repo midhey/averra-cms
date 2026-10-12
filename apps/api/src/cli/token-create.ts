@@ -1,3 +1,4 @@
+import { Uuid } from '@cms/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { sites } from '../db/schema'
@@ -11,7 +12,7 @@ const usage = `Выпустить токен API (права редактора 
 Токен показывается один раз. --by нужен, только если владельцев несколько.`
 
 const Args = z.object({
-  site: z.uuid('Нужен id сайта'),
+  site: Uuid('Нужен id сайта'),
   name: z.string().trim().min(1).max(80),
   by: UserEmail.optional(),
 })

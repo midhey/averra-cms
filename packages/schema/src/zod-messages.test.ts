@@ -1,5 +1,6 @@
-import { features, hero, PageTitle } from '@cms/schema'
 import { describe, expect, it } from 'vitest'
+import { features, hero } from './blocks'
+import { PageTitle } from './page'
 import { setupZodMessages } from './zod-messages'
 
 setupZodMessages()

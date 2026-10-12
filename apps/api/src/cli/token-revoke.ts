@@ -1,3 +1,4 @@
+import { Uuid } from '@cms/schema'
 import { z } from 'zod'
 import { tokensRepo } from '../modules/tokens/repo'
 import { args, CliError, check, openDb, run } from './common'
@@ -9,7 +10,7 @@ id видно в выводе pnpm token:create и pnpm token:list.`
 
 await run(async () => {
   const { id } = check(
-    z.object({ id: z.uuid('Нужен id токена') }),
+    z.object({ id: Uuid('Нужен id токена') }),
     args({ id: { type: 'string' } }, usage),
     usage,
   )

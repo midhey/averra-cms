@@ -1,3 +1,4 @@
+import { Uuid } from '@cms/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { sites } from '../db/schema'
@@ -9,7 +10,7 @@ const usage = `Дать участнику доступ к сайту:
 
 editor — правит и публикует; client — только правит черновики. Повторный вызов меняет роль.`
 
-const Args = z.object({ email: UserEmail, site: z.uuid('Нужен id сайта'), role: MemberRole })
+const Args = z.object({ email: UserEmail, site: Uuid('Нужен id сайта'), role: MemberRole })
 
 await run(async () => {
   const { email, site, role } = check(

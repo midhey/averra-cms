@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { demoSiteId } from '@cms/schema'
+import { demoSiteId, setupZodMessages } from '@cms/schema'
 import { createApp } from './app'
 import type { MemberRole } from './auth/access'
 import { createAuth } from './auth/auth'
@@ -38,6 +38,8 @@ export async function createTestApi({
   mediaMaxBytes?: number
   images?: ImageProcessor
 } = {}) {
+  // Как в index.ts: ошибки проверки — по-русски, тесты видят те же ответы, что админка
+  setupZodMessages()
   const { db, close: closeDb } = createDb()
   // Своя временная папка медиатеки на каждый API. Создаётся при первой записи, удаляется в close
   const mediaDir = join(tmpdir(), `cms-test-media-${randomUUID()}`)

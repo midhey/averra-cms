@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { AppType } from '@cms/api'
+import { setupZodMessages } from '@cms/schema'
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { hc } from 'hono/client'
@@ -8,6 +9,9 @@ import { z } from 'zod'
 import { missingTokenMessage, registerTools } from './tools'
 
 // stdout занят протоколом MCP: всё служебное пишем только в stderr (console.error)
+
+// Ошибки проверки входа инструментов — по-русски, теми же словами, что в API и админке
+setupZodMessages()
 
 // .mcp.json запускает сервер из корня репозитория, поэтому .env ищем рядом с пакетом,
 // а не в текущей папке
