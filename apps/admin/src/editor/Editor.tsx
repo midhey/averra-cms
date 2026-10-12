@@ -1,12 +1,12 @@
 import { type BlockType, type PageContent, PageTitle, type Theme } from '@cms/schema'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from '@tanstack/react-router'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../api'
-import { apiErrorText, messageOf } from '../errors'
+import { apiErrorText, apiRequestError, messageOf } from '../errors'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
-import { queryKeys } from '../queries'
+import { queryKeys, revisionQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { BlockList } from './BlockList'
 import {
@@ -18,6 +18,8 @@ import {
   updateBlockProps,
 } from './draft'
 import styles from './Editor.module.css'
+import { History, type HistoryRevision } from './History'
+import { restoredMessage, restoreQuestion, revisionLabel } from './history-format'
 import { Inspector } from './Inspector'
 import { Preview } from './Preview'
 import { validateBlocks } from './validation'
@@ -38,6 +40,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     snapshotOf(page.title, page.draft.blocks),
   )
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Версия из истории в предпросмотре. Черновик в редакторе она не трогает
+  const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
+  const historyId = useId()
 
   const validation = useMemo(() => validateBlocks(blocks), [blocks])
   const invalidIds = useMemo(() => new Set(Object.keys(validation.blockErrors)), [validation])
@@ -93,6 +99,22 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     onSuccess: refreshPages,
   })
 
+  const restoreRevision = useMutation({
+    mutationFn: async (revisionId: string) => {
+      const res = await pageApi.revisions[':revisionId'].restore.$post({
+        param: { ...param, revisionId },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+    onSuccess: refreshPages,
+  })
+
+  const shown = useQuery({
+    ...revisionQuery(site.id, page.slug, shownRevision?.id ?? ''),
+    enabled: shownRevision !== null,
+  })
+
   const publishDraft = useMutation({
     mutationFn: async () => {
       const res = await pageApi.publish.$post({ param })
@@ -126,10 +148,40 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     }
   }
 
+  async function restore(revision: HistoryRevision) {
+    if (dirty && !window.confirm(restoreQuestion(revision))) return
+    setStatus({ kind: 'busy', message: 'Возвращаю версию…' })
+    try {
+      const restored = await restoreRevision.mutateAsync(revision.id)
+      // Редактор берёт черновик из ответа API, как при открытии страницы
+      setTitle(restored.title)
+      setBlocks(restored.draft.blocks)
+      setSavedSnapshot(snapshotOf(restored.title, restored.draft.blocks))
+      setSelectedId(restored.draft.blocks[0]?.id ?? null)
+      setPreviewContent(restored.draft)
+      setShownRevision(null)
+      setStatus({ kind: 'done', message: restoredMessage(revision, canPublish(site.access)) })
+    } catch (error) {
+      setStatus({ kind: 'error', message: messageOf(error) })
+    }
+  }
+
+  function toggleHistory() {
+    setHistoryOpen(!historyOpen)
+    setShownRevision(null)
+  }
+
+  // Правят всё равно черновик: выбор блока возвращает к его полям и к его предпросмотру
+  function selectBlock(id: string) {
+    setSelectedId(id)
+    setHistoryOpen(false)
+    setShownRevision(null)
+  }
+
   const addBlock = (type: BlockType) => {
     const block = createBlock(type, blocks)
     setBlocks(insertBlock(blocks, block, selectedId ?? undefined))
-    setSelectedId(block.id)
+    selectBlock(block.id)
   }
 
   const deleteBlock = (id: string) => {
@@ -159,6 +211,14 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
           <button type="button" onClick={save} disabled={!dirty || !canSave || busy}>
             Сохранить черновик
           </button>
+          <button
+            type="button"
+            aria-expanded={historyOpen}
+            aria-controls={historyOpen ? historyId : undefined}
+            onClick={toggleHistory}
+          >
+            История
+          </button>
           {/* Клиент публиковать не может: API ответит 403, кнопка только сбивала бы с толку */}
           {canPublish(site.access) && (
             <button
@@ -185,19 +245,47 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         blocks={blocks}
         selectedId={selectedId}
         invalidIds={invalidIds}
-        onSelect={setSelectedId}
+        onSelect={selectBlock}
         onMove={(id, offset) => setBlocks(moveBlock(blocks, id, offset))}
         onRemove={deleteBlock}
         onAdd={addBlock}
       />
-      <Preview content={previewContent} theme={site.theme} />
-      <Inspector
-        block={selected}
-        errors={selected ? (validation.blockErrors[selected.id] ?? {}) : {}}
-        onChange={(props) => {
-          if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
-        }}
+      <Preview
+        content={shown.data && shownRevision ? shown.data.content : previewContent}
+        theme={site.theme}
+        note={previewNote(shownRevision, shown)}
       />
+      {historyOpen ? (
+        <History
+          id={historyId}
+          siteId={site.id}
+          slug={page.slug}
+          selectedId={shownRevision?.id ?? null}
+          restoring={busy}
+          onSelect={setShownRevision}
+          onRestore={restore}
+        />
+      ) : (
+        <Inspector
+          block={selected}
+          errors={selected ? (validation.blockErrors[selected.id] ?? {}) : {}}
+          onChange={(props) => {
+            if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
+          }}
+        />
+      )}
     </div>
   )
+}
+
+/** Подпись над предпросмотром, когда в нём не черновик, а версия из истории */
+function previewNote(
+  revision: HistoryRevision | null,
+  query: { isPending: boolean; error: Error | null },
+) {
+  if (!revision) return undefined
+  const label = revisionLabel(revision)
+  if (query.error) return `${label}: не удалось загрузить — ${messageOf(query.error)}`
+  if (query.isPending) return `${label}: загружаю…`
+  return `${label} — так страница выглядела на сайте. Черновик не изменился`
 }

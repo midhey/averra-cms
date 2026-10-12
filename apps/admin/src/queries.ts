@@ -10,6 +10,10 @@ export const queryKeys = {
   site: (siteId: string) => ['sites', siteId] as const,
   pages: (siteId: string) => ['sites', siteId, 'pages'] as const,
   page: (siteId: string, slug: string) => ['sites', siteId, 'pages', slug] as const,
+  revisions: (siteId: string, slug: string) =>
+    ['sites', siteId, 'pages', slug, 'revisions'] as const,
+  revision: (siteId: string, slug: string, revisionId: string) =>
+    ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
 }
 
 export const sitesQuery = () =>
@@ -50,6 +54,33 @@ export const pageQuery = (siteId: string, slug: string) =>
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
+  })
+
+/** История публикаций страницы, новые сверху. Публикация сбрасывает её вместе со списком страниц */
+export const revisionsQuery = (siteId: string, slug: string) =>
+  queryOptions({
+    queryKey: queryKeys.revisions(siteId, slug),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].pages[':slug'].revisions.$get({
+        param: { siteId, slug },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Версия с содержимым. Снимок в истории не меняется никогда, поэтому и не устаревает */
+export const revisionQuery = (siteId: string, slug: string, revisionId: string) =>
+  queryOptions({
+    queryKey: queryKeys.revision(siteId, slug, revisionId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].pages[':slug'].revisions[':revisionId'].$get({
+        param: { siteId, slug, revisionId },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+    staleTime: Number.POSITIVE_INFINITY,
   })
 
 /**

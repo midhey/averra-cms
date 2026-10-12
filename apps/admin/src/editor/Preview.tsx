@@ -21,7 +21,14 @@ const EMPTY_DOCUMENT = '<!doctype html><html lang="ru"><head></head><body></body
  * Так стили лендинга не смешиваются со стилями админки, а медиазапросы срабатывают
  * по ширине выбранного устройства
  */
-export function Preview({ content, theme }: { content: PageContent; theme: Theme }) {
+type PreviewProps = {
+  content: PageContent
+  theme: Theme
+  /** Что показано, если не черновик: например, версия из истории */
+  note?: string
+}
+
+export function Preview({ content, theme, note }: PreviewProps) {
   const [device, setDevice] = useState<Device>('desktop')
   const [frameDocument, setFrameDocument] = useState<Document | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -95,6 +102,10 @@ export function Preview({ content, theme }: { content: PageContent; theme: Theme
           </button>
         ))}
       </fieldset>
+      {/* Живая область есть всегда, даже пустая: так экранный диктор прочитает смену версии */}
+      <p className={styles.note} aria-live="polite">
+        {note}
+      </p>
       <div ref={stageRef} className={styles.stage}>
         <div className={styles.frameBox} style={{ width: width * scale }}>
           <iframe

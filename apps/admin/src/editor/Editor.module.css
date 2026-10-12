@@ -78,6 +78,13 @@
   cursor: default;
 }
 
+/* Открытая панель истории — кнопка «нажата» */
+.topbar button[aria-expanded="true"] {
+  border-color: #2f5bea;
+  background: #eef2fd;
+  color: #2f5bea;
+}
+
 .topbar .primary {
   border-color: #2f5bea;
   background: #2f5bea;
