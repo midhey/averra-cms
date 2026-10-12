@@ -129,3 +129,27 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Ручка перетаскивания: без touch-action палец на телефоне прокручивал бы страницу, а не тащил */
+.dragHandle {
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #5b6170;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragHandle:hover {
+  background: #e3e5e9;
+}
+
+.dragHandle[aria-pressed="true"] {
+  cursor: grabbing;
+}
+
+.dragHandle:focus-visible {
+  outline: 2px solid #2f5bea;
+  outline-offset: 1px;
+}

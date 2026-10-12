@@ -1,4 +1,7 @@
-import { type ComponentType, useId } from 'react'
+import { type ComponentType, type ReactNode, useId, useMemo } from 'react'
+import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
+import { moveItem } from '../ui/sortable'
+import { useItemKeys } from './item-keys'
 import { emptyValue, fieldKind, type JsonSchema } from './json-schema'
 import { getIn, type Path, pathKey, setIn } from './path'
 import styles from './SchemaForm.module.css'
@@ -190,57 +193,47 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
   const error = errors[pathKey(path)]
   const canAdd = schema.maxItems === undefined || items.length < schema.maxItems
   const canRemove = items.length > (schema.minItems ?? 0)
+  const itemKeys = useItemKeys(items.length)
+  const { keys } = itemKeys
+  const entries = useMemo(
+    () => keys.map((key, index) => ({ id: key, label: itemLabel(items[index], index) })),
+    [keys, items],
+  )
 
-  const moveItem = (from: number, to: number) => {
-    const next = [...items]
-    const [item] = next.splice(from, 1)
-    next.splice(to, 0, item)
-    onChange(path, next)
+  const move = (from: number, to: number) => {
+    itemKeys.move(from, to)
+    onChange(path, moveItem(items, from, to))
+  }
+  const remove = (index: number) => {
+    itemKeys.remove(index)
+    onChange(path, items.toSpliced(index, 1))
   }
 
   return (
     <fieldset className={styles.group}>
       <legend className={styles.legend}>{label}</legend>
-      {items.map((item, index) => (
-        // У пунктов нет id. Поля управляемые, поэтому ключ по индексу не путает значения
-        <div key={index} className={styles.item}>
-          <div className={styles.itemBar}>
-            <span>№ {index + 1}</span>
-            <button
-              type="button"
-              aria-label="Поднять пункт"
-              disabled={index === 0}
-              onClick={() => moveItem(index, index - 1)}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              aria-label="Опустить пункт"
-              disabled={index === items.length - 1}
-              onClick={() => moveItem(index, index + 1)}
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              aria-label="Удалить пункт"
-              disabled={!canRemove}
-              onClick={() => onChange(path, items.toSpliced(index, 1))}
-            >
-              ✕
-            </button>
-          </div>
-          <Fields
-            schema={itemSchema}
-            value={item}
-            path={[...path, index]}
-            errors={errors}
-            onChange={onChange}
-            widgets={widgets}
-          />
-        </div>
-      ))}
+      <SortableList entries={entries} noun="пункт" onMove={move}>
+        {items.map((item, index) => (
+          <ListItem
+            key={keys[index]}
+            id={keys[index] ?? String(index)}
+            index={index}
+            count={items.length}
+            canRemove={canRemove}
+            onMove={move}
+            onRemove={remove}
+          >
+            <Fields
+              schema={itemSchema}
+              value={item}
+              path={[...path, index]}
+              errors={errors}
+              onChange={onChange}
+              widgets={widgets}
+            />
+          </ListItem>
+        ))}
+      </SortableList>
       {error && <p className={styles.error}>{error}</p>}
       <button
         type="button"
@@ -252,4 +245,63 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
       </button>
     </fieldset>
   )
+}
+
+type ListItemProps = {
+  id: string
+  index: number
+  count: number
+  canRemove: boolean
+  onMove: (from: number, to: number) => void
+  onRemove: (index: number) => void
+  children: ReactNode
+}
+
+function ListItem({ id, index, count, canRemove, onMove, onRemove, children }: ListItemProps) {
+  const sortable = useSortableItem(id, 'пункт')
+  return (
+    <div
+      ref={sortable.ref}
+      style={sortable.style}
+      className={styles.item}
+      data-dragging={sortable.dragging}
+    >
+      <div className={styles.itemBar}>
+        <DragHandle handle={sortable.handle} label="Перетащить пункт" />
+        <span>№ {index + 1}</span>
+        <button
+          type="button"
+          aria-label="Поднять пункт"
+          disabled={index === 0}
+          onClick={() => onMove(index, index - 1)}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          aria-label="Опустить пункт"
+          disabled={index === count - 1}
+          onClick={() => onMove(index, index + 1)}
+        >
+          ↓
+        </button>
+        <button
+          type="button"
+          aria-label="Удалить пункт"
+          disabled={!canRemove}
+          onClick={() => onRemove(index)}
+        >
+          ✕
+        </button>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** Имя пункта для диктора: его заголовок, если он есть, иначе номер */
+function itemLabel(item: unknown, index: number) {
+  const title =
+    typeof item === 'object' && item !== null ? (item as Record<string, unknown>).title : undefined
+  return typeof title === 'string' && title.trim() !== '' ? title : `№ ${index + 1}`
 }

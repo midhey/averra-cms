@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBlock, type EditorBlock, insertBlock, moveBlock, removeBlock } from './draft'
+import { createBlock, type EditorBlock, insertBlock, removeBlock } from './draft'
 
 const list: EditorBlock[] = [
   { id: 'hero-1', type: 'hero', props: { title: 'Первый' } },
@@ -18,11 +18,6 @@ describe('черновик страницы', () => {
     const block = createBlock('features', list)
     expect(ids(insertBlock(list, block, 'hero-1'))).toEqual(['hero-1', 'features-1', 'cta-1'])
     expect(ids(insertBlock(list, block))).toEqual(['hero-1', 'cta-1', 'features-1'])
-  })
-
-  it('двигает блоки и не выходит за края списка', () => {
-    expect(ids(moveBlock(list, 'cta-1', -1))).toEqual(['cta-1', 'hero-1'])
-    expect(moveBlock(list, 'hero-1', -1)).toBe(list)
   })
 
   it('удаляет блок', () => {

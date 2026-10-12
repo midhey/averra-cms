@@ -11,15 +11,9 @@ import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
 import { mediaQuery, queryKeys, revisionQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
+import { moveItem } from '../ui/sortable'
 import { BlockList } from './BlockList'
-import {
-  createBlock,
-  type EditorBlock,
-  insertBlock,
-  moveBlock,
-  removeBlock,
-  updateBlockProps,
-} from './draft'
+import { createBlock, type EditorBlock, insertBlock, removeBlock, updateBlockProps } from './draft'
 import styles from './Editor.module.css'
 import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel } from './history-format'
@@ -204,7 +198,9 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
 
   return (
     <div className={styles.editor}>
-      <div className={styles.top}>
+      {/* Именованная область: ориентир для диктора и место, где e2e ищет статус редактора.
+          Живые области role="status" есть ещё у каждого списка с перетаскиванием */}
+      <section className={styles.top} aria-label="Страница">
         <header className={styles.topbar}>
           <Breadcrumbs site={site} current={pagePath(page.slug)} />
           <label className={styles.title}>
@@ -250,14 +246,14 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         {validation.pageErrors.length > 0 && (
           <p className={styles.pageErrors}>{validation.pageErrors.join('. ')}</p>
         )}
-      </div>
+      </section>
 
       <BlockList
         blocks={blocks}
         selectedId={selectedId}
         invalidIds={invalidIds}
         onSelect={selectBlock}
-        onMove={(id, offset) => setBlocks(moveBlock(blocks, id, offset))}
+        onMove={(from, to) => setBlocks(moveItem(blocks, from, to))}
         onRemove={deleteBlock}
         onAdd={addBlock}
       />

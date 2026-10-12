@@ -18,14 +18,6 @@ export function insertBlock(list: readonly EditorBlock[], block: EditorBlock, af
   return index === -1 ? [...list, block] : list.toSpliced(index + 1, 0, block)
 }
 
-export function moveBlock(list: readonly EditorBlock[], id: string, offset: -1 | 1) {
-  const from = list.findIndex((block) => block.id === id)
-  const to = from + offset
-  const block = list[from]
-  if (!block || to < 0 || to >= list.length) return list
-  return list.toSpliced(from, 1).toSpliced(to, 0, block)
-}
-
 export function removeBlock(list: readonly EditorBlock[], id: string) {
   return list.filter((block) => block.id !== id)
 }

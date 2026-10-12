@@ -78,6 +78,13 @@ textarea.input {
   background: #f7f8fa;
 }
 
+/* Пункт, который тащат, — поверх соседей */
+.item[data-dragging="true"] {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.15);
+}
+
 .itemBar {
   display: flex;
   align-items: center;

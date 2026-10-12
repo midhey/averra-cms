@@ -31,6 +31,14 @@
   background: #eef2fd;
 }
 
+/* Блок, который тащат, — поверх соседей, которые под ним разъезжаются */
+.item[data-dragging="true"] {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.15);
+}
+
 .select {
   display: flex;
   flex: 1;
