@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { can } from '../../auth/access'
 import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { conflict } from '../../errors'
 import { validate } from '../../validate'
 import { sitesRepo } from './repo'
 
@@ -23,14 +24,6 @@ const PageParams = SiteParams.extend({ slug: PageSlug })
 const SaveDraft = z.strictObject({
   title: PageTitle,
   content: PageContent,
-})
-
-type Issue = { path: string; message: string }
-
-// 409 — запрос правильный, но спорит с тем, что уже лежит в базе. issues с путём до поля,
-// как у ошибок проверки: админка покажет сообщение прямо у поля, которое надо поправить
-const conflict = (message: string, issues: Issue[] = []) => ({
-  error: { code: 'conflict', message, issues },
 })
 
 // Вход проверил authenticate в app.ts. Здесь каждый маршрут сайта объявляет действие
@@ -148,7 +141,7 @@ export function sitesRoutes({ db }: { db: Db }) {
         site('page.publish'),
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
-          const page = await repo.publish(siteId, slug)
+          const page = await repo.publish(siteId, slug, c.var.actor)
           if (!page) return c.json(notFound('Страница не найдена'), 404)
           return c.json(page)
         },

@@ -6,6 +6,7 @@ import type { Auth } from './auth/auth'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
 import { authRoutes } from './modules/auth/routes'
+import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
 
 // Здесь не импортируем Node API (fs, process и т.п.): админка читает типы этого файла.
@@ -35,6 +36,7 @@ export function createApp({ db, auth, trustedOrigins, log }: AppDeps) {
     })
     .route('/', authRoutes({ auth }))
     .route('/sites', sitesRoutes({ db }))
+    .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } }, 404))
 

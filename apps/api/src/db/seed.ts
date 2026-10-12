@@ -3,28 +3,45 @@ import { defaultTheme } from '@cms/tokens'
 import type { Auth } from '../auth/auth'
 import { usersRepo } from '../modules/users/repo'
 import type { Db } from './client'
-import { pages, sites } from './schema'
+import { pageRevisions, pages, sites } from './schema'
 
 /** Для разработки: в пустую базу кладём демо-сайт с опубликованным лендингом */
 export async function seedDemo(db: Db) {
   const [existing] = await db.select({ id: sites.id }).from(sites).limit(1)
   if (existing) return
 
-  const [site] = await db
-    .insert(sites)
-    .values({ id: demoSiteId, name: 'Демо: ремонт квартир', theme: defaultTheme })
-    .returning({ id: sites.id })
-  if (!site) throw new Error('Не удалось создать демо-сайт')
-
   const content = PageContent.parse(demoPage)
-  await db.insert(pages).values({
-    siteId: site.id,
-    slug: MAIN_PAGE_SLUG,
-    title: demoPageTitle,
-    draft: content,
-    published: content,
-    publishedTitle: demoPageTitle,
-    publishedAt: new Date(),
+  const publishedAt = new Date()
+  // Демо-главная опубликована, значит, у неё есть и версия в истории — как после публикации
+  await db.transaction(async (tx) => {
+    const [site] = await tx
+      .insert(sites)
+      .values({ id: demoSiteId, name: 'Демо: ремонт квартир', theme: defaultTheme })
+      .returning({ id: sites.id })
+    if (!site) throw new Error('Не удалось создать демо-сайт')
+
+    const [page] = await tx
+      .insert(pages)
+      .values({
+        siteId: site.id,
+        slug: MAIN_PAGE_SLUG,
+        title: demoPageTitle,
+        draft: content,
+        published: content,
+        publishedTitle: demoPageTitle,
+        publishedAt,
+      })
+      .returning({ id: pages.id })
+    if (!page) throw new Error('Не удалось создать демо-страницу')
+
+    await tx.insert(pageRevisions).values({
+      siteId: site.id,
+      pageId: page.id,
+      version: 1,
+      title: demoPageTitle,
+      content,
+      publishedAt,
+    })
   })
 }
 

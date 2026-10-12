@@ -1,8 +1,8 @@
 import { MAIN_PAGE_SLUG, type PageContent, type Theme } from '@cms/schema'
-import { and, asc, eq, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
-import { pages, siteMembers, sites } from '../../db/schema'
+import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
 
 export function sitesRepo(db: Db) {
   const pageIs = (siteId: string, slug: string) =>
@@ -110,18 +110,46 @@ export function sitesRepo(db: Db) {
       return page
     },
 
-    /** Публикация — копия черновика и заголовка в опубликованную версию */
-    async publish(siteId: string, slug: string) {
-      const [page] = await db
-        .update(pages)
-        .set({
-          published: sql`${pages.draft}`,
-          publishedTitle: sql`${pages.title}`,
-          publishedAt: new Date(),
+    /**
+     * Публикация — копия черновика и заголовка в опубликованную версию плюс запись в историю.
+     * Одна транзакция: публикации без версии в истории (и наоборот) не бывает
+     */
+    publish(siteId: string, slug: string, actor: Actor) {
+      return db.transaction(async (tx) => {
+        const [page] = await tx
+          .update(pages)
+          .set({
+            published: sql`${pages.draft}`,
+            publishedTitle: sql`${pages.title}`,
+            publishedAt: new Date(),
+          })
+          .where(pageIs(siteId, slug))
+          .returning()
+        if (!page) return undefined
+        const { published, publishedTitle, publishedAt } = page
+        if (!published || publishedTitle === null || !publishedAt) {
+          throw new Error('База не вернула опубликованную версию страницы')
+        }
+
+        // Номер считаем после UPDATE: он держит блокировку строки страницы, и две
+        // одновременные публикации одной страницы получат номера по очереди
+        const [last] = await tx
+          .select({ version: max(pageRevisions.version) })
+          .from(pageRevisions)
+          .where(eq(pageRevisions.pageId, page.id))
+        await tx.insert(pageRevisions).values({
+          siteId,
+          pageId: page.id,
+          version: (last?.version ?? 0) + 1,
+          // Снимок — из того, что вернул UPDATE: в истории ровно то, что ушло на сайт
+          title: publishedTitle,
+          content: published,
+          publishedBy: actor.kind === 'user' ? actor.user.id : null,
+          publishedByToken: actor.kind === 'token' ? actor.tokenId : null,
+          publishedAt,
         })
-        .where(pageIs(siteId, slug))
-        .returning()
-      return page
+        return page
+      })
     },
 
     /** false — такой страницы не было */

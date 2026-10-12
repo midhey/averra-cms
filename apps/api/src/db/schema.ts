@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -165,4 +166,39 @@ export const apiTokens = pgTable(
     revokedAt: timestamp({ withTimezone: true }),
   },
   (table) => [index('api_tokens_site_id_idx').on(table.siteId)],
+)
+
+/**
+ * Снимок страницы при каждой публикации: что ушло на сайт, кто и когда. Пишет его публикация
+ * в той же транзакции (sitesRepo.publish), а возврат версии в черновик историю не меняет
+ */
+export const pageRevisions = pgTable(
+  'page_revisions',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    // История живёт, пока жива страница: новая страница с тем же адресом начинает с версии 1
+    pageId: uuid()
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    // Номер публикации у страницы. Время двух быстрых публикаций может совпасть, номер — нет
+    version: integer().notNull(),
+    title: text().notNull(),
+    content: jsonb().$type<PageContent>().notNull(),
+    // Автор — ссылкой, имя берётся при чтении. Пусто у публикаций до истории и у демо-сайта
+    publishedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    publishedByToken: uuid().references(() => apiTokens.id, { onDelete: 'set null' }),
+    publishedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('page_revisions_page_version_unique').on(table.pageId, table.version),
+    index('page_revisions_site_id_idx').on(table.siteId),
+    check(
+      'page_revisions_one_author',
+      sql`${table.publishedBy} IS NULL OR ${table.publishedByToken} IS NULL`,
+    ),
+    check('page_revisions_version_positive', sql`${table.version} > 0`),
+  ],
 )
