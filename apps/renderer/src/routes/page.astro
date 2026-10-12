@@ -5,6 +5,8 @@ import { themeToCss } from '@cms/tokens'
 import { loadSnapshot } from '../lib/snapshot'
 
 // Маршрут подключается в astro.config.mjs: при сборке он статический, в dev — по запросу.
+// Поэтому в dev Astro пишет в лог «getStaticPaths() ignored in dynamic page…» и советует
+// prerender = true. Так и задумано: совет не выполняем, getStaticPaths нужен только сборке.
 // Главная страница сайта хранится со slug «index» и открывается по корню
 export async function getStaticPaths() {
   const { pages } = await loadSnapshot()
@@ -17,7 +19,11 @@ const { site, pages, media } = await loadSnapshot()
 const slug = Astro.params.slug ?? 'index'
 const page = pages.find((candidate) => candidate.slug === slug)
 // При сборке сюда попадают только опубликованные страницы. В dev адрес может быть любым:
-// неопубликованная или удалённая страница — это 404, как и на собранном сайте
+// неопубликованная или удалённая страница — это 404, как и на собранном сайте. /index — тоже:
+// главная только по корню, а в сборке папки /index/ нет
+if (Astro.params.slug === 'index') {
+  return new Response('Главная страница открывается по адресу /', { status: 404 })
+}
 if (!page) return new Response(`Страница «${slug}» не опубликована`, { status: 404 })
 const themeCss = themeToCss(site.theme)
 ---
