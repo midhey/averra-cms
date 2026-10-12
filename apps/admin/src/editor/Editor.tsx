@@ -1,5 +1,5 @@
-import type { BlockType, PageContent, Theme } from '@cms/schema'
-import { useEffect, useMemo, useState } from 'react'
+import { type BlockType, type PageContent, PageTitle, type Theme } from '@cms/schema'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, messageOf } from '../errors'
 import { BlockList } from './BlockList'
@@ -43,7 +43,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   }, [validation.content])
 
   const dirty = snapshotOf(title, blocks) !== savedSnapshot
-  const titleValid = title.trim() !== '' && title.length <= 120
+  // Та же схема, что у API: сообщение об ошибке совпадёт с тем, что ответил бы сервер
+  const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
+  const titleValid = titleError === undefined
+  const titleErrorId = useId()
   const canSave = validation.content !== null && titleValid
   const busy = status.kind === 'busy'
 
@@ -114,6 +117,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               aria-invalid={titleValid ? undefined : true}
+              aria-describedby={titleValid ? undefined : titleErrorId}
             />
           </label>
           <span className={styles.status} data-kind={status.kind} role="status">
@@ -131,6 +135,11 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             Опубликовать
           </button>
         </header>
+        {titleError !== undefined && (
+          <p id={titleErrorId} className={styles.pageErrors}>
+            Заголовок страницы: {titleError}
+          </p>
+        )}
         {validation.pageErrors.length > 0 && (
           <p className={styles.pageErrors}>{validation.pageErrors.join('. ')}</p>
         )}

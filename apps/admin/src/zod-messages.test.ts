@@ -1,4 +1,4 @@
-import { features, hero } from '@cms/schema'
+import { features, hero, PageTitle } from '@cms/schema'
 import { describe, expect, it } from 'vitest'
 import { setupZodMessages } from './zod-messages'
 
@@ -13,6 +13,11 @@ describe('сообщения об ошибках', () => {
     expect(messages(hero.props.safeParse({ title: 'а'.repeat(121) }))).toEqual([
       'Не больше 120 символов',
     ])
+  })
+
+  it('одинаковы для заголовка страницы и полей блоков: пробелы — тоже пусто', () => {
+    expect(messages(PageTitle.safeParse('   '))).toEqual(['Поле не может быть пустым'])
+    expect(messages(PageTitle.safeParse('а'.repeat(121)))).toEqual(['Не больше 120 символов'])
   })
 
   it('объясняют ограничения списков', () => {
