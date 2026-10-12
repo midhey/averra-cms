@@ -1,0 +1,119 @@
+.library {
+  display: grid;
+  gap: 12px;
+}
+
+.upload {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.fileInput {
+  max-width: 100%;
+}
+
+.hint,
+.muted {
+  margin: 0;
+  color: #5b6170;
+  font-size: 12px;
+}
+
+.progress {
+  width: 100%;
+  max-width: 320px;
+}
+
+.status {
+  min-height: 1.2em;
+  margin: 0;
+  color: #1b7f3b;
+}
+
+.error {
+  margin: 0;
+  color: #c62828;
+  white-space: pre-line;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #e3e5e9;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.card[data-selected="true"] {
+  border-color: #2f5bea;
+  box-shadow: 0 0 0 2px rgb(47 91 234 / 0.2);
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: 110px;
+  border-radius: 6px;
+  background: #f4f5f7;
+  object-fit: cover;
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.actions button {
+  padding: 4px 10px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.actions .primary {
+  border-color: #2f5bea;
+  background: #2f5bea;
+  color: #fff;
+}
+
+.actions .primary[aria-pressed="true"] {
+  background: #eef2fd;
+  color: #2f5bea;
+}
+
+.actions .danger {
+  border-color: #e3b4b0;
+  color: #c62828;
+}

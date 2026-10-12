@@ -1,4 +1,4 @@
-import { SchemaForm } from '../forms/SchemaForm'
+import { SchemaForm, type Widgets } from '../forms/SchemaForm'
 import { catalogEntry } from './catalog'
 import type { EditorBlock } from './draft'
 import styles from './Inspector.module.css'
@@ -7,10 +7,12 @@ type InspectorProps = {
   block: EditorBlock | undefined
   errors: Readonly<Record<string, string>>
   onChange: (props: Record<string, unknown>) => void
+  /** Свои виджеты полей: выбор картинки из медиатеки сайта */
+  widgets: Widgets
 }
 
 /** Поля выбранного блока. Форма строится по JSON Schema из каталога */
-export function Inspector({ block, errors, onChange }: InspectorProps) {
+export function Inspector({ block, errors, onChange, widgets }: InspectorProps) {
   if (!block) {
     return (
       <aside className={styles.panel}>
@@ -33,6 +35,7 @@ export function Inspector({ block, errors, onChange }: InspectorProps) {
         value={block.props}
         errors={errors}
         onChange={onChange}
+        widgets={widgets}
       />
     </aside>
   )

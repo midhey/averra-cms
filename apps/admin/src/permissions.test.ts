@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canManagePages, canPublish, safeRedirect } from './permissions'
+import { canDeleteMedia, canManagePages, canPublish, safeRedirect } from './permissions'
 
 describe('возврат после входа', () => {
   it.each([
@@ -34,5 +34,13 @@ describe('что показывать роли', () => {
     expect([canPublish('client'), canManagePages('client')]).toEqual([false, false])
     expect([canPublish('editor'), canManagePages('editor')]).toEqual([true, true])
     expect([canPublish('owner'), canManagePages('owner')]).toEqual([true, true])
+  })
+
+  it('картинки удаляют владелец и редактор, клиент только загружает', () => {
+    expect((['client', 'editor', 'owner'] as const).map(canDeleteMedia)).toEqual([
+      false,
+      true,
+      true,
+    ])
   })
 })

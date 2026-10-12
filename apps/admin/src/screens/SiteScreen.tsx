@@ -53,6 +53,11 @@ export function SiteScreen() {
       <header className={styles.header}>
         <Breadcrumbs site={site} />
         <h1>{site.name}</h1>
+        <nav aria-label="Разделы сайта" className={styles.sectionNav}>
+          <Link to="/sites/$siteId/media" params={{ siteId }} className={styles.pageLink}>
+            Медиатека
+          </Link>
+        </nav>
       </header>
 
       <section aria-labelledby={pagesHeadingId} className={styles.section}>

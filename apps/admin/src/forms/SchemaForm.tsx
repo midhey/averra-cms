@@ -1,11 +1,12 @@
-import { useId } from 'react'
+import { type ComponentType, useId } from 'react'
 import { emptyValue, fieldKind, type JsonSchema } from './json-schema'
 import { getIn, type Path, pathKey, setIn } from './path'
 import styles from './SchemaForm.module.css'
 
 type Errors = Readonly<Record<string, string>>
 
-type FieldProps = {
+/** Что получает поле формы, в том числе свой виджет (например, выбор картинки) */
+export type FieldProps = {
   schema: JsonSchema
   value: unknown
   path: Path
@@ -13,7 +14,14 @@ type FieldProps = {
   required: boolean
   errors: Errors
   onChange: (path: Path, value: unknown) => void
+  widgets: Widgets
 }
+
+/**
+ * Виджеты для полей с пометкой x-widget. Форма общая и не знает ни про медиатеку, ни про сайт:
+ * виджет приходит в неё явно от того, кто знает (редактор)
+ */
+export type Widgets = { image?: ComponentType<FieldProps> }
 
 type SchemaFormProps = {
   schema: JsonSchema
@@ -21,16 +29,27 @@ type SchemaFormProps = {
   /** Ошибки по путям внутри value: 'button.href', 'items.0.title' */
   errors: Errors
   onChange: (value: Record<string, unknown>) => void
+  widgets?: Widgets
 }
 
 /** Форма по JSON Schema: поля, подписи и ограничения берутся из той же схемы, что проверяет API */
-export function SchemaForm({ schema, value, errors, onChange }: SchemaFormProps) {
+export function SchemaForm({ schema, value, errors, onChange, widgets = {} }: SchemaFormProps) {
   const change = (path: Path, next: unknown) =>
     onChange(setIn(value, path, next) as Record<string, unknown>)
-  return <Fields schema={schema} value={value} path={[]} errors={errors} onChange={change} />
+  return (
+    <Fields
+      schema={schema}
+      value={value}
+      path={[]}
+      errors={errors}
+      onChange={change}
+      widgets={widgets}
+    />
+  )
 }
 
-function Fields({ schema, value, path, errors, onChange }: Omit<FieldProps, 'label' | 'required'>) {
+function Fields(props: Omit<FieldProps, 'label' | 'required'>) {
+  const { schema, value, path, errors, onChange, widgets } = props
   const required = new Set(schema.required ?? [])
   return Object.entries(schema.properties ?? {}).map(([key, child]) => (
     <Field
@@ -42,6 +61,7 @@ function Fields({ schema, value, path, errors, onChange }: Omit<FieldProps, 'lab
       required={required.has(key)}
       errors={errors}
       onChange={onChange}
+      widgets={widgets}
     />
   ))
 }
@@ -58,6 +78,11 @@ function Field(props: FieldProps) {
       return <ObjectField {...props} />
     case 'list':
       return <ListField {...props} />
+    case 'image': {
+      const Image = props.widgets.image
+      if (Image) return <Image {...props} />
+      return <p className={styles.hint}>Поле «{props.label}» пока не редактируется в админке</p>
+    }
     default:
       return <p className={styles.hint}>Поле «{props.label}» пока не редактируется в админке</p>
   }
@@ -134,7 +159,8 @@ function SelectField({ schema, value, path, label, onChange }: FieldProps) {
   )
 }
 
-function ObjectField({ schema, value, path, label, required, errors, onChange }: FieldProps) {
+function ObjectField(props: FieldProps) {
+  const { schema, value, path, label, required, onChange } = props
   const id = useId()
   const present = value !== undefined
   const toggle = (on: boolean) => onChange(path, on ? emptyValue(schema) : undefined)
@@ -153,14 +179,12 @@ function ObjectField({ schema, value, path, label, required, errors, onChange }:
           Показывать
         </label>
       )}
-      {present && (
-        <Fields schema={schema} value={value} path={path} errors={errors} onChange={onChange} />
-      )}
+      {present && <Fields {...props} />}
     </fieldset>
   )
 }
 
-function ListField({ schema, value, path, label, errors, onChange }: FieldProps) {
+function ListField({ schema, value, path, label, errors, onChange, widgets }: FieldProps) {
   const items: unknown[] = Array.isArray(value) ? value : []
   const itemSchema = schema.items ?? {}
   const error = errors[pathKey(path)]
@@ -213,6 +237,7 @@ function ListField({ schema, value, path, label, errors, onChange }: FieldProps)
             path={[...path, index]}
             errors={errors}
             onChange={onChange}
+            widgets={widgets}
           />
         </div>
       ))}

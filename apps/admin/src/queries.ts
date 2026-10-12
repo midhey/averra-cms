@@ -14,6 +14,7 @@ export const queryKeys = {
     ['sites', siteId, 'pages', slug, 'revisions'] as const,
   revision: (siteId: string, slug: string, revisionId: string) =>
     ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
+  media: (siteId: string) => ['sites', siteId, 'media'] as const,
 }
 
 export const sitesQuery = () =>
@@ -81,6 +82,17 @@ export const revisionQuery = (siteId: string, slug: string, revisionId: string) 
       return res.json()
     },
     staleTime: Number.POSITIVE_INFINITY,
+  })
+
+/** Медиатека сайта, новые сверху. Её же берёт предпросмотр редактора, чтобы показать картинки */
+export const mediaQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.media(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].media.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
   })
 
 /**

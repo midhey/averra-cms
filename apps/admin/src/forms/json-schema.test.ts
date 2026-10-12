@@ -17,6 +17,8 @@ describe('fieldKind', () => {
     expect(fieldKind(field(hero, 'button'))).toBe('object')
     expect(fieldKind(field(field(hero, 'button'), 'href'))).toBe('text')
     expect(fieldKind(field(catalogEntry('features').schema, 'items'))).toBe('list')
+    // Картинка — объект, но со своим виджетом: выбор из медиатеки и alt
+    expect(fieldKind(field(hero, 'image'))).toBe('image')
   })
 })
 

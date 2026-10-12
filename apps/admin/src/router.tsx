@@ -7,15 +7,16 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { safeRedirect } from './permissions'
-import { meQuery, pageQuery, pagesQuery, siteQuery, sitesQuery } from './queries'
+import { mediaQuery, meQuery, pageQuery, pagesQuery, siteQuery, sitesQuery } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
 import { LoginScreen } from './screens/LoginScreen'
+import { MediaScreen } from './screens/MediaScreen'
 import { SiteScreen } from './screens/SiteScreen'
 import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AppHeader } from './ui/AppHeader'
 
-// Маршруты описаны в коде, без генератора: экранов четыре, всё дерево видно здесь.
+// Маршруты описаны в коде, без генератора: экранов пять, всё дерево видно здесь.
 // Данные загружаются в кеш TanStack Query, роутер только ждёт их перед показом экрана
 
 type RouterContext = { queryClient: QueryClient }
@@ -77,6 +78,17 @@ const siteRoute = createRoute({
   component: SiteScreen,
 })
 
+const mediaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sites/$siteId/media',
+  loader: ({ context: { queryClient }, params: { siteId } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(siteQuery(siteId)),
+      queryClient.ensureQueryData(mediaQuery(siteId)),
+    ]),
+  component: MediaScreen,
+})
+
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/pages/$slug',
@@ -95,7 +107,13 @@ const editorRoute = createRoute({
   component: EditorScreen,
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, sitesRoute, siteRoute, editorRoute])
+const routeTree = rootRoute.addChildren([
+  loginRoute,
+  sitesRoute,
+  siteRoute,
+  mediaRoute,
+  editorRoute,
+])
 
 export function createAdminRouter(queryClient: QueryClient) {
   return createRouter({

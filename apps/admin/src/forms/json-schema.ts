@@ -12,12 +12,16 @@ export type JsonSchema = {
   items?: JsonSchema
   minItems?: number
   maxItems?: number
+  /** Свой виджет вместо обычных полей: пометку ставит схема в @cms/schema (например, Image) */
+  'x-widget'?: string
 }
 
-export type FieldKind = 'text' | 'textarea' | 'select' | 'object' | 'list' | 'unsupported'
+export type FieldKind = 'text' | 'textarea' | 'select' | 'object' | 'list' | 'image' | 'unsupported'
 
 /** Каким полем формы показывать значение. Длинный текст — многострочным полем */
 export function fieldKind(schema: JsonSchema): FieldKind {
+  // Картинка по устройству — объект { mediaId, alt }, но человеку нужен выбор из медиатеки
+  if (schema['x-widget'] === 'image') return 'image'
   if (schema.enum) return 'select'
   switch (schema.type) {
     case 'string':

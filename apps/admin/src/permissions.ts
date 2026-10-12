@@ -6,6 +6,8 @@ export type SiteAccess = 'owner' | 'editor' | 'client'
 /** Создавать, публиковать и удалять страницы могут владелец и редактор, клиент — только править */
 export const canPublish = (access: SiteAccess) => access !== 'client'
 export const canManagePages = (access: SiteAccess) => access !== 'client'
+/** Картинки загружают все, кто правит сайт, а удаляют, как и страницы, владелец и редактор */
+export const canDeleteMedia = (access: SiteAccess) => access !== 'client'
 
 /**
  * Куда вернуть после входа. Только адрес внутри админки: ссылка вида /login?redirect=https://…

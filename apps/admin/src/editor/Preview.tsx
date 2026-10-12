@@ -1,6 +1,6 @@
 import { Page } from '@cms/blocks'
 import baseCss from '@cms/blocks/base.css?inline'
-import type { PageContent, Theme } from '@cms/schema'
+import type { MediaMap, PageContent, Theme } from '@cms/schema'
 import { themeToCss } from '@cms/tokens'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,11 +24,13 @@ const EMPTY_DOCUMENT = '<!doctype html><html lang="ru"><head></head><body></body
 type PreviewProps = {
   content: PageContent
   theme: Theme
+  /** Картинки сайта: блоки берут из справочника адреса вариантов, как на опубликованном сайте */
+  media: MediaMap
   /** Что показано, если не черновик: например, версия из истории */
   note?: string
 }
 
-export function Preview({ content, theme, note }: PreviewProps) {
+export function Preview({ content, theme, media, note }: PreviewProps) {
   const [device, setDevice] = useState<Device>('desktop')
   const [frameDocument, setFrameDocument] = useState<Document | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -118,7 +120,7 @@ export function Preview({ content, theme, note }: PreviewProps) {
           />
         </div>
       </div>
-      {frameDocument && createPortal(<Page content={content} />, frameDocument.body)}
+      {frameDocument && createPortal(<Page content={content} media={media} />, frameDocument.body)}
     </section>
   )
 }

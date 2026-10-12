@@ -179,3 +179,8 @@
   color: #c62828;
   white-space: pre-line;
 }
+
+/* Разделы сайта под заголовком: пока только медиатека */
+.sectionNav {
+  margin: -12px 0 16px;
+}

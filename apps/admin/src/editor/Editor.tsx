@@ -4,9 +4,12 @@ import { useBlocker } from '@tanstack/react-router'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, apiRequestError, messageOf } from '../errors'
+import type { FieldProps, Widgets } from '../forms/SchemaForm'
+import { ImageField } from '../media/ImageField'
+import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
-import { queryKeys, revisionQuery } from '../queries'
+import { mediaQuery, queryKeys, revisionQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { BlockList } from './BlockList'
 import {
@@ -44,6 +47,14 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Версия из истории в предпросмотре. Черновик в редакторе она не трогает
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
   const historyId = useId()
+
+  // Медиатека сайта: из неё поле «картинка» выбирает, а предпросмотр берёт адреса вариантов
+  const library = useQuery(mediaQuery(site.id))
+  const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
+  const widgets = useMemo<Widgets>(
+    () => ({ image: (props: FieldProps) => <ImageField {...props} siteId={site.id} /> }),
+    [site.id],
+  )
 
   const validation = useMemo(() => validateBlocks(blocks), [blocks])
   const invalidIds = useMemo(() => new Set(Object.keys(validation.blockErrors)), [validation])
@@ -195,7 +206,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     <div className={styles.editor}>
       <div className={styles.top}>
         <header className={styles.topbar}>
-          <Breadcrumbs site={site} page={pagePath(page.slug)} />
+          <Breadcrumbs site={site} current={pagePath(page.slug)} />
           <label className={styles.title}>
             <span className={styles.titleLabel}>Заголовок страницы</span>
             <input
@@ -253,6 +264,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       <Preview
         content={shown.data && shownRevision ? shown.data.content : previewContent}
         theme={site.theme}
+        media={media}
         note={previewNote(shownRevision, shown)}
       />
       {historyOpen ? (
@@ -272,6 +284,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
           onChange={(props) => {
             if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
           }}
+          widgets={widgets}
         />
       )}
     </div>
