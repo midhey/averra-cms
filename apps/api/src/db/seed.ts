@@ -1,4 +1,4 @@
-import { demoPage, PageContent } from '@cms/schema'
+import { demoPage, demoPageTitle, PageContent } from '@cms/schema'
 import { defaultTheme } from '@cms/tokens'
 import type { Db } from './client'
 import { pages, sites } from './schema'
@@ -18,9 +18,10 @@ export async function seedDemo(db: Db) {
   await db.insert(pages).values({
     siteId: site.id,
     slug: 'index',
-    title: 'Ремонт квартир под ключ',
+    title: demoPageTitle,
     draft: content,
     published: content,
+    publishedTitle: demoPageTitle,
     publishedAt: new Date(),
   })
 }

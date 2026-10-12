@@ -1,4 +1,4 @@
-import { PageContent } from '@cms/schema'
+import { PageContent, PageTitle } from '@cms/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Db } from '../../db/client'
@@ -14,7 +14,7 @@ const PageParams = SiteParams.extend({
 })
 
 const SaveDraft = z.strictObject({
-  title: z.string().trim().min(1).max(120),
+  title: PageTitle,
   content: PageContent,
 })
 

@@ -1,5 +1,8 @@
 import type { PageContentInput } from './page'
 
+/** Заголовок демо-страницы: его кладёт в базу сид API, к нему же возвращают её e2e-тесты */
+export const demoPageTitle = 'Ремонт квартир под ключ'
+
 /** Демо-лендинг для разработки: его показывает рендерер, а позже им заполнится база */
 export const demoPage = {
   blocks: [

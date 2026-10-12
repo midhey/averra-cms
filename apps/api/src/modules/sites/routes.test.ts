@@ -1,4 +1,4 @@
-import type { PageContentInput } from '@cms/schema'
+import { demoPageTitle, type PageContentInput } from '@cms/schema'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../../testing'
@@ -44,6 +44,12 @@ describe('сайты и страницы', () => {
     const page = await res.json()
     expect(page.draft.blocks).toHaveLength(1)
     expect(page.published?.blocks).toHaveLength(3)
+
+    // Новый заголовок страницы тоже ждёт публикации: на сайте пока старый
+    const snapshot = await sites[':siteId'].snapshot.$get({ param: { siteId } })
+    if (snapshot.status !== 200) throw new Error(`Ожидали 200, пришёл ${snapshot.status}`)
+    const { pages } = await snapshot.json()
+    expect(pages[0]?.title).toBe(demoPageTitle)
   })
 
   it('публикует черновик, и он попадает в снимок сайта', async () => {
@@ -54,6 +60,7 @@ describe('сайты и страницы', () => {
     const res = await sites[':siteId'].snapshot.$get({ param: { siteId } })
     if (res.status !== 200) throw new Error(`Ожидали 200, пришёл ${res.status}`)
     const { pages } = await res.json()
+    expect(pages[0]?.title).toBe('Новый лендинг')
     expect(pages[0]?.content.blocks[0]).toMatchObject({ props: { title: 'Новый заголовок' } })
   })
 

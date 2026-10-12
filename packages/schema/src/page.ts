@@ -14,3 +14,6 @@ export const PageContent = z
 export type PageContent = z.infer<typeof PageContent>
 /** Что можно прислать в API: поля со значениями по умолчанию необязательны */
 export type PageContentInput = z.input<typeof PageContent>
+
+/** Заголовок страницы (тег title). Одна схема для API и для поля в редакторе */
+export const PageTitle = z.string().trim().min(1).max(120)

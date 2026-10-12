@@ -36,11 +36,15 @@ export function sitesRepo(db: Db) {
       return page
     },
 
-    /** Публикация — копия черновика в опубликованную версию */
+    /** Публикация — копия черновика и заголовка в опубликованную версию */
     async publish(siteId: string, slug: string) {
       const [page] = await db
         .update(pages)
-        .set({ published: sql`${pages.draft}`, publishedAt: new Date() })
+        .set({
+          published: sql`${pages.draft}`,
+          publishedTitle: sql`${pages.title}`,
+          publishedAt: new Date(),
+        })
         .where(pageIs(siteId, slug))
         .returning()
       return page
@@ -48,11 +52,15 @@ export function sitesRepo(db: Db) {
 
     async publishedPages(siteId: string) {
       const rows = await db
-        .select({ slug: pages.slug, title: pages.title, content: pages.published })
+        .select({ slug: pages.slug, title: pages.publishedTitle, content: pages.published })
         .from(pages)
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
         .orderBy(asc(pages.slug))
-      return rows.flatMap((row) => (row.content ? [{ ...row, content: row.content }] : []))
+      // published и published_title заполнены вместе — это держит CHECK в базе
+      // (pages_published_with_title), так что фильтр только сужает типы и страниц не теряет
+      return rows.flatMap(({ slug, title, content }) =>
+        content && title ? [{ slug, title, content }] : [],
+      )
     },
   }
 }
