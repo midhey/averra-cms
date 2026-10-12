@@ -3,5 +3,15 @@ export { BlockInstance, type BlockType, blocks, cta, features, hero } from './bl
 export { Button, Href } from './common'
 export { BlockId, defineBlock } from './define-block'
 export { demoPage, demoPageTitle } from './demo'
-export { PageContent, type PageContentInput, PageTitle } from './page'
+export {
+  MAIN_PAGE_SLUG,
+  NewPage,
+  PageContent,
+  type PageContentInput,
+  PageSlug,
+  PageTemplate,
+  PageTitle,
+  pageTemplateContent,
+} from './page'
+export { NewSite, SiteName } from './site'
 export { Theme } from './theme'
