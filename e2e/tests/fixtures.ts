@@ -149,3 +149,21 @@ export function historyPanel(page: Page) {
     showDraftButton: panel.getByRole('button', { name: 'Показать черновик' }),
   }
 }
+
+/** Медиатека сайта так, как её видит человек */
+export function mediaScreen(page: Page) {
+  const grid = page.getByRole('list', { name: 'Картинки сайта' })
+  return {
+    open: async () => {
+      const site = await findDemoSite()
+      await page.goto(`/sites/${site.id}/media`)
+      await expect(page.getByRole('heading', { level: 1, name: 'Медиатека' })).toBeVisible()
+    },
+    fileInput: page.getByLabel('Загрузить картинку'),
+    status: page.getByRole('status'),
+    alert: page.getByRole('alert'),
+    grid,
+    item: (name: string) => grid.getByRole('listitem').filter({ hasText: name }),
+    deleteButton: (name: string) => page.getByRole('button', { name: `Удалить «${name}»` }),
+  }
+}

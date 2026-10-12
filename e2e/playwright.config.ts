@@ -42,6 +42,10 @@ export default defineConfig({
         NODE_ENV: 'development',
         PORT: String(ports.api),
         PGLITE_DIR: resolve(import.meta.dirname, '.data/pglite'),
+        // Картинки e2e — рядом с их базой и стираются вместе с ней
+        MEDIA_DIR: resolve(import.meta.dirname, '.data/media'),
+        // Лимит меньше обычных 10 МБ: тест большого файла не гоняет десятки мегабайт
+        MEDIA_MAX_BYTES: String(2 * 1024 * 1024),
         DEV_OWNER_EMAIL: e2eOwner.email,
         DEV_OWNER_PASSWORD: e2eOwner.password,
         ADMIN_URL: urls.admin,
