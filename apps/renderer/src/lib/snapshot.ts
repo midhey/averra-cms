@@ -1,5 +1,6 @@
 import { CMS_API_URL, CMS_SITE_ID } from 'astro:env/server'
 import type { AppType } from '@cms/api'
+import type { MediaMap } from '@cms/schema'
 import { hc } from 'hono/client'
 
 const sites = hc<AppType>(CMS_API_URL).api.sites
@@ -17,7 +18,28 @@ export async function loadSnapshot() {
   const res = await request(() => sites[':siteId'].snapshot.$get({ param: { siteId } }))
   if (res.status === 404) throw new Error(`В API нет сайта ${siteId} (CMS_SITE_ID)`)
   if (res.status !== 200) throw new Error(`API ответил ${res.status} на сайт ${siteId}`)
-  return res.json()
+  const snapshot = await res.json()
+  return { ...snapshot, media: withAbsoluteUrls(snapshot.media) }
+}
+
+/**
+ * API отдаёт адреса файлов картинок от своего корня (/api/media/…), а страницу сайта открывают
+ * с другого адреса — ссылки должны вести на сам API. Когда публикация начнёт выкладывать
+ * файлы вместе со статикой (модуль 9), адреса будут указывать туда
+ */
+function withAbsoluteUrls(media: MediaMap): MediaMap {
+  return Object.fromEntries(
+    Object.entries(media).map(([id, file]) => [
+      id,
+      {
+        ...file,
+        variants: file.variants.map((variant) => ({
+          ...variant,
+          url: new URL(variant.url, CMS_API_URL).href,
+        })),
+      },
+    ]),
+  )
 }
 
 async function request<T>(call: () => Promise<T>): Promise<T> {

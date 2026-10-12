@@ -13,7 +13,7 @@ export async function getStaticPaths() {
 
 // Содержимое грузим здесь, а не в getStaticPaths: в dev-режиме этот код выполняется
 // на каждый запрос, и опубликованные правки видны после обновления страницы
-const { site, pages } = await loadSnapshot()
+const { site, pages, media } = await loadSnapshot()
 const slug = Astro.params.slug ?? 'index'
 const page = pages.find((candidate) => candidate.slug === slug)
 // При сборке сюда попадают только опубликованные страницы. В dev адрес может быть любым:
@@ -30,6 +30,6 @@ const themeCss = themeToCss(site.theme)
     <style is:inline set:html={themeCss}></style>
   </head>
   <body>
-    <Page content={page.content} />
+    <Page content={page.content} media={media} />
   </body>
 </html>
