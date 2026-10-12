@@ -25,6 +25,10 @@ const permissions = {
   'page.create': ['owner', 'editor'],
   'page.publish': ['owner', 'editor'],
   'page.delete': ['owner', 'editor'],
+  // Картинки — как страницы: клиент правит свой сайт, значит, и картинки для него грузит,
+  // а удалять, как и страницы, может владелец или редактор
+  'media.upload': ['owner', 'editor', 'client'],
+  'media.delete': ['owner', 'editor'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -40,6 +44,8 @@ export const forbiddenMessages: Record<Permission, string> = {
   'page.create': 'Создавать страницы может владелец или редактор сайта',
   'page.publish': 'Публиковать может владелец или редактор сайта',
   'page.delete': 'Удалять страницы может владелец или редактор сайта',
+  'media.upload': 'Загружать картинки на этот сайт нельзя',
+  'media.delete': 'Удалять картинки может владелец или редактор сайта',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

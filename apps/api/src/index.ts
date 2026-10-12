@@ -7,6 +7,8 @@ import { createDb } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
 import { seedDemo, seedDevOwner } from './db/seed'
+import { diskStorage } from './media/disk-storage'
+import { sharpProcessor } from './media/sharp-processor'
 
 const config = loadConfig()
 
@@ -49,6 +51,9 @@ const app = createApp({
   auth,
   trustedOrigins: [config.ADMIN_URL, config.API_URL],
   log: console.log,
+  storage: diskStorage(config.MEDIA_DIR),
+  images: sharpProcessor(),
+  mediaMaxBytes: config.MEDIA_MAX_BYTES,
 })
 
 /**

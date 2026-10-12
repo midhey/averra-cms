@@ -1,4 +1,5 @@
 import {
+  collectMediaRefs,
   MAIN_PAGE_SLUG,
   NewPage,
   NewSite,
@@ -6,6 +7,7 @@ import {
   PageSlug,
   PageTitle,
   pageTemplateContent,
+  Uuid,
 } from '@cms/schema'
 import { defaultTheme } from '@cms/tokens'
 import { Hono } from 'hono'
@@ -15,9 +17,11 @@ import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/mi
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { validate } from '../../validate'
+import { missingMediaIssues } from '../media/refs'
+import { mediaRepo } from '../media/repo'
 import { sitesRepo } from './repo'
 
-const SiteParams = z.object({ siteId: z.uuid() })
+const SiteParams = z.object({ siteId: Uuid() })
 
 const PageParams = SiteParams.extend({ slug: PageSlug })
 
@@ -30,6 +34,7 @@ const SaveDraft = z.strictObject({
 // через requireSite: он же отвечает 404 на чужой или несуществующий сайт
 export function sitesRoutes({ db }: { db: Db }) {
   const repo = sitesRepo(db)
+  const media = mediaRepo(db)
   const site = (permission: Parameters<typeof requireSite>[1]) => requireSite(db, permission)
 
   return (
@@ -65,9 +70,16 @@ export function sitesRoutes({ db }: { db: Db }) {
         const { siteId } = c.req.valid('param')
         const found = await repo.find(siteId)
         if (!found) return c.json(notFound('Сайт не найден'), 404)
+        const pages = await repo.publishedPages(siteId)
+        // Справочник картинок — только тех, что стоят на опубликованных страницах: рендереру
+        // нужны их варианты, а остальная медиатека снаружи не видна
+        const mediaIds = pages.flatMap((page) =>
+          collectMediaRefs(page.content).map((ref) => ref.mediaId),
+        )
         return c.json({
           site: { id: found.id, name: found.name, theme: found.theme },
-          pages: await repo.publishedPages(siteId),
+          pages,
+          media: await media.files(siteId, mediaIds),
         })
       })
 
@@ -110,6 +122,11 @@ export function sitesRoutes({ db }: { db: Db }) {
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
           const { title, content } = c.req.valid('json')
+          // Картинка — ссылка в медиатеку этого сайта: на чужую или удалённую сослаться нельзя
+          const missing = await missingMediaIssues(media, siteId, content)
+          if (missing.length > 0) {
+            return c.json(conflict('На странице есть картинки не из медиатеки сайта', missing), 409)
+          }
           if (can(c.var.siteRole, 'page.create')) {
             return c.json(await repo.saveDraft(siteId, slug, title, content), 200)
           }

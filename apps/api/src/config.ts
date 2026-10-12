@@ -18,6 +18,14 @@ const Env = z
     PORT: z.coerce.number().int().positive().default(4000),
     // Папка встроенного Postgres (PGlite) для разработки. Для прода появится DATABASE_URL
     PGLITE_DIR: z.string().min(1).default('.data/pglite'),
+    // Папка с картинками медиатеки. В проде её место займёт S3-совместимое хранилище
+    MEDIA_DIR: z.string().min(1).default('.data/media'),
+    // Самый большой файл, который принимает медиатека, в байтах. По умолчанию 10 МБ
+    MEDIA_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 1024 * 1024),
     // Подпись cookie сессии. Сгенерировать: openssl rand -base64 32
     AUTH_SECRET: z.string().min(32).optional(),
     // Адрес админки: только с него Better Auth и API принимают запросы с cookie

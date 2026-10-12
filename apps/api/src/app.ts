@@ -5,7 +5,10 @@ import { logger } from 'hono/logger'
 import type { Auth } from './auth/auth'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
+import type { ImageProcessor } from './media/processor'
+import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
+import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
 
@@ -17,9 +20,16 @@ export type AppDeps = {
   /** Откуда принимаем изменяющие запросы с cookie: адреса админки и самого API */
   trustedOrigins: readonly string[]
   log: (message: string) => void
+  /** Где лежат файлы медиатеки: папка на диске, потом S3 */
+  storage: MediaStorage
+  /** Проверка и нарезка картинок (sharp) */
+  images: ImageProcessor
+  /** Самый большой файл медиатеки в байтах */
+  mediaMaxBytes: number
 }
 
-export function createApp({ db, auth, trustedOrigins, log }: AppDeps) {
+export function createApp(deps: AppDeps) {
+  const { db, auth, trustedOrigins, log } = deps
   const app = new Hono<AuthEnv>()
     .use(logger(log))
     .basePath('/api')
@@ -37,6 +47,8 @@ export function createApp({ db, auth, trustedOrigins, log }: AppDeps) {
     .route('/', authRoutes({ auth }))
     .route('/sites', sitesRoutes({ db }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
+    .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))
+    .route('/media', mediaFilesRoutes(deps))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } }, 404))
 

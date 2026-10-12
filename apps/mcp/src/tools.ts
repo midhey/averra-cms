@@ -1,5 +1,5 @@
 import type { AppType } from '@cms/api'
-import { blocks, describeApiError, PageContent, PageSlug, PageTitle } from '@cms/schema'
+import { blocks, describeApiError, PageContent, PageSlug, PageTitle, Uuid } from '@cms/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
@@ -7,7 +7,7 @@ import { z } from 'zod'
 export type Api = ReturnType<typeof hc<AppType>>
 
 const PageRef = z.object({
-  siteId: z.uuid().describe('Id сайта из list_sites'),
+  siteId: Uuid().describe('Id сайта из list_sites'),
   slug: PageSlug.default('index').describe(
     'Адрес страницы: латиница в нижнем регистре, цифры, дефис между ними. Главная — index',
   ),
@@ -28,6 +28,7 @@ const rules = [
   'Главный заголовок страницы (h1) получает первый блок hero, поэтому начинай страницу с него.',
   'Ссылки только https://, http://, /, #, mailto: и tel:.',
   'Лишних полей быть не должно: используй только поля из схем блоков.',
+  'Картинка — { mediaId, alt }: mediaId из медиатеки этого сайта (её пополняют в админке), alt обязателен — коротко, что на картинке. Чужой или выдуманный mediaId API не примет. hero в варианте split без картинки не пройдёт.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
 ]
 

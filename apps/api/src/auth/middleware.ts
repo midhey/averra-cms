@@ -21,8 +21,13 @@ export const forbidden = (message: string) => ({ error: { code: 'forbidden', mes
 export const notFound = (message: string) => ({ error: { code: 'not_found', message } })
 
 // Без входа открыто только это. Остальное под /api закрыто по умолчанию: новый маршрут
-// не окажется открытым по забывчивости. Опубликованное и так публично — его берёт рендерер
-const publicRoutes = [/^\/api\/health(\/ready)?$/, /^\/api\/sites\/[^/]+\/snapshot$/]
+// не окажется открытым по забывчивости. Опубликованное и так публично — его берёт рендерер.
+// Файлы картинок тоже: на них ссылается опубликованный сайт
+const publicRoutes = [
+  /^\/api\/health(\/ready)?$/,
+  /^\/api\/sites\/[^/]+\/snapshot$/,
+  /^\/api\/media\/[^/]+\/[^/]+$/,
+]
 
 function isPublic(method: string, path: string) {
   // /api/auth/* — эндпоинты Better Auth: что там можно без входа, решает он сам
@@ -91,7 +96,9 @@ export function authenticate({ db, auth, trustedOrigins }: AuthenticateOptions) 
  */
 export function requireSite(db: Db, permission: Permission) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const siteId = c.req.param('siteId')
+    // Сырой параметр, не после validate: приводим к строчным, как Uuid, иначе токен сайта
+    // (его siteId из базы — строчными) не узнал бы свой сайт в адресе с заглавными буквами
+    const siteId = c.req.param('siteId')?.toLowerCase()
     const role = siteId === undefined ? undefined : await siteRoleOf(db, c.var.actor, siteId)
     if (!role) return c.json(notFound('Сайт не найден'), 404)
     if (!can(role, permission)) return c.json(forbidden(forbiddenMessages[permission]), 403)

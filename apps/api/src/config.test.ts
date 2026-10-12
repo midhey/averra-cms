@@ -25,6 +25,15 @@ describe('конфиг', () => {
     })
   })
 
+  it('медиатека по умолчанию — папка .data/media и файлы до 10 МБ, оба значения настраиваются', () => {
+    expect(parseConfig({}).data).toMatchObject({
+      MEDIA_DIR: '.data/media',
+      MEDIA_MAX_BYTES: 10 * 1024 * 1024,
+    })
+    expect(parseConfig({ MEDIA_MAX_BYTES: '2048' }).data?.MEDIA_MAX_BYTES).toBe(2048)
+    expect(issuePaths({ MEDIA_MAX_BYTES: '0' })).toEqual(['MEDIA_MAX_BYTES'])
+  })
+
   it('адрес API по умолчанию следует за PORT', () => {
     expect(parseConfig({ PORT: '4100' }).data?.API_URL).toBe('http://localhost:4100')
   })

@@ -1,15 +1,17 @@
-import { PageContent, PageSlug, PageTitle } from '@cms/schema'
+import { PageContent, PageSlug, PageTitle, Uuid } from '@cms/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { validate } from '../../validate'
+import { missingMediaIssues } from '../media/refs'
+import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
 import { revisionsRepo } from './repo'
 
-const PageParams = z.object({ siteId: z.uuid(), slug: PageSlug })
-const RevisionParams = PageParams.extend({ revisionId: z.uuid() })
+const PageParams = z.object({ siteId: Uuid(), slug: PageSlug })
+const RevisionParams = PageParams.extend({ revisionId: Uuid() })
 
 /**
  * История публикаций страницы. Монтируется на /sites/:siteId/pages/:slug/revisions.
@@ -19,6 +21,7 @@ const RevisionParams = PageParams.extend({ revisionId: z.uuid() })
 export function revisionsRoutes({ db }: { db: Db }) {
   const revisions = revisionsRepo(db)
   const sites = sitesRepo(db)
+  const media = mediaRepo(db)
 
   /** Версии нет: если нет и страницы, говорим об этом — так понятнее, что искать */
   const missing = async (siteId: string, slug: string) =>
@@ -69,6 +72,13 @@ export function revisionsRoutes({ db }: { db: Db }) {
           ].map((issue) => ({ path: issue.path.map(String).join('.'), message: issue.message }))
           const message = `Версия ${revision.version} не подходит под нынешние схемы блоков, вернуть её в черновик нельзя`
           return c.json(conflict(message, issues), 409)
+        }
+
+        // Картинку из версии могли удалить из медиатеки: такой черновик API не дал бы сохранить
+        const lostMedia = await missingMediaIssues(media, siteId, content.data)
+        if (lostMedia.length > 0) {
+          const message = `В версии ${revision.version} есть картинки, которых уже нет в медиатеке, вернуть её в черновик нельзя`
+          return c.json(conflict(message, lostMedia), 409)
         }
 
         const page = await sites.updateDraft(siteId, slug, title.data, content.data)

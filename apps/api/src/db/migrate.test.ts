@@ -163,3 +163,53 @@ describe('миграция 0004_page_revisions', () => {
     expect(left).toEqual([])
   })
 })
+
+describe('миграция 0005_media', () => {
+  const siteId = '00000000-0000-4000-8000-000000000001'
+
+  it('ложится на базу с контентом и держит тип и размеры проверками', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+    ]) {
+      await applyMigration(client, name)
+    }
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO pages (site_id, slug, title, draft) VALUES ('${siteId}', 'index', 'Главная', '{"blocks":[]}');
+    `)
+
+    await applyMigration(client, '0005_media')
+
+    const insert = (values: { mime?: string; width?: number }) => `
+      INSERT INTO media (site_id, original_name, mime_type, width, height, size, variants, original_file)
+      VALUES ('${siteId}', 'a.jpg', '${values.mime ?? 'image/jpeg'}', ${values.width ?? 100}, 50, 1000, '[]', 'original.jpg')`
+    await client.exec(insert({}))
+    await expect(client.exec(insert({ mime: 'image/svg+xml' }))).rejects.toThrow(
+      /media_mime_type_valid/,
+    )
+    await expect(client.exec(insert({ width: 0 }))).rejects.toThrow(/media_size_positive/)
+
+    // Автор — человек или токен, но не оба сразу
+    const { rows: users } = await client.query<{ id: string }>(
+      `INSERT INTO users (name, email) VALUES ('Автор', 'author@example.test') RETURNING id`,
+    )
+    const { rows: tokens } = await client.query<{ id: string }>(
+      `INSERT INTO api_tokens (site_id, name, token_hash) VALUES ('${siteId}', 'mcp', 'hash') RETURNING id`,
+    )
+    await expect(
+      client.exec(`
+        INSERT INTO media (site_id, original_name, mime_type, width, height, size, variants, original_file, uploaded_by, uploaded_by_token)
+        VALUES ('${siteId}', 'b.jpg', 'image/jpeg', 10, 10, 10, '[]', 'original.jpg', '${users[0]?.id}', '${tokens[0]?.id}')`),
+    ).rejects.toThrow(/media_one_author/)
+
+    // Удаление сайта уносит его медиатеку
+    await client.exec(`DELETE FROM sites WHERE id = '${siteId}'`)
+    const { rows } = await client.query('SELECT id FROM media')
+    expect(rows).toEqual([])
+  })
+})

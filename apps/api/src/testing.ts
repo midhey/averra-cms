@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { demoSiteId } from '@cms/schema'
 import { createApp } from './app'
 import type { MemberRole } from './auth/access'
@@ -6,6 +10,9 @@ import { DEV_AUTH_SECRET } from './config'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import { seedDemo } from './db/seed'
+import { diskStorage } from './media/disk-storage'
+import type { ImageProcessor } from './media/processor'
+import { sharpProcessor } from './media/sharp-processor'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
 
@@ -21,8 +28,24 @@ export type TestRole = 'owner' | MemberRole
  * API на базе в памяти с демо-сайтом — для тестов, в том числе других пакетов.
  * Помощники дают сессию нужной роли и токен: так тесты проверяют права, а не обходят их
  */
-export async function createTestApi({ production = false } = {}) {
-  const { db, close } = createDb()
+export async function createTestApi({
+  production = false,
+  mediaMaxBytes = 10 * 1024 * 1024,
+  // Свой процессор — чтобы тест мог проверить, дошёл ли запрос до обработки картинки
+  images = sharpProcessor(),
+}: {
+  production?: boolean
+  mediaMaxBytes?: number
+  images?: ImageProcessor
+} = {}) {
+  const { db, close: closeDb } = createDb()
+  // Своя временная папка медиатеки на каждый API. Создаётся при первой записи, удаляется в close
+  const mediaDir = join(tmpdir(), `cms-test-media-${randomUUID()}`)
+  const storage = diskStorage(mediaDir)
+  const close = async () => {
+    await closeDb()
+    await rm(mediaDir, { recursive: true, force: true })
+  }
   await migrateDb(db)
   await seedDemo(db)
 
@@ -39,6 +62,9 @@ export async function createTestApi({ production = false } = {}) {
     auth,
     trustedOrigins: [testOrigins.admin, testOrigins.api],
     log: () => {},
+    storage,
+    images,
+    mediaMaxBytes,
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)
@@ -86,6 +112,10 @@ export async function createTestApi({ production = false } = {}) {
     auth,
     close,
     demoSiteId,
+    /** Хранилище медиатеки: тест может проверить, что файлы легли или удалились */
+    storage,
+    /** Папка медиатеки на диске: тест может проверить, что после отказа в ней ничего не легло */
+    mediaDir,
     createUser,
     sessionHeaders,
     loginAs,

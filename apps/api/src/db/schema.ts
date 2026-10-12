@@ -1,4 +1,4 @@
-import type { PageContent, Theme } from '@cms/schema'
+import type { ImageFormat, ImageMimeType, PageContent, Theme } from '@cms/schema'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
@@ -200,5 +200,57 @@ export const pageRevisions = pgTable(
       sql`${table.publishedBy} IS NULL OR ${table.publishedByToken} IS NULL`,
     ),
     check('page_revisions_version_positive', sql`${table.version} > 0`),
+  ],
+)
+
+/** Вариант картинки: какой файл лежит в хранилище и что в нём. Имя файла строит сервер */
+export type StoredVariant = {
+  format: ImageFormat
+  width: number
+  height: number
+  /** Вес файла в байтах */
+  size: number
+  /** Имя файла в папке картинки: 480.avif. Из него и id строится ключ в хранилище */
+  file: string
+}
+
+/**
+ * Медиатека сайта. Файлы лежат в хранилище (src/media/storage.ts) по ключу из site_id, id
+ * и имени варианта — пользовательский ввод в путь не попадает. Имя загруженного файла
+ * хранится только для показа в админке
+ */
+export const media = pgTable(
+  'media',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    originalName: text().notNull(),
+    // Тип по содержимому файла, а не по расширению: его определил sharp
+    mimeType: text().$type<ImageMimeType>().notNull(),
+    // Размеры уже после поворота по EXIF — такими картинку видит человек
+    width: integer().notNull(),
+    height: integer().notNull(),
+    // Вес загруженного файла в байтах
+    size: integer().notNull(),
+    variants: jsonb().$type<StoredVariant[]>().notNull(),
+    // Чистый оригинал в полном размере: из него потом можно нарезать новые варианты
+    originalFile: text().notNull(),
+    uploadedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    uploadedByToken: uuid().references(() => apiTokens.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('media_site_id_idx').on(table.siteId),
+    check(
+      'media_mime_type_valid',
+      sql`${table.mimeType} IN ('image/jpeg', 'image/png', 'image/webp', 'image/avif')`,
+    ),
+    check(
+      'media_size_positive',
+      sql`${table.width} > 0 AND ${table.height} > 0 AND ${table.size} > 0`,
+    ),
+    check('media_one_author', sql`${table.uploadedBy} IS NULL OR ${table.uploadedByToken} IS NULL`),
   ],
 )
