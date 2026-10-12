@@ -4,6 +4,7 @@ import '@cms/blocks/base.css'
 import { themeToCss } from '@cms/tokens'
 import { loadSnapshot } from '../lib/snapshot'
 
+// Маршрут подключается в astro.config.mjs: при сборке он статический, в dev — по запросу.
 // Главная страница сайта хранится со slug «index» и открывается по корню
 export async function getStaticPaths() {
   const { pages } = await loadSnapshot()
@@ -15,7 +16,9 @@ export async function getStaticPaths() {
 const { site, pages } = await loadSnapshot()
 const slug = Astro.params.slug ?? 'index'
 const page = pages.find((candidate) => candidate.slug === slug)
-if (!page) throw new Error(`Страница «${slug}» не опубликована`)
+// При сборке сюда попадают только опубликованные страницы. В dev адрес может быть любым:
+// неопубликованная или удалённая страница — это 404, как и на собранном сайте
+if (!page) return new Response(`Страница «${slug}» не опубликована`, { status: 404 })
 const themeCss = themeToCss(site.theme)
 ---
 
