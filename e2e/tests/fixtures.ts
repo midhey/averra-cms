@@ -135,3 +135,17 @@ export function answerDialogs(page: Page, answers: boolean[]) {
   })
   return messages
 }
+
+/** Панель «История» редактора так, как её видит человек */
+export function historyPanel(page: Page) {
+  const panel = page.getByRole('complementary', { name: 'История публикаций' })
+  return {
+    toggle: page.getByRole('button', { name: 'История', exact: true }),
+    panel,
+    versions: panel.getByRole('listitem'),
+    /** Кнопка версии по номеру: «Версия 1», но не «Версия 10» */
+    version: (n: number) => panel.getByRole('button', { name: new RegExp(`^Версия ${n}(?!d)`) }),
+    restoreButton: panel.getByRole('button', { name: 'Вернуть в черновик' }),
+    showDraftButton: panel.getByRole('button', { name: 'Показать черновик' }),
+  }
+}
