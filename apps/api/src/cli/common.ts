@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
+import { setupZodMessages } from '@cms/schema'
 import { z } from 'zod'
 import { createAuth } from '../auth/auth'
 import { loadConfig } from '../config'
@@ -34,13 +35,17 @@ export function check<S extends z.ZodType>(schema: S, value: unknown, usage: str
 
 /** База и Better Auth той же конфигурации, что у API. Пока API запущен, база занята */
 export async function openDb() {
-  const config = loadConfig()
+  // Учебный секрет команде не опасен: она не слушает сеть, а Better Auth нужен ей только для
+  // хеша пароля, который от секрета не зависит. Демо-сайт и владельца команды не заводят.
+  // Без этого pnpm user:create на свежем клоне требовал бы AUTH_SECRET в .env
+  const config = loadConfig({ dev: true })
   mkdirSync(config.PGLITE_DIR, { recursive: true })
   const unlock = await lockDb(config.PGLITE_DIR).catch((error: unknown) => {
     if (!(error instanceof DbLockedError)) throw error
     throw new CliError(
-      `База ${config.PGLITE_DIR} открыта процессом ${error.pid} — скорее всего, это API из pnpm dev.\n` +
-        'Встроенная база не выдерживает два процесса сразу: останови pnpm dev и повтори команду.',
+      `База ${config.PGLITE_DIR} открыта процессом ${error.pid ?? '(неизвестно)'} — скорее всего, это API из pnpm dev.\n` +
+        'Встроенная база не выдерживает два процесса сразу: останови pnpm dev и повтори команду.\n' +
+        error.hint,
     )
   })
   const { db, close } = createDb(config.PGLITE_DIR)
@@ -67,6 +72,8 @@ export async function openDb() {
 
 /** Запускает команду: CliError — короткое сообщение и код 1, остальное — со стеком */
 export async function run(main: () => Promise<void>) {
+  // Ошибки аргументов — по-русски, как в API и админке
+  setupZodMessages()
   try {
     await main()
   } catch (error) {

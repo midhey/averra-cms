@@ -1,7 +1,10 @@
 import { mkdirSync } from 'node:fs'
-import { type HttpBindings, serve } from '@hono/node-server'
+import { parseArgs } from 'node:util'
+import { setupZodMessages } from '@cms/schema'
+import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { createAuth } from './auth/auth'
+import { serverFetch } from './client-ip'
 import { loadConfig } from './config'
 import { createDb } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
@@ -10,14 +13,19 @@ import { seedDemo, seedDevOwner } from './db/seed'
 import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
 
-const config = loadConfig()
+setupZodMessages()
+// --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
+// и e2e: без флага API не стартует на учебном секрете, даже если переменных нет вовсе
+const { values: flags } = parseArgs({ options: { dev: { type: 'boolean', default: false } } })
+const config = loadConfig({ dev: flags.dev })
 
 mkdirSync(config.PGLITE_DIR, { recursive: true })
 const unlock = await lockDb(config.PGLITE_DIR, { waitMs: 5000 }).catch((error: unknown) => {
   if (!(error instanceof DbLockedError)) throw error
   console.error(
-    `База ${config.PGLITE_DIR} уже открыта процессом ${error.pid}. ` +
-      'Встроенная база не выдерживает два процесса сразу: останови второй API или команду.',
+    `База ${config.PGLITE_DIR} уже открыта процессом ${error.pid ?? '(неизвестно)'}. ` +
+      'Встроенная база не выдерживает два процесса сразу: останови второй API или команду.\n' +
+      error.hint,
   )
   process.exit(1)
 })
@@ -34,7 +42,7 @@ const auth = createAuth({
   secureCookies: config.secureCookies,
 })
 
-if (config.NODE_ENV === 'development') {
+if (config.devSeed) {
   await seedDemo(db)
   const owner = await seedDevOwner(db, auth, config.devOwner)
   if (owner === 'created') console.log(`Создан владелец для разработки: ${config.devOwner?.email}`)
@@ -56,25 +64,19 @@ const app = createApp({
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
 })
 
-/**
- * Лимит попыток входа Better Auth считает по X-Forwarded-For. Без прокси впереди этот
- * заголовок пишет сам клиент и мог бы обходить лимит, меняя «свой» IP на каждой попытке.
- * Поэтому, если прокси не доверяем, ставим в заголовок адрес соединения
- */
-function withClientIp(request: Request, { incoming }: HttpBindings) {
-  if (config.TRUST_PROXY) return request
-  const headers = new Headers(request.headers)
-  headers.set('x-forwarded-for', incoming.socket.remoteAddress ?? 'unknown')
-  return new Request(request, { headers })
-}
-
 const server = serve(
   {
-    fetch: (request, env) => app.fetch(withClientIp(request, env as HttpBindings), env),
+    fetch: serverFetch(app, { trustProxy: config.TRUST_PROXY, loopbackOnly: config.loopbackOnly }),
     port: config.PORT,
   },
   (info) => {
     console.log(`API: http://localhost:${info.port}/api/health`)
+    if (config.loopbackOnly) {
+      console.log(
+        'Учебный режим (--dev, учебный секрет AUTH_SECRET): только для разработки. ' +
+          'API отвечает лишь на запросы к localhost с этого компьютера',
+      )
+    }
   },
 )
 

@@ -34,7 +34,10 @@ export default defineConfig({
   webServer: [
     {
       name: 'API',
-      command: 'node scripts/clean-data.ts && pnpm --filter @cms/api start',
+      // --dev — учебный режим, как в pnpm dev: без своего AUTH_SECRET, с демо-сайтом и владельцем
+      // в пустой базе. Без флага API на учебном секрете не стартует (см. isLocalDev в config.ts).
+      // tsx напрямую, а не скрипт start: pnpm мог бы принять --dev за свой флаг
+      command: 'node scripts/clean-data.ts && pnpm --filter @cms/api exec tsx src/index.ts --dev',
       url: `${urls.api}/api/health/ready`,
       reuseExistingServer: false,
       env: {
@@ -66,7 +69,7 @@ export default defineConfig({
       name: 'Рендерер',
       // Astro держит один файл-замок apps/renderer/.astro/dev.json на проект и не даёт
       // запустить второй astro dev рядом с рендерером из pnpm dev (и наоборот).
-      // --ignore-lock не читает и не пишет замок, а заодно не даёт Astro уйти в фон,
+      // --ignore-lock не берёт и не пишет замок (разве что удалит брошенный), а заодно не даёт Astro уйти в фон,
       // когда он решит, что его запустил агент: webServer должен владеть процессом
       command: `pnpm --filter @cms/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
       url: urls.renderer,
