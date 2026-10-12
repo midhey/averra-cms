@@ -19,6 +19,8 @@
     "@cms/blocks": "workspace:*",
     "@cms/schema": "workspace:*",
     "@cms/tokens": "workspace:*",
+    "@tanstack/react-query": "^5.104.1",
+    "@tanstack/react-router": "^1.170.42",
     "hono": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

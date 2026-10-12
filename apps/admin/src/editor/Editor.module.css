@@ -18,9 +18,10 @@
   background: #fff;
 }
 
-.site {
-  font-weight: 600;
-  white-space: nowrap;
+.topbar > nav {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 40%;
 }
 
 .title {

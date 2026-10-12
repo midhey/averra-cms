@@ -1,7 +1,12 @@
 import { type BlockType, type PageContent, PageTitle, type Theme } from '@cms/schema'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useBlocker } from '@tanstack/react-router'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, messageOf } from '../errors'
+import { pagePath } from '../pages-format'
+import { queryKeys } from '../queries'
+import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { BlockList } from './BlockList'
 import {
   createBlock,
@@ -63,15 +68,43 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
+  // И уйти по ссылке внутри админки или кнопкой «Назад» браузера. Закрытие вкладки ловит
+  // beforeunload выше, а свой у блокировщика по умолчанию включён всегда, даже без правок
+  useBlocker({
+    shouldBlockFn: () =>
+      !window.confirm('На странице есть несохранённые изменения. Уйти без сохранения?'),
+    disabled: !dirty,
+    enableBeforeUnload: false,
+  })
+
   const pageApi = api.sites[':siteId'].pages[':slug']
   const param = { siteId: site.id, slug: page.slug }
+  const queryClient = useQueryClient()
+  // Список страниц показывает, есть ли неопубликованные правки, и когда опубликовано:
+  // после сохранения и публикации он устарел. Сброс по префиксу задевает и эту страницу
+  const refreshPages = () => queryClient.invalidateQueries({ queryKey: queryKeys.pages(site.id) })
+
+  const saveDraft = useMutation({
+    mutationFn: async (body: { title: string; content: PageContent }) => {
+      const res = await pageApi.$put({ param, json: body })
+      if (res.status !== 200) throw new Error(await apiErrorText(res))
+    },
+    onSuccess: refreshPages,
+  })
+
+  const publishDraft = useMutation({
+    mutationFn: async () => {
+      const res = await pageApi.publish.$post({ param })
+      if (res.status !== 200) throw new Error(await apiErrorText(res))
+    },
+    onSuccess: refreshPages,
+  })
 
   async function save() {
     if (!validation.content || !titleValid) return false
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
-      const res = await pageApi.$put({ param, json: { title, content: validation.content } })
-      if (res.status !== 200) throw new Error(await apiErrorText(res))
+      await saveDraft.mutateAsync({ title, content: validation.content })
       setSavedSnapshot(snapshotOf(title, blocks))
       setStatus({ kind: 'done', message: 'Черновик сохранён' })
       return true
@@ -85,8 +118,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     if (dirty && !(await save())) return
     setStatus({ kind: 'busy', message: 'Публикую…' })
     try {
-      const res = await pageApi.publish.$post({ param })
-      if (res.status !== 200) throw new Error(await apiErrorText(res))
+      await publishDraft.mutateAsync()
       setStatus({ kind: 'done', message: 'Опубликовано. Обнови сайт, чтобы увидеть' })
     } catch (error) {
       setStatus({ kind: 'error', message: messageOf(error) })
@@ -110,7 +142,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     <div className={styles.editor}>
       <div className={styles.top}>
         <header className={styles.topbar}>
-          <span className={styles.site}>{site.name}</span>
+          <Breadcrumbs site={site} page={pagePath(page.slug)} />
           <label className={styles.title}>
             <span className={styles.titleLabel}>Заголовок страницы</span>
             <input

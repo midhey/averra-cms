@@ -1,0 +1,176 @@
+.screen {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.screen h1 {
+  margin: 12px 0 24px;
+  font-size: 24px;
+}
+
+.screen h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.header {
+  margin-bottom: 8px;
+}
+
+.section {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid #e3e5e9;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.message {
+  margin: 0;
+  padding: 24px;
+  color: #5b6170;
+}
+
+.empty,
+.muted {
+  margin: 0;
+  color: #5b6170;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.siteList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.siteList a,
+.pageLink {
+  color: #2f5bea;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.siteList a {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.siteList a:hover {
+  background: #eef2fd;
+}
+
+.pageLink:hover {
+  text-decoration: underline;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e3e5e9;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: #5b6170;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.state[data-changed="true"] {
+  color: #9a5b00;
+}
+
+.rowActions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  max-width: 480px;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.choice label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.screen button {
+  padding: 7px 12px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.screen button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.screen .primary {
+  border-color: #2f5bea;
+  background: #2f5bea;
+  color: #fff;
+}
+
+.screen .danger {
+  border-color: #e3b4b0;
+  color: #c62828;
+}
+
+.notice {
+  margin: 12px 0 0;
+  color: #1b7f3b;
+}
+
+.formError {
+  margin: 0;
+  color: #c62828;
+  white-space: pre-line;
+}
