@@ -1,32 +1,50 @@
 import type { AppType } from '@cms/api'
-import { demoPage, demoPageTitle } from '@cms/schema'
+import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@cms/schema'
 import { test as base, expect, type Page } from '@playwright/test'
 import { hc } from 'hono/client'
 import { urls } from '../urls'
 
-const sites = hc<AppType>(urls.api).api.sites
+/** Типизированный клиент API e2e: поменяется API — тесты перестанут компилироваться */
+export const sites = hc<AppType>(urls.api).api.sites
 
-/**
- * Возвращает демо-страницу в исходное состояние: черновик и опубликованная версия — демо.
- * Так каждый тест стартует с одного и того же известного состояния, в каком бы порядке ни шёл
- */
-async function resetDemoPage() {
+type DemoSite = { id: string; name: string }
+
+/** Демо-сайт — первый в базе: его кладёт API при старте, новые сайты встают после него */
+export async function findDemoSite(): Promise<DemoSite> {
   const [site] = await (await sites.$get()).json()
   if (!site) throw new Error('В базе e2e нет демо-сайта: API должен был положить его при старте')
-  const param = { siteId: site.id, slug: 'index' }
+  return site
+}
+
+/**
+ * Возвращает демо-сайт в исходное состояние: на нём только главная, её черновик и
+ * опубликованная версия — демо. Страницы, которые создали другие тесты, удаляются.
+ * Так каждый тест стартует с одного и того же известного состояния, в каком бы порядке ни шёл
+ */
+async function resetDemoSite() {
+  const site = await findDemoSite()
+  const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })
   expect(saved.status, 'сброс черновика демо-страницы').toBe(200)
   const published = await page.publish.$post({ param })
   expect(published.status, 'публикация демо-страницы').toBe(200)
+
+  const list = await sites[':siteId'].pages.$get({ param: { siteId: site.id } })
+  if (list.status !== 200) throw new Error(`Список страниц демо-сайта: ${list.status}`)
+  for (const { slug } of await list.json()) {
+    if (slug === MAIN_PAGE_SLUG) continue
+    const deleted = await page.$delete({ param: { siteId: site.id, slug } })
+    expect(deleted.status, `удаление страницы ${slug} демо-сайта`).toBe(204)
+  }
+  return site
 }
 
-export const test = base.extend<{ demoPage: undefined }>({
-  demoPage: [
+export const test = base.extend<{ demoSite: DemoSite }>({
+  demoSite: [
     // biome-ignore lint/correctness/noEmptyPattern: Playwright требует деструктуризацию первого аргумента фикстуры
     async ({}, use) => {
-      await resetDemoPage()
-      await use(undefined)
+      await use(await resetDemoSite())
     },
     { auto: true },
   ],
@@ -47,8 +65,10 @@ export function editor(page: Page) {
   const blockList = page.getByRole('navigation', { name: 'Блоки страницы' })
   const inspector = page.getByRole('complementary', { name: 'Поля блока' })
   return {
-    open: async () => {
-      await page.goto('/')
+    /** Редактор страницы по прямому адресу. По умолчанию — главная демо-сайта */
+    open: async (slug: string = MAIN_PAGE_SLUG) => {
+      const site = await findDemoSite()
+      await page.goto(`/sites/${site.id}/pages/${slug}`)
       await expect(page.getByLabel('Заголовок страницы')).toBeVisible()
     },
     pageTitle: page.getByLabel('Заголовок страницы'),
@@ -67,8 +87,38 @@ export function editor(page: Page) {
 }
 
 /** Опубликованный сайт: рендерер в dev-режиме берёт свежий снимок из API на каждый запрос */
-export async function openSite(page: Page) {
+export async function openSite(page: Page, path = '/') {
   const site = await page.context().newPage()
-  await site.goto(urls.renderer)
+  await site.goto(`${urls.renderer}${path}`)
   return site
+}
+
+/** Экран страниц сайта так, как его видит человек */
+export function siteScreen(page: Page) {
+  const newPageForm = page.getByRole('form', { name: 'Новая страница' })
+  return {
+    heading: page.getByRole('heading', { level: 1 }),
+    breadcrumbs: page.getByRole('navigation', { name: 'Навигация по разделам' }),
+    pages: page.getByRole('table', { name: 'Страницы' }),
+    row: (text: string) =>
+      page.getByRole('table', { name: 'Страницы' }).getByRole('row').filter({ hasText: text }),
+    newPageForm,
+    newPage: {
+      title: newPageForm.getByLabel('Заголовок'),
+      slug: newPageForm.getByLabel('Адрес'),
+      template: (label: 'С первым экраном' | 'Пустая') =>
+        newPageForm.getByRole('radio', { name: label }),
+      submit: newPageForm.getByRole('button', { name: 'Создать страницу' }),
+    },
+  }
+}
+
+/** Считает диалоги confirm и отвечает на них по очереди: true — «ОК», false — «Отмена» */
+export function answerDialogs(page: Page, answers: boolean[]) {
+  const messages: string[] = []
+  page.on('dialog', (dialog) => {
+    messages.push(dialog.message())
+    return answers.shift() ? dialog.accept() : dialog.dismiss()
+  })
+  return messages
 }
