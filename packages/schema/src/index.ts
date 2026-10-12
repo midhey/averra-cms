@@ -4,6 +4,22 @@ export { BlockInstance, type BlockType, blocks, cta, features, hero } from './bl
 export { Button, Href } from './common'
 export { BlockId, defineBlock } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
+export { Uuid } from './id'
+export {
+  collectMediaRefs,
+  fileSizeLimitHint,
+  fileTooLargeMessage,
+  Image,
+  ImageFormat,
+  type ImageMimeType,
+  imageFormatOf,
+  imageMimeTypes,
+  MediaFile,
+  MediaId,
+  type MediaMap,
+  type MediaRef,
+  MediaVariantView,
+} from './media'
 export {
   MAIN_PAGE_SLUG,
   NewPage,
