@@ -1,8 +1,9 @@
 export { ApiError, describeApiError } from './api-error'
+export { SignIn } from './auth'
 export { BlockInstance, type BlockType, blocks, cta, features, hero } from './blocks'
 export { Button, Href } from './common'
 export { BlockId, defineBlock } from './define-block'
-export { demoPage, demoPageTitle } from './demo'
+export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export {
   MAIN_PAGE_SLUG,
   NewPage,
