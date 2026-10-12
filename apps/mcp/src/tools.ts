@@ -1,5 +1,5 @@
 import type { AppType } from '@cms/api'
-import { blocks, describeApiError, PageContent } from '@cms/schema'
+import { blocks, describeApiError, PageContent, PageSlug, PageTitle } from '@cms/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
@@ -8,18 +8,16 @@ export type Api = ReturnType<typeof hc<AppType>>
 
 const PageRef = z.object({
   siteId: z.uuid().describe('Id сайта из list_sites'),
-  slug: z
-    .string()
-    .regex(/^[a-z0-9-]{1,64}$/)
-    .default('index')
-    .describe('Адрес страницы: латиница, цифры и дефис. Главная страница — index'),
+  slug: PageSlug.default('index').describe(
+    'Адрес страницы: латиница в нижнем регистре, цифры, дефис между ними. Главная — index',
+  ),
 })
 type PageRef = z.output<typeof PageRef>
 
 // Содержимое страницы описывает та же схема, что проверяет её в API:
 // нейронка видит те же правила, которыми потом проверят её работу
 export const SaveDraftInput = PageRef.extend({
-  title: z.string().trim().min(1).max(120).describe('Заголовок страницы, его видно во вкладке'),
+  title: PageTitle.describe('Заголовок страницы, его видно во вкладке'),
   content: PageContent,
 })
 type SaveDraftInput = z.output<typeof SaveDraftInput>

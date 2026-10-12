@@ -1,4 +1,4 @@
-import { demoPage, demoPageTitle, PageContent } from '@cms/schema'
+import { demoPage, demoPageTitle, MAIN_PAGE_SLUG, PageContent } from '@cms/schema'
 import { defaultTheme } from '@cms/tokens'
 import type { Db } from './client'
 import { pages, sites } from './schema'
@@ -17,7 +17,7 @@ export async function seedDemo(db: Db) {
   const content = PageContent.parse(demoPage)
   await db.insert(pages).values({
     siteId: site.id,
-    slug: 'index',
+    slug: MAIN_PAGE_SLUG,
     title: demoPageTitle,
     draft: content,
     published: content,
