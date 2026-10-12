@@ -14,11 +14,14 @@ test('по экранам: сайты → сайт → редактор и на�
 }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
+  // У каждого экрана свой заголовок вкладки: их различают история браузера и диктор
+  await expect(page).toHaveTitle('Сайты — Админка')
 
   await page.getByRole('link', { name: demoSite.name }).click()
   const screen = siteScreen(page)
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(screen.heading).toHaveText(demoSite.name)
+  await expect(page).toHaveTitle(`${demoSite.name} — страницы — Админка`)
   await expect(screen.pages.getByRole('row')).toHaveCount(2) // заголовки и главная
   await expect(screen.row(demo.pageTitle)).toContainText('/')
   await expect(screen.row(demo.pageTitle)).toContainText('Опубликована')
@@ -30,6 +33,7 @@ test('по экранам: сайты → сайт → редактор и на�
   const ed = editor(page)
   await expect(page).toHaveURL(`/sites/${demoSite.id}/pages/index`)
   await expect(ed.pageTitle).toHaveValue(demo.pageTitle)
+  await expect(page).toHaveTitle(`${demo.pageTitle} — редактор — Админка`)
 
   await page.reload()
   await expect(ed.pageTitle).toHaveValue(demo.pageTitle)
@@ -236,6 +240,8 @@ test('страница удаляется только после подтвер
   await expect(screen.row('Старая акция')).toHaveCount(0)
   expect(dialogs).toHaveLength(2)
   await expect(page.getByRole('status')).toHaveText('Страница «Старая акция» удалена')
+  // Кнопки «Удалить» больше нет — фокус на заголовке списка, а не в никуда
+  await expect(page.getByRole('heading', { level: 2, name: 'Страницы' })).toBeFocused()
 
   await page.reload()
   await expect(screen.row(demo.pageTitle)).toBeVisible()
@@ -325,4 +331,54 @@ test('несуществующий сайт, страница или адрес 
   await page.goto('/kakoy-to/adres')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Такой страницы в админке нет')
   await expect(page.getByRole('link', { name: 'К списку сайтов' })).toBeVisible()
+
+  // Кривой id сайта или адрес страницы в ссылке — тоже «не найдено», а не «данные не прошли проверку»
+  await page.goto('/sites/not-a-uuid')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайт не найден')
+  await expect(page).toHaveTitle('Сайт не найден — Админка')
+  await page.goto(`/sites/${demoSite.id}/pages/O_NAS`)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Страница не найдена')
+  await page.goto('/sites/not-a-uuid/media')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайт не найден')
+})
+
+test('форма и сообщения одного сайта не переезжают на другой по «Назад»', async ({
+  page,
+  demoSite,
+}) => {
+  const other = await sites.$post({ json: { name: uniqueName('Второй сайт') } })
+  if (other.status !== 201) throw new Error(`Второй сайт: ${other.status}`)
+  const { id: otherId } = await other.json()
+  const screen = siteScreen(page)
+
+  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${otherId}`)
+  await screen.newPage.title.fill('Набрано на втором сайте')
+  await page.goBack()
+  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  await expect(screen.heading).toHaveText(demoSite.name)
+  await expect(screen.newPage.title).toHaveValue('')
+})
+
+test('длинный заголовок и адрес без пробелов не растягивают экран', async ({ page, demoSite }) => {
+  const slug = 'a'.repeat(64)
+  const created = await sites[':siteId'].pages.$post({
+    param: { siteId: demoSite.id },
+    json: { slug, title: 'Б'.repeat(120) },
+  })
+  expect(created.status).toBe(201)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`/sites/${demoSite.id}`)
+  const screen = siteScreen(page)
+  await expect(screen.row(slug)).toBeVisible()
+
+  // Страница не прокручивается вбок, кнопка «Удалить» видна в окне
+  const overflow = await page.evaluate(
+    'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+  )
+  expect(Number(overflow)).toBeLessThanOrEqual(0)
+  const remove = screen.row(slug).getByRole('button', { name: /^Удалить страницу/ })
+  const box = await remove.boundingBox()
+  if (!box) throw new Error('Кнопки «Удалить» не видно')
+  expect(box.x + box.width).toBeLessThanOrEqual(1280)
 })

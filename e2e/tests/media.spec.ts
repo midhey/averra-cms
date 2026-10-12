@@ -45,6 +45,10 @@ test('картинка из медиатеки в первом экране spli
   await ed.field('Вариант').selectOption('split')
   await expect(ed.inspector).toContainText('В варианте split нужна картинка')
   await expect(ed.saveButton).toBeDisabled()
+  // Подпись поля не спорит с ошибкой: «необязательно» у картинки не пишем
+  await expect(ed.inspector.getByRole('group', { name: 'Картинка' })).not.toContainText(
+    'необязательно',
+  )
 
   await ed.inspector.getByRole('button', { name: 'Выбрать картинку' }).click()
   const dialog = page.getByRole('dialog', { name: 'Медиатека: выберите картинку' })
@@ -133,9 +137,10 @@ test('картинку, которая стоит на странице, уда�
   await media.deleteButton(file.name).click()
   await expect(media.alert).toContainText('Картинка используется на страницах')
   await expect(media.alert).toContainText('«Страница с фото» (/s-foto) — черновик')
-  expect(dialogs).toEqual([
-    `Удалить картинку «${file.name}» из медиатеки? Вернуть её не получится.`,
-  ])
+  // В вопросе — не только имя файла (у фото с iOS оно у всех image.jpg), но и размеры
+  expect(dialogs).toHaveLength(1)
+  expect(dialogs[0]).toContain(`Удалить картинку «${file.name}», 1600 × 1000, `)
+  expect(dialogs[0]).toContain('из медиатеки? Вернуть её не получится.')
   await expect(media.item(file.name)).toBeVisible()
 })
 

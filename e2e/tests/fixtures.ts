@@ -199,7 +199,7 @@ export function historyPanel(page: Page) {
     panel,
     versions: panel.getByRole('listitem'),
     /** Кнопка версии по номеру: «Версия 1», но не «Версия 10» */
-    version: (n: number) => panel.getByRole('button', { name: new RegExp(`^Версия ${n}(?!d)`) }),
+    version: (n: number) => panel.getByRole('button', { name: new RegExp(`^Версия ${n}(?!\\d)`) }),
     restoreButton: panel.getByRole('button', { name: 'Вернуть в черновик' }),
     showDraftButton: panel.getByRole('button', { name: 'Показать черновик' }),
   }

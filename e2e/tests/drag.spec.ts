@@ -46,6 +46,14 @@ test('щелчок по ручке без движения ничего не п�
   await ed.dragHandle('Преимущества').click()
 
   await expect(ed.blocks.nth(1)).toContainText('Преимущества')
+  // Без порога dnd-kit начал бы перетаскивание на нажатии и объявил бы «поднят» и «поставлен»:
+  // порядок бы не изменился, а объявления выдали бы, что щелчок стал перетаскиванием
+  await expect(ed.blockAnnouncement).toHaveText('')
+  // Ручки блоков и пунктов выглядят одинаково: стили кнопок пункта ручку не перебивают
+  await expect(ed.dragHandle('Преимущества')).toHaveCSS('cursor', 'grab')
+  await ed.selectBlock('Преимущества')
+  await expect(ed.itemHandles.first()).toHaveCSS('cursor', 'grab')
+  await expect(ed.itemHandles.first()).toHaveCSS('border-top-width', '0px')
   await expect(ed.status).toHaveText('Всё сохранено')
   await expect(ed.saveButton).toBeDisabled()
 })
@@ -136,6 +144,9 @@ test('пункты списка в форме блока переставляю�
   await expect(ed.itemAnnouncement).toHaveText(
     `Пункт «${features[0]}» поставлен на позицию 3 из 4.`,
   )
+  // Фокус на ручке того же пункта: ключи пунктов постоянные, а не по индексу
+  await expect(ed.itemHandles.nth(2)).toBeFocused()
+  await expect(ed.itemHandles.nth(2)).toHaveAccessibleName(`Перетащить пункт «${features[0]}»`)
   for (const [index, title] of afterKeyboard.entries()) {
     await expect(ed.itemTitles.nth(index)).toHaveValue(title)
   }
@@ -159,4 +170,68 @@ test('пункты списка в форме блока переставляю�
     features[0],
     features[3],
   ])
+})
+
+test('после удаления пункта из середины перестановка ведёт тот же пункт', async ({ page }) => {
+  const ed = editor(page)
+  await ed.open()
+  await ed.selectBlock('Преимущества')
+
+  await ed.items.getByRole('button', { name: 'Удалить пункт' }).nth(1).click()
+  const afterRemove = [features[0], features[2], features[3]]
+  await expect(ed.itemTitles).toHaveCount(3)
+  for (const [index, title] of afterRemove.entries()) {
+    await expect(ed.itemTitles.nth(index)).toHaveValue(title)
+  }
+
+  // Ключи сдвинулись вместе с удалением: тащим первый пункт, и едет именно он
+  await ed.itemHandles.nth(0).focus()
+  await page.keyboard.press('Space')
+  await expect(ed.itemAnnouncement).toHaveText(`Пункт «${features[0]}» поднят. Позиция 1 из 3.`)
+  await firstArrow(
+    page,
+    'ArrowDown',
+    ed.itemAnnouncement,
+    `Пункт «${features[0]}» на позиции 2 из 3.`,
+  )
+  await page.keyboard.press('Space')
+
+  const afterMove = [features[2], features[0], features[3]]
+  for (const [index, title] of afterMove.entries()) {
+    await expect(ed.itemTitles.nth(index)).toHaveValue(title)
+  }
+  await expect(ed.itemHandles.nth(1)).toBeFocused()
+  await expect(ed.itemHandles.nth(1)).toHaveAccessibleName(`Перетащить пункт «${features[0]}»`)
+  await expect(ed.preview.getByRole('heading', { level: 3 })).toHaveText(afterMove)
+})
+
+test('стрелки у края списка не теряют фокус', async ({ page }) => {
+  const ed = editor(page)
+  await ed.open()
+
+  // Блок встал первым: «Поднять» стала недоступна, фокус — на «Опустить» того же блока
+  await ed.block('Преимущества').getByRole('button', { name: 'Поднять блок' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(ed.blocks.nth(0)).toContainText('Преимущества')
+  await expect(
+    ed.block('Преимущества').getByRole('button', { name: 'Опустить блок' }),
+  ).toBeFocused()
+
+  // То же у пунктов
+  await ed.selectBlock('Преимущества')
+  await ed.items.getByRole('button', { name: 'Опустить пункт' }).nth(2).focus()
+  await page.keyboard.press('Enter')
+  await expect(ed.itemTitles.nth(3)).toHaveValue(features[2])
+  await expect(ed.items.getByRole('button', { name: 'Поднять пункт' }).nth(3)).toBeFocused()
+})
+
+test('ручки подписаны именем блока, а не одинаково', async ({ page }) => {
+  const ed = editor(page)
+  await ed.open()
+  await expect(ed.dragHandle('Первый экран')).toHaveAccessibleName(
+    `Перетащить блок «${demo.heroTitle}»`,
+  )
+  await expect(ed.dragHandle('Преимущества')).toHaveAccessibleName(
+    `Перетащить блок «${demo.featuresTitle}»`,
+  )
 })

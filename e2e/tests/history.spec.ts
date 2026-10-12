@@ -147,15 +147,51 @@ test('история и возврат работают с клавиатуры'
   await expect(history.version(1)).toHaveAttribute('aria-pressed', 'true')
   await expect(ed.preview.getByRole('heading', { level: 1 })).toHaveText(version(1).hero)
 
+  // «Показать черновик» пропадает вместе с выбором: фокус возвращается на версию, а не в никуда
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(history.showDraftButton).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(history.version(1)).toHaveAttribute('aria-pressed', 'false')
+  await expect(history.version(1)).toBeFocused()
+  await page.keyboard.press('Space')
+
   await page.keyboard.press('Tab')
   await expect(history.restoreButton).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(ed.status).toHaveText(restored)
   await expect(ed.pageTitle).toHaveValue(version(1).pageTitle)
+  // Кнопка возврата пропала — фокус на той же версии, следующий Tab идёт дальше по панели
+  await expect(history.version(1)).toBeFocused()
 
   // Повторное нажатие «История» закрывает панель
   await history.toggle.focus()
   await page.keyboard.press('Enter')
   await expect(history.panel).toBeHidden()
   await expect(history.toggle).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('правка блоков при открытой истории возвращает предпросмотр к черновику', async ({
+  page,
+  demoSite,
+}) => {
+  await createPage(demoSite.id)
+  await publishTwiceViaApi(demoSite.id)
+  answerDialogs(page, [true])
+  const ed = editor(page)
+  const history = historyPanel(page)
+  await ed.open(slug)
+
+  await history.toggle.click()
+  await history.version(1).click()
+  await expect(ed.preview.getByRole('heading', { level: 1 })).toHaveText(version(1).hero)
+  const note = page.getByText(/так страница выглядела на сайте/)
+  await expect(note).toBeVisible()
+
+  await ed.block('Первый экран').getByRole('button', { name: 'Удалить блок' }).click()
+  await expect(ed.blocks).toHaveCount(0)
+  // Черновик изменился: подписи «Черновик не изменился» и старой версии больше нет
+  await expect(note).toBeHidden()
+  await expect(ed.preview.getByRole('heading', { level: 1 })).toHaveCount(0)
+  await expect(history.version(1)).toHaveAttribute('aria-pressed', 'false')
 })

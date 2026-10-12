@@ -1,3 +1,4 @@
+import { urls } from '../urls'
 import { demo, editor, expect, openSite, test } from './fixtures'
 
 const published = 'Опубликовано. Обнови сайт, чтобы увидеть'
@@ -71,4 +72,13 @@ test('опубликованный порядок блоков совпадае�
     demo.ctaTitle,
     demo.featuresTitle,
   ])
+})
+
+test('главная открывается только по корню: /index — 404, как на собранном сайте', async ({
+  page,
+}) => {
+  expect((await page.request.get(`${urls.renderer}/`)).status()).toBe(200)
+  const index = await page.request.get(`${urls.renderer}/index`)
+  expect(index.status()).toBe(404)
+  expect(await index.text()).toContain('Главная страница открывается по адресу /')
 })
