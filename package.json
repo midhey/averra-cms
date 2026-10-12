@@ -18,6 +18,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "e2e": "pnpm --filter @cms/e2e e2e",
     "db:generate": "pnpm --filter @cms/api db:generate"
   },
   "devDependencies": {

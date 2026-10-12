@@ -4,8 +4,12 @@ dist
 coverage
 *.log
 
-# Локальная база PGlite
+# Локальная база PGlite (и база e2e в e2e/.data)
 .data
+
+# Отчёты Playwright
+playwright-report
+test-results
 
 # Секреты
 .env
