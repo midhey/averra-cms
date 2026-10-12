@@ -84,7 +84,7 @@ test('две публикации → две версии → первая в ч
   await expect(history.versions).toHaveCount(2)
 
   // Выбор блока закрывает историю и показывает поля возвращённой версии
-  await ed.block('Первый экран').getByRole('button').first().click()
+  await ed.selectBlock('Первый экран')
   await expect(history.panel).toBeHidden()
   await expect(ed.field('Заголовок')).toHaveValue(version(1).hero)
 
