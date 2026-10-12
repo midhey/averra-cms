@@ -1,11 +1,24 @@
+import { readFile } from 'node:fs/promises'
 import type { AppType } from '@cms/api'
 import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@cms/schema'
 import { test as base, expect, type Page } from '@playwright/test'
 import { hc } from 'hono/client'
-import { urls } from '../urls'
+import { ownerStateFile, urls } from '../urls'
 
-/** Типизированный клиент API e2e: поменяется API — тесты перестанут компилироваться */
-export const sites = hc<AppType>(urls.api).api.sites
+/**
+ * Cookie сессии владельца из файла, который сохранил проект setup, и Origin админки:
+ * без него API не примет изменяющий запрос с cookie. Так ходит в API и сама админка
+ */
+async function ownerHeaders() {
+  const state = JSON.parse(await readFile(ownerStateFile, 'utf8')) as {
+    cookies: { name: string; value: string }[]
+  }
+  const cookie = state.cookies.map(({ name, value }) => `${name}=${value}`).join('; ')
+  return { cookie, origin: urls.admin }
+}
+
+/** Типизированный клиент API e2e от имени владельца: поменяется API — тесты не скомпилируются */
+export const sites = hc<AppType>(urls.api, { headers: ownerHeaders }).api.sites
 
 type DemoSite = { id: string; name: string }
 

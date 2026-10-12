@@ -1,6 +1,8 @@
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { demoSiteId } from '@cms/schema'
 import { defineConfig, devices } from '@playwright/test'
-import { ports, urls } from './urls'
+import { e2eOwner, ownerStateFile, ports, urls } from './urls'
 
 export default defineConfig({
   testDir: './tests',
@@ -17,7 +19,16 @@ export default defineConfig({
     locale: 'ru-RU',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // Входит владельцем один раз и сохраняет cookie: остальным тестам не надо проходить
+    // форму входа (и тратить лимит попыток входа). Вход как таковой проверяет auth.spec.ts
+    { name: 'setup', testMatch: /auth\.setup\.ts$/ },
+    {
+      name: 'chromium',
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: fileURLToPath(ownerStateFile) },
+    },
+  ],
   // Серверы поднимаются по очереди: API первым, остальные ходят в него.
   // Занятый порт — ошибка, а не повод гонять тесты по чужому серверу и чужой базе
   webServer: [
@@ -27,10 +38,17 @@ export default defineConfig({
       url: `${urls.api}/api/health/ready`,
       reuseExistingServer: false,
       env: {
-        // development, чтобы API положил в пустую базу демо-сайт
+        // development, чтобы API положил в пустую базу демо-сайт и владельца
         NODE_ENV: 'development',
         PORT: String(ports.api),
         PGLITE_DIR: resolve(import.meta.dirname, '.data/pglite'),
+        DEV_OWNER_EMAIL: e2eOwner.email,
+        DEV_OWNER_PASSWORD: e2eOwner.password,
+        ADMIN_URL: urls.admin,
+        API_URL: urls.api,
+        // Перед API стоит прокси Vite из админки. Доверяем X-Forwarded-For, чтобы тесты входа
+        // могли быть разными «клиентами» и лимит попыток одного не задевал другой
+        TRUST_PROXY: 'true',
       },
     },
     {
@@ -49,7 +67,8 @@ export default defineConfig({
       command: `pnpm --filter @cms/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
       url: urls.renderer,
       reuseExistingServer: false,
-      env: { CMS_API_URL: urls.api, ASTRO_TELEMETRY_DISABLED: '1' },
+      // Демо-сайт свежей базы всегда с этим id: список сайтов без входа не получить
+      env: { CMS_API_URL: urls.api, CMS_SITE_ID: demoSiteId, ASTRO_TELEMETRY_DISABLED: '1' },
     },
   ],
 })

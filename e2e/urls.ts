@@ -6,3 +6,16 @@ export const urls = {
   admin: `http://localhost:${ports.admin}`,
   renderer: `http://localhost:${ports.renderer}`,
 } as const
+
+/**
+ * Владелец админки в базе e2e: API создаёт его при старте (DEV_OWNER_*), тесты входят им.
+ * Учебные данные только для e2e — база e2e своя и стирается перед каждым прогоном
+ */
+export const e2eOwner = {
+  email: 'owner@e2e.test',
+  password: 'e2e-owner-password',
+  name: 'Владелец (разработка)',
+} as const
+
+/** Сессия владельца, которую сохраняет проект setup и берут остальные тесты */
+export const ownerStateFile = new URL('./.data/owner.json', import.meta.url)
