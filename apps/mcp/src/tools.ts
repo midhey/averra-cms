@@ -44,29 +44,47 @@ export function blockCatalog() {
   }
 }
 
-async function unwrap(request: Promise<ClientResponse<unknown>>) {
+const createTokenHint =
+  'Создай токен: pnpm token:create --site <id сайта> --name mcp (id сайта виден в адресе админки ' +
+  '/sites/<id>) и положи строку CMS_API_TOKEN=… из вывода в apps/mcp/.env. Потом перезапусти MCP-сервер'
+
+export const missingTokenMessage = `Нужен токен API: без него MCP не пускают в CMS. ${createTokenHint}`
+
+async function unwrap(request: () => Promise<ClientResponse<unknown>>) {
   let res: ClientResponse<unknown>
   try {
-    res = await request
+    res = await request()
   } catch (cause) {
     throw new Error('API не отвечает. Запусти его: pnpm dev', { cause })
   }
   const body: unknown = await res.json()
+  if (res.status === 401) {
+    throw new Error(`API не принял токен: он отозван или неверный. ${createTokenHint}`)
+  }
   if (!res.ok) throw new Error(describeApiError(res.status, body))
   return body
 }
 
-/** Операции поверх API. MCP для API — обычный клиент, как админка */
-export function cmsTools(api: Api) {
-  const sites = api.api.sites
+/**
+ * Операции поверх API. MCP для API — обычный клиент, как админка, только входит токеном.
+ * Без клиента (нет токена) каждая операция с API отвечает, как токен получить
+ */
+export function cmsTools(client: Api | undefined) {
+  if (!client) {
+    const fail = async (): Promise<never> => {
+      throw new Error(missingTokenMessage)
+    }
+    return { listSites: fail, getPage: fail, saveDraft: fail, publishPage: fail }
+  }
+  const sites = client.api.sites
   const page = sites[':siteId'].pages[':slug']
   return {
-    listSites: () => unwrap(sites.$get()),
-    getPage: ({ siteId, slug }: PageRef) => unwrap(page.$get({ param: { siteId, slug } })),
+    listSites: () => unwrap(() => sites.$get()),
+    getPage: ({ siteId, slug }: PageRef) => unwrap(() => page.$get({ param: { siteId, slug } })),
     saveDraft: ({ siteId, slug, title, content }: SaveDraftInput) =>
-      unwrap(page.$put({ param: { siteId, slug }, json: { title, content } })),
+      unwrap(() => page.$put({ param: { siteId, slug }, json: { title, content } })),
     publishPage: ({ siteId, slug }: PageRef) =>
-      unwrap(page.publish.$post({ param: { siteId, slug } })),
+      unwrap(() => page.publish.$post({ param: { siteId, slug } })),
   }
 }
 
@@ -74,7 +92,7 @@ const asText = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 })
 
-export function registerTools(server: McpServer, api: Api) {
+export function registerTools(server: McpServer, api: Api | undefined) {
   const tools = cmsTools(api)
 
   server.registerTool(
@@ -92,7 +110,7 @@ export function registerTools(server: McpServer, api: Api) {
     'list_sites',
     {
       title: 'Сайты',
-      description: 'Список сайтов: id и название.',
+      description: 'Сайты, к которым есть доступ у токена MCP: id и название.',
       annotations: { readOnlyHint: true },
     },
     async () => asText(await tools.listSites()),

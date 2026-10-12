@@ -32,7 +32,8 @@ export default defineConfig({
         access: 'public',
         default: 'http://localhost:4000',
       }),
-      // Какой сайт собирать. Если не задан — первый сайт из API
+      // Какой сайт собирать (apps/renderer/.env). Список сайтов в API закрыт входом, поэтому
+      // «первый сайт» рендерер узнать не может, а снимок сайта открыт и берётся по id
       CMS_SITE_ID: envField.string({ context: 'server', access: 'public', optional: true }),
     },
   },
