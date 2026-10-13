@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { type ConfigOptions, DEV_AUTH_SECRET, parseConfig } from './config'
+import {
+  type ConfigOptions,
+  DEV_AUTH_SECRET,
+  isDevAuthSecret,
+  parseApiArgs,
+  parseConfig,
+} from './config'
 
 const prodEnv = {
   NODE_ENV: 'production',
@@ -106,6 +112,50 @@ describe('конфиг', () => {
       expect(issuePaths({ ...prodEnv, AUTH_SECRET: DEV_AUTH_SECRET })).toEqual(['AUTH_SECRET'])
     })
 
+    describe('варианты учебного секрета — тот же публичный секрет', () => {
+      const variants = [
+        ` ${DEV_AUTH_SECRET}`,
+        `${DEV_AUTH_SECRET} `,
+        `	${DEV_AUTH_SECRET}
+`,
+        `"${DEV_AUTH_SECRET}"`,
+        `'${DEV_AUTH_SECRET}'`,
+        DEV_AUTH_SECRET.toUpperCase(),
+        'Dev-Only-Secret-Not-For-Production-0123456789',
+        DEV_AUTH_SECRET.replaceAll('-', '_'),
+        // Часть учебного секрета, добитая до 32 символов
+        'dev-only-secret-plus-my-own-tail-1234',
+        'my-very-long-prefix-not-for-production',
+        `${DEV_AUTH_SECRET}-and-something-more`,
+      ]
+
+      it('распознаются: пробелы, кавычки, регистр, _ вместо -, часть секрета', () => {
+        expect(isDevAuthSecret(DEV_AUTH_SECRET)).toBe(true)
+        for (const secret of variants) expect(isDevAuthSecret(secret), secret).toBe(true)
+        expect(isDevAuthSecret('y'.repeat(32))).toBe(false)
+        expect(isDevAuthSecret('kq3H7vXQm9b2Lw0Zr5TtYc8N1aPdEfGu+JhS4o6Vi/A=')).toBe(false)
+      })
+
+      it('вне учебного режима не проходят: ни на сервере, ни в проде, ни без флага', () => {
+        for (const AUTH_SECRET of variants) {
+          expect(issuePaths({ ...remote, AUTH_SECRET }), AUTH_SECRET).toEqual(['AUTH_SECRET'])
+          expect(issuePaths({ ...prodEnv, AUTH_SECRET }), AUTH_SECRET).toEqual(['AUTH_SECRET'])
+          expect(issuePaths({ AUTH_SECRET }, {}), AUTH_SECRET).toEqual(['AUTH_SECRET'])
+        }
+        expect(
+          parseConfig({ ...remote, AUTH_SECRET: ` ${DEV_AUTH_SECRET}` }, dev).error?.issues,
+        ).toEqual([
+          expect.objectContaining({ message: expect.stringMatching(/учебный секрет.*вариант/) }),
+        ])
+      })
+
+      it('в учебном режиме API на варианте отвечает только этому компьютеру', () => {
+        for (const AUTH_SECRET of variants) {
+          expect(parseConfig({ AUTH_SECRET }, dev).data?.loopbackOnly, AUTH_SECRET).toBe(true)
+        }
+      })
+    })
+
     it('localhost, *.localhost, 127.x и [::1] — этот компьютер', () => {
       for (const host of ['localhost', 'admin.localhost', '127.0.0.1', '127.1.2.3', '[::1]']) {
         const config = parseConfig(
@@ -193,5 +243,34 @@ describe('конфиг', () => {
     expect(parseConfig({ TRUST_PROXY: 'true' }, dev).data?.TRUST_PROXY).toBe(true)
     expect(parseConfig({ TRUST_PROXY: 'false' }, dev).data?.TRUST_PROXY).toBe(false)
     expect(issuePaths({ TRUST_PROXY: 'maybe' })).toEqual(['TRUST_PROXY'])
+  })
+})
+
+describe('аргументы API', () => {
+  it('без аргументов — обычный запуск, --dev — учебный режим', () => {
+    expect(parseApiArgs([])).toEqual({ success: true, dev: false })
+    expect(parseApiArgs(['--dev'])).toEqual({ success: true, dev: true })
+  })
+
+  it('опечатка или лишний аргумент — русская ошибка со списком, а не исключение', () => {
+    for (const args of [
+      ['--Dev'],
+      ['--dev', '--port', '4000'],
+      ['dev'],
+      ['--dev=true'],
+      ['-d'],
+      ['--', '--dev'],
+    ]) {
+      expect(() => parseApiArgs(args), args.join(' ')).not.toThrow()
+      const result = parseApiArgs(args)
+      expect(result, args.join(' ')).toEqual({
+        success: false,
+        error: expect.stringMatching(/^Непонятные аргументы API: .+Принимается только --dev/),
+      })
+    }
+    expect(parseApiArgs(['--Dev', 'extra'])).toMatchObject({
+      error: expect.stringContaining('--Dev extra.'),
+    })
+    expect(parseApiArgs(['--dev=1'])).toMatchObject({ error: expect.stringContaining('--dev=1.') })
   })
 })

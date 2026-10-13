@@ -1,11 +1,10 @@
 import { mkdirSync } from 'node:fs'
-import { parseArgs } from 'node:util'
 import { setupZodMessages } from '@cms/schema'
 import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { createAuth } from './auth/auth'
 import { serverFetch } from './client-ip'
-import { loadConfig } from './config'
+import { loadConfig, parseApiArgs } from './config'
 import { createDb } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
@@ -16,8 +15,13 @@ import { sharpProcessor } from './media/sharp-processor'
 setupZodMessages()
 // --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
 // и e2e: без флага API не стартует на учебном секрете, даже если переменных нет вовсе
-const { values: flags } = parseArgs({ options: { dev: { type: 'boolean', default: false } } })
-const config = loadConfig({ dev: flags.dev })
+const args = parseApiArgs()
+if (!args.success) {
+  // Как ошибки конфига: короткое сообщение и код 1, без стека
+  console.error(args.error)
+  process.exit(1)
+}
+const config = loadConfig({ dev: args.dev })
 
 mkdirSync(config.PGLITE_DIR, { recursive: true })
 const unlock = await lockDb(config.PGLITE_DIR, { waitMs: 5000 }).catch((error: unknown) => {

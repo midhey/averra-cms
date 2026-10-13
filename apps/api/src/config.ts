@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { parseArgs } from 'node:util'
 import { z } from 'zod'
 
 /**
@@ -6,6 +7,19 @@ import { z } from 'zod'
  * только для учебного режима (см. isLocalDev ниже). Значение нарочно говорящее
  */
 export const DEV_AUTH_SECRET = 'dev-only-secret-not-for-production-0123456789'
+
+/** Узнаваемые части учебного секрета после нормализации: только буквы и цифры, нижний регистр */
+const DEV_SECRET_MARKERS = ['devonlysecret', 'notforproduction']
+
+/**
+ * Учебный секрет или его вариант: с пробелами по краям, в кавычках, в другом регистре, с _ вместо -
+ * или только его часть. Все они — тот же публичный секрет из репозитория, поэтому сравнение
+ * точным совпадением не годится: вариант прошёл бы как «свой» секрет и снял бы защиту loopback
+ */
+export function isDevAuthSecret(secret: string) {
+  const normalized = secret.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return DEV_SECRET_MARKERS.some((marker) => normalized.includes(marker))
+}
 
 /**
  * Адрес без пути: с ним сравнивается заголовок Origin, а в нём пути не бывает.
@@ -108,13 +122,20 @@ const envSchema = (options: ConfigOptions) =>
             'NODE_ENV не production и адреса ADMIN_URL и API_URL на localhost',
         })
       }
-      // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория
-      if (env.AUTH_SECRET === DEV_AUTH_SECRET && !isLocalDev(env, options)) {
+      // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория,
+      // как бы его ни переписали (см. isDevAuthSecret)
+      if (
+        env.AUTH_SECRET !== undefined &&
+        isDevAuthSecret(env.AUTH_SECRET) &&
+        !isLocalDev(env, options)
+      ) {
         ctx.addIssue({
           code: 'custom',
           path: ['AUTH_SECRET'],
           message:
-            'Учебный секрет из репозитория годится только для разработки на localhost (pnpm dev)',
+            'Это учебный секрет из репозитория или его вариант (с пробелами, в кавычках, ' +
+            'в другом регистре, его часть). Он годится только для разработки на localhost ' +
+            '(pnpm dev). Задай свой: openssl rand -base64 32',
         })
       }
     })
@@ -132,7 +153,7 @@ const envSchema = (options: ConfigOptions) =>
         // Учебный секрет публичный, поэтому такой API отвечает только запросам к localhost
         // с этого компьютера. Это добавочная защита, а не главная: прокси на том же сервере,
         // который шлёт апстриму его Host (nginx по умолчанию), её обходит (см. client-ip.ts)
-        loopbackOnly: AUTH_SECRET === DEV_AUTH_SECRET,
+        loopbackOnly: isDevAuthSecret(AUTH_SECRET),
         // Заводить ли в пустой базе демо-сайт и владельца из DEV_OWNER_*
         devSeed,
         // Cookie только по HTTPS — в проде и везде, где API открыт по https.
@@ -150,6 +171,41 @@ export type Config = z.output<ReturnType<typeof envSchema>>
 /** Проверяет переменные окружения. Отдельно от loadConfig, чтобы проверять в тестах */
 export function parseConfig(env: Record<string, string | undefined>, options: ConfigOptions = {}) {
   return envSchema(options).safeParse(env)
+}
+
+export type ApiArgs = { success: true; dev: boolean } | { success: false; error: string }
+
+/**
+ * Аргументы командной строки API: принимается только --dev (его ставят pnpm dev и e2e).
+ * Опечатка или лишний аргумент — понятная ошибка, а не молчаливый пропуск: --Dev вместо --dev
+ * иначе тихо запустил бы API без учебного режима. Отдельно от index.ts, чтобы проверять в тестах:
+ * index.ts при импорте поднимает сервер. Без args — аргументы процесса
+ */
+export function parseApiArgs(args?: string[]): ApiArgs {
+  // Нестрогий разбор с токенами, а не strict: parseArgs в strict бросает английскую ошибку,
+  // а здесь нужен список всех непонятых аргументов в русском сообщении
+  const { values, tokens } = parseArgs({
+    args,
+    options: { dev: { type: 'boolean' } },
+    strict: false,
+    allowPositionals: true,
+    tokens: true,
+  })
+  const unknown = tokens.flatMap((token) => {
+    if (token.kind === 'positional') return [token.value]
+    if (token.kind !== 'option') return []
+    if (token.name === 'dev' && token.value === undefined) return []
+    return [token.value === undefined ? token.rawName : `${token.rawName}=${token.value}`]
+  })
+  if (unknown.length > 0) {
+    return {
+      success: false,
+      error:
+        `Непонятные аргументы API: ${unknown.join(' ')}. ` +
+        'Принимается только --dev (учебный режим для разработки, его ставит pnpm dev)',
+    }
+  }
+  return { success: true, dev: values.dev === true }
 }
 
 export function loadConfig(options: ConfigOptions = {}): Config {
