@@ -12,12 +12,19 @@ export const DEV_AUTH_SECRET = 'dev-only-secret-not-for-production-0123456789'
 const DEV_SECRET_MARKERS = ['devonlysecret', 'notforproduction']
 
 /**
- * Учебный секрет или его вариант: с пробелами по краям, в кавычках, в другом регистре, с _ вместо -
- * или только его часть. Все они — тот же публичный секрет из репозитория, поэтому сравнение
- * точным совпадением не годится: вариант прошёл бы как «свой» секрет и снял бы защиту loopback
+ * Учебный секрет или его вариант: с пробелами по краям, в кавычках, в другом регистре, с другими
+ * разделителями (_ вместо -), полноширинными символами или только его часть. Все они — тот же
+ * публичный секрет из репозитория, поэтому сравнение точным совпадением не годится: вариант прошёл
+ * бы как «свой» секрет и снял бы защиту loopback. Ловим то, что получается по небрежности при
+ * копировании; нарочно искажённый секрет (похожие буквы другого алфавита, кодировки) — уже другой
+ * ключ, и его не распознаём
  */
 export function isDevAuthSecret(secret: string) {
-  const normalized = secret.toLowerCase().replace(/[^a-z0-9]/g, '')
+  // NFKC сводит полноширинные и другие совместимые формы символов к обычным латинским
+  const normalized = secret
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
   return DEV_SECRET_MARKERS.some((marker) => normalized.includes(marker))
 }
 
@@ -122,8 +129,8 @@ const envSchema = (options: ConfigOptions) =>
             'NODE_ENV не production и адреса ADMIN_URL и API_URL на localhost',
         })
       }
-      // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория,
-      // как бы его ни переписали (см. isDevAuthSecret)
+      // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория, в том числе
+      // с пробелами, кавычками, в другом регистре или с другими разделителями (см. isDevAuthSecret)
       if (
         env.AUTH_SECRET !== undefined &&
         isDevAuthSecret(env.AUTH_SECRET) &&
@@ -181,7 +188,7 @@ export type ApiArgs = { success: true; dev: boolean } | { success: false; error:
  * иначе тихо запустил бы API без учебного режима. Отдельно от index.ts, чтобы проверять в тестах:
  * index.ts при импорте поднимает сервер. Без args — аргументы процесса
  */
-export function parseApiArgs(args?: string[]): ApiArgs {
+export function parseApiArgs(args: string[] = process.argv.slice(2)): ApiArgs {
   // Нестрогий разбор с токенами, а не strict: parseArgs в strict бросает английскую ошибку,
   // а здесь нужен список всех непонятых аргументов в русском сообщении
   const { values, tokens } = parseArgs({
@@ -191,17 +198,19 @@ export function parseApiArgs(args?: string[]): ApiArgs {
     allowPositionals: true,
     tokens: true,
   })
-  const unknown = tokens.flatMap((token) => {
-    if (token.kind === 'positional') return [token.value]
-    if (token.kind !== 'option') return []
-    if (token.name === 'dev' && token.value === undefined) return []
-    return [token.value === undefined ? token.rawName : `${token.rawName}=${token.value}`]
-  })
-  if (unknown.length > 0) {
+  // В сообщении — аргументы так, как их написали, а не токены parseArgs: группа -dev
+  // разворачивается в три токена -d -e -v, а «--» перед аргументом вовсе не попадает в его токен.
+  // Поэтому собираем номера непонятых аргументов (Set убирает повторы от групп) и берём по ним args
+  const unknown = new Set<number>()
+  for (const token of tokens) {
+    if (token.kind === 'option' && token.name === 'dev' && token.value === undefined) continue
+    unknown.add(token.index)
+  }
+  if (unknown.size > 0) {
     return {
       success: false,
       error:
-        `Непонятные аргументы API: ${unknown.join(' ')}. ` +
+        `Непонятные аргументы API: ${[...unknown].map((index) => args[index]).join(' ')}. ` +
         'Принимается только --dev (учебный режим для разработки, его ставит pnpm dev)',
     }
   }

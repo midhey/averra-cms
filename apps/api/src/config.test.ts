@@ -116,20 +116,23 @@ describe('конфиг', () => {
       const variants = [
         ` ${DEV_AUTH_SECRET}`,
         `${DEV_AUTH_SECRET} `,
-        `	${DEV_AUTH_SECRET}
-`,
+        `\t${DEV_AUTH_SECRET}\n`,
         `"${DEV_AUTH_SECRET}"`,
         `'${DEV_AUTH_SECRET}'`,
         DEV_AUTH_SECRET.toUpperCase(),
         'Dev-Only-Secret-Not-For-Production-0123456789',
         DEV_AUTH_SECRET.replaceAll('-', '_'),
+        // Полноширинные символы (ｄｅｖ－ｏｎｌｙ…): сдвиг ASCII на U+FEE0
+        DEV_AUTH_SECRET.replace(/[!-~]/g, (char) =>
+          String.fromCharCode(char.charCodeAt(0) + 0xfee0),
+        ),
         // Часть учебного секрета, добитая до 32 символов
         'dev-only-secret-plus-my-own-tail-1234',
         'my-very-long-prefix-not-for-production',
         `${DEV_AUTH_SECRET}-and-something-more`,
       ]
 
-      it('распознаются: пробелы, кавычки, регистр, _ вместо -, часть секрета', () => {
+      it('распознаются: пробелы, кавычки, регистр, _ вместо -, полноширинные символы, часть секрета', () => {
         expect(isDevAuthSecret(DEV_AUTH_SECRET)).toBe(true)
         for (const secret of variants) expect(isDevAuthSecret(secret), secret).toBe(true)
         expect(isDevAuthSecret('y'.repeat(32))).toBe(false)
@@ -259,6 +262,7 @@ describe('аргументы API', () => {
       ['dev'],
       ['--dev=true'],
       ['-d'],
+      ['-dev'],
       ['--', '--dev'],
     ]) {
       expect(() => parseApiArgs(args), args.join(' ')).not.toThrow()
@@ -272,5 +276,21 @@ describe('аргументы API', () => {
       error: expect.stringContaining('--Dev extra.'),
     })
     expect(parseApiArgs(['--dev=1'])).toMatchObject({ error: expect.stringContaining('--dev=1.') })
+  })
+
+  it('в ошибке аргументы так, как их написали, а не токены разбора', () => {
+    const listed = (args: string[]) => {
+      const result = parseApiArgs(args)
+      return result.success
+        ? undefined
+        : result.error.match(/^Непонятные аргументы API: (.*?)\. /)?.[1]
+    }
+    // Группа из одной черты — одним аргументом, а не -d -e -v
+    expect(listed(['-dev'])).toBe('-dev')
+    expect(listed(['--dev', '-dev'])).toBe('-dev')
+    // «--» показываем: без него «--dev» в ошибке противоречил бы подсказке «принимается --dev»
+    expect(listed(['--', '--dev'])).toBe('-- --dev')
+    expect(listed(['--dev', '--port', '4000'])).toBe('--port 4000')
+    expect(listed(['--dev=true'])).toBe('--dev=true')
   })
 })
