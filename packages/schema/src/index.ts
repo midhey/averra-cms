@@ -6,6 +6,14 @@ export { BlockId, defineBlock } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export { Uuid } from './id'
 export {
+  hasHeaderBreak,
+  MailAddress,
+  MailLine,
+  MailSenderName,
+  MailSubject,
+  MailUrl,
+} from './mail'
+export {
   collectMediaRefs,
   fileSizeLimitHint,
   fileTooLargeMessage,
