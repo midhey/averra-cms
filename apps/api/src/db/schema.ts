@@ -254,3 +254,65 @@ export const media = pgTable(
     check('media_one_author', sql`${table.uploadedBy} IS NULL OR ${table.uploadedByToken} IS NULL`),
   ],
 )
+
+/** Состояние письма в очереди: ждёт, отправляется, отправлено, окончательно не отправлено */
+export const mailStatuses = ['pending', 'sending', 'sent', 'failed'] as const
+export type MailStatusValue = (typeof mailStatuses)[number]
+
+/**
+ * Очередь писем (паттерн outbox). Письмо пишется сюда в той же транзакции, что и действие
+ * (enqueueMail в src/mail/outbox.ts), а отправляет его обработчик с повторами. Данные письма
+ * (data) живут только до отправки: у отправленного их нет, а у письма с одноразовой ссылкой
+ * их нет и после неудачи. Сами строки удаляются через MAIL_RETENTION_DAYS
+ */
+export const mailOutbox = pgTable(
+  'mail_outbox',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    // Письма о заявках относятся к сайту, письма системы (сброс пароля) — нет
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    // Id шаблона из src/mail/templates. Данные проверены его схемой при постановке в очередь
+    template: text().notNull(),
+    // Данные шаблона. null — стёрты: письмо отправлено или в нём была одноразовая ссылка
+    data: jsonb().$type<unknown>(),
+    recipient: text().notNull(),
+    status: text().$type<MailStatusValue>().notNull().default('pending'),
+    // Сколько раз письмо брали в отправку
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // Аренда обработчика: пока она не истекла, письмо в статусе sending никто другой не берёт
+    lockedUntil: timestamp({ withTimezone: true }),
+    // Кто взял письмо: итог отправки записывается только с тем же claim_id
+    claimId: uuid(),
+    // Текст последней ошибки, без секретов
+    lastError: text(),
+    lastAttemptAt: timestamp({ withTimezone: true }),
+    // Message-ID, который вернул провайдер
+    messageId: text(),
+    sentAt: timestamp({ withTimezone: true }),
+    // Срок одноразовой ссылки в письме: позже письмо бессмысленно и не отправляется
+    expiresAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('mail_outbox_due_idx').on(table.status, table.nextAttemptAt),
+    index('mail_outbox_sent_at_idx').on(table.sentAt),
+    index('mail_outbox_site_id_idx').on(table.siteId),
+    check(
+      'mail_outbox_status_valid',
+      sql`${table.status} IN ('pending', 'sending', 'sent', 'failed')`,
+    ),
+    check('mail_outbox_attempts_valid', sql`${table.attempts} >= 0`),
+    // Отправленное письмо всегда знает, когда ушло, а неотправленное — не притворяется ушедшим
+    check(
+      'mail_outbox_sent_at_valid',
+      sql`(${table.status} = 'sent') = (${table.sentAt} IS NOT NULL)`,
+    ),
+    // Ждущему и отправляющемуся письму данные нужны, у отправленного их уже нет: секреты
+    // и персональные данные лежат в базе не дольше, чем нужно для отправки
+    check(
+      'mail_outbox_data_lifetime',
+      sql`(${table.status} IN ('pending', 'sending') AND ${table.data} IS NOT NULL) OR (${table.status} = 'sent' AND ${table.data} IS NULL) OR ${table.status} = 'failed'`,
+    ),
+  ],
+)

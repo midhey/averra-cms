@@ -24,7 +24,8 @@
     "member:add": "pnpm --filter @averra/api member:add",
     "token:create": "pnpm --filter @averra/api token:create",
     "token:list": "pnpm --filter @averra/api token:list",
-    "token:revoke": "pnpm --filter @averra/api token:revoke"
+    "token:revoke": "pnpm --filter @averra/api token:revoke",
+    "mail:test": "pnpm --filter @averra/api mail:test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

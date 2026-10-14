@@ -268,3 +268,93 @@ describe('миграция 0005_media', () => {
     expect(rows).toEqual([])
   })
 })
+
+describe('миграция 0006_mail_outbox', () => {
+  it('держит статус, попытки и время отправки; письма сайта уходят вместе с ним', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+      '0005_media',
+      '0006_mail_outbox',
+    ]) {
+      await applyMigration(client, name)
+    }
+    const siteId = '00000000-0000-4000-8000-000000000001'
+    await client.exec(`INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}')`)
+
+    const insert = (values: string) => `
+      INSERT INTO mail_outbox (site_id, template, data, recipient, status, attempts, sent_at)
+      VALUES (${values})`
+    await client.exec(insert(`'${siteId}', 'mail-test', '{}', 'a@b.ru', 'pending', 0, NULL`))
+    await client.exec(insert(`NULL, 'mail-test', '{}', 'a@b.ru', 'sent', 1, now()`))
+    await expect(
+      client.exec(insert(`NULL, 'mail-test', '{}', 'a@b.ru', 'queued', 0, NULL`)),
+    ).rejects.toThrow(/mail_outbox_status_valid/)
+    await expect(
+      client.exec(insert(`NULL, 'mail-test', '{}', 'a@b.ru', 'pending', -1, NULL`)),
+    ).rejects.toThrow(/mail_outbox_attempts_valid/)
+    // Отправленное знает, когда ушло, а ждущее не притворяется отправленным
+    await expect(
+      client.exec(insert(`NULL, 'mail-test', '{}', 'a@b.ru', 'sent', 1, NULL`)),
+    ).rejects.toThrow(/mail_outbox_sent_at_valid/)
+    await expect(
+      client.exec(insert(`NULL, 'mail-test', '{}', 'a@b.ru', 'pending', 0, now()`)),
+    ).rejects.toThrow(/mail_outbox_sent_at_valid/)
+
+    await client.exec(`DELETE FROM sites WHERE id = '${siteId}'`)
+    const { rows } = await client.query<{ site_id: string | null }>(
+      'SELECT site_id FROM mail_outbox',
+    )
+    expect(rows).toEqual([{ site_id: null }])
+  })
+})
+
+describe('миграция 0007_mail_outbox_data_lifetime', () => {
+  it('стирает данные отправленных писем и писем со ссылкой и держит это проверкой', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+      '0005_media',
+      '0006_mail_outbox',
+    ]) {
+      await applyMigration(client, name)
+    }
+    const insert = (template: string, status: string, sentAt = 'NULL') => `
+      INSERT INTO mail_outbox (template, data, recipient, status, sent_at)
+      VALUES ('${template}', '{"url":"https://admin.example.ru/reset?token=SECRET"}', 'a@b.ru', '${status}', ${sentAt})`
+    await client.exec(insert('mail-test', 'pending'))
+    await client.exec(insert('mail-test', 'sent', 'now()'))
+    await client.exec(insert('mail-test', 'failed'))
+    await client.exec(insert('password-reset', 'failed'))
+
+    await applyMigration(client, '0007_mail_outbox_data_lifetime')
+
+    const { rows } = await client.query<{ template: string; status: string; has_data: boolean }>(
+      'SELECT template, status, data IS NOT NULL AS has_data FROM mail_outbox ORDER BY template, status',
+    )
+    expect(rows).toEqual([
+      // Неотправленное письмо без секрета хранит данные: его можно повторить
+      { template: 'mail-test', status: 'failed', has_data: true },
+      { template: 'mail-test', status: 'pending', has_data: true },
+      { template: 'mail-test', status: 'sent', has_data: false },
+      { template: 'password-reset', status: 'failed', has_data: false },
+    ])
+    // Отправленное письмо с данными и ждущее без данных база не примет
+    await expect(client.exec(insert('mail-test', 'sent', 'now()'))).rejects.toThrow(
+      /mail_outbox_data_lifetime/,
+    )
+    await expect(
+      client.exec(
+        `INSERT INTO mail_outbox (template, data, recipient, status) VALUES ('mail-test', NULL, 'a@b.ru', 'pending')`,
+      ),
+    ).rejects.toThrow(/mail_outbox_data_lifetime/)
+  })
+})

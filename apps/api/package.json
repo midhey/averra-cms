@@ -23,7 +23,8 @@
     "member:add": "tsx src/cli/member-add.ts",
     "token:create": "tsx src/cli/token-create.ts",
     "token:list": "tsx src/cli/token-list.ts",
-    "token:revoke": "tsx src/cli/token-revoke.ts"
+    "token:revoke": "tsx src/cli/token-revoke.ts",
+    "mail:test": "tsx src/cli/mail-test.ts"
   },
   "dependencies": {
     "@averra/schema": "workspace:*",
@@ -34,12 +35,15 @@
     "better-auth": "^1.7.7",
     "drizzle-orm": "^0.45.3",
     "hono": "catalog:",
+    "nodemailer": "^10.1.0",
     "sharp": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "drizzle-kit": "^0.31.11",
+    "selfsigned": "^5.5.0",
+    "smtp-server": "^3.19.21",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

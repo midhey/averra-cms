@@ -1,0 +1,171 @@
+import { eq } from 'drizzle-orm'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { createDb, type Db } from '../db/client'
+import { migrateDb } from '../db/migrate'
+import { mailOutbox } from '../db/schema'
+import { MailSendError } from './mailer'
+import { memoryMailer } from './memory-mailer'
+import { enqueueMail } from './outbox'
+import { type MailWorker, startMailWorker } from './worker'
+
+let db: Db
+let close: () => Promise<void>
+let worker: MailWorker | undefined
+
+// База одна на файл (миграции на каждый тест под нагрузкой не укладывались в тайм-аут),
+// а очередь перед каждым тестом пустая: тесты не забирают письма друг друга
+beforeAll(async () => {
+  const created = createDb()
+  db = created.db
+  close = created.close
+  await migrateDb(db)
+})
+afterAll(async () => {
+  await close()
+})
+beforeEach(async () => {
+  await db.delete(mailOutbox)
+})
+afterEach(async () => {
+  await worker?.stop()
+  worker = undefined
+})
+
+const testMail = (to = 'anna@example.ru') => ({
+  template: 'mail-test' as const,
+  data: { sentAt: new Date().toISOString(), provider: 'тест' },
+  to,
+})
+
+const settings = { maxAttempts: 3, retentionDays: 30 }
+
+/** Ждёт условия, проверяя его каждые 10 мс */
+async function until(check: () => boolean | Promise<boolean>, timeoutMs = 5000) {
+  const start = Date.now()
+  while (!(await check())) {
+    if (Date.now() - start > timeoutMs) throw new Error('не дождались')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+const statusOf = async (id: string) =>
+  (await db.select({ status: mailOutbox.status }).from(mailOutbox).where(eq(mailOutbox.id, id)))[0]
+    ?.status
+
+describe('обработчик в процессе API', () => {
+  it('сам забирает письма из очереди', async () => {
+    const mailer = memoryMailer()
+    const { id } = await enqueueMail(db, testMail())
+    worker = startMailWorker({ db, mailer, ...settings, intervalMs: 20 })
+    await until(async () => (await statusOf(id)) === 'sent')
+    expect(mailer.sent).toHaveLength(1)
+  })
+
+  it('wake будит его сразу, не дожидаясь следующего круга', async () => {
+    const mailer = memoryMailer()
+    worker = startMailWorker({ db, mailer, ...settings, intervalMs: 60 * 60 * 1000 })
+    // Первый круг идёт сразу при старте: даём ему пройти по пустой очереди
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const { id } = await enqueueMail(db, testMail())
+    worker.wake()
+    await until(async () => (await statusOf(id)) === 'sent')
+  })
+
+  it('stop ждёт отправку, которая уже идёт, и больше писем не берёт', async () => {
+    let release: () => void = () => {}
+    let started = 0
+    const mailer = memoryMailer({
+      beforeSend: () => {
+        started += 1
+        return new Promise<void>((resolve) => {
+          release = resolve
+        })
+      },
+    })
+    const first = await enqueueMail(db, testMail('first@example.ru'), new Date(Date.now() - 1000))
+    const second = await enqueueMail(db, testMail('second@example.ru'))
+    worker = startMailWorker({ db, mailer, ...settings, intervalMs: 20 })
+    await until(() => started === 1)
+
+    let stopped = false
+    const stopping = worker.stop().then(() => {
+      stopped = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Письмо ещё отправляется — stop не вернулся
+    expect(stopped).toBe(false)
+
+    release()
+    await stopping
+    expect(mailer.sent.map((mail) => mail.to)).toEqual(['first@example.ru'])
+    expect(await statusOf(first.id)).toBe('sent')
+    // Второе письмо из той же пачки отпущено обратно в очередь, а не брошено в «отправляется»
+    expect(await statusOf(second.id)).toBe('pending')
+    const [row] = await db.select().from(mailOutbox).where(eq(mailOutbox.id, second.id))
+    expect(row?.attempts).toBe(0)
+
+    // После остановки круги не идут
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(started).toBe(1)
+  })
+
+  it('чистит старые письма', async () => {
+    const [old] = await db
+      .insert(mailOutbox)
+      .values({
+        template: 'mail-test',
+        data: null,
+        recipient: 'a@b.ru',
+        status: 'sent',
+        sentAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: mailOutbox.id })
+    worker = startMailWorker({ db, mailer: memoryMailer(), ...settings, intervalMs: 20 })
+    await until(async () => (await statusOf(old?.id as string)) === undefined)
+  })
+
+  it('сервер не принял вход — обработчик выжидает, а не логинится на каждом круге; wake будит', async () => {
+    let logins = 0
+    const mailer = memoryMailer({
+      beforeSend: () => {
+        logins += 1
+        throw new MailSendError('Сервер не принял логин или пароль', false, 'auth')
+      },
+    })
+    const logs: string[] = []
+    await enqueueMail(db, testMail('a@example.ru'), new Date(Date.now() - 2000))
+    await enqueueMail(db, testMail('b@example.ru'), new Date(Date.now() - 1000))
+    worker = startMailWorker({
+      db,
+      mailer,
+      ...settings,
+      intervalMs: 20,
+      log: (message) => logs.push(message),
+    })
+    await until(() => logins === 1)
+    // Круг идёт раз в 20 мс, но после сбоя входа пауза — минута: за 200 мс входов больше нет
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(logins).toBe(1)
+    expect(logs.join('\n')).toContain('следующая попытка через 60 с')
+
+    // «Повторить» в админке будит обработчик и во время паузы
+    worker.wake()
+    await until(() => logins === 2)
+  })
+
+  it('без провайдера (почта выключена) писем не шлёт, но очередь чистит', async () => {
+    const { id: waiting } = await enqueueMail(db, testMail())
+    const [old] = await db
+      .insert(mailOutbox)
+      .values({
+        template: 'mail-test',
+        data: {},
+        recipient: 'a@b.ru',
+        createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: mailOutbox.id })
+    worker = startMailWorker({ db, ...settings, intervalMs: 20 })
+    await until(async () => (await statusOf(old?.id as string)) === undefined)
+    expect(await statusOf(waiting)).toBe('pending')
+  })
+})

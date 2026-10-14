@@ -249,6 +249,96 @@ describe('конфиг', () => {
   })
 })
 
+describe('почта', () => {
+  const smtp = {
+    SMTP_HOST: 'smtp.example.ru',
+    SMTP_USER: 'noreply@example.ru',
+    SMTP_PASSWORD: 'smtp-secret-password',
+    MAIL_FROM: 'noreply@example.ru',
+  }
+
+  it('в учебном режиме без SMTP_* — файловый ящик в .data/mail', () => {
+    expect(parseConfig({}, dev).data?.mail).toEqual({
+      transport: 'file',
+      dir: '.data/mail',
+      from: { address: 'noreply@averra.test', name: 'Averra CMS' },
+      maxAttempts: 8,
+      retentionDays: 30,
+    })
+  })
+
+  it('без SMTP_* и не в учебном режиме — почта выключена явно и с причиной', () => {
+    const mail = parseConfig(prodEnv).data?.mail
+    expect(mail?.transport).toBe('off')
+    expect(mail && 'reason' in mail ? mail.reason : '').toContain('Почта не настроена')
+    expect(parseConfig({ MAIL_TRANSPORT: 'off' }, dev).data?.mail).toMatchObject({
+      transport: 'off',
+      reason: expect.stringContaining('MAIL_TRANSPORT=off'),
+    })
+  })
+
+  it('SMTP_HOST включает SMTP; режим берётся из порта: 465 — TLS, 587 — STARTTLS', () => {
+    expect(parseConfig({ ...prodEnv, ...smtp }).data?.mail).toMatchObject({
+      transport: 'smtp',
+      host: 'smtp.example.ru',
+      port: 465,
+      security: 'tls',
+      user: 'noreply@example.ru',
+      password: 'smtp-secret-password',
+      from: { address: 'noreply@example.ru', name: 'Averra CMS' },
+    })
+    expect(parseConfig({ ...prodEnv, ...smtp, SMTP_PORT: '587' }).data?.mail).toMatchObject({
+      security: 'starttls',
+    })
+    expect(
+      parseConfig({ ...prodEnv, ...smtp, SMTP_PORT: '2525', SMTP_SECURITY: 'starttls' }).data?.mail,
+    ).toMatchObject({ port: 2525, security: 'starttls' })
+  })
+
+  it('нестандартный порт без SMTP_SECURITY — ошибка; варианта без шифрования нет', () => {
+    expect(issuePaths({ ...prodEnv, ...smtp, SMTP_PORT: '2525' })).toEqual(['SMTP_SECURITY'])
+    expect(issuePaths({ ...prodEnv, ...smtp, SMTP_SECURITY: 'none' })).toEqual(['SMTP_SECURITY'])
+    expect(issuePaths({ ...prodEnv, ...smtp, SMTP_SECURITY: 'plain' })).toEqual(['SMTP_SECURITY'])
+  })
+
+  it('SMTP без логина, пароля или отправителя — ошибка конфига, а не тихо выключенная почта', () => {
+    for (const key of ['SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM'] as const) {
+      const { [key]: _, ...rest } = smtp
+      expect(issuePaths({ ...prodEnv, ...rest }), key).toEqual([key])
+    }
+    expect(issuePaths({ ...prodEnv, MAIL_TRANSPORT: 'smtp' })).toEqual([
+      'SMTP_HOST',
+      'SMTP_USER',
+      'SMTP_PASSWORD',
+      'MAIL_FROM',
+    ])
+  })
+
+  it('ошибка конфига не печатает пароль', () => {
+    const password = 'smtp-secret-password'
+    const result = parseConfig({ ...prodEnv, ...smtp, MAIL_FROM: 'не адрес', SMTP_PORT: 'x' })
+    expect(JSON.stringify(result.error?.issues)).not.toContain(password)
+  })
+
+  it('файловый ящик в проде запрещён', () => {
+    expect(issuePaths({ ...prodEnv, MAIL_TRANSPORT: 'file' })).toEqual(['MAIL_TRANSPORT'])
+  })
+
+  it('перевод строки в MAIL_FROM и MAIL_FROM_NAME — ошибка: это заголовки письма', () => {
+    const from = 'noreply@example.ru\nBcc: x@y.ru'
+    expect(issuePaths({ ...prodEnv, ...smtp, MAIL_FROM: from })).toEqual(['MAIL_FROM'])
+    const name = 'Averra\r\nBcc: x@y.ru'
+    expect(issuePaths({ ...prodEnv, ...smtp, MAIL_FROM_NAME: name })).toEqual(['MAIL_FROM_NAME'])
+  })
+
+  it('попытки и срок хранения настраиваются', () => {
+    expect(
+      parseConfig({ MAIL_MAX_ATTEMPTS: '5', MAIL_RETENTION_DAYS: '7' }, dev).data?.mail,
+    ).toMatchObject({ maxAttempts: 5, retentionDays: 7 })
+    expect(issuePaths({ MAIL_RETENTION_DAYS: '0' })).toEqual(['MAIL_RETENTION_DAYS'])
+  })
+})
+
 describe('аргументы API', () => {
   it('без аргументов — обычный запуск, --dev — учебный режим', () => {
     expect(parseApiArgs([])).toEqual({ success: true, dev: false })

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
+import { MailAddress, MailSenderName } from '@averra/schema'
 import { z } from 'zod'
 
 /**
@@ -75,6 +76,93 @@ function isLocalDev(env: RawEnv, { dev = false }: ConfigOptions) {
   return dev && env.NODE_ENV !== 'production' && isLoopbackUrl(ADMIN_URL) && isLoopbackUrl(API_URL)
 }
 
+type MailEnv = RawEnv & {
+  MAIL_TRANSPORT?: 'smtp' | 'file' | 'off'
+  SMTP_HOST?: string
+  SMTP_PORT: number
+  SMTP_SECURITY?: 'tls' | 'starttls'
+  SMTP_USER?: string
+  SMTP_PASSWORD?: string
+  MAIL_FROM?: string
+  MAIL_FROM_NAME: string
+  MAIL_DIR: string
+  MAIL_MAX_ATTEMPTS: number
+  MAIL_RETENTION_DAYS: number
+}
+
+/** Какой провайдер почты выбран: явно в MAIL_TRANSPORT или по тому, что задано */
+function mailTransportOf(env: MailEnv, options: ConfigOptions) {
+  if (env.MAIL_TRANSPORT) return env.MAIL_TRANSPORT
+  if (env.SMTP_HOST !== undefined) return 'smtp'
+  // Файловый ящик по умолчанию только в учебном режиме: на сервере письма молча ложились бы в папку
+  return isLocalDev(env, options) ? 'file' : 'off'
+}
+
+/** Режим шифрования по порту: 465 — TLS сразу, 587 и 25 — STARTTLS. Для других портов — явно */
+const securityByPort: Record<number, 'tls' | 'starttls'> = {
+  465: 'tls',
+  587: 'starttls',
+  25: 'starttls',
+}
+
+/** Что сказать владельцу, когда почта не работает: и в API, и в админке */
+const MAIL_OFF_EFFECT = 'Не работают сброс пароля, приглашения участников и уведомления о заявках'
+
+function checkMail(env: MailEnv, options: ConfigOptions, ctx: z.RefinementCtx) {
+  const transport = mailTransportOf(env, options)
+  if (transport === 'file' && env.NODE_ENV === 'production') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['MAIL_TRANSPORT'],
+      message: 'Файловый ящик — только для разработки: в проде письма не дошли бы до людей',
+    })
+  }
+  if (transport !== 'smtp') return
+  for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM'] as const) {
+    if (env[key] === undefined) {
+      ctx.addIssue({ code: 'custom', path: [key], message: `Для отправки через SMTP нужен ${key}` })
+    }
+  }
+  if (env.SMTP_SECURITY === undefined && securityByPort[env.SMTP_PORT] === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['SMTP_SECURITY'],
+      message: `Для порта ${env.SMTP_PORT} задай SMTP_SECURITY: tls (TLS сразу) или starttls`,
+    })
+  }
+}
+
+/** Настройки почты для index.ts и команд. Пароль здесь, но наружу он идёт только в smtpMailer */
+function mailConfig(env: MailEnv, options: ConfigOptions) {
+  const common = { maxAttempts: env.MAIL_MAX_ATTEMPTS, retentionDays: env.MAIL_RETENTION_DAYS }
+  const transport = mailTransportOf(env, options)
+  const from = { address: env.MAIL_FROM ?? 'noreply@averra.test', name: env.MAIL_FROM_NAME }
+  if (transport === 'file') return { ...common, transport, dir: env.MAIL_DIR, from }
+  if (transport === 'smtp' && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD) {
+    return {
+      ...common,
+      transport,
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      security: env.SMTP_SECURITY ?? securityByPort[env.SMTP_PORT] ?? 'tls',
+      user: env.SMTP_USER,
+      password: env.SMTP_PASSWORD,
+      from,
+    }
+  }
+  return {
+    ...common,
+    transport: 'off' as const,
+    reason:
+      env.MAIL_TRANSPORT === 'off'
+        ? `Почта выключена (MAIL_TRANSPORT=off). ${MAIL_OFF_EFFECT}`
+        : 'Почта не настроена: задай SMTP_HOST, SMTP_USER, SMTP_PASSWORD и MAIL_FROM ' +
+          `(см. README, «Почта»). ${MAIL_OFF_EFFECT}`,
+  }
+}
+
+export type MailConfig = ReturnType<typeof mailConfig>
+
 const envSchema = (options: ConfigOptions) =>
   z
     .object({
@@ -104,6 +192,26 @@ const envSchema = (options: ConfigOptions) =>
       // Владелец, которого API создаёт в пустой базе в учебном режиме. Без --dev не используется
       DEV_OWNER_EMAIL: z.email().optional(),
       DEV_OWNER_PASSWORD: z.string().min(10).max(128).optional(),
+      // Почта (см. README, «Почта»). smtp — настоящая отправка, file — письма в папку
+      // (разработка), off — выключена. Не задано: SMTP_HOST → smtp, учебный режим → file, иначе off
+      MAIL_TRANSPORT: z.enum(['smtp', 'file', 'off']).optional(),
+      SMTP_HOST: z.string().trim().min(1).optional(),
+      SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+      // tls — TLS сразу (порт 465), starttls — обязательный STARTTLS (587). Без шифрования нельзя
+      SMTP_SECURITY: z.enum(['tls', 'starttls']).optional(),
+      SMTP_USER: z.string().min(1).optional(),
+      // Пароль только здесь, в окружении: не в базе, не в логах и не в ответах API.
+      // Сообщения Zod значение не печатают, поэтому и ошибка конфига его не покажет
+      SMTP_PASSWORD: z.string().min(1).optional(),
+      // Адрес отправителя — всегда на своём домене с настроенными SPF, DKIM и DMARC
+      MAIL_FROM: MailAddress.optional(),
+      MAIL_FROM_NAME: MailSenderName.default('Averra CMS'),
+      // Папка файлового ящика (MAIL_TRANSPORT=file)
+      MAIL_DIR: z.string().min(1).default('.data/mail'),
+      // Сколько раз пробовать отправить письмо, прежде чем сдаться
+      MAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(8),
+      // Через сколько дней удалять отправленные и неотправленные письма: в них персональные данные
+      MAIL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     })
     .superRefine((env, ctx) => {
       if ((env.DEV_OWNER_EMAIL === undefined) !== (env.DEV_OWNER_PASSWORD === undefined)) {
@@ -129,6 +237,7 @@ const envSchema = (options: ConfigOptions) =>
             'NODE_ENV не production и адреса ADMIN_URL и API_URL на localhost',
         })
       }
+      checkMail(env, options, ctx)
       // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория, в том числе
       // с пробелами, кавычками, в другом регистре или с другими разделителями (см. isDevAuthSecret)
       if (
@@ -170,6 +279,7 @@ const envSchema = (options: ConfigOptions) =>
           devSeed && env.DEV_OWNER_EMAIL && env.DEV_OWNER_PASSWORD
             ? { email: env.DEV_OWNER_EMAIL, password: env.DEV_OWNER_PASSWORD }
             : undefined,
+        mail: mailConfig(env, options),
       }
     })
 

@@ -8,6 +8,7 @@ import type { Db } from './db/client'
 import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
+import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
@@ -26,6 +27,8 @@ export type AppDeps = {
   images: ImageProcessor
   /** Самый большой файл медиатеки в байтах */
   mediaMaxBytes: number
+  /** Почта: состояние без секретов и очередь. Сам Mailer живёт в обработчике (index.ts) */
+  mail: MailDeps
 }
 
 export function createApp(deps: AppDeps) {
@@ -49,6 +52,7 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))
     .route('/media', mediaFilesRoutes(deps))
+    .route('/mail', mailRoutes({ db, mail: deps.mail }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 

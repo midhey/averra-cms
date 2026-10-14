@@ -7,3 +7,11 @@ export type Issue = { path: string; message: string }
 export const conflict = (message: string, issues: Issue[] = []) => ({
   error: { code: 'conflict', message, issues },
 })
+
+/**
+ * 503 — действию нужна почта, а она не настроена (нет SMTP_*). Так отвечают сброс пароля,
+ * приглашения и всё, что без письма не имеет смысла: честно, а не «готово», которое не придёт
+ */
+export const mailDisabled = (reason: string) => ({
+  error: { code: 'mail_disabled', message: reason },
+})
