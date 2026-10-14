@@ -50,6 +50,8 @@ export default defineConfig({
         MEDIA_DIR: resolve(import.meta.dirname, '.data/media'),
         // Лимит меньше обычных 10 МБ: тест большого файла не гоняет десятки мегабайт
         MEDIA_MAX_BYTES: String(2 * 1024 * 1024),
+        // Почта e2e — файловый ящик (учебный режим) рядом с базой: наружу ничего не уходит
+        MAIL_DIR: resolve(import.meta.dirname, '.data/mail'),
         DEV_OWNER_EMAIL: e2eOwner.email,
         DEV_OWNER_PASSWORD: e2eOwner.password,
         ADMIN_URL: urls.admin,
