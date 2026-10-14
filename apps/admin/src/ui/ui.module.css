@@ -107,6 +107,17 @@
   white-space: nowrap;
 }
 
+.appNav a {
+  color: #c9d3ff;
+  text-decoration: none;
+}
+
+.appNav a:hover,
+.appNav a[aria-current="page"] {
+  color: #fff;
+  text-decoration: underline;
+}
+
 .user {
   overflow: hidden;
   margin-left: auto;

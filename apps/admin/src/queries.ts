@@ -15,6 +15,9 @@ export const queryKeys = {
   revision: (siteId: string, slug: string, revisionId: string) =>
     ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
   media: (siteId: string) => ['sites', siteId, 'media'] as const,
+  mail: ['mail'] as const,
+  mailOutbox: ['mail', 'outbox'] as const,
+  mailPreview: (template: string) => ['mail', 'templates', template] as const,
 }
 
 export const sitesQuery = () =>
@@ -93,6 +96,47 @@ export const mediaQuery = (siteId: string) =>
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
+  })
+
+/** Почта: включена ли, провайдер без секретов, настройки очереди и список шаблонов */
+export const mailQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.mail,
+    queryFn: async () => {
+      const res = await api.mail.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Последние письма очереди, новые сверху */
+export const mailOutboxQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.mailOutbox,
+    queryFn: async () => {
+      const res = await api.mail.outbox.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Id шаблона письма — тот же список, что у API */
+export type MailTemplateId = Parameters<
+  (typeof api.mail.templates)[':template']['preview']['$get']
+>[0]['param']['template']
+
+/** Шаблон письма на примерных данных. Шаблоны живут в коде и между выкладками не меняются */
+export const mailPreviewQuery = (template: MailTemplateId) =>
+  queryOptions({
+    queryKey: queryKeys.mailPreview(template),
+    queryFn: async () => {
+      const res = await api.mail.templates[':template'].preview.$get({
+        param: { template },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+    staleTime: Number.POSITIVE_INFINITY,
   })
 
 /**

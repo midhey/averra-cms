@@ -9,16 +9,26 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { safeRedirect } from './permissions'
-import { mediaQuery, meQuery, pageQuery, pagesQuery, siteQuery, sitesQuery } from './queries'
+import {
+  mailOutboxQuery,
+  mailQuery,
+  mediaQuery,
+  meQuery,
+  pageQuery,
+  pagesQuery,
+  siteQuery,
+  sitesQuery,
+} from './queries'
 import { EditorScreen } from './screens/EditorScreen'
 import { LoginScreen } from './screens/LoginScreen'
+import { MailScreen } from './screens/MailScreen'
 import { MediaScreen } from './screens/MediaScreen'
 import { SiteScreen } from './screens/SiteScreen'
 import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AppHeader } from './ui/AppHeader'
 
-// Маршруты описаны в коде, без генератора: экранов пять, всё дерево видно здесь.
+// Маршруты описаны в коде, без генератора: экранов шесть, всё дерево видно здесь.
 // Данные загружаются в кеш TanStack Query, роутер только ждёт их перед показом экрана
 
 type RouterContext = { queryClient: QueryClient }
@@ -127,12 +137,25 @@ const editorRoute = createRoute({
   component: EditorScreen,
 })
 
+// Почта — только владельцу: участнику API ответит 403, и экран ошибки скажет почему
+const mailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/mail',
+  loader: ({ context: { queryClient } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(mailQuery()),
+      queryClient.ensureQueryData(mailOutboxQuery()),
+    ]),
+  component: MailScreen,
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   sitesRoute,
   siteRoute,
   mediaRoute,
   editorRoute,
+  mailRoute,
 ])
 
 export function createAdminRouter(queryClient: QueryClient) {
