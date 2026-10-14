@@ -1,4 +1,4 @@
-import { SignIn } from '@cms/schema'
+import { SignIn } from '@averra/schema'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'

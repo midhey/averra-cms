@@ -22,7 +22,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   return (
     <header className={styles.appHeader}>
-      <span className={styles.appName}>CMS</span>
+      <span className={styles.appName}>Averra CMS</span>
       <span className={styles.user} title={user.email}>
         {user.name}
       </span>

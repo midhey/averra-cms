@@ -1,4 +1,4 @@
-import type { BlockType } from '@cms/schema'
+import type { BlockType } from '@averra/schema'
 import { useMemo, useState } from 'react'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { useMoveButtons } from '../ui/use-move-buttons'

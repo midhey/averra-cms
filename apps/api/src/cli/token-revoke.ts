@@ -1,4 +1,4 @@
-import { Uuid } from '@cms/schema'
+import { Uuid } from '@averra/schema'
 import { z } from 'zod'
 import { tokensRepo } from '../modules/tokens/repo'
 import { args, CliError, check, openDb, run } from './common'

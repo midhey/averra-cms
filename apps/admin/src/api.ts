@@ -1,4 +1,4 @@
-import type { AppType } from '@cms/api'
+import type { AppType } from '@averra/api'
 import { hc } from 'hono/client'
 import { apiFetch } from './errors'
 

@@ -1,5 +1,5 @@
 {
-  "name": "@cms/schema",
+  "name": "@averra/schema",
   "private": true,
   "type": "module",
   "exports": {

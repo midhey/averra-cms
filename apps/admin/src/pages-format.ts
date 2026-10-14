@@ -1,4 +1,4 @@
-import { MAIN_PAGE_SLUG } from '@cms/schema'
+import { MAIN_PAGE_SLUG } from '@averra/schema'
 
 type PageStatus = { publishedAt: string | null; hasUnpublishedChanges: boolean }
 

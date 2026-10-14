@@ -102,7 +102,9 @@
 }
 
 .appName {
+  flex-shrink: 0;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .user {

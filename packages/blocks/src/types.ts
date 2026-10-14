@@ -1,4 +1,4 @@
-import type { BlockInstance, BlockType, MediaMap } from '@cms/schema'
+import type { BlockInstance, BlockType, MediaMap } from '@averra/schema'
 
 /** Поля блока после проверки схемой: значения по умолчанию уже подставлены */
 export type BlockData<T extends BlockType> = Extract<BlockInstance, { type: T }>['props']

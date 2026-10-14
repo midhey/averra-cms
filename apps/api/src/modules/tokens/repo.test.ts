@@ -1,4 +1,4 @@
-import { defaultTheme } from '@cms/tokens'
+import { defaultTheme } from '@averra/tokens'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { apiTokens, sites } from '../../db/schema'

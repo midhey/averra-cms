@@ -1,4 +1,4 @@
-import { Uuid } from '@cms/schema'
+import { Uuid } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { sites } from '../db/schema'

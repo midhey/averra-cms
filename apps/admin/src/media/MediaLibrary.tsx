@@ -1,4 +1,4 @@
-import { formatBytes, imageMimeTypes } from '@cms/schema'
+import { formatBytes, imageMimeTypes } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ChangeEvent, useId, useState } from 'react'
 import { api } from '../api'

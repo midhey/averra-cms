@@ -1,5 +1,5 @@
 {
-  "name": "@cms/e2e",
+  "name": "@averra/e2e",
   "private": true,
   "type": "module",
   "devEngines": {
@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@cms/api": "workspace:*",
-    "@cms/schema": "workspace:*",
+    "@averra/api": "workspace:*",
+    "@averra/schema": "workspace:*",
     "@playwright/test": "^1.64.0",
     "@types/node": "catalog:",
     "hono": "catalog:",

@@ -1,4 +1,4 @@
-import type { BlockType } from '@cms/schema'
+import type { BlockType } from '@averra/schema'
 import { catalogEntry } from './catalog'
 
 /** Блок в редакторе: поля как есть, пока без гарантий. Проверяет их схема при каждом изменении */

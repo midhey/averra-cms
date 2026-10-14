@@ -1,4 +1,4 @@
-import { Theme } from '@cms/schema'
+import { Theme } from '@averra/schema'
 
 export const defaultTheme: Theme = {
   colors: {

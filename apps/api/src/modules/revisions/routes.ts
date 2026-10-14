@@ -1,4 +1,4 @@
-import { ExistingPageSlug, PageContent, PageTitle, Uuid } from '@cms/schema'
+import { ExistingPageSlug, PageContent, PageTitle, Uuid } from '@averra/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'

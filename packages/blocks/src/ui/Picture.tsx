@@ -1,4 +1,4 @@
-import { type Image, type ImageFormat, imageMimeTypes, type MediaMap } from '@cms/schema'
+import { type Image, type ImageFormat, imageMimeTypes, type MediaMap } from '@averra/schema'
 import styles from './Picture.module.css'
 
 type PictureProps = {

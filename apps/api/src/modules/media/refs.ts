@@ -1,4 +1,4 @@
-import { collectMediaRefs, type PageContent } from '@cms/schema'
+import { collectMediaRefs, type PageContent } from '@averra/schema'
 import type { Issue } from '../../errors'
 import type { mediaRepo } from './repo'
 

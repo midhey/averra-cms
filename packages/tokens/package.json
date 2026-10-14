@@ -1,5 +1,5 @@
 {
-  "name": "@cms/tokens",
+  "name": "@averra/tokens",
   "private": true,
   "type": "module",
   "exports": {
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cms/schema": "workspace:*"
+    "@averra/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

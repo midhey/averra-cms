@@ -1,4 +1,4 @@
-import type { ImageFormat, ImageMimeType, PageContent, Theme } from '@cms/schema'
+import type { ImageFormat, ImageMimeType, PageContent, Theme } from '@averra/schema'
 import { sql } from 'drizzle-orm'
 import {
   boolean,

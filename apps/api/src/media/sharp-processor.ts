@@ -1,4 +1,4 @@
-import { type ImageFormat, imageFormatOf } from '@cms/schema'
+import { type ImageFormat, imageFormatOf } from '@averra/schema'
 import sharp, { type Metadata, type Sharp } from 'sharp'
 import {
   concurrencyLimit,

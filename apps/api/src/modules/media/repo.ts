@@ -1,4 +1,4 @@
-import type { ImageMimeType } from '@cms/schema'
+import type { ImageMimeType } from '@averra/schema'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'

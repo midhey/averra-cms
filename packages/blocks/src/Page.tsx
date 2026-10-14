@@ -1,4 +1,4 @@
-import type { BlockInstance, MediaMap, PageContent } from '@cms/schema'
+import type { BlockInstance, MediaMap, PageContent } from '@averra/schema'
 import { Cta } from './cta/Cta'
 import { Features } from './features/Features'
 import { Hero } from './hero/Hero'

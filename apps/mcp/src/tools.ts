@@ -1,5 +1,5 @@
-import type { AppType } from '@cms/api'
-import { blocks, describeApiError, PageContent, PageSlug, PageTitle, Uuid } from '@cms/schema'
+import type { AppType } from '@averra/api'
+import { blocks, describeApiError, PageContent, PageSlug, PageTitle, Uuid } from '@averra/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
@@ -49,7 +49,7 @@ const createTokenHint =
   'Создай токен: pnpm token:create --site <id сайта> --name mcp (id сайта виден в адресе админки ' +
   '/sites/<id>) и положи строку CMS_API_TOKEN=… из вывода в apps/mcp/.env. Потом перезапусти MCP-сервер'
 
-export const missingTokenMessage = `Нужен токен API: без него MCP не пускают в CMS. ${createTokenHint}`
+export const missingTokenMessage = `Нужен токен API: без него MCP не пускают в Averra CMS. ${createTokenHint}`
 
 async function unwrap(request: () => Promise<ClientResponse<unknown>>) {
   let res: ClientResponse<unknown>

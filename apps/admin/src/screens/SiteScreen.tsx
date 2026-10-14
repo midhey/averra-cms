@@ -1,4 +1,4 @@
-import { MAIN_PAGE_SLUG, NewPage, type PageTemplate } from '@cms/schema'
+import { MAIN_PAGE_SLUG, NewPage, type PageTemplate } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'

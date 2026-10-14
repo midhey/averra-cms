@@ -1,5 +1,5 @@
-import { demoPage, demoPageTitle, demoSiteId, MAIN_PAGE_SLUG, PageContent } from '@cms/schema'
-import { defaultTheme } from '@cms/tokens'
+import { demoPage, demoPageTitle, demoSiteId, MAIN_PAGE_SLUG, PageContent } from '@averra/schema'
+import { defaultTheme } from '@averra/tokens'
 import type { Auth } from '../auth/auth'
 import { usersRepo } from '../modules/users/repo'
 import type { Db } from './client'

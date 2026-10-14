@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { crc32 } from 'node:zlib'
-import { demoSiteId, type PageContentInput } from '@cms/schema'
+import { demoSiteId, type PageContentInput } from '@averra/schema'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
 import { type ImageProcessor, MAX_PIXELS, MAX_VARIANT_SIDE } from '../../media/processor'

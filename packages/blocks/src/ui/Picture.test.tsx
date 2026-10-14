@@ -1,4 +1,4 @@
-import type { MediaFile, MediaMap } from '@cms/schema'
+import type { MediaFile, MediaMap } from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Picture } from './Picture'

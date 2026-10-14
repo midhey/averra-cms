@@ -1,4 +1,4 @@
-import { ExistingPageSlug, Uuid } from '@cms/schema'
+import { ExistingPageSlug, Uuid } from '@averra/schema'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,

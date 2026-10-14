@@ -1,4 +1,4 @@
-import { NewSite } from '@cms/schema'
+import { NewSite } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'

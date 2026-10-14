@@ -9,7 +9,7 @@ import { defineConfig, envField } from 'astro/config'
  * в файле должен быть константой, а здесь он зависит от команды
  */
 const sitePages = {
-  name: 'cms-site-pages',
+  name: 'averra-site-pages',
   hooks: {
     'astro:config:setup': ({ command, injectRoute }) => {
       injectRoute({

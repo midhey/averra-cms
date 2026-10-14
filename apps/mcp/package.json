@@ -1,5 +1,5 @@
 {
-  "name": "@cms/mcp",
+  "name": "@averra/mcp",
   "private": true,
   "type": "module",
   "devEngines": {
@@ -15,14 +15,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cms/schema": "workspace:*",
+    "@averra/schema": "workspace:*",
     "@modelcontextprotocol/server": "^2.3.0",
     "hono": "catalog:",
     "tsx": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cms/api": "workspace:*",
+    "@averra/api": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import type { AppType } from '@cms/api'
-import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@cms/schema'
+import type { AppType } from '@averra/api'
+import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@averra/schema'
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { hc } from 'hono/client'
 import { ownerStateFile, urls } from '../urls'

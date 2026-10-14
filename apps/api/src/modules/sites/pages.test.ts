@@ -1,5 +1,5 @@
-import { hero, type PageContentInput } from '@cms/schema'
-import { defaultTheme } from '@cms/tokens'
+import { hero, type PageContentInput } from '@averra/schema'
+import { defaultTheme } from '@averra/tokens'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
 import { pages as pagesTable } from '../../db/schema'

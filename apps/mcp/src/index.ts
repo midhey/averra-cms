@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type { AppType } from '@cms/api'
-import { setupZodMessages } from '@cms/schema'
+import type { AppType } from '@averra/api'
+import { setupZodMessages } from '@averra/schema'
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { hc } from 'hono/client'
@@ -37,7 +37,7 @@ const api = CMS_API_TOKEN
   : undefined
 
 const handle = serveStdio(() => {
-  const server = new McpServer({ name: 'cms', version: '0.1.0' })
+  const server = new McpServer({ name: 'averra', version: '0.1.0' })
   registerTools(server, api)
   return server
 })
@@ -46,5 +46,5 @@ const stop = () => void handle.close()
 process.on('SIGINT', stop)
 process.on('SIGTERM', stop)
 
-console.error(`MCP-сервер CMS запущен, API: ${CMS_API_URL}`)
+console.error(`MCP-сервер Averra CMS запущен, API: ${CMS_API_URL}`)
 if (!api) console.error(missingTokenMessage)

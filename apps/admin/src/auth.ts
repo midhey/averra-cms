@@ -1,4 +1,4 @@
-import type { SignIn } from '@cms/schema'
+import type { SignIn } from '@averra/schema'
 import { apiFetch, apiRequestError } from './errors'
 
 // Вход и выход — эндпоинты Better Auth (/api/auth/*). Их нет в типах Hono RPC, поэтому

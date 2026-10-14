@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
-import { setupZodMessages } from '@cms/schema'
+import { setupZodMessages } from '@averra/schema'
 import { z } from 'zod'
 import { createAuth } from '../auth/auth'
 import { loadConfig } from '../config'

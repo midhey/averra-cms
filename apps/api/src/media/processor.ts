@@ -1,4 +1,4 @@
-import type { ImageFormat } from '@cms/schema'
+import type { ImageFormat } from '@averra/schema'
 
 // Только типы и чистые функции: этот файл импортируют маршруты, а их типы читает админка.
 // Обработка на sharp — в sharp-processor.ts, её подключают index.ts и testing.ts

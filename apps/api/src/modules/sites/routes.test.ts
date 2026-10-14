@@ -1,4 +1,4 @@
-import { demoPageTitle, type PageContentInput } from '@cms/schema'
+import { demoPageTitle, type PageContentInput } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'

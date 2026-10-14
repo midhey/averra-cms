@@ -1,4 +1,4 @@
-import { ApiError, describeApiError } from '@cms/schema'
+import { ApiError, describeApiError } from '@averra/schema'
 
 type ErrorResponse = { status: number; json(): Promise<unknown> }
 

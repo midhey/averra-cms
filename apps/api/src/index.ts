@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs'
-import { setupZodMessages } from '@cms/schema'
+import { setupZodMessages } from '@averra/schema'
 import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { createAuth } from './auth/auth'

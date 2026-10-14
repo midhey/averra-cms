@@ -1,4 +1,4 @@
-import { formatBytes } from '@cms/schema'
+import { formatBytes } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
   deleteQuestion,

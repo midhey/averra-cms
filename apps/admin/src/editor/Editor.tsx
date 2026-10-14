@@ -1,4 +1,4 @@
-import { type BlockType, type PageContent, PageTitle, type Theme } from '@cms/schema'
+import { type BlockType, type PageContent, PageTitle, type Theme } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from '@tanstack/react-router'
 import { useEffect, useId, useMemo, useState } from 'react'

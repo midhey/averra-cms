@@ -12,7 +12,7 @@ export type JsonSchema = {
   items?: JsonSchema
   minItems?: number
   maxItems?: number
-  /** Свой виджет вместо обычных полей: пометку ставит схема в @cms/schema (например, Image) */
+  /** Свой виджет вместо обычных полей: пометку ставит схема в @averra/schema (например, Image) */
   'x-widget'?: string
 }
 

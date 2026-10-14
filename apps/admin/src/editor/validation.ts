@@ -1,4 +1,4 @@
-import { PageContent } from '@cms/schema'
+import { PageContent } from '@averra/schema'
 import type { EditorBlock } from './draft'
 
 export type Validation = {

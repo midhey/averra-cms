@@ -1,4 +1,4 @@
-import { hero } from '@cms/schema'
+import { hero } from '@averra/schema'
 import { urls } from '../urls'
 import { answerDialogs, demo, editor, expect, openSite, siteScreen, sites, test } from './fixtures'
 
@@ -15,13 +15,13 @@ test('по экранам: сайты → сайт → редактор и на�
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
   // У каждого экрана свой заголовок вкладки: их различают история браузера и диктор
-  await expect(page).toHaveTitle('Сайты — Админка')
+  await expect(page).toHaveTitle('Сайты — Averra CMS')
 
   await page.getByRole('link', { name: demoSite.name }).click()
   const screen = siteScreen(page)
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(screen.heading).toHaveText(demoSite.name)
-  await expect(page).toHaveTitle(`${demoSite.name} — страницы — Админка`)
+  await expect(page).toHaveTitle(`${demoSite.name} — страницы — Averra CMS`)
   await expect(screen.pages.getByRole('row')).toHaveCount(2) // заголовки и главная
   await expect(screen.row(demo.pageTitle)).toContainText('/')
   await expect(screen.row(demo.pageTitle)).toContainText('Опубликована')
@@ -33,7 +33,7 @@ test('по экранам: сайты → сайт → редактор и на�
   const ed = editor(page)
   await expect(page).toHaveURL(`/sites/${demoSite.id}/pages/index`)
   await expect(ed.pageTitle).toHaveValue(demo.pageTitle)
-  await expect(page).toHaveTitle(`${demo.pageTitle} — редактор — Админка`)
+  await expect(page).toHaveTitle(`${demo.pageTitle} — редактор — Averra CMS`)
 
   await page.reload()
   await expect(ed.pageTitle).toHaveValue(demo.pageTitle)
@@ -335,7 +335,7 @@ test('несуществующий сайт, страница или адрес 
   // Кривой id сайта или адрес страницы в ссылке — тоже «не найдено», а не «данные не прошли проверку»
   await page.goto('/sites/not-a-uuid')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайт не найден')
-  await expect(page).toHaveTitle('Сайт не найден — Админка')
+  await expect(page).toHaveTitle('Сайт не найден — Averra CMS')
   await page.goto(`/sites/${demoSite.id}/pages/O_NAS`)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Страница не найдена')
   await page.goto('/sites/not-a-uuid/media')

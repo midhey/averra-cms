@@ -1,6 +1,6 @@
 import { CMS_API_URL, CMS_SITE_ID } from 'astro:env/server'
-import type { AppType } from '@cms/api'
-import { demoSiteId, type MediaMap } from '@cms/schema'
+import type { AppType } from '@averra/api'
+import { demoSiteId, type MediaMap } from '@averra/schema'
 import { hc } from 'hono/client'
 
 const sites = hc<AppType>(CMS_API_URL).api.sites

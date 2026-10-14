@@ -21,7 +21,7 @@ export class DbLockedError extends Error {
    */
   get hint() {
     return (
-      `Если процесса ${this.pid ?? 'из замка'} нет или это не API и не команда CMS, ` +
+      `Если процесса ${this.pid ?? 'из замка'} нет или это не API и не команда Averra CMS, ` +
       `удали файл замка: ${this.path}`
     )
   }

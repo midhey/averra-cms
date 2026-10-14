@@ -1,4 +1,4 @@
-import { PageContent } from '@cms/schema'
+import { PageContent } from '@averra/schema'
 import type { InferResponseType } from 'hono/client'
 import type { api } from '../api'
 import { formatDateTime } from '../pages-format'

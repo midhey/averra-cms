@@ -1,4 +1,4 @@
-import { fileTooLargeMessage, formatBytes, type MediaMap } from '@cms/schema'
+import { fileTooLargeMessage, formatBytes, type MediaMap } from '@averra/schema'
 import type { InferResponseType } from 'hono/client'
 import type { api } from '../api'
 import { formatDateTime } from '../pages-format'

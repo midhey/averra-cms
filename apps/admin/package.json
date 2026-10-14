@@ -1,5 +1,5 @@
 {
-  "name": "@cms/admin",
+  "name": "@averra/admin",
   "private": true,
   "type": "module",
   "devEngines": {
@@ -16,9 +16,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cms/blocks": "workspace:*",
-    "@cms/schema": "workspace:*",
-    "@cms/tokens": "workspace:*",
+    "@averra/blocks": "workspace:*",
+    "@averra/schema": "workspace:*",
+    "@averra/tokens": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -30,7 +30,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cms/api": "workspace:*",
+    "@averra/api": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^6.1.2",

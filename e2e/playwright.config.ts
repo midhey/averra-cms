@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { demoSiteId } from '@cms/schema'
+import { demoSiteId } from '@averra/schema'
 import { defineConfig, devices } from '@playwright/test'
 import { e2eOwner, ownerStateFile, ports, urls } from './urls'
 
@@ -37,7 +37,8 @@ export default defineConfig({
       // --dev — учебный режим, как в pnpm dev: без своего AUTH_SECRET, с демо-сайтом и владельцем
       // в пустой базе. Без флага API на учебном секрете не стартует (см. isLocalDev в config.ts).
       // tsx напрямую, а не скрипт start: pnpm мог бы принять --dev за свой флаг
-      command: 'node scripts/clean-data.ts && pnpm --filter @cms/api exec tsx src/index.ts --dev',
+      command:
+        'node scripts/clean-data.ts && pnpm --filter @averra/api exec tsx src/index.ts --dev',
       url: `${urls.api}/api/health/ready`,
       reuseExistingServer: false,
       env: {
@@ -60,7 +61,7 @@ export default defineConfig({
     },
     {
       name: 'Админка',
-      command: 'pnpm --filter @cms/admin exec vite --strictPort',
+      command: 'pnpm --filter @averra/admin exec vite --strictPort',
       url: urls.admin,
       reuseExistingServer: false,
       env: { ADMIN_PORT: String(ports.admin), CMS_API_URL: urls.api },
@@ -71,7 +72,7 @@ export default defineConfig({
       // запустить второй astro dev рядом с рендерером из pnpm dev (и наоборот).
       // --ignore-lock не берёт и не пишет замок (разве что удалит брошенный), а заодно не даёт Astro уйти в фон,
       // когда он решит, что его запустил агент: webServer должен владеть процессом
-      command: `pnpm --filter @cms/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
+      command: `pnpm --filter @averra/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
       url: urls.renderer,
       reuseExistingServer: false,
       // Демо-сайт свежей базы всегда с этим id: список сайтов без входа не получить

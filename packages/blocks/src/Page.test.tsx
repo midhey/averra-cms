@@ -1,4 +1,4 @@
-import { demoPage, type MediaMap, PageContent } from '@cms/schema'
+import { demoPage, type MediaMap, PageContent } from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Page } from './Page'

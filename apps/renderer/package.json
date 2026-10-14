@@ -1,5 +1,5 @@
 {
-  "name": "@cms/renderer",
+  "name": "@averra/renderer",
   "private": true,
   "type": "module",
   "devEngines": {
@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
-    "@cms/blocks": "workspace:*",
-    "@cms/schema": "workspace:*",
-    "@cms/tokens": "workspace:*",
+    "@averra/blocks": "workspace:*",
+    "@averra/schema": "workspace:*",
+    "@averra/tokens": "workspace:*",
     "astro": "^7.3.5",
     "hono": "catalog:",
     "react": "catalog:",
@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@cms/api": "workspace:*",
+    "@averra/api": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:"

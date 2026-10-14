@@ -1,4 +1,4 @@
-import { MAIN_PAGE_SLUG, type PageContent, type Theme } from '@cms/schema'
+import { MAIN_PAGE_SLUG, type PageContent, type Theme } from '@averra/schema'
 import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'

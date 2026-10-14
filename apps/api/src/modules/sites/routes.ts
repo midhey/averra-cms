@@ -9,8 +9,8 @@ import {
   PageTitle,
   pageTemplateContent,
   Uuid,
-} from '@cms/schema'
-import { defaultTheme } from '@cms/tokens'
+} from '@averra/schema'
+import { defaultTheme } from '@averra/tokens'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { can } from '../../auth/access'

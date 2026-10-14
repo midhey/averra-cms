@@ -1,4 +1,4 @@
-import { Theme } from '@cms/schema'
+import { Theme } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import { defaultTheme, themeToCss } from './index'
 

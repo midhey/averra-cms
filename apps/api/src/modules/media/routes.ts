@@ -4,7 +4,7 @@ import {
   imageMimeTypes,
   MAIN_PAGE_SLUG,
   Uuid,
-} from '@cms/schema'
+} from '@averra/schema'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'

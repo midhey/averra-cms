@@ -1,4 +1,4 @@
-import { type BlockType, blocks } from '@cms/schema'
+import { type BlockType, blocks } from '@averra/schema'
 import { z } from 'zod'
 import type { JsonSchema } from '../forms/json-schema'
 

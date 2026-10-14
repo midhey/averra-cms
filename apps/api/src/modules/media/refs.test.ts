@@ -1,4 +1,4 @@
-import { demoSiteId, type PageContentInput } from '@cms/schema'
+import { demoSiteId, type PageContentInput } from '@averra/schema'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../../testing'
