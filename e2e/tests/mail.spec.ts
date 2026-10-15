@@ -8,6 +8,7 @@ const templates = [
   { title: 'Проверка почты', text: 'Почта работает' },
   { title: 'Сброс пароля', text: 'Задать новый пароль' },
   { title: 'Приглашение на сайт', text: 'Принять приглашение' },
+  { title: 'Настройки почты изменены', text: 'Настройки почты в админке Averra CMS изменены' },
 ] as const
 
 test('владелец открывает «Почту» из шапки: состояние, очередь и предпросмотр шаблонов', async ({
@@ -27,6 +28,15 @@ test('владелец открывает «Почту» из шапки: сос
   await expect(state).toContainText('Почта включена')
   await expect(state).toContainText('Файловый ящик: письма не уходят наружу')
   await expect(state).toContainText('Averra CMS <noreply@averra.test>')
+
+  // SMTP в админке не задан (smtp-settings.spec.ts его удаляет за собой): форма пустая, а пароль
+  // SMTP не задан. Сохранять и проверять её здесь не нужно — это делает smtp-settings.spec.ts
+  const smtp = page.getByRole('region', { name: 'Настройки SMTP' })
+  await expect(smtp).toContainText('SMTP не задан')
+  await expect(smtp.getByLabel('Пароль SMTP', { exact: true })).toHaveAccessibleDescription(
+    /Пароль не задан/,
+  )
+  await expect(smtp.getByRole('button', { name: 'Проверить подключение' })).toBeVisible()
 
   await expect(page.getByRole('region', { name: 'Очередь писем' })).toBeVisible()
 

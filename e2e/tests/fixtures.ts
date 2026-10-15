@@ -18,7 +18,9 @@ async function ownerHeaders() {
 }
 
 /** Типизированный клиент API e2e от имени владельца: поменяется API — тесты не скомпилируются */
-export const sites = hc<AppType>(urls.api, { headers: ownerHeaders }).api.sites
+export const ownerApi = hc<AppType>(urls.api, { headers: ownerHeaders }).api
+
+export const sites = ownerApi.sites
 
 type DemoSite = { id: string; name: string }
 

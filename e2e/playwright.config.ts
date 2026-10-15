@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoSiteId } from '@averra/schema'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eOwner, ownerStateFile, ports, urls } from './urls'
+import { e2eOwner, ownerStateFile, ports, smtpTest, urls } from './urls'
 
 export default defineConfig({
   testDir: './tests',
@@ -36,9 +36,10 @@ export default defineConfig({
       name: 'API',
       // --dev — учебный режим, как в pnpm dev: без своего AUTH_SECRET, с демо-сайтом и владельцем
       // в пустой базе. Без флага API на учебном секрете не стартует (см. isLocalDev в config.ts).
-      // tsx напрямую, а не скрипт start: pnpm мог бы принять --dev за свой флаг
+      // tsx напрямую, а не скрипт start: pnpm мог бы принять --dev за свой флаг.
+      // smtp-certs — CA тестового SMTP-сервера: его файл должен быть до старта API (NODE_EXTRA_CA_CERTS)
       command:
-        'node scripts/clean-data.ts && pnpm --filter @averra/api exec tsx src/index.ts --dev',
+        'node scripts/clean-data.ts && node scripts/smtp-certs.ts && pnpm --filter @averra/api exec tsx src/index.ts --dev',
       url: `${urls.api}/api/health/ready`,
       reuseExistingServer: false,
       env: {
@@ -59,6 +60,13 @@ export default defineConfig({
         // Перед API стоит прокси Vite из админки. Доверяем X-Forwarded-For, чтобы тесты входа
         // могли быть разными «клиентами» и лимит попыток одного не задевал другой
         TRUST_PROXY: 'true',
+        // CA тестового SMTP-сервера (tests/smtp-settings.spec.ts): стандартный механизм Node
+        // добавляет его к доверенным корневым. Проверку сертификата это не снимает: сертификат
+        // сервера по-прежнему должен быть подписан им и выписан на localhost
+        NODE_EXTRA_CA_CERTS: smtpTest.files.ca,
+        // Тестовый SMTP-сервер слушает свой порт, а не 587: SMTP из админки подключается к нему
+        // вместо 465 и 587. API принимает это только в учебном режиме (--dev)
+        DEV_SMTP_CONNECT_PORT: String(smtpTest.port),
       },
     },
     {
