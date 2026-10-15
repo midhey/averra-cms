@@ -336,12 +336,16 @@ export async function saveSmtp(
       }
     }),
   )
+  // Смена уже в базе: exclusive не бросает, даже если пересобрать провайдера не вышло (тогда почта
+  // на паузе до следующей попытки, runtime.ts). Запись в журнал — всегда
   log(
     `[${now.toISOString()}] Настройки почты (SMTP) сохранены в админке: ${whoIs(user)}. ` +
       `Изменено: ${fields.length > 0 ? labelsOf(fields).join(', ') : 'ничего'}. ` +
       `Проверка подключения: ${verifiedAt ? 'пройдена' : 'не делалась (сохранено без проверки)'}`,
   )
-  if (owners.length > 0) wake()
+  // Обработчик — сразу: письма владельцам, выход из паузы после сбоя сервера на прежних
+  // настройках (например, отказа адресу отправителя) и новая попытка перечитать настройки
+  wake()
   return { ok: true, fields, notified: owners.length }
 }
 
@@ -385,6 +389,6 @@ export async function removeSmtp({ db, runtime, log, wake }: ChangeDeps, user: S
     `[${now.toISOString()}] Настройки почты (SMTP) удалены из админки: ${whoIs(user)}. ` +
       `Теперь: ${providerLine(after)}`,
   )
-  if (owners.length > 0) wake()
+  wake()
   return { ok: true as const, notified: owners.length }
 }

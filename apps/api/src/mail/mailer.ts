@@ -60,7 +60,8 @@ export const MAIL_OFF_EFFECT =
 
 /**
  * Ошибка отправки: текст уже без секретов и по-русски. permanent — повторять бессмысленно
- * (сервер навсегда отказал адресу или письму), такое письмо сразу помечается неотправленным
+ * (сервер навсегда отказал адресу получателя или письму), такое письмо сразу помечается
+ * неотправленным
  */
 export class MailSendError extends Error {
   override name = 'MailSendError'
@@ -69,6 +70,12 @@ export class MailSendError extends Error {
     readonly permanent = false,
     /** На каком шаге сломалось: для pnpm mail:test */
     readonly step?: MailStep,
+    /**
+     * Сервер отказал адресу отправителя (ответ на MAIL FROM). Это настройки (адрес не того ящика,
+     * под которым вход) или лимит отправителя, а не письмо: так же откажут любому письму. Очередь
+     * прерывает проход и выжидает, не тратя попыток (worker.ts)
+     */
+    readonly rejectedSender = false,
   ) {
     super(message)
   }

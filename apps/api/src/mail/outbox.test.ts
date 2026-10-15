@@ -7,6 +7,7 @@ import { mailOutbox, sites } from '../db/schema'
 import { MailSendError } from './mailer'
 import { memoryMailer } from './memory-mailer'
 import { enqueueMail, outboxRepo, retryDelayMs, SENDING_LEASE_MS } from './outbox'
+import { smtpFailure } from './smtp-mailer'
 import { MailDataError } from './templates'
 import { LINK_EXPIRED_ERROR, processOutbox } from './worker'
 
@@ -383,6 +384,89 @@ describe('сбои сервера и базы', () => {
       }
     },
   )
+
+  it('сервер не принял адрес отправителя (553 на MAIL FROM) — проход прерван, попытки целы, failed нет', async () => {
+    // Как у Яндекс 360, когда MAIL_FROM не совпадает с логином: это настройки, а не письмо.
+    // Ошибка — та, что сделает smtpMailer из ответа nodemailer
+    const rejected = Object.assign(
+      new Error('Mail command failed: 553 5.7.1 Sender address rejected: not owned by auth user.'),
+      {
+        code: 'EENVELOPE',
+        command: 'MAIL FROM',
+        responseCode: 553,
+        response: '553 5.7.1 Sender address rejected: not owned by auth user.',
+      },
+    )
+    const smtp = {
+      host: 'smtp.yandex.ru',
+      port: 465,
+      security: 'tls' as const,
+      user: 'robot@example.ru',
+      password: 'smtp-secret',
+      from: { address: 'noreply@example.ru', name: 'Averra CMS' },
+    }
+    let sends = 0
+    const mailer = memoryMailer({
+      beforeSend: () => {
+        sends += 1
+        throw smtpFailure(rejected, smtp)
+      },
+    })
+    const reset = {
+      template: 'password-reset' as const,
+      data: {
+        name: 'Анна',
+        url: 'https://admin.example.ru/reset-password#token=T',
+        expiresInMinutes: 60,
+      },
+      to: 'a@example.ru',
+    }
+    const ids = [
+      (await enqueueMail(db, reset, after(-3))).id,
+      (await enqueueMail(db, testMail('b@example.ru'), after(-2))).id,
+      (await enqueueMail(db, testMail('c@example.ru'), after(-1))).id,
+    ]
+    const result = await processOutbox({ db, mailer, ...settings, now: () => T0 })
+
+    // Сервер спросили один раз, письма не сожжены: ни одно не failed, попытки не потрачены
+    expect(sends).toBe(1)
+    expect(result).toMatchObject({ claimed: 3, sent: 0, retry: 0, failed: 0, serverDown: true })
+    for (const id of ids) {
+      expect(await rowOf(id)).toMatchObject({ status: 'pending', attempts: 0, claimId: null })
+    }
+    // Ссылка из письма сброса цела: письмо уйдёт, когда настройки поправят
+    expect((await rowOf(ids[0] as string)).data).toMatchObject({ url: reset.data.url })
+    // Почему не ушло, видно в очереди у того письма, на котором сломалось
+    expect((await rowOf(ids[0] as string)).lastError).toContain(
+      'Сервер не принял адрес отправителя noreply@example.ru',
+    )
+
+    // И на следующем проходе — то же самое: попытки не копятся, письмо не становится failed
+    await processOutbox({ db, mailer, ...settings, now: () => after(MINUTE) })
+    expect(await rowOf(ids[0] as string)).toMatchObject({ status: 'pending', attempts: 0 })
+  })
+
+  it('«последняя попытка» — только у писем, которые пробовали отправить, а не у отпущенных без попытки', async () => {
+    const mailer = memoryMailer({
+      beforeSend: () => {
+        throw new MailSendError('Сервер не принял логин или пароль', false, 'auth')
+      },
+    })
+    const first = await enqueueMail(db, testMail('a@example.ru'), after(-2))
+    const second = await enqueueMail(db, testMail('b@example.ru'), after(-1))
+    await processOutbox({ db, mailer, ...settings, now: () => T0 })
+    expect(await rowOf(first.id)).toMatchObject({ attempts: 1, lastAttemptAt: T0 })
+    // Второе письмо взяли в пачку, но отпустили, не отправляя: попытки не было
+    expect(await rowOf(second.id)).toMatchObject({ attempts: 0, lastAttemptAt: null })
+    const listed = await outboxRepo(db).list({ now: T0 })
+    expect(listed.find((row) => row.id === second.id)?.lastAttemptAt).toBeNull()
+
+    // Следующий проход: теперь первым идёт второе письмо, а первое отпущено — его настоящая
+    // попытка (T0) остаётся последней
+    await processOutbox({ db, mailer, ...settings, now: () => after(2 * MINUTE) })
+    expect(await rowOf(second.id)).toMatchObject({ attempts: 1, lastAttemptAt: after(2 * MINUTE) })
+    expect(await rowOf(first.id)).toMatchObject({ attempts: 1, lastAttemptAt: T0 })
+  })
 
   it('сбой письма (не сервера) — остальные письма пачки уходят', async () => {
     const mailer = memoryMailer({

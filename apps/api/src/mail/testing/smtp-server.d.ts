@@ -24,6 +24,7 @@ declare module 'smtp-server' {
     allowInsecureAuth?: boolean
     logger?: boolean
     onAuth?: (auth: Auth, session: Session, callback: Done<{ user: string }>) => void
+    onMailFrom?: (address: Address, session: Session, callback: Done) => void
     onData?: (stream: Readable, session: Session, callback: Done) => void
   }
 

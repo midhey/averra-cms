@@ -6,6 +6,7 @@ import { mailOutbox } from '../db/schema'
 import { MailSendError } from './mailer'
 import { memoryMailer } from './memory-mailer'
 import { enqueueMail } from './outbox'
+import { smtpFailure } from './smtp-mailer'
 import { type MailWorker, processOutbox, startMailWorker } from './worker'
 
 let db: Db
@@ -151,6 +152,55 @@ describe('обработчик в процессе API', () => {
     // «Повторить» в админке будит обработчик и во время паузы
     worker.wake()
     await until(() => logins === 2)
+  })
+
+  it('сервер не принял адрес отправителя — очередь не сжигается за один круг, обработчик выжидает', async () => {
+    // 553 на MAIL FROM, как у Яндекс 360 с MAIL_FROM не от того ящика: так его разберёт smtpMailer
+    const rejected = smtpFailure(
+      Object.assign(new Error('Mail command failed: 553 5.7.1 Sender address rejected'), {
+        code: 'EENVELOPE',
+        command: 'MAIL FROM',
+        responseCode: 553,
+      }),
+      {
+        host: 'smtp.yandex.ru',
+        port: 465,
+        security: 'tls',
+        user: 'robot@example.ru',
+        password: 'smtp-secret',
+        from: { address: 'noreply@example.ru', name: 'Averra CMS' },
+      },
+    )
+    let sends = 0
+    const mailer = memoryMailer({
+      beforeSend: () => {
+        sends += 1
+        throw rejected
+      },
+    })
+    const logs: string[] = []
+    // Писем больше пачки: раньше круг брал пачку за пачкой и помечал неотправленными все
+    for (let i = 0; i < 5; i++) {
+      await enqueueMail(db, testMail(`${i}@example.ru`), new Date(Date.now() - 5000 + i))
+    }
+    worker = startMailWorker({
+      db,
+      mailer,
+      ...settings,
+      batchSize: 2,
+      intervalMs: 20,
+      log: (message) => logs.push(message),
+    })
+    await until(() => sends === 1)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(sends).toBe(1)
+    const rows = await db
+      .select({ status: mailOutbox.status, attempts: mailOutbox.attempts })
+      .from(mailOutbox)
+    expect(rows).toHaveLength(5)
+    expect(rows.every((row) => row.status === 'pending' && row.attempts === 0)).toBe(true)
+    expect(logs.join('\n')).toContain('следующая попытка через 60 с')
+    expect(logs.join('\n')).toContain('Сервер не принял адрес отправителя')
   })
 
   it('без провайдера (почта выключена) писем не шлёт, но очередь чистит', async () => {

@@ -88,12 +88,28 @@ type NodemailerFailure = Error & {
   responseCode?: number
   response?: string
   timeoutType?: string
+  /** Команда SMTP, на которую сервер ответил отказом: 'MAIL FROM', 'RCPT TO', 'DATA'… */
+  command?: string
 }
 
 const TLS_CODES = /CERT|SELF_SIGNED|UNABLE_TO_|ERR_TLS|ERR_SSL|EPROTO|HANDSHAKE/i
 
+/**
+ * Сервер отказал адресу отправителя. Так отвечают, когда адрес не принадлежит ящику, под которым
+ * вошли («553 Sender address rejected: not owned by auth user» у Яндекс 360), или на лимит
+ * отправителя (4xx). Отказ получит любое письмо, а не только это
+ */
+const isSenderRejection = (error: NodemailerFailure) =>
+  error.code === 'EENVELOPE' && error.command === 'MAIL FROM'
+
+/**
+ * Соединение было, а приветствия SMTP нет. В режиме STARTTLS так бывает, когда порт ждёт TLS
+ * сразу (465): сервер молча ждёт рукопожатия TLS, клиент — приветствия
+ */
+const isGreetingTimeout = (error: NodemailerFailure) => error.timeoutType === 'GREETING_TIMEOUT'
+
 /** На каком шаге сломалось, по коду ошибки nodemailer и системы */
-function stepOf(error: NodemailerFailure): MailStep {
+function stepOf(error: NodemailerFailure, settings: SmtpSettings): MailStep {
   const codes = `${error.code ?? ''} ${error.originalCode ?? ''}`
   if (error.code === 'EDNS') return 'dns'
   if (error.code === 'EAUTH' || error.code === 'ENOAUTH') return 'auth'
@@ -101,6 +117,7 @@ function stepOf(error: NodemailerFailure): MailStep {
   if (
     error.code === 'ETLS' ||
     error.timeoutType === 'UPGRADE_TIMEOUT' ||
+    (isGreetingTimeout(error) && settings.security === 'starttls') ||
     TLS_CODES.test(codes) ||
     /certificate|ssl|tls/i.test(error.message)
   ) {
@@ -115,21 +132,25 @@ function stepOf(error: NodemailerFailure): MailStep {
 /** Что поправить — имена переменных окружения или полей на странице «Почта» */
 const hints: Record<
   SmtpOrigin,
-  Record<'host' | 'hostPort' | 'mode' | 'tlsOn587' | 'login', string>
+  Record<'host' | 'hostPort' | 'mode' | 'tlsOn587' | 'tlsFirst' | 'login' | 'sender', string>
 > = {
   env: {
     host: 'проверь SMTP_HOST',
     hostPort: 'проверь SMTP_HOST и SMTP_PORT',
     mode: 'проверь SMTP_PORT и SMTP_SECURITY',
     tlsOn587: 'для 587 нужен SMTP_SECURITY=starttls',
+    tlsFirst: 'для 465 нужен SMTP_SECURITY=tls',
     login: ' (SMTP_USER, SMTP_PASSWORD)',
+    sender: 'Проверь MAIL_FROM и SMTP_USER',
   },
   admin: {
     host: 'проверьте поле «Сервер SMTP»',
     hostPort: 'проверьте сервер и порт',
     mode: 'проверьте порт и шифрование',
     tlsOn587: 'для 587 выберите STARTTLS',
+    tlsFirst: 'выберите «465 — TLS сразу»',
     login: ' SMTP: проверьте логин и пароль (у Яндекса — пароль приложения)',
+    sender: 'Проверьте поля «Адрес отправителя» и «Логин»',
   },
 }
 
@@ -147,10 +168,16 @@ function explain(
         ? `DNS не ответил, где сервер ${settings.host}: проверь сеть и DNS-сервер этого компьютера`
         : `Имя сервера ${settings.host} не нашлось в DNS: ${hint.host}`
     case 'connection':
+      if (isGreetingTimeout(error)) {
+        return `${where} принял соединение, но не прислал приветствие SMTP: ${hint.mode}`
+      }
       return error.code === 'EPROTOCOL'
         ? `${where} ответил не как SMTP-сервер: ${hint.mode}`
         : `Не удалось соединиться с ${where}: ${hint.hostPort} и что порт не закрыт файрволом`
     case 'tls':
+      if (isGreetingTimeout(error)) {
+        return `${where} принял соединение, но не прислал приветствие SMTP — похоже, порт ждёт TLS сразу: ${hint.tlsFirst}`
+      }
       if (
         /STARTTLS/i.test(`${error.message} ${error.response ?? ''}`) &&
         !TLS_CODES.test(`${error.originalCode ?? ''}`)
@@ -163,6 +190,14 @@ function explain(
     case 'auth':
       return `Сервер не принял логин или пароль${hint.login}`
     case 'send':
+      if (isSenderRejection(error)) {
+        return (
+          `Сервер не принял адрес отправителя ${settings.from.address}: он должен принадлежать ` +
+          `ящику, под которым идёт вход (${settings.user}), а у Яндекс 360 — совпадать с логином ` +
+          `или быть его алиасом. ${hint.sender}`
+        )
+      }
+      if (error.command === 'RCPT TO') return 'Сервер не принял адрес получателя'
       return error.code === 'EENVELOPE'
         ? 'Сервер не принял адрес отправителя или получателя'
         : 'Сервер не принял письмо'
@@ -176,14 +211,21 @@ function explain(
 export function smtpFailure(error: unknown, settings: SmtpSettings, origin: SmtpOrigin = 'env') {
   if (error instanceof MailSendError) return error
   const failure = (error instanceof Error ? error : new Error(String(error))) as NodemailerFailure
-  const step = stepOf(failure)
+  const step = stepOf(failure, settings)
   const details = maskSecrets(failure.message, smtpSecrets(settings.user, settings.password))
-  // 5xx на адрес или письмо — сервер отказал навсегда, повторять бессмысленно
-  const permanent = step === 'send' && (failure.responseCode ?? 0) >= 500
+  const rejectedSender = isSenderRejection(failure)
+  // Окончательный отказ — только 5xx на адрес получателя или на само письмо (RCPT TO, DATA):
+  // сервер отказал именно этому письму, повторять бессмысленно. Отказ на MAIL FROM таким не
+  // считается: его получит любое письмо, пока не поправят настройки (rejectedSender)
+  const permanent =
+    step === 'send' &&
+    (failure.command === 'RCPT TO' || failure.command === 'DATA') &&
+    (failure.responseCode ?? 0) >= 500
   return new MailSendError(
     `${explain(step, failure, settings, origin)}. Подробности: ${details}`,
     permanent,
     step,
+    rejectedSender,
   )
 }
 
@@ -373,11 +415,9 @@ export async function diagnoseSmtp(
           : 'STARTTLS включён, сертификат сервера проверен',
       )
     } catch (error) {
-      const failure = smtpFailure(error ?? lastError, settings, options.origin)
-      return fail(
-        failure.step === 'connection' || failure.step === 'dns' ? failure.step : 'tls',
-        failure,
-      )
+      // Шаг «соединение» уже пройден: TCP открыт. Всё, что сломалось дальше, до входа (TLS,
+      // приветствие SMTP), — шаг TLS, а не второй итог соединения
+      return fail('tls', smtpFailure(error ?? lastError, settings, options.origin))
     }
 
     try {

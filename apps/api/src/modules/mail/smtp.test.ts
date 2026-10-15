@@ -785,6 +785,47 @@ describe('настройки SMTP в админке', () => {
     }
   })
 
+  it('перечитать настройки после коммита не вышло — ответ 200, запись в журнале, удалённый SMTP не отправляет', async () => {
+    await call('PUT', '/smtp', owner.headers, saveDirect(465))
+    expect((await api.mailRuntime.mailer())?.info).toMatchObject({ kind: 'smtp', port: 465 })
+    await api.db.delete(mailOutbox)
+    logs.length = 0
+    const wakes = api.mailWakes.count
+    // Удаление закоммичено, а первое же чтение после коммита — пересборка провайдера — падает
+    const transaction = api.db.transaction.bind(api.db)
+    const select = vi.spyOn(api.db, 'select')
+    const spy = vi.spyOn(api.db, 'transaction').mockImplementation(async (run, config) => {
+      const result = await transaction(run, config)
+      select.mockImplementationOnce(() => {
+        throw new Error('база недоступна')
+      })
+      return result
+    })
+    try {
+      const res = await call('DELETE', '/smtp', owner.headers, { currentPassword: TEST_PASSWORD })
+      expect(res.status).toBe(200)
+    } finally {
+      spy.mockRestore()
+      select.mockRestore()
+    }
+    // Изменение в журнале есть, обработчик разбужен
+    expect(logs.filter((line) => line.startsWith('['))).toEqual([
+      expect.stringContaining('Настройки почты (SMTP) удалены из админки'),
+    ])
+    expect(logs.join('\n')).toContain('не смог перечитать настройки почты')
+    expect(api.mailWakes.count).toBeGreaterThan(wakes)
+    // Пока настройки не перечитаны, почта на паузе — а не на удалённом SMTP
+    const paused = (await call('GET', '', owner.headers)).json.status
+    expect(paused).toMatchObject({ enabled: false })
+
+    // Обработчик берёт провайдера — рантайм перечитывает настройки, письмо об удалении уходит
+    // почтой по умолчанию, на удалённый сервер — ничего
+    await sendQueue(api)
+    expect(fallback.sent.map((mail) => mail.to)).toContain(owner.user.email)
+    expect(tls465.received).toHaveLength(0)
+    expect((await call('GET', '', owner.headers)).json.status.provider.kind).toBe('memory')
+  })
+
   it('удаление: почта возвращается к варианту по умолчанию, владельцам — письмо, в лог — запись', async () => {
     expect(
       (await call('DELETE', '/smtp', owner.headers, { currentPassword: TEST_PASSWORD })).status,

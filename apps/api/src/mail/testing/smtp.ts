@@ -26,7 +26,15 @@ export type TestSmtpServerOptions = {
   users?: Record<string, string>
   /** Свой ответ на неверный пароль: тест проверяет, что пароль из него маскируется */
   authError?: (password: string) => string
-  /** Порт. По умолчанию свободный; e2e слушает настоящий 587: настройки в админке пускают только 465 и 587 */
+  /**
+   * Отправитель только свой, как у Яндекс 360: MAIL FROM с адресом не того ящика, под которым
+   * вошли, — «553 5.7.1 Sender address rejected: not owned by auth user»
+   */
+  ownSendersOnly?: boolean
+  /**
+   * Порт. По умолчанию свободный. e2e слушает свой (smtpTest.port в e2e/urls.ts), а API e2e
+   * подключается к нему вместо 465 и 587 через DEV_SMTP_CONNECT_PORT
+   */
   port?: number
 }
 
@@ -36,6 +44,7 @@ export async function startTestSmtpServer({
   starttls = true,
   users = { 'noreply@averra.test': 'smtp-secret-password' },
   authError = () => 'Неверный логин или пароль',
+  ownSendersOnly = false,
   port: listenPort = 0,
 }: TestSmtpServerOptions) {
   const received: ReceivedMail[] = []
@@ -55,6 +64,17 @@ export async function startTestSmtpServer({
       }
       callback(null, { user: auth.username })
     },
+    onMailFrom(address, session, callback) {
+      if (ownSendersOnly && address.address !== session.user) {
+        callback(
+          Object.assign(new Error('5.7.1 Sender address rejected: not owned by auth user.'), {
+            responseCode: 553,
+          }),
+        )
+        return
+      }
+      callback()
+    },
     onData(stream, session, callback) {
       const chunks: Buffer[] = []
       stream.on('data', (chunk: Buffer) => chunks.push(chunk))
@@ -73,7 +93,7 @@ export async function startTestSmtpServer({
   // Обрыв соединения клиентом (тест отказа TLS) — не ошибка теста
   server.on('error', () => {})
   await new Promise<void>((resolve, reject) => {
-    // Занятый порт (e2e слушает 587) — понятная ошибка, а не тихо зависший тест
+    // Занятый порт (e2e слушает свой smtpTest.port) — понятная ошибка, а не тихо зависший тест
     server.server.once('error', reject)
     server.listen(listenPort, '127.0.0.1', () => {
       server.server.off('error', reject)

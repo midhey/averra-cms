@@ -137,11 +137,12 @@ export function outboxRepo(db: Db) {
         .for('update', { skipLocked: true })
       const rows = await db
         .update(mailOutbox)
+        // lastAttemptAt здесь не ставим: взятое письмо могут отпустить, не отправляя (сбой
+        // сервера на другом письме, остановка). Время попытки пишет renewLease перед отправкой
         .set({
           status: 'sending',
           claimId,
           lockedUntil: new Date(now.getTime() + SENDING_LEASE_MS),
-          lastAttemptAt: now,
           attempts: sql`${mailOutbox.attempts} + 1`,
         })
         .where(inArray(mailOutbox.id, due))
@@ -171,7 +172,8 @@ export function outboxRepo(db: Db) {
      * и следующие SENDING_LEASE_MS его никто не возьмёт. false — его уже взял другой обработчик
      * (или failStale пометил неотправленным): отправлять нельзя, иначе письмо уйдёт дважды.
      * Условие по claim_id проверяется в том же UPDATE, что и продление, — между проверкой
-     * и продлением письмо никто не перехватит
+     * и продлением письмо никто не перехватит. Это и есть начало попытки: lastAttemptAt
+     * ставится здесь, а не при заборе пачки
      */
     async renewLease(mail: ClaimedMail, now: Date) {
       const rows = await db
@@ -232,8 +234,12 @@ export function outboxRepo(db: Db) {
         )
     },
 
-    /** Отпустить взятое письмо, не отправляя: попытка не считается, письмо снова ждёт очереди */
-    async release(mail: ClaimedMail, now: Date) {
+    /**
+     * Отпустить взятое письмо, не отправляя: попытка не считается, письмо снова ждёт очереди.
+     * error — почему не ушло, если пробовали, но виновато не письмо (сервер не принял адрес
+     * отправителя): причину видно в очереди, а попытка всё равно не тратится
+     */
+    async release(mail: ClaimedMail, now: Date, error?: string) {
       await db
         .update(mailOutbox)
         .set({
@@ -242,6 +248,7 @@ export function outboxRepo(db: Db) {
           nextAttemptAt: now,
           claimId: null,
           lockedUntil: null,
+          ...(error === undefined ? {} : { lastError: error.slice(0, 1000) }),
         })
         .where(claimed(mail))
     },

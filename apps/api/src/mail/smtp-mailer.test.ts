@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { MailSendError } from './mailer'
-import { diagnoseSmtp, type SmtpSettings, smtpMailer } from './smtp-mailer'
+import { diagnoseSmtp, type SmtpSettings, smtpFailure, smtpMailer } from './smtp-mailer'
 import { createTestCa, issueServerCert, startTestSmtpServer, type TestCa } from './testing/smtp'
 
 // Настоящий SMTP-сервер (smtp-server) на свободном порту с сертификатом от тестового CA.
@@ -193,6 +193,25 @@ describe('SMTP', () => {
     expect(error.permanent).toBe(false)
   })
 
+  it('чужой отправитель (553 на MAIL FROM, как у Яндекс 360) — сбой настроек, а не письма', async () => {
+    const smtp = await server({ mode: 'tls', ownSendersOnly: true })
+    const mailer = smtpMailer(
+      { ...settings(smtp.port, 'tls'), from: { address: 'info@averra.test', name: 'Averra CMS' } },
+      { ca: ca.cert, timeouts: fastTimeouts },
+    )
+    const error = await sendError(mailer.send(mail))
+    await mailer.close()
+
+    // Не окончательный отказ письма: так очередь не сожжёт все письма за один проход
+    expect(error.permanent).toBe(false)
+    expect(error.rejectedSender).toBe(true)
+    expect(error.step).toBe('send')
+    expect(error.message).toContain('Сервер не принял адрес отправителя info@averra.test')
+    expect(error.message).toContain(`под которым идёт вход (${USER})`)
+    expect(error.message).toContain('Sender address rejected')
+    expect(smtp.received).toHaveLength(0)
+  })
+
   it('перевод строки в теме не доходит до сервера: постоянная ошибка до соединения', async () => {
     const smtp = await server({ mode: 'tls' })
     const mailer = smtpMailer(settings(smtp.port, 'tls'), { ca: ca.cert, timeouts: fastTimeouts })
@@ -207,6 +226,36 @@ describe('SMTP', () => {
     expect(smtp.logins).toHaveLength(0)
     expect(smtp.received).toHaveLength(0)
   })
+})
+
+describe('какой отказ окончательный', () => {
+  /** Ошибка конверта так, как её отдаёт nodemailer: код, команда и ответ сервера */
+  const envelopeError = (command: string, response: string) =>
+    Object.assign(new Error(`Command failed: ${response}`), {
+      code: command === 'DATA' ? 'EMESSAGE' : 'EENVELOPE',
+      command,
+      response,
+      responseCode: Number(response.slice(0, 3)),
+    })
+
+  it.each([
+    ['RCPT TO', '550 5.1.1 Mailbox does not exist'],
+    ['DATA', '554 5.7.1 Message rejected as spam'],
+  ])('5xx на %s — окончательный отказ этого письма', (command, response) => {
+    const error = smtpFailure(envelopeError(command, response), settings(465, 'tls'))
+    expect(error).toMatchObject({ step: 'send', permanent: true, rejectedSender: false })
+  })
+
+  it.each([
+    '553 5.7.1 Sender address rejected: not owned by auth user.',
+    '451 4.7.1 Too many messages, try later',
+  ])(
+    'отказ на MAIL FROM (%s) — настройки или сервер, а не письмо: не окончательный',
+    (response) => {
+      const error = smtpFailure(envelopeError('MAIL FROM', response), settings(465, 'tls'))
+      expect(error).toMatchObject({ step: 'send', permanent: false, rejectedSender: true })
+    },
+  )
 })
 
 describe('проверка по шагам (pnpm mail:test)', () => {
@@ -279,6 +328,43 @@ describe('проверка по шагам (pnpm mail:test)', () => {
     expect(titles(result.steps)).toEqual(['dns:ok', 'connection:ok', 'tls:ok', 'auth:fail'])
     expect(JSON.stringify(result.steps)).not.toContain(wrong)
   })
+
+  it('чужой отправитель — ломается отправка, а подсказка — про адрес отправителя и логин', async () => {
+    const smtp = await server({ mode: 'starttls', ownSendersOnly: true })
+    const result = await diagnoseSmtp(
+      { ...settings(smtp.port, 'starttls'), from: { address: 'info@averra.test', name: 'A' } },
+      mail,
+      { ca: ca.cert, timeouts: fastTimeouts },
+    )
+    expect(titles(result.steps)).toEqual([
+      'dns:ok',
+      'connection:ok',
+      'tls:ok',
+      'auth:ok',
+      'send:fail',
+    ])
+    const message = result.steps.at(-1)?.message ?? ''
+    expect(message).toContain('Сервер не принял адрес отправителя info@averra.test')
+    expect(message).toContain(
+      `он должен принадлежать ящику, под которым идёт вход (${USER}), а у Яндекс 360 — совпадать с логином или быть его алиасом`,
+    )
+    expect(message).toContain('Проверь MAIL_FROM и SMTP_USER')
+    expect(message).toContain('Sender address rejected')
+    expect(smtp.received).toHaveLength(0)
+  })
+
+  it('STARTTLS на порту, который ждёт TLS сразу, — сломан TLS с подсказкой, а не «соединение»', async () => {
+    const smtp = await server({ mode: 'tls' })
+    const result = await diagnoseSmtp(settings(smtp.port, 'starttls'), mail, {
+      ca: ca.cert,
+      timeouts: { ...fastTimeouts, greeting: 300 },
+    })
+    // Соединение прошло один раз и не «ломается» вторым результатом того же шага
+    expect(titles(result.steps)).toEqual(['dns:ok', 'connection:ok', 'tls:fail'])
+    const message = result.steps.at(-1)?.message ?? ''
+    expect(message).toContain('похоже, порт ждёт TLS сразу: для 465 нужен SMTP_SECURITY=tls')
+    expect(message).not.toContain('файрвол')
+  })
 })
 
 describe('SMTP из настроек админки', () => {
@@ -328,5 +414,15 @@ describe('SMTP из настроек админки', () => {
       { timeouts: fastTimeouts },
     )
     expect(env.steps[0]?.message).toContain('проверь SMTP_HOST')
+
+    const sender = await server({ mode: 'tls', ownSendersOnly: true })
+    const foreignSender = await diagnoseSmtp(
+      { ...settings(sender.port, 'tls'), from: { address: 'info@averra.test', name: 'A' } },
+      mail,
+      { ca: ca.cert, timeouts: fastTimeouts, origin: 'admin' },
+    )
+    const send = foreignSender.steps.at(-1)?.message ?? ''
+    expect(send).toContain('Проверьте поля «Адрес отправителя» и «Логин»')
+    expect(send).not.toContain('MAIL_FROM')
   })
 })

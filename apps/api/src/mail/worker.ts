@@ -39,6 +39,15 @@ const errorText = (error: unknown) =>
  */
 const SERVER_STEPS: ReadonlySet<MailStep> = new Set(['dns', 'connection', 'tls', 'auth'])
 
+/**
+ * Отказ адресу отправителя (MAIL FROM): адрес не того ящика, под которым вход, или лимит
+ * отправителя. Ошибка настроек, а не письма — её получит любое письмо. Проход прерывается,
+ * как при сбое сервера, но попытка не тратится и у этого письма: иначе за ночь с неверным
+ * MAIL_FROM очередь по одному письму ушла бы в failed, а ссылки сброса и приглашений стёрлись бы
+ */
+const isSenderRejection = (error: unknown) =>
+  error instanceof MailSendError && !error.permanent && error.rejectedSender
+
 const isServerFailure = (error: unknown) =>
   error instanceof MailSendError &&
   !error.permanent &&
@@ -55,7 +64,10 @@ export type ProcessResult = {
   failed: number
   /** Письма пачки, которые за время прохода взял другой обработчик: их отправит он */
   skipped: number
-  /** Сломался сервер (DNS, соединение, TLS, вход): остальные письма отпущены, обработчику пора выждать */
+  /**
+   * Сломался сервер (DNS, соединение, TLS, вход) или он не принял адрес отправителя: остальные
+   * письма отпущены, обработчику пора выждать
+   */
   serverDown: boolean
   /** Почта выключилась посреди прохода: письма, до которых не дошло, отпущены */
   mailOff: boolean
@@ -67,7 +79,8 @@ export type ProcessResult = {
  * Один проход обработчика: забрать письма, которым пора, и отправить по одному. Перед каждым
  * письмом аренда продлевается: если его уже взял другой обработчик, письмо пропускается.
  * Сбой письма — следующая попытка с растущей паузой, после maxAttempts или при постоянном
- * отказе — failed. Сбой сервера — остальные письма пачки отпускаются без траты попыток
+ * отказе — failed. Сбой сервера — остальные письма пачки отпускаются без траты попыток.
+ * Отказ адресу отправителя (настройки) — отпускаются все, включая это письмо
  */
 export async function processOutbox({
   db,
@@ -95,11 +108,14 @@ export async function processOutbox({
   const batch = await repo.claimDue({ now: now(), limit: batchSize, maxAttempts })
   result.claimed = batch.length
 
-  /** Отпустить письма, до которых проход не дойдёт. Без исключений: база может быть недоступна */
-  async function releaseRest(rest: ClaimedMail[]) {
+  /**
+   * Отпустить письма, до которых проход не дойдёт (или письмо, в котором не виновато само письмо:
+   * тогда с причиной в error). Без исключений: база может быть недоступна
+   */
+  async function releaseRest(rest: ClaimedMail[], error?: string) {
     for (const mail of rest) {
       try {
-        await repo.release(mail, now())
+        await repo.release(mail, now(), error)
       } catch {
         // Не вышло — письмо вернётся в очередь само, когда истечёт аренда
       }
@@ -150,6 +166,17 @@ export async function processOutbox({
       const rendered = renderMail(template.data, mail.data)
       ;({ messageId } = await sender.send({ to: mail.recipient, ...rendered }))
     } catch (error) {
+      if (isSenderRejection(error)) {
+        // Письмо ни при чём: отпускаем его без траты попытки, но с причиной — её видно в очереди
+        result.serverDown = true
+        log(
+          `Письмо ${mail.id} (${mail.template}) не отправлено: ${errorText(error)}. ` +
+            'Это настройки почты, а не письмо: попытка не засчитана, письма ждут исправления',
+        )
+        await releaseRest([mail], errorText(error))
+        await releaseRest(batch.slice(index + 1))
+        break
+      }
       const permanent =
         error instanceof MailDataError || (error instanceof MailSendError && error.permanent)
       const outcome = await repo.markFailedAttempt(mail, {
@@ -214,7 +241,8 @@ export const MAX_SERVER_PAUSE_MS = 30 * 60 * 1000
 /**
  * Обработчик очереди в процессе API: раз в intervalMs забирает письма и отправляет их, раз
  * в cleanupEveryMs чистит старые и гасит письма с истёкшими ссылками. Сломался сервер (вход,
- * TLS, соединение) — выжидает с растущей паузой до MAX_SERVER_PAUSE_MS. wake() будит его сразу.
+ * TLS, соединение) или он не принял адрес отправителя — выжидает с растущей паузой
+ * до MAX_SERVER_PAUSE_MS. wake() будит его сразу.
  * stop() больше не берёт писем, ждёт отправку, которая уже идёт, и только потом отпускает —
  * index.ts зовёт его до закрытия базы. Без mailer только чистит: письма с персональными
  * данными не лежат дольше срока, даже когда почта выключена
