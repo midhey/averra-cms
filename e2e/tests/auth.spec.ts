@@ -113,6 +113,8 @@ test('сессия кончилась посреди работы — вход �
 
   await page.getByRole('link', { name: demoSite.name }).click()
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  // Экран загрузился целиком: адрес меняется раньше, чем загрузчик получит все данные
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   // Сессию отозвали (или она истекла): cookie больше нет, а админка ещё открыта
   await page.context().clearCookies()
   await page.getByRole('link', { name: 'Ремонт квартир под ключ' }).click()
