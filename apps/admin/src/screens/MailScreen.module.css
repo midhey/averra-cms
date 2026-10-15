@@ -107,3 +107,68 @@
   overflow-wrap: normal;
   white-space: nowrap;
 }
+
+/* Откуда настройки SMTP: приглушённо и с отступом до списка сохранённых */
+.source {
+  margin: 0 0 8px;
+  color: #5b6170;
+}
+
+/* Почему SMTP в админке только для чтения: окружение или нет ключа шифрования */
+.lock {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f4f5f7;
+  overflow-wrap: anywhere;
+}
+
+/* Учебный ключ шифрования: настоящий пароль здесь не вводят */
+.warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fff4e0;
+  color: #7a4a00;
+}
+
+/* Проверка и сохранение внутри формы SMTP: fieldset с подписью-заголовком, без рамки */
+.group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid #e3e5e9;
+}
+
+.group legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.group p {
+  margin: 0;
+}
+
+/* Шаги проверки подключения: ✓ и ✗, сообщение сервера переносится где угодно */
+.steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.steps li[data-ok="true"] > span:first-child {
+  color: #1b7f3b;
+}
+
+.steps li[data-ok="false"] > span:first-child {
+  color: #c62828;
+}

@@ -13,6 +13,7 @@ import {
   invitationsQuery,
   mailOutboxQuery,
   mailQuery,
+  mailSmtpQuery,
   mediaQuery,
   meQuery,
   pageQuery,
@@ -187,6 +188,7 @@ const mailRoute = createRoute({
   loader: ({ context: { queryClient } }) =>
     Promise.all([
       queryClient.ensureQueryData(mailQuery()),
+      queryClient.ensureQueryData(mailSmtpQuery()),
       queryClient.ensureQueryData(mailOutboxQuery()),
     ]),
   component: MailScreen,

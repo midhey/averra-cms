@@ -20,6 +20,7 @@ export const queryKeys = {
   invitation: (token: string) => ['invitation', token] as const,
   mail: ['mail'] as const,
   mailOutbox: ['mail', 'outbox'] as const,
+  mailSmtp: ['mail', 'smtp'] as const,
   mailPreview: (template: string) => ['mail', 'templates', template] as const,
 }
 
@@ -144,6 +145,20 @@ export const mailQuery = () =>
     queryKey: queryKeys.mail,
     queryFn: async () => {
       const res = await api.mail.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Настройки SMTP: откуда они (окружение, админка или нигде), можно ли менять и почему нет.
+ * Пароля в ответе нет — только «задан» или «не читается»
+ */
+export const mailSmtpQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.mailSmtp,
+    queryFn: async () => {
+      const res = await api.mail.smtp.$get()
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

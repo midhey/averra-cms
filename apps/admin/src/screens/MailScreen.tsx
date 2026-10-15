@@ -9,6 +9,7 @@ import {
   mailStatusLabel,
   providerDetails,
 } from '../mail/mail-format'
+import { SmtpSettingsSection } from '../mail/SmtpSettingsSection'
 import { formatDateTime } from '../pages-format'
 import {
   type MailTemplateId,
@@ -25,8 +26,8 @@ import styles from './screens.module.css'
 type Notice = { kind: 'done' | 'error'; text: string }
 
 /**
- * Почта админки — только владельцу: включена ли и через что, очередь писем с повтором
- * и предпросмотр каждого шаблона на примерных данных
+ * Почта админки — только владельцу: включена ли и через что, настройки SMTP (их можно задать
+ * здесь, если сервер их не задал сам), очередь писем с повтором и предпросмотр каждого шаблона
  */
 export function MailScreen() {
   const { data: mail } = useSuspenseQuery(mailQuery())
@@ -40,6 +41,7 @@ export function MailScreen() {
         <h1>Почта</h1>
       </header>
       <MailState mail={mail} />
+      <SmtpSettingsSection />
       <Outbox titles={titles} />
       <Templates templates={mail.templates} />
     </main>
