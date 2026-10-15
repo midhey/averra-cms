@@ -14,6 +14,14 @@ const response = (status: number, body: unknown) => ({
 })
 
 describe('ошибка из ответа API', () => {
+  it('сохраняет код ошибки: по нему экран решает, что показать', async () => {
+    const error = await apiRequestError(
+      response(410, { error: { code: 'invitation_expired', message: 'Срок истёк' } }),
+    )
+    expect(error.code).toBe('invitation_expired')
+    expect(error.message).toBe('Срок истёк')
+  })
+
   it('берёт сообщение и ошибки по полям из тела в формате ApiError', async () => {
     const error = await apiRequestError(
       response(409, {

@@ -10,36 +10,47 @@ import {
 } from '@tanstack/react-router'
 import { safeRedirect } from './permissions'
 import {
+  invitationsQuery,
   mailOutboxQuery,
   mailQuery,
   mediaQuery,
   meQuery,
   pageQuery,
   pagesQuery,
+  passwordResetQuery,
   siteQuery,
   sitesQuery,
 } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
+import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
+import { InviteScreen } from './screens/InviteScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MailScreen } from './screens/MailScreen'
 import { MediaScreen } from './screens/MediaScreen'
+import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { SiteScreen } from './screens/SiteScreen'
 import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AppHeader } from './ui/AppHeader'
 
-// Маршруты описаны в коде, без генератора: экранов шесть, всё дерево видно здесь.
+// Маршруты описаны в коде, без генератора: экранов девять, всё дерево видно здесь.
 // Данные загружаются в кеш TanStack Query, роутер только ждёт их перед показом экрана
 
 type RouterContext = { queryClient: QueryClient }
 
 const LOGIN_PATH = '/login'
 
+/**
+ * Экраны без входа: вход, «Забыли пароль?», новый пароль и приглашение по ссылке из письма.
+ * У человека по ссылке входа ещё нет (или он его забыл)
+ */
+const PUBLIC_PATHS = new Set([LOGIN_PATH, '/forgot-password', '/reset-password', '/invite'])
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // Вся админка, кроме входа, — только после входа. Кто вошёл, спрашиваем у API один раз
   // и держим в кеше; любой 401 потом сбрасывает это и ведёт на вход (main.tsx)
   beforeLoad: async ({ context: { queryClient }, location }) => {
-    if (location.pathname === LOGIN_PATH) return
+    if (PUBLIC_PATHS.has(location.pathname)) return
     const me = await queryClient.ensureQueryData(meQuery())
     if (!me) throw redirect({ to: LOGIN_PATH, search: { redirect: location.href } })
   },
@@ -72,6 +83,26 @@ const loginRoute = createRoute({
   component: LoginScreen,
 })
 
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot-password',
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(passwordResetQuery()),
+  component: ForgotPasswordScreen,
+})
+
+// Токен в обоих — во фрагменте адреса (#token=…): его читает сам экран
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  component: ResetPasswordScreen,
+})
+
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite',
+  component: InviteScreen,
+})
+
 /**
  * Кривой id сайта или адрес страницы в ссылке — это «не найдено», а не «данные не прошли
  * проверку» от API. Проверяем теми же схемами, что API: страницы со старыми адресами открываются
@@ -95,11 +126,23 @@ const siteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId',
   beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: ({ context: { queryClient }, params: { siteId } }) =>
-    Promise.all([
+  loader: async ({ context: { queryClient }, params: { siteId } }) => {
+    // Приглашения и состояние почты — только владельцу (остальным API ответит 403). Владелец
+    // админки — владелец на любом сайте, поэтому решаем по тому, кто вошёл, и грузим всё сразу.
+    // Они второстепенные: их сбой не должен прятать страницы сайта за экраном ошибки. Поэтому
+    // allSettled: ошибка остаётся в кеше запроса, и раздел «Участники» показывает её у себя.
+    // 401 и так уводит на вход (обработчик кеша в main.tsx)
+    const me = await queryClient.ensureQueryData(meQuery())
+    await Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
       queryClient.ensureQueryData(pagesQuery(siteId)),
-    ]),
+      me?.role === 'owner' &&
+        Promise.allSettled([
+          queryClient.ensureQueryData(invitationsQuery(siteId)),
+          queryClient.ensureQueryData(mailQuery()),
+        ]),
+    ])
+  },
   component: SiteScreen,
 })
 
@@ -151,6 +194,9 @@ const mailRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
+  inviteRoute,
   sitesRoute,
   siteRoute,
   mediaRoute,

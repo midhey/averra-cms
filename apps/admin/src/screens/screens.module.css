@@ -86,7 +86,10 @@
   text-decoration: underline;
 }
 
+/* position: relative — чтобы и скрытые подписи колонок (.visuallyHidden, absolute) жили внутри
+   прокрутки: иначе они встают за краем широкой таблицы и растягивают всю страницу вбок */
 .tableScroll {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -101,6 +104,17 @@
 .siteList a,
 .screen h1 {
   overflow-wrap: anywhere;
+}
+
+/* Таблица приглашений: шесть колонок на телефоне не помещаются, и почта рвалась бы по буквам.
+   Пусть лучше прокручивается вбок внутри .tableScroll */
+.wideTable {
+  min-width: 720px;
+}
+
+.wideTable td {
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .table th,

@@ -18,6 +18,8 @@ export class ApiRequestError extends Error {
     readonly status: number,
     message: string,
     readonly issues: readonly ApiIssue[] = [],
+    /** Код ошибки API (mail_disabled, invitation_expired…): по нему экран решает, что показать */
+    readonly code?: string,
   ) {
     super(message)
   }
@@ -28,8 +30,8 @@ export async function apiRequestError(res: ErrorResponse) {
   const body = await res.json().catch(() => null)
   const parsed = ApiError.safeParse(body)
   if (!parsed.success) return new ApiRequestError(res.status, `API ответил ${res.status}`)
-  const { message, issues } = parsed.data.error
-  return new ApiRequestError(res.status, message, issues)
+  const { message, issues, code } = parsed.data.error
+  return new ApiRequestError(res.status, message, issues, code)
 }
 
 /**

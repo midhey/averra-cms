@@ -14,6 +14,11 @@ export function useFormErrors(schemaErrors: FieldErrors) {
     errors: { ...serverErrors, ...(attempted ? schemaErrors : {}) } as FieldErrors,
     attempt: () => setAttempted(true),
     showServerErrors: setServerErrors,
+    /** Форма отправлена и очищена: пустые поля снова не ругаются до следующей попытки */
+    reset: () => {
+      setAttempted(false)
+      setServerErrors({})
+    },
     clearServerError: (name: string) =>
       setServerErrors((current) =>
         Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)),

@@ -6,8 +6,9 @@ import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
+import { InvitationsSection } from '../invitations/InvitationsSection'
 import { formatDateTime, pagePath, pageState } from '../pages-format'
-import { canManagePages } from '../permissions'
+import { canInvite, canManagePages } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
@@ -161,6 +162,9 @@ function SitePages({ siteId }: { siteId: string }) {
           Вы можете править черновики страниц. Публикует их владелец или редактор сайта.
         </p>
       )}
+
+      {/* Раздавать доступ к сайту может только владелец: остальным API ответит 403 */}
+      {canInvite(site.access) && <InvitationsSection siteId={siteId} />}
     </main>
   )
 }

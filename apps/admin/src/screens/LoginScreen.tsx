@@ -1,6 +1,6 @@
 import { SignIn } from '@averra/schema'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'
 import { signIn } from '../auth'
 import { messageOf } from '../errors'
@@ -96,8 +96,11 @@ export function LoginScreen() {
           </div>
         </form>
       </section>
+      <p>
+        <Link to="/forgot-password">Забыли пароль?</Link>
+      </p>
       <p className={styles.muted}>
-        Регистрации нет: пользователей создаёт владелец командой <code>pnpm user:create</code>.
+        Регистрации нет: участников приглашает владелец письмом со ссылкой.
       </p>
     </main>
   )

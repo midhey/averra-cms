@@ -27,3 +27,6 @@ export function safeRedirect(target: unknown) {
   if (url.pathname === '/login') return '/'
   return `${url.pathname}${url.search}${url.hash}`
 }
+
+/** Приглашать участников и отзывать приглашения может только владелец */
+export const canInvite = (access: SiteAccess) => access === 'owner'

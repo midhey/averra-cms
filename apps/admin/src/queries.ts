@@ -15,6 +15,9 @@ export const queryKeys = {
   revision: (siteId: string, slug: string, revisionId: string) =>
     ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
   media: (siteId: string) => ['sites', siteId, 'media'] as const,
+  invitations: (siteId: string) => ['sites', siteId, 'invitations'] as const,
+  passwordReset: ['password-reset'] as const,
+  invitation: (token: string) => ['invitation', token] as const,
   mail: ['mail'] as const,
   mailOutbox: ['mail', 'outbox'] as const,
   mailPreview: (template: string) => ['mail', 'templates', template] as const,
@@ -96,6 +99,43 @@ export const mediaQuery = (siteId: string) =>
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
+  })
+
+/** Приглашения на сайт, новые сверху. Только у владельца: остальным API ответит 403 */
+export const invitationsQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.invitations(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].invitations.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Работает ли сброс пароля по почте. Открыт без входа: его спрашивает «Забыли пароль?» */
+export const passwordResetQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.passwordReset,
+    queryFn: async () => {
+      const res = await api['password-reset'].$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Приглашение по токену из ссылки: сайт, роль, кто пригласил и есть ли уже вход у адреса.
+ * Не кешируется надолго: после принятия та же ссылка уже не работает
+ */
+export const invitationQuery = (token: string) =>
+  queryOptions({
+    queryKey: queryKeys.invitation(token),
+    queryFn: async () => {
+      const res = await api.invitations.lookup.$post({ json: { token } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+    gcTime: 0,
   })
 
 /** Почта: включена ли, провайдер без секретов, настройки очереди и список шаблонов */

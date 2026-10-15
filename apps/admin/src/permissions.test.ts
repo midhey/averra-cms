@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canDeleteMedia, canManagePages, canPublish, safeRedirect } from './permissions'
+import { canDeleteMedia, canInvite, canManagePages, canPublish, safeRedirect } from './permissions'
 
 describe('возврат после входа', () => {
   it.each([
@@ -43,4 +43,10 @@ describe('что показывать роли', () => {
       true,
     ])
   })
+})
+
+it('приглашает только владелец', () => {
+  expect(canInvite('owner')).toBe(true)
+  expect(canInvite('editor')).toBe(false)
+  expect(canInvite('client')).toBe(false)
 })
