@@ -14,8 +14,8 @@ export const PASSWORD_RESET_TTL_MINUTES = 60
 export const RESET_IDENTIFIER_PREFIX = 'reset-password:'
 
 /**
- * Так начинается идентификатор записи сброса в базе: reset-password#<SHA-256>. Разделитель
- * другой, чем у Better Auth (# вместо :), и это главное, см. hashVerificationIdentifier
+ * Так начинается идентификатор записи сброса в базе: reset-password#<SHA-256>. На месте
+ * разделителя — #, которого нет в приставках Better Auth, и это главное, см. hashVerificationIdentifier
  */
 export const RESET_STORED_PREFIX = 'reset-password#'
 
@@ -31,13 +31,19 @@ const toBase64Url = (bytes: Uint8Array) =>
  * Храним SHA-256 всего идентификатора, а открытым оставляем имя до двоеточия: по нему
  * находятся записи сброса пользователя, когда старые ссылки надо сжечь.
  *
- * Двоеточие в базе заменено на #, и в хеше (base64url) его тоже нет. Better Auth 1.7 со своим
- * хешером ищет и гасит запись дважды: сначала по хешу, а не нашёл — по идентификатору как
- * есть (запасной путь для записей, сохранённых до включения хеширования; см.
- * findVerificationValue и consumeVerificationValue в better-auth/dist/db/internal-adapter.mjs).
+ * Better Auth 1.7 со своим хешером ищет и гасит запись дважды: сначала по хешу, а не нашёл —
+ * по идентификатору как есть (запасной путь для записей, сохранённых до включения хеширования;
+ * см. findVerificationValue и consumeVerificationValue в better-auth/dist/db/internal-adapter.mjs).
  * Будь в базе reset-password:<хеш>, хеш сам работал бы как токен: Better Auth собрал бы из него
- * reset-password:<хеш> и нашёл запись запасным поиском. Идентификаторы Better Auth всегда
- * с двоеточием, а в базе его нет — запасной поиск не находит ничего
+ * reset-password:<хеш> и нашёл запись запасным поиском.
+ *
+ * Защита держится на двух вещах. В базе на месте разделителя всегда #: <имя>#<хеш>, а у
+ * идентификатора без двоеточия — #<хеш>; в самом хеше (base64url) # нет. А каждый идентификатор,
+ * который Better Auth собирает из присланного, начинается с постоянной приставки без #
+ * (reset-password:, delete-account- — не все с двоеточием), и ни одна сохранённая строка с неё
+ * не начинается. Значит, запасной поиск «как есть» не совпадёт с тем, что лежит в базе.
+ * Плагин или эндпоинт, где идентификатор целиком задаёт клиент (номер телефона в phone-number,
+ * адрес кошелька в siwe), это нарушает: перед его включением защиту надо перепроверить
  */
 export async function hashVerificationIdentifier(identifier: string) {
   const colon = identifier.indexOf(':')

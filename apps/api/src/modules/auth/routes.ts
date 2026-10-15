@@ -245,8 +245,11 @@ export function authRoutes({
         const wait = resetResponseMs - (Date.now() - started)
         if (wait > 0) await sleep(wait)
         // Запасной лимит Better Auth (auth/auth.ts) выше нашего и сработать не должен. Если всё же
-        // сработал — ответ тот же, что у нашего лимита по IP, а не второй формат
+        // сработал — ответ тот же, что у нашего лимита по IP, а не второй формат. Это отказ
+        // по IP, поэтому попытка адреса возвращается: запрос, отбитый по IP, в счётчик адресов
+        // не попадает, какой бы из двух лимитов его ни отбил
         if (res.status === 429) {
+          resetLimits.byEmail.refund(email)
           const retryAfterMs = (Number(res.headers.get('x-retry-after')) || 60) * 1000
           return c.json(tooManyResets('с вашего адреса', retryAfterMs), 429)
         }

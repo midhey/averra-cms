@@ -122,11 +122,17 @@ export function createAuth({
       ? { disabled: true }
       : {
           level: 'warn',
-          // Строка — как у логгера Better Auth по умолчанию, только без цветов
-          log: (level, message, ...args) => {
+          // Строка — как у логгера Better Auth по умолчанию, только без цветов. message по типам —
+          // строка, но Better Auth 1.7.7 передаёт первым аргументом и саму ошибку (catch
+          // в GET /list-sessions: logger.error(e)): логгер, который на ней падает, прятал бы сбой
+          log: (level, message: unknown, ...args) => {
             const print = level === 'error' ? console.error : console.warn
             const head = `${new Date().toISOString()} ${level.toUpperCase()} [Better Auth]:`
-            print(`${head} ${withoutQueryParams(message)}`, ...args.map(errorForLog))
+            const first =
+              typeof message === 'string'
+                ? [`${head} ${withoutQueryParams(message)}`]
+                : [head, errorForLog(message)]
+            print(...first, ...args.map(errorForLog))
           },
         },
   })

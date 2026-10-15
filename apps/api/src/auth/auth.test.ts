@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { eq, sql } from 'drizzle-orm'
+import { DrizzleQueryError, eq, sql } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { DEV_AUTH_SECRET } from '../config'
 import { sessions } from '../db/schema'
@@ -315,6 +315,44 @@ describe('лог Better Auth', () => {
     } finally {
       spy.mockRestore()
       await own.close()
+    }
+  })
+
+  it('ошибка объектом вместо текста (так пишет list-sessions) — в логе без параметров, логгер не падает', async () => {
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(
+        args.map((arg) => (typeof arg === 'string' ? arg : inspect(arg, { depth: 10 }))).join(' '),
+      )
+    })
+    try {
+      const auth = createAuth({
+        db: api.db,
+        secret: DEV_AUTH_SECRET,
+        baseURL: testOrigins.api,
+        adminUrl: testOrigins.admin,
+        secureCookies: false,
+      })
+      const { logger } = await auth.$context
+      const failure = new DrizzleQueryError(
+        'select * from "sessions" where "user_id" = $1',
+        ['SECRET-SESSION-TOKEN'],
+        Object.assign(new Error('connection terminated'), { code: '57P01' }),
+      )
+      // Better Auth 1.7.7 сам передаёт ошибку первым аргументом: catch в GET /list-sessions
+      // делает ctx.context.logger.error(e). Тип говорит «строка», на деле — объект
+      expect(() => logger.error(failure as unknown as string)).not.toThrow()
+
+      const logged = errors.join('\n')
+      // Исходный сбой виден, а не TypeError из самого логгера
+      expect(logged).toMatch(/Z ERROR \[Better Auth\]: Запрос к базе не выполнен: select/)
+      expect(logged).toContain('connection terminated')
+      expect(logged).not.toContain('TypeError')
+      for (const secret of ['SECRET-SESSION-TOKEN', 'params:']) {
+        expect(logged).not.toContain(secret)
+      }
+    } finally {
+      spy.mockRestore()
     }
   })
 })

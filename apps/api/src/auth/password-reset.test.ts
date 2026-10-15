@@ -30,6 +30,19 @@ describe('хеш идентификатора verifications', () => {
     expect(`${RESET_IDENTIFIER_PREFIX}${hash}`).not.toBe(stored)
     expect(`${RESET_IDENTIFIER_PREFIX}${stored}`).not.toBe(stored)
   })
+
+  it('и у идентификаторов Better Auth без двоеточия: в базе # на месте разделителя, приставки нет', async () => {
+    // delete-account-<токен> (Better Auth 1.7.7, update-user.mjs) — без двоеточия. Защита держится
+    // не на двоеточии, а на том, что сохранённая строка не начинается с приставки Better Auth
+    for (const [prefix, token] of [
+      ['delete-account-', 'SecretToken123'],
+      [RESET_IDENTIFIER_PREFIX, 'SecretToken123'],
+    ] as const) {
+      const stored = await hashVerificationIdentifier(`${prefix}${token}`)
+      expect(stored).toContain('#')
+      expect(stored.startsWith(prefix)).toBe(false)
+    }
+  })
 })
 
 it('ссылка ведёт в админку, токен — во фрагменте', () => {

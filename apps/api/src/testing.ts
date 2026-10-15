@@ -11,6 +11,7 @@ import { aesGcmSecretBox, KEY_BYTES } from './crypto/aes-gcm'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import { seedDemo } from './db/seed'
+import { errorForLog } from './log-error'
 import type { Mailer, SmtpSettings } from './mail/mailer'
 import { memoryMailer } from './mail/memory-mailer'
 import { createMailRuntime } from './mail/runtime'
@@ -111,6 +112,7 @@ export async function createTestApi({
     secretBox,
     keyKind: secretBox ? 'env' : undefined,
     smtp: adminSmtp(smtp),
+    logError: (message, error) => log(`${message}\n${String(errorForLog(error))}`),
   })
   await runtime.reload()
   const app = createApp({

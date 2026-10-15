@@ -1,6 +1,6 @@
 import { and, eq, like, sql } from 'drizzle-orm'
-import { afterAll, describe, expect, it } from 'vitest'
-import { RESET_REQUESTS_PER_IP } from '../../auth/auth'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { RESET_REQUESTS_PER_IP, RESET_REQUESTS_PER_IP_BACKSTOP } from '../../auth/auth'
 import { RESET_STORED_PREFIX } from '../../auth/password-reset'
 import { verifications } from '../../db/schema'
 import type { MemoryMail } from '../../mail/memory-mailer'
@@ -188,13 +188,30 @@ describe('полный цикл', () => {
     expect((await resetPassword(token, NEW_PASSWORD)).status).toBe(200)
   })
 
-  it('токен не того формата — 400 «ссылка не действует»; токен в строке запроса не берётся', async () => {
+  it('токен не того формата — 400 «ссылка не действует»', async () => {
     const bad = await resetPassword('abc', NEW_PASSWORD)
     expect(bad.status).toBe(400)
     expect(await bad.json()).toEqual({
       error: { code: 'invalid_token', message: expect.stringContaining('Ссылка не действует') },
     })
+  })
 
+  it('токен не того формата до Better Auth не доходит: его лимит (10 в минуту с IP) не тратится', async () => {
+    // Ответ тот же, что дал бы Better Auth, поэтому отличие видно по лимиту: дошли бы запросы
+    // до него — одиннадцатый с этого IP получил бы 429
+    const ip = freshIp()
+    for (let i = 0; i < 12; i++) {
+      const res = await api.app.request('/api/auth/reset-password', {
+        method: 'POST',
+        headers: jsonHeaders(ip),
+        body: JSON.stringify({ token: `not-a-token-${i}`, newPassword: NEW_PASSWORD }),
+      })
+      expect(res.status, `запрос ${i + 1}`).toBe(400)
+      expect(await res.json()).toMatchObject({ error: { code: 'invalid_token' } })
+    }
+  })
+
+  it('тело без токена — 400 проверки, токен из строки запроса не подставляется', async () => {
     const user = await api.createUser('member')
     await requestReset(user.email)
     const token = tokenOf((await inbox(user.email))[0])
@@ -207,7 +224,31 @@ describe('полный цикл', () => {
       },
     )
     expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: { code: 'validation' } })
     expect((await signIn(user.email, TEST_PASSWORD)).status).toBe(200)
+  })
+
+  it('в Better Auth уходит адрес без строки запроса: оттуда он не возьмёт ни токен, ни callbackURL', async () => {
+    const user = await api.createUser('member')
+    await requestReset(user.email)
+    const token = tokenOf((await inbox(user.email))[0])
+    const handler = vi.spyOn(api.auth, 'handler')
+    try {
+      const res = await api.app.request(
+        '/api/auth/reset-password?token=AAAAAAAAAAAAAAAAAAAAAAAA&callbackURL=https://evil.test',
+        {
+          method: 'POST',
+          headers: jsonHeaders(freshIp()),
+          body: JSON.stringify({ token, newPassword: NEW_PASSWORD }),
+        },
+      )
+      expect(res.status).toBe(200)
+      const [request] = handler.mock.calls.at(-1) ?? []
+      expect(request && new URL(request.url).search).toBe('')
+    } finally {
+      handler.mockRestore()
+    }
+    expect((await signIn(user.email, NEW_PASSWORD)).status).toBe(200)
   })
 
   it('варианты путей сброса до Better Auth не доходят: 404', async () => {
@@ -351,6 +392,36 @@ describe('лимиты', () => {
     expect(await limited.json()).toMatchObject({
       error: { message: expect.stringContaining('Слишком много запросов сброса с вашего адреса') },
     })
+  })
+
+  it('сработал запасной лимит Better Auth — тот же 429, что у нашего лимита по IP, а адрес попытку не теряет', async () => {
+    // Счётчик Better Auth для этого IP набит запросами мимо обёртки (так было бы, если её обойти),
+    // а наш лимит по IP ещё свободен: запрос пройдёт его и упрётся в запасной лимит Better Auth
+    const ip = freshIp()
+    for (let i = 0; i < RESET_REQUESTS_PER_IP_BACKSTOP.max; i++) {
+      const direct = await api.auth.handler(
+        new Request(`${testOrigins.api}/api/auth/request-password-reset`, {
+          method: 'POST',
+          headers: jsonHeaders(ip),
+          body: JSON.stringify({ email: `direct-${i}-${crypto.randomUUID()}@example.test` }),
+        }),
+      )
+      expect(direct.status).toBe(200)
+    }
+    const target = `backstop-${crypto.randomUUID()}@example.test`
+    const limited = await requestReset(target, ip)
+    expect(limited.status).toBe(429)
+    expect(await limited.json()).toEqual({
+      error: {
+        code: 'rate_limited',
+        message: expect.stringMatching(
+          /^Слишком много запросов сброса с вашего адреса\. Подождите \d+ мин/,
+        ),
+      },
+    })
+    // Отбитый по IP запрос в счётчик адресов не попал: у адреса все три попытки целы
+    for (let i = 0; i < 3; i++) expect((await requestReset(target)).status).toBe(200)
+    expect((await requestReset(target)).status).toBe(429)
   })
 
   it('IP проверяется первым: отбитые по IP запросы не попадают в счётчик адресов', async () => {
