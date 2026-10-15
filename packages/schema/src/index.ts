@@ -1,5 +1,20 @@
 export { ApiError, describeApiError } from './api-error'
-export { SignIn } from './auth'
+export {
+  ForgotPassword,
+  InvitationAccept,
+  InvitationLookup,
+  InvitationRegister,
+  InvitationToken,
+  MemberRole,
+  NewInvitation,
+  NewPassword,
+  PASSWORD_LENGTH,
+  ResetPassword,
+  ResetPasswordToken,
+  SignIn,
+  UserEmail,
+  UserName,
+} from './auth'
 export { BlockInstance, type BlockType, blocks, cta, features, hero } from './blocks'
 export { Button, Href } from './common'
 export { BlockId, defineBlock } from './define-block'
