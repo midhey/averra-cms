@@ -14,6 +14,7 @@ import { describeMailer } from './mail/mailer'
 import { startMailWorker } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
+import { invitationsRepo } from './modules/invitations/repo'
 
 setupZodMessages()
 // --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
@@ -41,12 +42,34 @@ process.on('exit', unlock)
 const { db, close } = createDb(config.PGLITE_DIR)
 await migrateDb(db)
 
+// Почта: провайдер по конфигу и обработчик очереди в этом же процессе. Выключена — обработчик
+// писем не шлёт, а только чистит очередь (письма с персональными данными не лежат дольше срока),
+// а админка говорит, что почта не настроена. Обработчик запускается до Better Auth:
+// письмо сброса пароля будит его сразу (onMailQueued)
+const { mailer, status: mailStatus } = createMailer(config.mail)
+const mailSettings = {
+  maxAttempts: config.mail.maxAttempts,
+  retentionDays: config.mail.retentionDays,
+}
+// Закрытые приглашения (в них адрес человека) живут столько же, сколько письма
+const mailWorker = startMailWorker({
+  db,
+  mailer,
+  ...mailSettings,
+  log: console.log,
+  cleanupAlso: [{ what: 'приглашения', run: (before) => invitationsRepo(db).cleanup(before) }],
+})
+console.log(
+  mailStatus.enabled ? `Почта: ${describeMailer(mailStatus.provider)}` : mailStatus.reason,
+)
+
 const auth = createAuth({
   db,
   secret: config.AUTH_SECRET,
   baseURL: config.API_URL,
   adminUrl: config.ADMIN_URL,
   secureCookies: config.secureCookies,
+  onMailQueued: () => mailWorker.wake(),
 })
 
 if (config.devSeed) {
@@ -61,19 +84,6 @@ if (config.devSeed) {
   }
 }
 
-// Почта: провайдер по конфигу и обработчик очереди в этом же процессе. Выключена — обработчик
-// писем не шлёт, а только чистит очередь (письма с персональными данными не лежат дольше срока),
-// а админка говорит, что почта не настроена
-const { mailer, status: mailStatus } = createMailer(config.mail)
-const mailSettings = {
-  maxAttempts: config.mail.maxAttempts,
-  retentionDays: config.mail.retentionDays,
-}
-const mailWorker = startMailWorker({ db, mailer, ...mailSettings, log: console.log })
-console.log(
-  mailStatus.enabled ? `Почта: ${describeMailer(mailStatus.provider)}` : mailStatus.reason,
-)
-
 const app = createApp({
   db,
   auth,
@@ -83,6 +93,7 @@ const app = createApp({
   images: sharpProcessor(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
   mail: { status: mailStatus, settings: mailSettings, wake: () => mailWorker.wake() },
+  adminUrl: config.ADMIN_URL,
 })
 
 const server = serve(

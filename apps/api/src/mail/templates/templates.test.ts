@@ -86,8 +86,23 @@ describe('шаблоны писем', () => {
 
   it('сброс пароля говорит срок и даёт ссылку и кнопкой, и текстом', () => {
     const mail = previewMail('password-reset')
-    expect(mail.text).toContain('https://admin.example.ru/reset-password?token=example')
+    expect(mail.text).toContain('https://admin.example.ru/reset-password#token=example')
     expect(mail.text).toContain('Ссылка работает 1 час и только один раз.')
-    expect(mail.html).toContain('href="https://admin.example.ru/reset-password?token=example"')
+    expect(mail.html).toContain('href="https://admin.example.ru/reset-password#token=example"')
+  })
+
+  it('приглашение не обещает задать пароль тому, у кого вход уже есть', () => {
+    const mail = previewMail('invitation')
+    expect(mail.text).toContain('https://admin.example.ru/invite#token=example')
+    expect(mail.text).not.toContain('задайте свой пароль')
+    expect(mail.text).toContain('Если вход уже есть, войдите своим паролем')
+    expect(mail.text).toContain('Если входа в админку у вас ещё нет')
+  })
+
+  it('примеры ссылок — с токеном во фрагменте, как настоящие письма', () => {
+    for (const template of Object.values(mailTemplates)) {
+      const { url } = template.example as { url?: string }
+      if (url !== undefined) expect(url).not.toContain('?token=')
+    }
   })
 })

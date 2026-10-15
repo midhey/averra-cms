@@ -4,7 +4,7 @@ import { html } from '../html'
 import { button, note, paragraph } from '../layout'
 import { defineMailTemplate, formatMinutes } from './define'
 
-/** Сброс пароля админки. Заготовка: письмо начнёт уходить в шаге 3.2 */
+/** Сброс пароля админки. Ставит в очередь sendResetPassword (auth/password-reset.ts) */
 export const passwordResetTemplate = defineMailTemplate({
   id: 'password-reset',
   title: 'Сброс пароля',
@@ -20,7 +20,7 @@ export const passwordResetTemplate = defineMailTemplate({
   }),
   example: {
     name: 'Анна',
-    url: 'https://admin.example.ru/reset-password?token=example',
+    url: 'https://admin.example.ru/reset-password#token=example',
     expiresInMinutes: 60,
   },
   // В ссылке токен: в очереди он живёт до отправки и не дольше, чем сама ссылка

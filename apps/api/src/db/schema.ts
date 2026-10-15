@@ -147,6 +147,48 @@ export const siteMembers = pgTable(
 )
 
 /**
+ * Приглашения участников на сайт. Ссылка из письма несёт токен, а здесь только его SHA-256:
+ * строка находится по id из токена, хеш сверяется за постоянное время (как у api_tokens).
+ * Приглашение одноразовое: принятое, отозванное или истёкшее больше не работает
+ */
+export const userInvitations = pgTable(
+  'user_invitations',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    // Кого пригласили: почта в нижнем регистре, как в users
+    email: text().notNull(),
+    role: text({ enum: ['editor', 'client'] }).notNull(),
+    tokenHash: text().notNull(),
+    // Кто пригласил. Удалили пользователя — приглашение остаётся, просто без автора
+    invitedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    // Кто принял: новый пользователь или тот, кто уже был
+    acceptedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    acceptedAt: timestamp({ withTimezone: true }),
+    revokedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    index('user_invitations_site_id_idx').on(table.siteId),
+    // У адреса на сайте одно открытое приглашение: новое отзывает прежнее (invitations/service.ts)
+    uniqueIndex('user_invitations_open_unique')
+      .on(table.siteId, table.email)
+      .where(sql`${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+    check('user_invitations_role_valid', sql`${table.role} IN ('editor', 'client')`),
+    check('user_invitations_email_lower', sql`${table.email} = lower(${table.email})`),
+    check('user_invitations_expires_valid', sql`${table.expiresAt} > ${table.createdAt}`),
+    // Принятое не отзывают, отозванное не принимают
+    check(
+      'user_invitations_one_outcome',
+      sql`${table.acceptedAt} IS NULL OR ${table.revokedAt} IS NULL`,
+    ),
+  ],
+)
+
+/**
  * Токены API для MCP и других программ: права редактора на одном сайте.
  * Хранится только SHA-256 токена — сам токен показывается один раз при создании
  */

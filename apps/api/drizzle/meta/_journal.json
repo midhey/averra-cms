@@ -57,6 +57,13 @@
       "when": 1791975765825,
       "tag": "0007_mail_outbox_data_lifetime",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791977814905,
+      "tag": "0008_user_invitations",
+      "breakpoints": true
     }
   ]
 }

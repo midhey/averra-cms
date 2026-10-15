@@ -168,4 +168,29 @@ describe('обработчик в процессе API', () => {
     await until(async () => (await statusOf(old?.id as string)) === undefined)
     expect(await statusOf(waiting)).toBe('pending')
   })
+
+  it('вместе с очередью чистит и остальное по тому же сроку (приглашения)', async () => {
+    const calls: Date[] = []
+    const logs: string[] = []
+    const now = new Date('2026-10-14T12:00:00Z')
+    worker = startMailWorker({
+      db,
+      ...settings,
+      now: () => now,
+      intervalMs: 20,
+      log: (message) => logs.push(message),
+      cleanupAlso: [
+        {
+          what: 'приглашения',
+          run: async (before) => {
+            calls.push(before)
+            return 2
+          },
+        },
+      ],
+    })
+    await until(() => logs.some((line) => line.startsWith('Удалено старых записей')))
+    expect(calls[0]).toEqual(new Date('2026-09-14T12:00:00Z'))
+    expect(logs).toContain('Удалено старых записей (приглашения): 2')
+  })
 })

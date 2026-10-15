@@ -2,16 +2,18 @@ import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
-import type { Auth } from './auth/auth'
+import { type Auth, RESET_REQUESTS_PER_IP } from './auth/auth'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
 import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
+import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
+import { createRateLimiter } from './rate-limit'
 
 // Здесь не импортируем Node API (fs, process и т.п.): админка читает типы этого файла.
 // Всё платформенное создаётся в index.ts и приходит через deps
@@ -29,10 +31,29 @@ export type AppDeps = {
   mediaMaxBytes: number
   /** Почта: состояние без секретов и очередь. Сам Mailer живёт в обработчике (index.ts) */
   mail: MailDeps
+  /** Адрес админки: из него собираются ссылки в письмах (приглашение, сброс пароля) */
+  adminUrl: string
+  /**
+   * Через сколько миллисекунд, не раньше, отвечать на «Забыли пароль?»: по времени ответа
+   * не должно быть видно, есть ли такой адрес. По умолчанию 300
+   */
+  resetResponseMs?: number
 }
 
+/** Запросов сброса пароля на один адрес: не больше трёх за 15 минут */
+export const RESET_REQUESTS_PER_EMAIL = { max: 3, windowMs: 15 * 60 * 1000 } as const
+
 export function createApp(deps: AppDeps) {
-  const { db, auth, trustedOrigins, log } = deps
+  const { db, auth, trustedOrigins, log, mail, adminUrl } = deps
+  // Свои на каждый экземпляр API: глобального состояния нет, тесты не делят счётчики.
+  // По IP — то же правило, что у Better Auth, но проверяется раньше счётчика адресов
+  const resetLimits = {
+    byIp: createRateLimiter({
+      max: RESET_REQUESTS_PER_IP.max,
+      windowMs: RESET_REQUESTS_PER_IP.window * 1000,
+    }),
+    byEmail: createRateLimiter(RESET_REQUESTS_PER_EMAIL),
+  }
   const app = new Hono<AuthEnv>()
     .use(logger(log))
     .basePath('/api')
@@ -47,12 +68,17 @@ export function createApp(deps: AppDeps) {
         return c.json({ status: 'error', db: 'down' } as const, 503)
       }
     })
-    .route('/', authRoutes({ auth }))
+    .route(
+      '/',
+      authRoutes({ auth, mail, resetLimits, resetResponseMs: deps.resetResponseMs ?? 300 }),
+    )
     .route('/sites', sitesRoutes({ db }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))
     .route('/media', mediaFilesRoutes(deps))
-    .route('/mail', mailRoutes({ db, mail: deps.mail }))
+    .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
+    .route('/invitations', invitationsRoutes({ db, auth }))
+    .route('/mail', mailRoutes({ db, mail }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 

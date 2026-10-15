@@ -176,7 +176,14 @@ export type MailWorkerOptions = Omit<ProcessOptions, 'stopped' | 'mailer'> & {
   intervalMs?: number
   /** Как часто чистить старые письма, мс */
   cleanupEveryMs?: number
+  /**
+   * Что ещё чистить вместе с очередью и по тому же сроку retentionDays: например, закрытые
+   * приглашения (index.ts). run удаляет записи, закрытые раньше before, и говорит, сколько
+   */
+  cleanupAlso?: ReadonlyArray<{ what: string; run: (before: Date) => Promise<number> }>
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Дольше этого обработчик не ждёт, когда почтовый сервер недоступен: чинят его обычно быстрее */
 export const MAX_SERVER_PAUSE_MS = 30 * 60 * 1000
@@ -192,6 +199,7 @@ export const MAX_SERVER_PAUSE_MS = 30 * 60 * 1000
 export function startMailWorker({
   intervalMs = 5000,
   cleanupEveryMs = 60 * 60 * 1000,
+  cleanupAlso = [],
   mailer,
   ...options
 }: MailWorkerOptions) {
@@ -214,6 +222,11 @@ export function startMailWorker({
         await repo.expireLinks(now())
         const removed = await repo.cleanup({ now: now(), retentionDays })
         if (removed > 0) log(`Из очереди писем удалено старых: ${removed}`)
+        const before = new Date(now().getTime() - retentionDays * DAY_MS)
+        for (const { what, run } of cleanupAlso) {
+          const count = await run(before)
+          if (count > 0) log(`Удалено старых записей (${what}): ${count}`)
+        }
       }
       if (!mailer) return intervalMs
       // Полная пачка — в очереди, скорее всего, есть ещё: берём сразу следующую

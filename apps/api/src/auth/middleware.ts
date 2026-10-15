@@ -22,16 +22,23 @@ export const notFound = (message: string) => ({ error: { code: 'not_found', mess
 
 // Без входа открыто только это. Остальное под /api закрыто по умолчанию: новый маршрут
 // не окажется открытым по забывчивости. Опубликованное и так публично — его берёт рендерер.
-// Файлы картинок тоже: на них ссылается опубликованный сайт
+// Файлы картинок тоже: на них ссылается опубликованный сайт. Экрану «Забыли пароль?» нужно
+// знать, работает ли сброс, ещё до входа
 const publicRoutes = [
   /^\/api\/health(\/ready)?$/,
   /^\/api\/sites\/[^/]+\/snapshot$/,
   /^\/api\/media\/[^/]+\/[^/]+$/,
+  /^\/api\/password-reset$/,
 ]
+
+// Изменяющие запросы без входа: принять приглашение новым пользователем (у него ещё нет
+// входа). Пускает только токен из письма, его проверяет сам маршрут
+const publicPostRoutes = [/^\/api\/invitations\/(lookup|register)$/]
 
 function isPublic(method: string, path: string) {
   // /api/auth/* — эндпоинты Better Auth: что там можно без входа, решает он сам
   if (path === '/api/auth' || path.startsWith('/api/auth/')) return true
+  if (method === 'POST') return publicPostRoutes.some((route) => route.test(path))
   return (method === 'GET' || method === 'HEAD') && publicRoutes.some((route) => route.test(path))
 }
 

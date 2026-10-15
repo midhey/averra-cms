@@ -3,7 +3,7 @@ import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import { setupZodMessages } from '@averra/schema'
 import { z } from 'zod'
 import { createAuth } from '../auth/auth'
-import { loadConfig } from '../config'
+import { isLoopbackHost, loadConfig } from '../config'
 import { createDb } from '../db/client'
 import { DbLockedError, lockDb } from '../db/lock'
 import { migrateDb } from '../db/migrate'
@@ -132,4 +132,30 @@ function readHidden(prompt: string) {
     stdin.resume()
     stdin.on('data', onData)
   })
+}
+
+/**
+ * Куда ведёт ссылка из письма, которое команда кладёт в очередь (приглашение). Очередь общая:
+ * письмо разошлёт тот API, что запустится, — в том числе продовый по SMTP. Поэтому команда
+ * всегда говорит, на какой адрес админки ведёт ссылка (сам токен — нет). Ссылка на localhost
+ * при настоящей почте (SMTP) — почти наверняка забытый ADMIN_URL: отказ. При файловом ящике
+ * (разработка) — предупреждение: если команда запущена на сервере без его переменных, письмо
+ * со ссылкой на localhost всё равно уйдёт, когда его заберёт продовый API
+ */
+export function inviteLinkNotice(adminUrl: string, transport: string) {
+  const local = isLoopbackHost(new URL(adminUrl).hostname)
+  if (local && transport === 'smtp') {
+    throw new CliError(
+      `ADMIN_URL ведёт на ${adminUrl}, а письмо уйдёт по SMTP: адресат не откроет ссылку на localhost.\n` +
+        'Задай ADMIN_URL — адрес админки, как у API, — и повтори',
+    )
+  }
+  const lines = [`Ссылка в письме ведёт в админку ${adminUrl}.`]
+  if (local) {
+    lines.push(
+      'Это адрес на этом компьютере. Если команда запущена на сервере, задай ADMIN_URL, как у API, ' +
+        'и пригласи заново: прежнее приглашение отзовётся само',
+    )
+  }
+  return lines
 }

@@ -70,6 +70,7 @@ describe('таблица разрешений', () => {
     ['page.delete', [true, true, false]],
     ['media.upload', [true, true, true]],
     ['media.delete', [true, true, false]],
+    ['members.invite', [true, false, false]],
   ] as const)('%s: владелец, редактор, клиент → %j', (permission, expected) => {
     expect(roles.map((role) => can(role, permission))).toEqual(expected)
   })

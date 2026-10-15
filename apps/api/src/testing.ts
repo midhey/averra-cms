@@ -37,7 +37,10 @@ export async function createTestApi({
   images = sharpProcessor(),
   // Почта в памяти: тест видит письма в mailer.sent. 'off' — почта выключена, как без SMTP_*
   mail = memoryMailer(),
+  // Порог ответа «Забыли пароль?»: тесты, которым он не важен, ставят 0
+  resetResponseMs,
 }: {
+  resetResponseMs?: number
   production?: boolean
   mediaMaxBytes?: number
   images?: ImageProcessor
@@ -56,6 +59,10 @@ export async function createTestApi({
   await migrateDb(db)
   await seedDemo(db)
 
+  // Обработчик очереди тесты запускают сами (processOutbox, startMailWorker): так им видно,
+  // когда письма уходят. wake считает вызовы — тест проверит, что повтор будит обработчик
+  const mailSettings = { maxAttempts: 3, retentionDays: 30 }
+  const wakes = { count: 0 }
   const auth = createAuth({
     db,
     secret: DEV_AUTH_SECRET,
@@ -63,15 +70,12 @@ export async function createTestApi({
     adminUrl: testOrigins.admin,
     secureCookies: production,
     quiet: true,
+    onMailQueued: () => (wakes.count += 1),
   })
   const mailStatus: MailStatus =
     mail === 'off'
       ? { enabled: false, reason: 'Почта не настроена (тест)' }
       : { enabled: true, provider: mail.info }
-  // Обработчик очереди тесты запускают сами (processOutbox, startMailWorker): так им видно,
-  // когда письма уходят. wake считает вызовы — тест проверит, что повтор будит обработчик
-  const mailSettings = { maxAttempts: 3, retentionDays: 30 }
-  const wakes = { count: 0 }
   const app = createApp({
     db,
     auth,
@@ -81,6 +85,8 @@ export async function createTestApi({
     images,
     mediaMaxBytes,
     mail: { status: mailStatus, settings: mailSettings, wake: () => (wakes.count += 1) },
+    adminUrl: testOrigins.admin,
+    resetResponseMs,
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)

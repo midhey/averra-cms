@@ -2,21 +2,13 @@ import { constantTimeEqual } from 'better-auth/crypto'
 import { asc, eq } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { apiTokens, sites, users } from '../../db/schema'
+import { randomSecret, sha256 } from '../../secrets'
 
 // Токен: cms_<id строки в api_tokens>_<секрет: 32 случайных байта в hex>.
 // По id строка находится индексом, а секрет сверяется сравнением хешей за постоянное время:
 // поиск по самому хешу в базе превратил бы сравнение секрета в поиск по индексу
 const TOKEN_FORMAT =
   /^cms_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_[0-9a-f]{64}$/
-
-const toHex = (bytes: Uint8Array) =>
-  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-
-/** SHA-256 через Web Crypto: модуль работает и в API, и в командах, без Node API */
-async function sha256(text: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-  return toHex(new Uint8Array(digest))
-}
 
 export function tokensRepo(db: Db) {
   return {
@@ -31,7 +23,7 @@ export function tokensRepo(db: Db) {
       createdBy?: string
     }) {
       const id = crypto.randomUUID()
-      const token = `cms_${id}_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`
+      const token = `cms_${id}_${randomSecret()}`
       await db
         .insert(apiTokens)
         .values({ id, siteId, name, createdBy, tokenHash: await sha256(token) })

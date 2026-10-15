@@ -29,6 +29,8 @@ const permissions = {
   // а удалять, как и страницы, может владелец или редактор
   'media.upload': ['owner', 'editor', 'client'],
   'media.delete': ['owner', 'editor'],
+  // Раздавать доступ к сайту (приглашения) — решение владельца студии, а не участника
+  'members.invite': ['owner'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -46,6 +48,7 @@ export const forbiddenMessages: Record<Permission, string> = {
   'page.delete': 'Удалять страницы может владелец или редактор сайта',
   'media.upload': 'Загружать картинки на этот сайт нельзя',
   'media.delete': 'Удалять картинки может владелец или редактор сайта',
+  'members.invite': 'Приглашать участников может только владелец',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

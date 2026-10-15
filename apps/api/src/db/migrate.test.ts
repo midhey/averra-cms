@@ -358,3 +358,52 @@ describe('миграция 0007_mail_outbox_data_lifetime', () => {
     ).rejects.toThrow(/mail_outbox_data_lifetime/)
   })
 })
+
+describe('миграция 0008_user_invitations', () => {
+  it('держит роль, почту, срок и один исход; открытое приглашение адреса на сайт одно', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+      '0005_media',
+      '0006_mail_outbox',
+      '0007_mail_outbox_data_lifetime',
+      '0008_user_invitations',
+    ]) {
+      await applyMigration(client, name)
+    }
+    const siteId = '00000000-0000-4000-8000-000000000001'
+    await client.exec(`INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}')`)
+
+    const insert = (values: string) => `
+      INSERT INTO user_invitations (site_id, email, role, token_hash, expires_at, accepted_at, revoked_at)
+      VALUES ('${siteId}', ${values})`
+    const week = `now() + interval '7 days'`
+    await client.exec(insert(`'a@b.ru', 'client', 'h1', ${week}, NULL, NULL`))
+    await expect(
+      client.exec(insert(`'c@b.ru', 'owner', 'h', ${week}, NULL, NULL`)),
+    ).rejects.toThrow(/user_invitations_role_valid/)
+    await expect(
+      client.exec(insert(`'C@b.ru', 'client', 'h', ${week}, NULL, NULL`)),
+    ).rejects.toThrow(/user_invitations_email_lower/)
+    await expect(
+      client.exec(insert(`'d@b.ru', 'client', 'h', now() - interval '1 day', NULL, NULL`)),
+    ).rejects.toThrow(/user_invitations_expires_valid/)
+    await expect(
+      client.exec(insert(`'e@b.ru', 'editor', 'h', ${week}, now(), now()`)),
+    ).rejects.toThrow(/user_invitations_one_outcome/)
+    // Второе открытое приглашение того же адреса — нет; принятое или отозванное рядом — можно
+    await expect(
+      client.exec(insert(`'a@b.ru', 'editor', 'h2', ${week}, NULL, NULL`)),
+    ).rejects.toThrow(/user_invitations_open_unique/)
+    await client.exec(insert(`'a@b.ru', 'editor', 'h3', ${week}, NULL, now()`))
+    await client.exec(insert(`'a@b.ru', 'editor', 'h4', ${week}, now(), NULL`))
+
+    await client.exec(`DELETE FROM sites WHERE id = '${siteId}'`)
+    const { rows } = await client.query('SELECT id FROM user_invitations')
+    expect(rows).toEqual([])
+  })
+})

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { MemberRole, NewUser } from '../modules/users/repo'
-import { check, run } from './common'
+import { CliError, check, inviteLinkNotice, run } from './common'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -21,11 +21,11 @@ describe('команды терминала', () => {
     const text = await printed(async () => {
       check(
         NewUser.omit({ password: true }),
-        { email: 'anna@example.ru', name: '', role: 'admin' },
+        { email: 'anna@example.ru', name: 'а'.repeat(81), role: 'admin' },
         'Как вызывать',
       )
     })
-    expect(text).toContain('Поле не может быть пустым')
+    expect(text).toContain('Не больше 80 символов')
     expect(text).toContain('Роль — owner или member')
     expect(text).toContain('Как вызывать')
     expect(text).not.toMatch(/Too small|Invalid option/)
@@ -36,5 +36,21 @@ describe('команды терминала', () => {
       check(z.object({ role: MemberRole }), { role: 'owner' }, '')
     })
     expect(text).toContain('Роль на сайте — editor или client')
+  })
+})
+
+describe('ссылка из письма команды', () => {
+  it('всегда говорит, куда ведёт ссылка, а про localhost предупреждает', () => {
+    expect(inviteLinkNotice('https://admin.averra.ru', 'smtp')).toEqual([
+      'Ссылка в письме ведёт в админку https://admin.averra.ru.',
+    ])
+    const local = inviteLinkNotice('http://localhost:5173', 'file')
+    expect(local[0]).toBe('Ссылка в письме ведёт в админку http://localhost:5173.')
+    expect(local[1]).toContain('задай ADMIN_URL')
+  })
+
+  it('ссылку на localhost по настоящей почте не ставит: отказ до записи в базу', () => {
+    expect(() => inviteLinkNotice('http://127.0.0.1:5173', 'smtp')).toThrow(CliError)
+    expect(() => inviteLinkNotice('http://localhost:5173', 'smtp')).toThrow(/Задай ADMIN_URL/)
   })
 })
