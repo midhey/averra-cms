@@ -72,6 +72,8 @@ function MailState({ mail }: { mail: MailData }) {
           <p>{status.reason}</p>
         </>
       )}
+      {/* Письма по SMTP со ссылками на localhost: адресат их не откроет (забытый ADMIN_URL) */}
+      {mail.linkWarning && <p className={mailStyles.warning}>{mail.linkWarning}</p>}
       <p className={styles.muted}>
         Письмо пробует уйти {attemptsLabel(settings.maxAttempts)} с растущей паузой. Отправленные и
         неотправленные письма удаляются через {daysLabel(settings.retentionDays)}: в них

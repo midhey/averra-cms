@@ -1,3 +1,4 @@
+import { ResetPasswordToken } from '@averra/schema'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
@@ -14,25 +15,37 @@ import styles from './screens.module.css'
 
 const fieldOrder = ['password', 'repeat']
 
+/** Ссылка не годится ещё до запроса в API: что сказать и куда идти дальше */
+function BrokenLink({ message }: { message: string }) {
+  return (
+    <section className={styles.section}>
+      <p role="alert" className={styles.formError}>
+        {message}
+      </p>
+      <p>
+        <Link to="/forgot-password">Запросить новую ссылку</Link>
+      </p>
+    </section>
+  )
+}
+
 /** Новый пароль по ссылке из письма: …/reset-password#token=… */
 export function ResetPasswordScreen() {
   const token = useLinkToken()
   const headingId = useId()
   usePageTitle('Новый пароль')
+  // Формат токена — той же схемой, что у API. Обрезанная при копировании ссылка — «повреждена»,
+  // а не «устарела или заменена»: так ответил бы API, не отличая её от мёртвой
+  const damaged =
+    token === undefined ? undefined : ResetPasswordToken.safeParse(token).error?.issues[0]?.message
 
   return (
     <main className={`${styles.screen} ${styles.narrow}`}>
       <h1 id={headingId}>Новый пароль</h1>
       {token === undefined ? (
-        <section className={styles.section}>
-          <p role="alert" className={styles.formError}>
-            Ссылка неполная: в ней нет токена. Откройте ссылку из письма целиком или запросите
-            новую.
-          </p>
-          <p>
-            <Link to="/forgot-password">Запросить новую ссылку</Link>
-          </p>
-        </section>
+        <BrokenLink message="Ссылка неполная: в ней нет токена. Откройте ссылку из письма целиком или запросите новую." />
+      ) : damaged !== undefined ? (
+        <BrokenLink message={damaged} />
       ) : (
         <NewPassword token={token} headingId={headingId} />
       )}
