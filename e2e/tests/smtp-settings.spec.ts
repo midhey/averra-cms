@@ -94,6 +94,11 @@ test('владелец задаёт SMTP: проверка, сохранение
     await expect(section.getByLabel('Пароль SMTP', { exact: true })).toHaveValue('')
     await expect(section.getByLabel('Ваш пароль от админки')).toHaveValue('')
     await expect(page.getByRole('region', { name: 'Состояние' })).toContainText('localhost:587')
+    // ADMIN_URL e2e — localhost, а письма теперь уходят по SMTP: экран предупреждает об этом
+    // (настоящий ответ API, без подмены). С файловым ящиком предупреждения нет (mail.spec.ts)
+    await expect(page.getByRole('region', { name: 'Состояние' })).toContainText(
+      'задайте ADMIN_URL — адрес админки снаружи',
+    )
 
     // Письмо «Настройки почты изменены» ушло владельцу через очередь — уже по новым настройкам
     await expect
@@ -139,6 +144,7 @@ test('владелец задаёт SMTP: проверка, сохранение
     expect(dialogs).toEqual([expect.stringContaining('Удалить настройки SMTP из админки?')])
     await expect(saved).toContainText('SMTP не задан')
     await expect(page.getByRole('region', { name: 'Состояние' })).toContainText('Файловый ящик')
+    await expect(page.getByRole('region', { name: 'Состояние' })).not.toContainText('ADMIN_URL')
   } finally {
     // Остальные e2e читают файловый ящик: SMTP из админки убираем, даже если тест упал.
     // Удалили уже на экране — 404

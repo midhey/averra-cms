@@ -100,3 +100,19 @@ test('почта не настроена — экран честно говор�
   await expect(page.getByRole('main')).toContainText('pnpm user:password --email')
   await expect(page.getByRole('form')).toHaveCount(0)
 })
+
+test('ссылку обрезали при копировании — экран говорит, что она повреждена, а не «устарела»', async ({
+  page,
+}) => {
+  // Токен Better Auth — 24 буквы и цифры. Обрезанный экран узнаёт сам, до формы и запроса в API
+  await page.goto('/reset-password#token=AbCdEf123')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Новый пароль')
+  await expect(page.getByRole('alert')).toHaveText(
+    'Ссылка повреждена: откройте её из письма целиком',
+  )
+  await expect(page.getByRole('alert')).not.toContainText('устарела')
+  await expect(page.getByRole('link', { name: 'Запросить новую ссылку' })).toBeVisible()
+  await expect(page.getByRole('form')).toHaveCount(0)
+  // Токен из адреса убран и здесь
+  await expect(page).toHaveURL(`${urls.admin}/reset-password`)
+})

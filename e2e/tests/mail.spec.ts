@@ -55,6 +55,72 @@ test('владелец открывает «Почту» из шапки: сос
   await expect(section.getByRole('article')).toHaveCount(templates.length)
 })
 
+/**
+ * Подменить в ответе GET /api/mail то, чего в почте e2e не бывает (она всегда файловый ящик):
+ * остальное — настоящий ответ API
+ */
+async function patchMailState(page: Page, patch: Record<string, unknown>) {
+  await page.route(/\/api\/mail$/, async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), ...patch } })
+  })
+}
+
+test('почта выключена — экран говорит это и почему', async ({ page }) => {
+  // Так API отвечает без SMTP вне учебного режима (config.ts): почта выключена с причиной
+  const reason =
+    'Почта не настроена: задайте SMTP на странице «Почта» в админке или переменными SMTP_HOST, ' +
+    'SMTP_USER, SMTP_PASSWORD и MAIL_FROM (см. README, «Почта»). Не работают сброс пароля, ' +
+    'приглашения участников и уведомления о заявках'
+  await patchMailState(page, { status: { enabled: false, reason } })
+  await page.goto('/mail')
+
+  const state = page.getByRole('region', { name: 'Состояние' })
+  await expect(state).toContainText('Почта выключена')
+  await expect(state).toContainText(reason)
+  await expect(state).not.toContainText('Почта включена')
+  // Остальной экран на месте: настройки SMTP и очередь
+  await expect(page.getByRole('region', { name: 'Настройки SMTP' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Очередь писем' })).toBeVisible()
+})
+
+test('письма по SMTP со ссылками на localhost — экран предупреждает про ADMIN_URL', async ({
+  page,
+}) => {
+  const linkWarning =
+    'Ссылки в письмах (сброс пароля, приглашения) ведут на http://localhost:5273 — адрес этого ' +
+    'компьютера, а письма уходят по SMTP: адресат на другом компьютере такую ссылку не откроет. ' +
+    'На сервере задайте ADMIN_URL — адрес админки снаружи — и перезапустите API'
+  await patchMailState(page, {
+    status: {
+      enabled: true,
+      provider: {
+        kind: 'smtp',
+        host: 'smtp.yandex.ru',
+        port: 465,
+        security: 'tls',
+        user: 'noreply@averra.test',
+        from: { address: 'noreply@averra.test', name: 'Averra CMS' },
+      },
+    },
+    linkWarning,
+  })
+  await page.goto('/mail')
+
+  const state = page.getByRole('region', { name: 'Состояние' })
+  await expect(state).toContainText('Почта включена')
+  await expect(state).toContainText(linkWarning)
+})
+
+test('файловый ящик — без предупреждения про localhost: в разработке ссылки на него и нужны', async ({
+  page,
+}) => {
+  await page.goto('/mail')
+  const state = page.getByRole('region', { name: 'Состояние' })
+  await expect(state).toContainText('Файловый ящик')
+  await expect(state).not.toContainText('ADMIN_URL')
+})
+
 // Как в client.spec.ts, роль подменяется в ответе /api/me,
 // а ответ API о почте — тем 403, который API отдаёт не владельцу (права проверяет
 // apps/api/src/modules/mail/mail.test.ts). Здесь — что админка слушается роли и честно отказывает
