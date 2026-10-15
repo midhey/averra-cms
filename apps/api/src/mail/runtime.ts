@@ -51,6 +51,11 @@ export type MailRuntimeOptions = {
   /** Какой ключ: свой (env) или учебный из репозитория (dev, только pnpm dev) */
   keyKind?: 'env' | 'dev'
   smtp: SmtpFactory
+  /**
+   * Куда сказать, что настройки после смены перечитать не вышло (сбой базы сразу после коммита).
+   * index.ts пишет в лог через errorForLog: в ошибке базы бывают параметры запроса
+   */
+  logError?: (message: string, error: unknown) => void
 }
 
 /**
@@ -69,6 +74,10 @@ const KEY_MISSING =
   'не расшифровать. Верните прежний ключ в окружение API — или задайте новый и введите пароль ' +
   'SMTP заново на странице «Почта»'
 
+const RELOAD_FAILED =
+  'API не смог перечитать настройки почты из базы после их изменения. Письма ждут: API ' +
+  `пробует снова перед каждым проходом очереди. ${MAIL_OFF_EFFECT}`
+
 const unreadable: Record<SecretBoxError['problem'], string> = {
   wrong_key:
     'Пароль SMTP в базе зашифрован другим ключом: MAIL_ENCRYPTION_KEY сменился. Введите пароль ' +
@@ -80,6 +89,26 @@ const unreadable: Record<SecretBoxError['problem'], string> = {
     'Пароль SMTP в базе не расшифровывается: запись не в том формате. Введите пароль SMTP ' +
     'заново на странице «Почта»',
 }
+
+/**
+ * Пароль SMTP из строки настроек: расшифрован или почему нет. Так же решают и команды
+ * (pnpm member:invite, cli/common.ts): письмо, которое API не сможет отправить, в очередь не ставят
+ */
+export function readStoredPassword(
+  secretBox: SecretBox | undefined,
+  row: Pick<StoredMailSettings, 'passwordEncrypted'>,
+): StoredPassword {
+  if (!secretBox) return { ok: false, reason: KEY_MISSING, problem: 'no_key' }
+  try {
+    return { ok: true, password: secretBox.decrypt(row.passwordEncrypted, MAIL_PASSWORD_CONTEXT) }
+  } catch (error) {
+    if (!(error instanceof SecretBoxError)) throw error
+    return { ok: false, reason: unreadable[error.problem], problem: error.problem }
+  }
+}
+
+/** Почему почта выключена, если пароль SMTP из админки не читается: для API и команд одно */
+export const unreadablePasswordReason = (reason: string) => `${reason}. ${MAIL_OFF_EFFECT}`
 
 type State = {
   source: MailSource
@@ -96,18 +125,10 @@ export function createMailRuntime({
   secretBox,
   keyKind,
   smtp,
+  logError = () => {},
 }: MailRuntimeOptions) {
   const repo = mailSettingsRepo(db)
-
-  function readPassword(row: StoredMailSettings): StoredPassword {
-    if (!secretBox) return { ok: false, reason: KEY_MISSING, problem: 'no_key' }
-    try {
-      return { ok: true, password: secretBox.decrypt(row.passwordEncrypted, MAIL_PASSWORD_CONTEXT) }
-    } catch (error) {
-      if (!(error instanceof SecretBoxError)) throw error
-      return { ok: false, reason: unreadable[error.problem], problem: error.problem }
-    }
-  }
+  const readPassword = (row: StoredMailSettings) => readStoredPassword(secretBox, row)
 
   function envState(mail: EnvMail): State {
     if (mail.kind === 'off') {
@@ -145,7 +166,7 @@ export function createMailRuntime({
     if (!password.ok) {
       return {
         source: 'database',
-        status: { enabled: false, reason: `${password.reason}. ${MAIL_OFF_EFFECT}` },
+        status: { enabled: false, reason: unreadablePasswordReason(password.reason) },
         own: false,
       }
     }
@@ -169,13 +190,55 @@ export function createMailRuntime({
   let state: State = env ? envState(env) : fallbackState()
   // Идёт смена настроек (exclusive): mailer() ждёт её конца
   let gate: Promise<unknown> = Promise.resolve()
+  // Настройки поменялись, а перечитать их не вышло: состояние не знает, какая почта сейчас
+  let stale = false
 
-  async function reload() {
-    const next = await resolve()
+  /** Сменить состояние; провайдер из прежних настроек админки — закрыть */
+  async function enter(next: State) {
     const previous = state
     state = next
     // SMTP-провайдер не держит соединений между письмами: закрыть его безопасно и посреди отправки
     if (previous.own && previous.mailer !== next.mailer) await previous.mailer?.close()
+  }
+
+  async function reload() {
+    await enter(await resolve())
+    stale = false
+  }
+
+  /**
+   * Перечитать после смены настроек. Смена уже закоммичена, поэтому сбой здесь не бросается
+   * наружу (иначе маршрут ответил бы 500 и не записал в журнал то, что поменялось), а ставит
+   * почту на паузу: прежний провайдер уже не тот (после удаления настроек письма ушли бы через
+   * удалённый SMTP). mailer() перед каждым письмом пробует перечитать снова
+   */
+  async function settle() {
+    try {
+      await reload()
+    } catch (error) {
+      stale = true
+      await enter({
+        source: state.source,
+        status: { enabled: false, reason: RELOAD_FAILED },
+        own: false,
+      }).catch(() => {})
+      logError('Почта: API не смог перечитать настройки почты после их изменения', error)
+    }
+  }
+
+  /** Секция, в которой меняется состояние: mailer() ждёт её конца, секции идут по одной */
+  async function guarded<T>(fn: () => Promise<T>): Promise<T> {
+    const previous = gate
+    let release = () => {}
+    gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    try {
+      await previous
+      return await fn()
+    } finally {
+      release()
+    }
   }
 
   return {
@@ -185,33 +248,32 @@ export function createMailRuntime({
     source: () => state.source,
     /**
      * Нынешний провайдер для очередного письма. Пока идёт смена настроек (exclusive), ждёт её
-     * конца: письмо, взятое из очереди после коммита новых настроек, уйдёт уже по ним
+     * конца: письмо, взятое из очереди после коммита новых настроек, уйдёт уже по ним. Если
+     * после смены настройки перечитать не вышло, пробует снова
      */
     async mailer() {
       await gate
+      if (stale) {
+        await guarded(async () => {
+          if (stale) await settle()
+        })
+      }
       return state.mailer
     },
     /**
      * Смена настроек: fn пишет в базу (настройки и письма в очередь одной транзакцией), потом
      * провайдер пересобирается. Всё это время обработчик очереди ждёт в mailer(). Смены идут
-     * по одной
+     * по одной. Ошибка fn — наружу (ничего не поменялось); сбой пересборки после неё — нет:
+     * смена уже в базе, почта встаёт на паузу до следующей попытки (settle)
      */
-    async exclusive<T>(fn: () => Promise<T>): Promise<T> {
-      const previous = gate
-      let release = () => {}
-      gate = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      try {
-        await previous
+    exclusive<T>(fn: () => Promise<T>): Promise<T> {
+      return guarded(async () => {
         const result = await fn()
-        await reload()
+        await settle()
         return result
-      } finally {
-        release()
-      }
+      })
     },
-    /** Перечитать настройки из базы и пересобрать провайдера (при старте API) */
+    /** Перечитать настройки из базы и пересобрать провайдера (при старте API). Сбой — наружу */
     reload,
     /** Пароль SMTP из строки настроек: расшифрован или почему нет */
     readPassword,

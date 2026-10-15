@@ -3,10 +3,13 @@ import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import { setupZodMessages } from '@averra/schema'
 import { z } from 'zod'
 import { createAuth } from '../auth/auth'
-import { isLoopbackHost, loadConfig, type MailConfig } from '../config'
+import { loadConfig, type MailConfig } from '../config'
+import { aesGcmSecretBox } from '../crypto/aes-gcm'
 import { createDb, type Db } from '../db/client'
 import { DbLockedError, lockDb } from '../db/lock'
 import { migrateDb } from '../db/migrate'
+import { isLocalAdminUrl } from '../mail/link-warning'
+import { readStoredPassword, unreadablePasswordReason } from '../mail/runtime'
 import { mailSettingsRepo } from '../mail/settings'
 
 // Общее для команд терминала (pnpm user:create, token:create…): аргументы, скрытый ввод
@@ -139,12 +142,13 @@ function readHidden(prompt: string) {
  * Куда ведёт ссылка из письма, которое команда кладёт в очередь (приглашение). Очередь общая:
  * письмо разошлёт тот API, что запустится, — в том числе продовый по SMTP. Поэтому команда
  * всегда говорит, на какой адрес админки ведёт ссылка (сам токен — нет). Ссылка на localhost
- * при настоящей почте (SMTP) — почти наверняка забытый ADMIN_URL: отказ. При файловом ящике
+ * при настоящей почте (SMTP) — почти наверняка забытый ADMIN_URL: отказ. API в том же случае
+ * только предупреждает (mail/link-warning.ts: там же, почему). При файловом ящике
  * (разработка) — предупреждение: если команда запущена на сервере без его переменных, письмо
  * со ссылкой на localhost всё равно уйдёт, когда его заберёт продовый API
  */
 export function inviteLinkNotice(adminUrl: string, transport: string) {
-  const local = isLoopbackHost(new URL(adminUrl).hostname)
+  const local = isLocalAdminUrl(adminUrl)
   if (local && transport === 'smtp') {
     throw new CliError(
       `ADMIN_URL ведёт на ${adminUrl}, а письмо уйдёт по SMTP: адресат не откроет ссылку на localhost.\n` +
@@ -163,14 +167,24 @@ export function inviteLinkNotice(adminUrl: string, transport: string) {
 
 /**
  * Как уйдёт письмо, которое команда кладёт в очередь (приглашение). Решило окружение — по нему;
- * иначе SMTP из админки, если он там задан (команда открывает базу, а пароль ей не нужен — письмо
- * отправит API); иначе вариант по умолчанию: файловый ящик в разработке или выключено
+ * иначе SMTP из админки, если он там задан; иначе вариант по умолчанию: файловый ящик
+ * в разработке или выключено. Пароль SMTP команде не нужен (письмо отправит API), но она
+ * проверяет, что его можно расшифровать тем же ключом (MAIL_ENCRYPTION_KEY): нет ключа или
+ * он не тот — у API почта выключена (MailRuntime), и письмо пролежало бы в очереди до срока
+ * ссылки. Тогда — отказ с той же причиной, что показывает API
  */
 export async function queuedMailTransport(
   db: Db,
-  mail: MailConfig,
+  { mail, mailEncryptionKey }: { mail: MailConfig; mailEncryptionKey: Uint8Array | undefined },
 ): Promise<{ transport: 'smtp' | 'file' } | { transport: 'off'; reason: string }> {
-  if (!mail.fromEnv && (await mailSettingsRepo(db).get())) return { transport: 'smtp' }
+  const row = mail.fromEnv ? undefined : await mailSettingsRepo(db).get()
+  if (row) {
+    const secretBox = mailEncryptionKey ? aesGcmSecretBox(mailEncryptionKey) : undefined
+    const password = readStoredPassword(secretBox, row)
+    return password.ok
+      ? { transport: 'smtp' }
+      : { transport: 'off', reason: unreadablePasswordReason(password.reason) }
+  }
   return mail.transport === 'off'
     ? { transport: 'off', reason: mail.reason }
     : { transport: mail.transport }

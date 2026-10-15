@@ -60,6 +60,8 @@ describe('состояние', () => {
         provider: { kind: 'memory', from: { address: 'noreply@averra.test', name: 'Averra CMS' } },
       },
       settings: { maxAttempts: 3, retentionDays: 30 },
+      // Почта не уходит наружу (в памяти): ссылки на localhost никому не помешают
+      linkWarning: null,
       templates: [
         expect.objectContaining({ id: 'mail-test', title: 'Проверка почты' }),
         expect.objectContaining({ id: 'password-reset', title: 'Сброс пароля' }),
@@ -100,6 +102,12 @@ describe('состояние', () => {
         },
       })
       expect(text).not.toContain(password)
+      // Ссылки в письмах ведут на localhost (ADMIN_URL тестов), а письма уходят по SMTP наружу
+      expect(JSON.parse(text).linkWarning).toBe(
+        'Ссылки в письмах (сброс пароля, приглашения) ведут на http://localhost:5173 — адрес ' +
+          'этого компьютера, а письма уходят по SMTP: адресат на другом компьютере такую ссылку ' +
+          'не откроет. На сервере задайте ADMIN_URL — адрес админки снаружи — и перезапустите API',
+      )
     } finally {
       await smtpApi.close()
     }

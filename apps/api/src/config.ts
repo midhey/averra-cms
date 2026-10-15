@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { MailAddress, MailSenderName } from '@averra/schema'
 import { z } from 'zod'
+import { isLoopbackHost } from './loopback'
 import { MAIL_OFF_EFFECT } from './mail/mailer'
 
 /**
@@ -89,11 +90,6 @@ const Origin = z
   .refine((url) => !URL.canParse(url) || new URL(url).origin === url, {
     error: 'Нужен адрес без пути и косой черты в конце, например https://admin.example.ru',
   })
-
-const LOOPBACK_HOST = /^(localhost|[a-z0-9.-]+\.localhost|127(\.\d{1,3}){3}|\[::1\])$/i
-
-/** Имя этого компьютера: localhost, *.localhost, 127.x.x.x или [::1] */
-export const isLoopbackHost = (hostname: string) => LOOPBACK_HOST.test(hostname)
 
 const isLoopbackUrl = (url: string) => URL.canParse(url) && isLoopbackHost(new URL(url).hostname)
 

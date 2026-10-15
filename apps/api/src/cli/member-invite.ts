@@ -33,8 +33,9 @@ await run(async () => {
   )
   const { db, auth, config, close } = await openDb()
   try {
-    // Как в API: без почты ссылку никто не получит. SMTP из админки — тоже почта
-    const mail = await queuedMailTransport(db, config.mail)
+    // Как в API: без почты ссылку никто не получит. SMTP из админки — тоже почта, если API
+    // расшифрует его пароль
+    const mail = await queuedMailTransport(db, config)
     if (mail.transport === 'off') throw new CliError(mail.reason)
     // До записи в базу: ссылку на localhost по SMTP не отправляем вовсе
     const linkNotice = inviteLinkNotice(config.ADMIN_URL, mail.transport)

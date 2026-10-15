@@ -10,7 +10,9 @@ import { createDb } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
 import { seedDemo, seedDevOwner } from './db/seed'
+import { errorForLog } from './log-error'
 import { mailSources } from './mail/create-mailer'
+import { localLinkWarning } from './mail/link-warning'
 import { describeMailer } from './mail/mailer'
 import { createMailRuntime } from './mail/runtime'
 import { adminSmtp } from './mail/smtp-mailer'
@@ -61,6 +63,8 @@ const mail = createMailRuntime({
   secretBox: config.mailEncryptionKey ? aesGcmSecretBox(config.mailEncryptionKey) : undefined,
   keyKind: config.mailKeyKind,
   smtp: adminSmtp(devSmtpPort === undefined ? {} : { connectPort: () => devSmtpPort }),
+  // Ошибка базы — через errorForLog: в ней бывают параметры запроса (log-error.ts)
+  logError: (message, error) => console.error(message, errorForLog(error)),
 })
 await mail.reload()
 const mailSettings = {
@@ -82,6 +86,10 @@ console.log(
     ? `Почта (${mailSourceNote[mail.source()]}): ${describeMailer(mailStatus.provider)}`
     : mailStatus.reason,
 )
+// Ссылки из писем по SMTP ведут на localhost — забытый ADMIN_URL. Не отказ, а предупреждение:
+// в pnpm dev так бывает нарочно (mail/link-warning.ts). Его же показывает страница «Почта»
+const linkWarning = localLinkWarning(config.ADMIN_URL, mailStatus)
+if (linkWarning) console.warn(linkWarning)
 // Окружение решило почту само — SMTP из админки не действует, и ключ ему не нужен
 if (config.mailKeyKind === 'dev' && !config.mail.fromEnv) {
   console.log(

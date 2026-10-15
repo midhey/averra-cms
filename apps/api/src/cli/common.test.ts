@@ -1,8 +1,13 @@
+import { randomBytes } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createDb } from '../db/client'
+import { aesGcmSecretBox, KEY_BYTES } from '../crypto/aes-gcm'
+import { createDb, type Db } from '../db/client'
 import { migrateDb } from '../db/migrate'
 import { mailSettings } from '../db/schema'
+import { memoryMailer } from '../mail/memory-mailer'
+import { createMailRuntime } from '../mail/runtime'
+import { MAIL_PASSWORD_CONTEXT } from '../mail/settings'
 import { MemberRole, NewUser } from '../modules/users/repo'
 import { CliError, check, inviteLinkNotice, queuedMailTransport, run } from './common'
 
@@ -61,30 +66,76 @@ describe('ссылка из письма команды', () => {
 describe('почта для писем команд', () => {
   const base = { maxAttempts: 8, retentionDays: 30 }
   const off = { ...base, fromEnv: false, transport: 'off' as const, reason: 'Почта не настроена' }
+  const key = randomBytes(KEY_BYTES)
+
+  /** Настройки SMTP из админки с паролем, зашифрованным этим ключом */
+  const saveSmtp = (db: Db, sealedWith: Uint8Array) =>
+    db.insert(mailSettings).values({
+      host: 'smtp.example.ru',
+      port: 465,
+      security: 'tls',
+      username: 'noreply@example.ru',
+      passwordEncrypted: aesGcmSecretBox(sealedWith).encrypt('smtp-pass', MAIL_PASSWORD_CONTEXT),
+      fromAddress: 'noreply@example.ru',
+      fromName: 'Averra CMS',
+    })
 
   it('SMTP из админки — тоже почта: команда не отказывает и не ставит ссылку на localhost', async () => {
     const { db, close } = createDb()
     try {
       await migrateDb(db)
-      expect(await queuedMailTransport(db, off)).toEqual({
+      expect(await queuedMailTransport(db, { mail: off, mailEncryptionKey: key })).toEqual({
         transport: 'off',
         reason: 'Почта не настроена',
       })
-      await db.insert(mailSettings).values({
-        host: 'smtp.example.ru',
-        port: 465,
-        security: 'tls',
-        username: 'noreply@example.ru',
-        passwordEncrypted: `v1.0123456789abcdef.${'A'.repeat(16)}.${'B'.repeat(22)}.Q0lQSEVS`,
-        fromAddress: 'noreply@example.ru',
-        fromName: 'Averra CMS',
+      await saveSmtp(db, key)
+      expect(await queuedMailTransport(db, { mail: off, mailEncryptionKey: key })).toEqual({
+        transport: 'smtp',
       })
-      expect(await queuedMailTransport(db, off)).toEqual({ transport: 'smtp' })
       expect(() => inviteLinkNotice('http://localhost:5173', 'smtp')).toThrow(CliError)
       // Окружение решило само — оно главнее админки
       expect(
-        await queuedMailTransport(db, { ...off, fromEnv: true, reason: 'MAIL_TRANSPORT=off' }),
+        await queuedMailTransport(db, {
+          mail: { ...off, fromEnv: true, reason: 'MAIL_TRANSPORT=off' },
+          mailEncryptionKey: key,
+        }),
       ).toEqual({ transport: 'off', reason: 'MAIL_TRANSPORT=off' })
+    } finally {
+      await close()
+    }
+  })
+
+  it('пароль SMTP из админки API не расшифрует (нет ключа или не тот) — отказ с той же причиной, что у API', async () => {
+    const { db, close } = createDb()
+    try {
+      await migrateDb(db)
+      await saveSmtp(db, key)
+      const [row] = await db.select().from(mailSettings)
+      if (!row) throw new Error('Настройки не сохранились')
+      for (const mailEncryptionKey of [undefined, randomBytes(KEY_BYTES)]) {
+        const transport = await queuedMailTransport(db, { mail: off, mailEncryptionKey })
+        // Причина — слово в слово та, с которой API выключил почту (MailRuntime)
+        const secretBox = mailEncryptionKey ? aesGcmSecretBox(mailEncryptionKey) : undefined
+        const runtime = createMailRuntime({
+          db,
+          fallback: { reason: 'Почта не настроена' },
+          secretBox,
+          smtp: { mailer: () => memoryMailer(), diagnose: async () => ({ ok: true, steps: [] }) },
+        })
+        await runtime.reload()
+        const status = runtime.status()
+        expect(status.enabled).toBe(false)
+        expect(transport).toEqual({
+          transport: 'off',
+          reason: status.enabled ? '' : status.reason,
+        })
+      }
+      expect(
+        await queuedMailTransport(db, { mail: off, mailEncryptionKey: undefined }),
+      ).toMatchObject({ reason: expect.stringContaining('без MAIL_ENCRYPTION_KEY') })
+      expect(
+        await queuedMailTransport(db, { mail: off, mailEncryptionKey: randomBytes(KEY_BYTES) }),
+      ).toMatchObject({ reason: expect.stringContaining('MAIL_ENCRYPTION_KEY сменился') })
     } finally {
       await close()
     }

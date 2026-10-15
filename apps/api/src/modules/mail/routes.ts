@@ -7,6 +7,7 @@ import { type AuthEnv, forbidden, notFound, requireOwner } from '../../auth/midd
 import type { Db } from '../../db/client'
 import { checkStale, conflict, mailSettingsLocked } from '../../errors'
 import { createCheckTokens } from '../../mail/check-token'
+import { localLinkWarning } from '../../mail/link-warning'
 import { describeMailer } from '../../mail/mailer'
 import { outboxRepo } from '../../mail/outbox'
 import type { MailRuntime } from '../../mail/runtime'
@@ -63,11 +64,14 @@ export function mailRoutes({
   mail,
   passwords,
   log,
+  adminUrl,
 }: {
   db: Db
   mail: MailDeps
   passwords: PasswordConfirmations
   log: (message: string) => void
+  /** Адрес админки: на него ведут ссылки из писем — предупредить, если это localhost */
+  adminUrl: string
 }) {
   const outbox = outboxRepo(db)
   const { runtime } = mail
@@ -79,12 +83,20 @@ export function mailRoutes({
   return (
     new Hono<AuthEnv>()
       .use(requireOwner(OWNER_ONLY))
-      .get('/', (c) =>
-        c.json(
-          { status: runtime.status(), settings: mail.settings, templates: mailTemplateList() },
+      // linkWarning — ссылки из писем по SMTP ведут на localhost (mail/link-warning.ts). По
+      // нынешнему состоянию: SMTP могли задать в админке уже после старта API
+      .get('/', (c) => {
+        const status = runtime.status()
+        return c.json(
+          {
+            status,
+            settings: mail.settings,
+            linkWarning: localLinkWarning(adminUrl, status),
+            templates: mailTemplateList(),
+          },
           200,
-        ),
-      )
+        )
+      })
 
       // Настройки SMTP без пароля: откуда они, можно ли менять и почему нет
       .get('/smtp', async (c) => c.json(await smtpView(db, runtime), 200))

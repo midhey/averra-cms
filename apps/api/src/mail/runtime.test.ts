@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { aesGcmSecretBox, KEY_BYTES } from '../crypto/aes-gcm'
 import { createDb, type Db } from '../db/client'
 import { migrateDb } from '../db/migrate'
@@ -208,6 +208,69 @@ describe('почта процесса', () => {
     expect(smtp.created[0]?.mailer.closed).toBe(true)
     expect(await mail.mailer()).toBe(fallback)
     expect(mail.source()).toBe('none')
+  })
+
+  it('перечитать настройки после коммита не вышло — смена не теряется, прежний SMTP не работает, mailer() пробует снова', async () => {
+    await saveSettings()
+    const failures: string[] = []
+    const {
+      runtime: mail,
+      smtp,
+      fallback,
+    } = runtime({
+      logError: (message) => failures.push(message),
+    })
+    await mail.reload()
+    expect(await mail.mailer()).toBe(smtp.created[0]?.mailer)
+    try {
+      // Удаление закоммичено, а первое же чтение настроек после него (reload) падает
+      const result = await mail.exclusive(async () => {
+        await db.delete(mailSettings)
+        vi.spyOn(db, 'select').mockImplementationOnce(() => {
+          throw new Error('база недоступна')
+        })
+        return 'removed'
+      })
+      // Смена прошла: exclusive её не прячет за ошибкой пересборки
+      expect(result).toBe('removed')
+      expect(failures).toEqual([expect.stringContaining('не смог перечитать настройки почты')])
+      // Удалённый SMTP больше не отправляет: пока настройки не перечитаны, почта на паузе
+      expect(smtp.created[0]?.mailer.closed).toBe(true)
+      expect(mail.status()).toMatchObject({
+        enabled: false,
+        reason: expect.stringContaining('не смог перечитать настройки почты'),
+      })
+      // Обработчик спрашивает провайдера — рантайм перечитывает настройки сам
+      expect(await mail.mailer()).toBe(fallback)
+      expect(mail.status()).toEqual({ enabled: true, provider: fallback.info })
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('перечитать снова не вышло — почта остаётся на паузе, а не на прежнем провайдере', async () => {
+    const { runtime: mail, fallback } = runtime()
+    await mail.reload()
+    expect(await mail.mailer()).toBe(fallback)
+    try {
+      // Сохранили SMTP, а перечитать не вышло ни после коммита, ни при следующем запросе
+      await mail.exclusive(async () => {
+        await saveSettings()
+        vi.spyOn(db, 'select').mockImplementationOnce(() => {
+          throw new Error('база недоступна')
+        })
+      })
+      vi.spyOn(db, 'select').mockImplementationOnce(() => {
+        throw new Error('база всё ещё недоступна')
+      })
+      // Письма не уходят прежним провайдером (почтой по умолчанию) мимо новых настроек
+      expect(await mail.mailer()).toBeUndefined()
+      expect(mail.status()).toMatchObject({ enabled: false })
+      // База ожила — следующий запрос провайдера находит новые настройки
+      expect((await mail.mailer())?.info).toMatchObject({ kind: 'smtp', host: 'smtp.example.ru' })
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 
   it('сбой внутри смены не блокирует обработчик', async () => {

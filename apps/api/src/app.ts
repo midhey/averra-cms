@@ -94,7 +94,7 @@ export function createApp(deps: AppDeps) {
     .route('/media', mediaFilesRoutes(deps))
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
-    .route('/mail', mailRoutes({ db, mail, passwords, log }))
+    .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 

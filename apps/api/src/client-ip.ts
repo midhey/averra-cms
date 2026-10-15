@@ -1,5 +1,5 @@
 import type { Http2Bindings, HttpBindings } from '@hono/node-server'
-import { isLoopbackHost } from './config'
+import { isLoopbackHost } from './loopback'
 
 // Что делать с запросом до приложения, зная адрес соединения. Отдельно от index.ts,
 // чтобы проверить тестом: index.ts при импорте поднимает сервер и открывает базу
