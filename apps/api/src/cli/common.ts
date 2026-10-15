@@ -3,10 +3,11 @@ import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import { setupZodMessages } from '@averra/schema'
 import { z } from 'zod'
 import { createAuth } from '../auth/auth'
-import { isLoopbackHost, loadConfig } from '../config'
-import { createDb } from '../db/client'
+import { isLoopbackHost, loadConfig, type MailConfig } from '../config'
+import { createDb, type Db } from '../db/client'
 import { DbLockedError, lockDb } from '../db/lock'
 import { migrateDb } from '../db/migrate'
+import { mailSettingsRepo } from '../mail/settings'
 
 // Общее для команд терминала (pnpm user:create, token:create…): аргументы, скрытый ввод
 // пароля и открытие базы. Команды работают с базой напрямую, как API, а не через HTTP:
@@ -158,4 +159,19 @@ export function inviteLinkNotice(adminUrl: string, transport: string) {
     )
   }
   return lines
+}
+
+/**
+ * Как уйдёт письмо, которое команда кладёт в очередь (приглашение). Решило окружение — по нему;
+ * иначе SMTP из админки, если он там задан (команда открывает базу, а пароль ей не нужен — письмо
+ * отправит API); иначе вариант по умолчанию: файловый ящик в разработке или выключено
+ */
+export async function queuedMailTransport(
+  db: Db,
+  mail: MailConfig,
+): Promise<{ transport: 'smtp' | 'file' } | { transport: 'off'; reason: string }> {
+  if (!mail.fromEnv && (await mailSettingsRepo(db).get())) return { transport: 'smtp' }
+  return mail.transport === 'off'
+    ? { transport: 'off', reason: mail.reason }
+    : { transport: mail.transport }
 }

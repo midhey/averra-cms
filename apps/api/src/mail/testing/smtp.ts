@@ -1,54 +1,12 @@
+/// <reference path="./smtp-server.d.ts" />
 import type { AddressInfo } from 'node:net'
-import { generate } from 'selfsigned'
 import { SMTPServer } from 'smtp-server'
 
+export { createTestCa, issueServerCert, type TestCa } from './certs'
+
 // Настоящий SMTP-сервер для тестов: на свободном порту 127.0.0.1, с сертификатом от своего
-// тестового CA. Клиент доверяет этому CA только явно — параметром ca у smtpMailer
-
-export type TestCa = { key: string; cert: string }
-
-const yearFromNow = () => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-
-/** Тестовый корневой сертификат. Каждый вызов — новый CA: «чужой» для сертификатов другого */
-export async function createTestCa(name = 'Averra CMS Test CA'): Promise<TestCa> {
-  const pems = await generate([{ name: 'commonName', value: name }], {
-    keyType: 'ec',
-    algorithm: 'sha256',
-    notAfterDate: yearFromNow(),
-    extensions: [
-      { name: 'basicConstraints', cA: true, critical: true },
-      { name: 'keyUsage', keyCertSign: true, cRLSign: true, critical: true },
-    ],
-  })
-  return { key: pems.private, cert: pems.cert }
-}
-
-/**
- * Сертификат сервера, подписанный CA. По умолчанию — на localhost и 127.0.0.1; с другим
- * именем — чтобы проверить, что сертификат от доверенного CA, но на чужое имя, не принимается
- */
-export async function issueServerCert(ca: TestCa, name = 'localhost') {
-  const altNames =
-    name === 'localhost'
-      ? [
-          { type: 2 as const, value: 'localhost' },
-          { type: 7 as const, ip: '127.0.0.1' },
-        ]
-      : [{ type: 2 as const, value: name }]
-  const pems = await generate([{ name: 'commonName', value: name }], {
-    keyType: 'ec',
-    algorithm: 'sha256',
-    notAfterDate: yearFromNow(),
-    ca,
-    extensions: [
-      { name: 'basicConstraints', cA: false },
-      { name: 'keyUsage', digitalSignature: true, critical: true },
-      { name: 'extKeyUsage', serverAuth: true },
-      { name: 'subjectAltName', altNames },
-    ],
-  })
-  return { key: pems.private, cert: pems.cert }
-}
+// тестового CA. Клиент доверяет этому CA только явно — параметром ca у smtpMailer (тесты API)
+// или через NODE_EXTRA_CA_CERTS у отдельного процесса API (e2e, см. e2e/scripts/smtp-certs.ts)
 
 /** Что получил сервер */
 export type ReceivedMail = {
@@ -68,6 +26,8 @@ export type TestSmtpServerOptions = {
   users?: Record<string, string>
   /** Свой ответ на неверный пароль: тест проверяет, что пароль из него маскируется */
   authError?: (password: string) => string
+  /** Порт. По умолчанию свободный; e2e слушает настоящий 587: настройки в админке пускают только 465 и 587 */
+  port?: number
 }
 
 export async function startTestSmtpServer({
@@ -76,6 +36,7 @@ export async function startTestSmtpServer({
   starttls = true,
   users = { 'noreply@averra.test': 'smtp-secret-password' },
   authError = () => 'Неверный логин или пароль',
+  port: listenPort = 0,
 }: TestSmtpServerOptions) {
   const received: ReceivedMail[] = []
   const logins: { username: string; secure: boolean }[] = []
@@ -111,7 +72,14 @@ export async function startTestSmtpServer({
   })
   // Обрыв соединения клиентом (тест отказа TLS) — не ошибка теста
   server.on('error', () => {})
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve, reject) => {
+    // Занятый порт (e2e слушает 587) — понятная ошибка, а не тихо зависший тест
+    server.server.once('error', reject)
+    server.listen(listenPort, '127.0.0.1', () => {
+      server.server.off('error', reject)
+      resolve()
+    })
+  })
   const { port } = server.server.address() as AddressInfo
   return {
     port,

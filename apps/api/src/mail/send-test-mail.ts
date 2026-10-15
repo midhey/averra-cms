@@ -5,6 +5,14 @@ import { diagnoseSmtp, type SmtpOptions } from './smtp-mailer'
 import { renderMail } from './templates'
 
 /**
+ * SMTP из админки команда не видит: базу она не открывает, чтобы работать и при запущенном API.
+ * Его проверяет та же диагностика — кнопка «Проверить подключение» на странице «Почта»
+ */
+export const ADMIN_SMTP_NOTE =
+  'Команда проверяет только почту из окружения (SMTP_*). SMTP, заданный в админке, проверяет кнопка ' +
+  '«Проверить подключение» на странице «Почта»: команда не открывает базу, чтобы работать и при запущенном API'
+
+/**
  * Проверочное письмо для pnpm mail:test — напрямую, мимо очереди и базы. Для SMTP — по шагам
  * (DNS, соединение, TLS, вход, отправка), каждый шаг печатается сразу. Возвращает, ушло ли письмо.
  * Пароль не печатается: сообщения шагов проходят maskSecrets
@@ -15,6 +23,8 @@ export async function sendTestMail(
   print: (line: string) => void,
   options: SmtpOptions = {},
 ) {
+  // Окружение почту не решало — значит, SMTP может быть задан в админке, а его команда не видит
+  if (!mail.fromEnv) print(ADMIN_SMTP_NOTE)
   if (mail.transport === 'off') {
     print(mail.reason)
     return false

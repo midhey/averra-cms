@@ -3,8 +3,10 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import { type Auth, RESET_REQUESTS_PER_IP } from './auth/auth'
+import { createPasswordConfirmation } from './auth/confirm-password'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
+import { errorForLog } from './log-error'
 import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
@@ -29,7 +31,10 @@ export type AppDeps = {
   images: ImageProcessor
   /** Самый большой файл медиатеки в байтах */
   mediaMaxBytes: number
-  /** Почта: состояние без секретов и очередь. Сам Mailer живёт в обработчике (index.ts) */
+  /**
+   * Почта: почта процесса (состояние без секретов, настройки SMTP из админки, проверка
+   * подключения) и очередь. Провайдера берёт обработчик очереди (index.ts)
+   */
   mail: MailDeps
   /** Адрес админки: из него собираются ссылки в письмах (приглашение, сброс пароля) */
   adminUrl: string
@@ -54,6 +59,10 @@ export function createApp(deps: AppDeps) {
     }),
     byEmail: createRateLimiter(RESET_REQUESTS_PER_EMAIL),
   }
+  // Один счётчик неудач на все пути, которыми вошедший проверяет свой пароль по HTTP:
+  // повторный пароль для настроек почты и смена пароля. Двух счётчиков хватило бы на вдвое
+  // больший перебор
+  const passwords = createPasswordConfirmation(auth)
   const app = new Hono<AuthEnv>()
     .use(logger(log))
     .basePath('/api')
@@ -70,7 +79,14 @@ export function createApp(deps: AppDeps) {
     })
     .route(
       '/',
-      authRoutes({ auth, mail, resetLimits, resetResponseMs: deps.resetResponseMs ?? 300 }),
+      authRoutes({
+        auth,
+        mail,
+        passwords,
+        trustedOrigins,
+        resetLimits,
+        resetResponseMs: deps.resetResponseMs ?? 300,
+      }),
     )
     .route('/sites', sitesRoutes({ db }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
@@ -78,7 +94,7 @@ export function createApp(deps: AppDeps) {
     .route('/media', mediaFilesRoutes(deps))
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
-    .route('/mail', mailRoutes({ db, mail }))
+    .route('/mail', mailRoutes({ db, mail, passwords, log }))
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 
@@ -86,7 +102,8 @@ export function createApp(deps: AppDeps) {
     if (err instanceof HTTPException) {
       return c.json({ error: { code: 'http_error', message: err.message } }, err.status)
     }
-    console.error(err)
+    // Ошибка запроса к базе — без параметров: в них бывают секреты (log-error.ts)
+    console.error(errorForLog(err))
     return c.json({ error: { code: 'internal', message: 'Внутренняя ошибка сервера' } }, 500)
   })
 

@@ -10,9 +10,16 @@ export type OutboxSettings = {
   retentionDays: number
 }
 
+/**
+ * Откуда брать провайдера: настройки SMTP меняют в админке без перезапуска API, поэтому
+ * обработчик спрашивает нынешнего перед каждым письмом. undefined — почта выключилась
+ */
+export type MailerSource = () => Promise<Mailer | undefined>
+
 export type ProcessOptions = OutboxSettings & {
   db: Db
-  mailer: Mailer
+  /** Провайдер или откуда его брать перед каждым письмом (MailRuntime.mailer) */
+  mailer: Mailer | MailerSource
   now?: () => Date
   /** Сколько писем брать за раз */
   batchSize?: number
@@ -50,6 +57,8 @@ export type ProcessResult = {
   skipped: number
   /** Сломался сервер (DNS, соединение, TLS, вход): остальные письма отпущены, обработчику пора выждать */
   serverDown: boolean
+  /** Почта выключилась посреди прохода: письма, до которых не дошло, отпущены */
+  mailOff: boolean
   /** Проход прерван сбоем базы: письмо ушло, а записать это не вышло */
   aborted: boolean
 }
@@ -77,8 +86,10 @@ export async function processOutbox({
     failed: 0,
     skipped: 0,
     serverDown: false,
+    mailOff: false,
     aborted: false,
   }
+  const currentMailer = typeof mailer === 'function' ? mailer : async () => mailer
   await repo.failStale({ now: now(), maxAttempts })
   await repo.expireLinks(now())
   const batch = await repo.claimDue({ now: now(), limit: batchSize, maxAttempts })
@@ -98,6 +109,15 @@ export async function processOutbox({
   for (const [index, mail] of batch.entries()) {
     if (stopped()) {
       // Остановка: письма пачки, до которых не дошло, отпускаем сразу, а не через пять минут аренды
+      await releaseRest(batch.slice(index))
+      break
+    }
+    // Провайдер — нынешний, на каждое письмо: настройки могли поменять, пока шла пачка. Пока
+    // идёт смена настроек, ждём её конца (MailRuntime.exclusive): письмо, которое легло в очередь
+    // вместе с новыми настройками, уйдёт уже по ним
+    const sender = await currentMailer()
+    if (!sender) {
+      result.mailOff = true
       await releaseRest(batch.slice(index))
       break
     }
@@ -128,7 +148,7 @@ export async function processOutbox({
         throw new MailSendError(`Шаблона «${mail.template}» больше нет`, true)
       }
       const rendered = renderMail(template.data, mail.data)
-      ;({ messageId } = await mailer.send({ to: mail.recipient, ...rendered }))
+      ;({ messageId } = await sender.send({ to: mail.recipient, ...rendered }))
     } catch (error) {
       const permanent =
         error instanceof MailDataError || (error instanceof MailSendError && error.permanent)
@@ -170,8 +190,11 @@ export async function processOutbox({
 }
 
 export type MailWorkerOptions = Omit<ProcessOptions, 'stopped' | 'mailer'> & {
-  /** Провайдер. Без него (почта выключена) обработчик писем не шлёт, а только чистит очередь */
-  mailer?: Mailer
+  /**
+   * Провайдер или откуда его брать (MailRuntime.mailer). Без него (почта выключена) обработчик
+   * писем не шлёт, а только чистит очередь
+   */
+  mailer?: Mailer | MailerSource
   /** Как часто смотреть в очередь, мс */
   intervalMs?: number
   /** Как часто чистить старые письма, мс */
@@ -211,6 +234,9 @@ export function startMailWorker({
   let lastCleanup = Number.NEGATIVE_INFINITY
   // Сколько проходов подряд сломался сервер: от этого растёт пауза
   let serverFailures = 0
+  // С каким провайдером был прошлый круг: сменили настройки — пауза после сбоя сервера не в счёт
+  let lastMailer: Mailer | undefined
+  const currentMailer: MailerSource = typeof mailer === 'function' ? mailer : async () => mailer
 
   /** Один круг. Возвращает паузу до следующего */
   async function tick() {
@@ -228,11 +254,20 @@ export function startMailWorker({
           if (count > 0) log(`Удалено старых записей (${what}): ${count}`)
         }
       }
-      if (!mailer) return intervalMs
+      const current = await currentMailer()
+      if (current !== lastMailer) {
+        lastMailer = current
+        serverFailures = 0
+      }
+      if (!current) return intervalMs
       // Полная пачка — в очереди, скорее всего, есть ещё: берём сразу следующую
       const batchSize = options.batchSize ?? 10
       while (!stopped) {
-        const result = await processOutbox({ ...options, mailer, stopped: () => stopped })
+        const result = await processOutbox({
+          ...options,
+          mailer: currentMailer,
+          stopped: () => stopped,
+        })
         if (result.serverDown) {
           serverFailures += 1
           const pause = Math.min(
@@ -245,7 +280,7 @@ export function startMailWorker({
           return pause
         }
         if (result.sent > 0) serverFailures = 0
-        if (result.aborted || result.claimed < batchSize) break
+        if (result.aborted || result.mailOff || result.claimed < batchSize) break
       }
     } catch (error) {
       // Сбой базы не должен ронять API: обработчик попробует снова на следующем круге

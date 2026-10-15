@@ -1,9 +1,10 @@
-import { ForgotPassword, ResetPasswordToken } from '@averra/schema'
+import { CurrentPassword, ForgotPassword, NewPassword, ResetPasswordToken } from '@averra/schema'
 import { getIP } from 'better-auth/api'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import type { Auth } from '../../auth/auth'
-import { type AuthEnv, notFound } from '../../auth/middleware'
+import { type Auth, CLOSED_AUTH_PATHS } from '../../auth/auth'
+import type { PasswordConfirmations } from '../../auth/confirm-password'
+import { type AuthEnv, forbidden, notFound, unauthorized } from '../../auth/middleware'
 import { mailDisabled } from '../../errors'
 import type { RateLimiter } from '../../rate-limit'
 import { validate } from '../../validate'
@@ -81,6 +82,13 @@ type AuthRoutesDeps = {
   auth: Auth
   mail: MailDeps
   /**
+   * Счётчик неудач своего пароля — общий с подтверждением пароля у настроек почты: смена пароля
+   * проверяет текущий пароль и не должна быть вторым путём его подбора
+   */
+  passwords: PasswordConfirmations
+  /** Откуда принимаем изменяющие запросы с cookie: адреса админки и самого API */
+  trustedOrigins: readonly string[]
+  /**
    * Лимиты запросов сброса: с одного IP и на один адрес. IP проверяется первым: адрес
    * попадает в счётчик, только если IP-лимит запрос пропустил, — иначе один клиент, перебирая
    * адреса, наполнял бы счётчик адресов без ограничения
@@ -112,19 +120,67 @@ function tooManyResets(whose: string, retryAfterMs: number) {
 const ResetPasswordBody = z.strictObject({ token: z.string(), newPassword: z.string() })
 
 /**
- * Пути сброса пароля, которые до Better Auth не пускаем мимо наших обёрток: со слешем в конце,
- * двойным слешем, в другом регистре, закодированные (%2F, %2D) и старое имя forget-password.
- * Иначе запрос обошёл бы проверки обёрток, а его счёт в лимите Better Auth разошёлся бы с нашим
+ * Тело смены своего пароля. revokeOtherSessions не принимаем: остальные входы пользователя
+ * завершаются всегда, как после сброса пароля (если пароль увели, увели и сессию)
  */
-function isResetPathVariant(url: string) {
+const ChangePasswordBody = z.strictObject({
+  currentPassword: CurrentPassword,
+  newPassword: NewPassword,
+})
+
+/**
+ * Пути Better Auth, которые до него не доходят мимо наших обёрток: сброс и смена пароля (и старое
+ * имя forget-password) — в вариантах написания: со слешем в конце, двойным слешем, в другом
+ * регистре, закодированные (%2F, %2D). Иначе запрос обошёл бы проверки обёрток и общий счётчик
+ * неудач пароля, а его счёт в лимите Better Auth разошёлся бы с нашим. Закрытые пути
+ * (CLOSED_AUTH_PATHS) — в любом написании: Better Auth сверяет их только буква в букву
+ */
+const GUARDED_AUTH_PATHS = new RegExp(
+  `(${[
+    'request-password-reset',
+    'reset-password',
+    'forget-password',
+    'change-password',
+    ...CLOSED_AUTH_PATHS.map((path) => path.slice(1)),
+  ].join('|')})`,
+  'i',
+)
+
+function isGuardedPathVariant(url: string) {
   let path = new URL(url).pathname
   try {
     path = decodeURIComponent(path)
   } catch {
     return true
   }
-  return /(request-password-reset|reset-password|forget-password)/i.test(path)
+  return GUARDED_AUTH_PATHS.test(path)
 }
+
+/** Better Auth отказал из-за неверного текущего пароля (а не из-за нового пароля, лимита, Origin) */
+async function isWrongPassword(res: Response) {
+  if (res.status !== 400) return false
+  const body = BetterAuthError.safeParse(
+    await res
+      .clone()
+      .json()
+      .catch(() => null),
+  )
+  return body.data?.code === 'INVALID_PASSWORD'
+}
+
+/** Ответ Better Auth с нашим телом: статус, cookie и прочие заголовки — его */
+function withBody(res: Response, body: unknown) {
+  const headers = new Headers(res.headers)
+  headers.set('content-type', 'application/json')
+  headers.delete('content-length')
+  return new Response(JSON.stringify(body), { status: res.status, headers })
+}
+
+/** Что отвечаем на удачную смену пароля. Токен новой сессии — только в httpOnly-cookie */
+export const PASSWORD_CHANGED = {
+  status: 'changed',
+  message: 'Пароль изменён. Остальные входы в админку завершены',
+} as const
 
 /** Запрос в Better Auth с нашим телом вместо присланного; адрес — без строки запроса */
 function withJsonBody(req: Request, body: unknown) {
@@ -138,7 +194,14 @@ function withJsonBody(req: Request, body: unknown) {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export function authRoutes({ auth, mail, resetLimits, resetResponseMs }: AuthRoutesDeps) {
+export function authRoutes({
+  auth,
+  mail,
+  passwords,
+  trustedOrigins,
+  resetLimits,
+  resetResponseMs,
+}: AuthRoutesDeps) {
   return (
     new Hono<AuthEnv>()
       // Кто вошёл: имя для шапки админки и роль. Токен в админку не ходит, но ответ
@@ -156,14 +219,15 @@ export function authRoutes({ auth, mail, resetLimits, resetResponseMs }: AuthRou
 
       // Можно ли сбросить пароль по почте: экран «Забыли пароль?» говорит это заранее.
       // Открыт без входа (auth/middleware.ts), подробностей настройки почты не отдаёт
-      .get('/password-reset', (c) => c.json({ available: mail.status.enabled }, 200))
+      .get('/password-reset', (c) => c.json({ available: mail.runtime.status().enabled }, 200))
 
       // «Забыли пароль?» Перед Better Auth: своя схема (только почта, без redirectTo), почта
       // выключена — 503 для любого адреса, лимиты по IP и на адрес, одинаковый ответ в одно время.
       // Письмо ставит в очередь sendResetPassword (auth/auth.ts)
       .post('/auth/request-password-reset', validate('json', ForgotPassword), async (c) => {
         const started = Date.now()
-        if (!mail.status.enabled) return c.json(mailDisabled(mail.status.reason), 503)
+        const status = mail.runtime.status()
+        if (!status.enabled) return c.json(mailDisabled(status.reason), 503)
         const { email } = c.req.valid('json')
         // IP — так же, как его видит лимит Better Auth (X-Forwarded-For ставит index.ts).
         // Не нашли — общий счётчик, как у Better Auth: лучше общий лимит, чем никакого
@@ -207,10 +271,40 @@ export function authRoutes({ auth, mail, resetLimits, resetResponseMs }: AuthRou
         return asApiError(await auth.handler(withJsonBody(c.req.raw, { token, newPassword })))
       })
 
+      // Смена своего пароля (Better Auth, /change-password). Текущий пароль Better Auth проверяет
+      // под общим счётчиком неудач (auth/confirm-password.ts) — тем же, что у повторного пароля
+      // для настроек почты: иначе уведённая сессия подбирала бы пароль здесь, с лимитом только
+      // по IP. Остальные входы пользователя завершаются, этот получает новую cookie
+      .post('/auth/change-password', validate('json', ChangePasswordBody), async (c) => {
+        // Как у всех наших изменяющих маршрутов с cookie (auth/middleware.ts): только из админки.
+        // Better Auth проверяет Origin и сам, но уже внутри попытки, а в тестах (isTest) — никогда
+        const origin = c.req.header('origin')
+        if (!origin || !trustedOrigins.includes(origin)) {
+          return c.json(forbidden('Запрос пришёл не из админки'), 403)
+        }
+        const { currentPassword, newPassword } = c.req.valid('json')
+        // Кто вошёл — без продления сессии: если пора, её продлит сам Better Auth в ответе
+        const session = await auth.api.getSession({
+          headers: c.req.raw.headers,
+          query: { disableRefresh: true },
+        })
+        if (!session) return c.json(unauthorized(), 401)
+        const outcome = await passwords.attempt(session.user.id, async () => {
+          const res = await auth.handler(
+            withJsonBody(c.req.raw, { currentPassword, newPassword, revokeOtherSessions: true }),
+          )
+          return { wrongPassword: await isWrongPassword(res), result: res }
+        })
+        if (!outcome.ok) return c.json(outcome.body, outcome.status)
+        const res = await asApiError(outcome.result)
+        return res.ok ? withBody(res, PASSWORD_CHANGED) : res
+      })
+
       // Вход, выход и сессии — Better Auth (/api/auth/sign-in/email, /api/auth/sign-out и т.д.).
-      // Сброс пароля — только через обёртки выше: варианты их путей сюда не пропускаем
+      // Сброс и смена пароля — только через обёртки выше, а закрытые пути (CLOSED_AUTH_PATHS) —
+      // никак: варианты их написания сюда не пропускаем
       .on(['GET', 'POST'], '/auth/*', async (c) => {
-        if (isResetPathVariant(c.req.url)) return c.json(notFound('Не найдено'), 404)
+        if (isGuardedPathVariant(c.req.url)) return c.json(notFound('Не найдено'), 404)
         return asApiError(await auth.handler(c.req.raw))
       })
   )

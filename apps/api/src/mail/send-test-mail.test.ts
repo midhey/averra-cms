@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { MailConfig } from '../config'
 import type { FileMail } from './file-mailer'
-import { sendTestMail } from './send-test-mail'
+import { ADMIN_SMTP_NOTE, sendTestMail } from './send-test-mail'
 import { createTestCa, issueServerCert, startTestSmtpServer, type TestCa } from './testing/smtp'
 
 // pnpm mail:test без запуска процесса: то же, что делает команда, но с явным CA тестового сервера
 
-const common = { maxAttempts: 8, retentionDays: 30 }
+const common = { maxAttempts: 8, retentionDays: 30, fromEnv: false }
 const from = { address: 'noreply@averra.test', name: 'Averra CMS' }
 
 let ca: TestCa
@@ -39,7 +39,18 @@ describe('pnpm mail:test', () => {
       reason: 'Почта не настроена: задай SMTP_HOST…',
     }
     expect(await sendTestMail(mail, 'anna@example.ru', print)).toBe(false)
-    expect(lines).toEqual(['Почта не настроена: задай SMTP_HOST…'])
+    // Окружение почту не решало: SMTP может быть в админке — команда говорит, где его проверить
+    expect(lines).toEqual([ADMIN_SMTP_NOTE, 'Почта не настроена: задай SMTP_HOST…'])
+    expect(ADMIN_SMTP_NOTE).toContain('«Проверить подключение»')
+
+    const explicit = printer()
+    const off: MailConfig = {
+      ...mail,
+      fromEnv: true,
+      reason: 'Почта выключена (MAIL_TRANSPORT=off)',
+    }
+    expect(await sendTestMail(off, 'anna@example.ru', explicit.print)).toBe(false)
+    expect(explicit.lines).toEqual(['Почта выключена (MAIL_TRANSPORT=off)'])
   })
 
   it('файловый ящик — письмо «Проверка почты» в папке и путь к ней', async () => {
@@ -63,6 +74,7 @@ describe('pnpm mail:test', () => {
     const { lines, print } = printer()
     const mail: MailConfig = {
       ...common,
+      fromEnv: true,
       transport: 'smtp',
       host: 'localhost',
       port: smtp.port,

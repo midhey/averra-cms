@@ -407,3 +407,73 @@ describe('миграция 0008_user_invitations', () => {
     expect(rows).toEqual([])
   })
 })
+
+describe('миграция 0009_mail_settings', () => {
+  const migrations = [
+    '0000_init',
+    '0001_page_published_title',
+    '0002_page_published_with_title',
+    '0003_auth',
+    '0004_page_revisions',
+    '0005_media',
+    '0006_mail_outbox',
+    '0007_mail_outbox_data_lifetime',
+    '0008_user_invitations',
+    '0009_mail_settings',
+  ]
+  // Запись в формате aesGcmSecretBox: v1.<версия ключа>.<iv>.<тег>.<шифротекст>
+  const sealed = `v1.0123456789abcdef.${'A'.repeat(16)}.${'B'.repeat(22)}.Q0lQSEVS`
+
+  const insert = (values: { port?: number; security?: string; password?: string; site?: string }) =>
+    `INSERT INTO mail_settings (site_id, host, port, security, username, password_encrypted, from_address, from_name)
+     VALUES (${values.site ? `'${values.site}'` : 'NULL'}, 'smtp.example.ru', ${values.port ?? 465},
+       '${values.security ?? 'tls'}', 'noreply@example.ru', '${values.password ?? sealed}',
+       'noreply@example.ru', 'Averra CMS')`
+
+  it('пускает только 465 с TLS и 587 со STARTTLS и только зашифрованный пароль', async () => {
+    client = new PGlite()
+    for (const name of migrations) await applyMigration(client, name)
+
+    await client.exec(insert({ port: 587, security: 'starttls' }))
+    await client.exec('DELETE FROM mail_settings')
+    for (const [port, security] of [
+      [465, 'starttls'],
+      [587, 'tls'],
+      [25, 'starttls'],
+      [2525, 'tls'],
+      [465, 'none'],
+    ] as const) {
+      await expect(client.exec(insert({ port, security })), `${port} ${security}`).rejects.toThrow(
+        /mail_settings_mode_valid/,
+      )
+    }
+    for (const password of [
+      'smtp-secret-password',
+      'v1.plain-text-password',
+      `v2${sealed.slice(2)}`,
+      `${sealed} `,
+      '',
+    ]) {
+      await expect(client.exec(insert({ password })), password).rejects.toThrow(
+        /mail_settings_password_sealed/,
+      )
+    }
+  })
+
+  it('строка на всю установку одна; на сайт — потом, тоже не больше одной', async () => {
+    client = new PGlite()
+    for (const name of migrations) await applyMigration(client, name)
+    const siteId = '00000000-0000-4000-8000-000000000001'
+    await client.exec(`INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}')`)
+
+    await client.exec(insert({}))
+    await expect(client.exec(insert({}))).rejects.toThrow(/mail_settings_site_unique/)
+    await client.exec(insert({ site: siteId }))
+    await expect(client.exec(insert({ site: siteId }))).rejects.toThrow(/mail_settings_site_unique/)
+
+    // Удалили сайт — его настройки ушли с ним, настройки установки остались
+    await client.exec(`DELETE FROM sites WHERE id = '${siteId}'`)
+    const { rows } = await client.query('SELECT site_id FROM mail_settings')
+    expect(rows).toEqual([{ site_id: null }])
+  })
+})

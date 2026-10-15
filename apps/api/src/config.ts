@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { MailAddress, MailSenderName } from '@averra/schema'
 import { z } from 'zod'
+import { MAIL_OFF_EFFECT } from './mail/mailer'
 
 /**
  * Секрет подписи cookie для разработки и тестов. Он лежит в репозитории, поэтому годится
@@ -28,6 +29,55 @@ export function isDevAuthSecret(secret: string) {
     .replace(/[^a-z0-9]/g, '')
   return DEV_SECRET_MARKERS.some((marker) => normalized.includes(marker))
 }
+
+/**
+ * Ключ шифрования пароля SMTP для разработки и e2e: base64 строки «dev-only-mail-key-not-for-prod!!».
+ * Он лежит в репозитории, поэтому, как и DEV_AUTH_SECRET, годится только для учебного режима:
+ * пароль, зашифрованный им, защищён только для вида
+ */
+export const DEV_MAIL_ENCRYPTION_KEY = 'ZGV2LW9ubHktbWFpbC1rZXktbm90LWZvci1wcm9kISE='
+
+/** Узнаваемые части учебного ключа: в нём самом (как тексте) и в его записи base64 */
+const DEV_MAIL_KEY_MARKERS = ['devonlymailkey', 'notforprod']
+
+const lettersAndDigits = (text: string) =>
+  text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+/** Сколько байт в ключе AES-256 */
+const MAIL_KEY_BYTES = 32
+
+/**
+ * Байты ключа из base64 или base64url, с «=» в конце или без. Пробелы и кавычки по краям
+ * не мешают: так ключ часто приходит из .env. Не base64 — undefined
+ */
+function decodeMailKey(value: string) {
+  const compact = value.trim().replace(/^(["'])(.*)\1$/, '$2')
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(compact)) return undefined
+  return Buffer.from(compact.replaceAll('-', '+').replaceAll('_', '/'), 'base64')
+}
+
+/**
+ * Учебный ключ шифрования или его вариант: с пробелами и кавычками, в другом регистре, в записи
+ * base64url или без «=», его часть, а ещё тот же учебный текст, записанный в base64 иначе. Все они —
+ * публичный ключ из репозитория (ловим небрежность при копировании, как isDevAuthSecret)
+ */
+export function isDevMailKey(value: string) {
+  const normalized = lettersAndDigits(value)
+  const dev = lettersAndDigits(DEV_MAIL_ENCRYPTION_KEY)
+  if (normalized.length >= 16 && (dev.includes(normalized) || normalized.includes(dev))) return true
+  if (DEV_MAIL_KEY_MARKERS.some((marker) => normalized.includes(marker))) return true
+  const decoded = decodeMailKey(value)
+  if (decoded === undefined) return false
+  const text = lettersAndDigits(decoded.toString('latin1'))
+  return DEV_MAIL_KEY_MARKERS.some((marker) => text.includes(marker))
+}
+
+const MAIL_KEY_HINT =
+  '32 случайных байта в base64 (44 символа). Сгенерировать: openssl rand -base64 32 ' +
+  `или node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`
 
 /**
  * Адрес без пути: с ним сравнивается заголовок Origin, а в нём пути не бывает.
@@ -105,9 +155,6 @@ const securityByPort: Record<number, 'tls' | 'starttls'> = {
   25: 'starttls',
 }
 
-/** Что сказать владельцу, когда почта не работает: и в API, и в админке */
-const MAIL_OFF_EFFECT = 'Не работают сброс пароля, приглашения участников и уведомления о заявках'
-
 function checkMail(env: MailEnv, options: ConfigOptions, ctx: z.RefinementCtx) {
   const transport = mailTransportOf(env, options)
   if (transport === 'file' && env.NODE_ENV === 'production') {
@@ -132,9 +179,17 @@ function checkMail(env: MailEnv, options: ConfigOptions, ctx: z.RefinementCtx) {
   }
 }
 
-/** Настройки почты для index.ts и команд. Пароль здесь, но наружу он идёт только в smtpMailer */
+/**
+ * Настройки почты для index.ts и команд. Пароль здесь, но наружу он идёт только в smtpMailer.
+ * fromEnv — окружение решило само (SMTP_HOST или явный MAIL_TRANSPORT): тогда оно главнее
+ * настроек SMTP из админки. Иначе transport — то, что берётся, когда в админке SMTP не задан
+ */
 function mailConfig(env: MailEnv, options: ConfigOptions) {
-  const common = { maxAttempts: env.MAIL_MAX_ATTEMPTS, retentionDays: env.MAIL_RETENTION_DAYS }
+  const common = {
+    maxAttempts: env.MAIL_MAX_ATTEMPTS,
+    retentionDays: env.MAIL_RETENTION_DAYS,
+    fromEnv: env.MAIL_TRANSPORT !== undefined || env.SMTP_HOST !== undefined,
+  }
   const transport = mailTransportOf(env, options)
   const from = { address: env.MAIL_FROM ?? 'noreply@averra.test', name: env.MAIL_FROM_NAME }
   if (transport === 'file') return { ...common, transport, dir: env.MAIL_DIR, from }
@@ -156,9 +211,21 @@ function mailConfig(env: MailEnv, options: ConfigOptions) {
     reason:
       env.MAIL_TRANSPORT === 'off'
         ? `Почта выключена (MAIL_TRANSPORT=off). ${MAIL_OFF_EFFECT}`
-        : 'Почта не настроена: задай SMTP_HOST, SMTP_USER, SMTP_PASSWORD и MAIL_FROM ' +
-          `(см. README, «Почта»). ${MAIL_OFF_EFFECT}`,
+        : 'Почта не настроена: задайте SMTP на странице «Почта» в админке или переменными ' +
+          `SMTP_HOST, SMTP_USER, SMTP_PASSWORD и MAIL_FROM (см. README, «Почта»). ${MAIL_OFF_EFFECT}`,
   }
+}
+
+/**
+ * Ключ шифрования пароля SMTP из админки: свой из MAIL_ENCRYPTION_KEY или, в учебном режиме,
+ * учебный. Вне учебного режима без ключа — undefined: API работает, а SMTP в админке только
+ * для чтения. Варианты учебного ключа вне учебного режима отсекает проверка конфига
+ */
+function mailKeyOf(value: string | undefined, localDev: boolean) {
+  const dev = { key: decodeMailKey(DEV_MAIL_ENCRYPTION_KEY), kind: 'dev' as const }
+  if (value === undefined) return localDev ? dev : { key: undefined, kind: undefined }
+  if (isDevMailKey(value)) return dev
+  return { key: decodeMailKey(value), kind: 'env' as const }
 }
 
 export type MailConfig = ReturnType<typeof mailConfig>
@@ -212,6 +279,14 @@ const envSchema = (options: ConfigOptions) =>
       MAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(8),
       // Через сколько дней удалять отправленные и неотправленные письма: в них персональные данные
       MAIL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+      // Ключ, которым шифруется пароль SMTP из админки (AES-256-GCM): 32 байта в base64.
+      // Отдельный от AUTH_SECRET: утечка одного не даёт другого. Проверка — в superRefine,
+      // чтобы сообщение не печатало значение
+      MAIL_ENCRYPTION_KEY: z.string().optional(),
+      // Только учебный режим (e2e): SMTP из админки подключается к этому порту того же сервера
+      // вместо 465 или 587. Тестовый SMTP-сервер e2e слушает свободный порт: порты ниже 1024
+      // на Linux без root не занять. Вне учебного режима — ошибка конфига
+      DEV_SMTP_CONNECT_PORT: z.coerce.number().int().min(1).max(65535).optional(),
     })
     .superRefine((env, ctx) => {
       if ((env.DEV_OWNER_EMAIL === undefined) !== (env.DEV_OWNER_PASSWORD === undefined)) {
@@ -238,6 +313,37 @@ const envSchema = (options: ConfigOptions) =>
         })
       }
       checkMail(env, options, ctx)
+      // Учебный ключ шифрования — по тем же правилам, что учебный секрет: только учебный режим
+      if (env.MAIL_ENCRYPTION_KEY !== undefined) {
+        if (isDevMailKey(env.MAIL_ENCRYPTION_KEY)) {
+          if (!isLocalDev(env, options)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['MAIL_ENCRYPTION_KEY'],
+              message:
+                'Это учебный ключ шифрования из репозитория или его вариант: он годится только ' +
+                `для разработки на localhost (pnpm dev). Задай свой — ${MAIL_KEY_HINT}`,
+            })
+          }
+        } else if (decodeMailKey(env.MAIL_ENCRYPTION_KEY)?.length !== MAIL_KEY_BYTES) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['MAIL_ENCRYPTION_KEY'],
+            message: `MAIL_ENCRYPTION_KEY — ${MAIL_KEY_HINT}`,
+          })
+        }
+      }
+      // Порт для тестового SMTP — только учебный режим: в проде проверка подключения и отправка
+      // через SMTP из админки ходят лишь на 465 и 587 (сервер не сканер портов)
+      if (env.DEV_SMTP_CONNECT_PORT !== undefined && !isLocalDev(env, options)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['DEV_SMTP_CONNECT_PORT'],
+          message:
+            'DEV_SMTP_CONNECT_PORT — только для разработки и e2e (pnpm dev, флаг --dev, адреса ' +
+            'на localhost). Уберите его: на сервере SMTP из админки ходит только на 465 и 587',
+        })
+      }
       // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория, в том числе
       // с пробелами, кавычками, в другом регистре или с другими разделителями (см. isDevAuthSecret)
       if (
@@ -261,6 +367,7 @@ const envSchema = (options: ConfigOptions) =>
       // Демо-сайт и владелец для разработки — по тому же правилу, что и учебный секрет, а не
       // по одному NODE_ENV: иначе в пустую продовую базу лёг бы опубликованный демо-сайт
       const devSeed = env.NODE_ENV === 'development' && isLocalDev(env, options)
+      const mailKey = mailKeyOf(env.MAIL_ENCRYPTION_KEY, isLocalDev(env, options))
       return {
         ...env,
         AUTH_SECRET,
@@ -280,6 +387,12 @@ const envSchema = (options: ConfigOptions) =>
             ? { email: env.DEV_OWNER_EMAIL, password: env.DEV_OWNER_PASSWORD }
             : undefined,
         mail: mailConfig(env, options),
+        // Ключ шифрования пароля SMTP из админки. Нет — SMTP в админке только для чтения
+        mailEncryptionKey: mailKey.key,
+        // env — свой ключ, dev — учебный из репозитория (только pnpm dev): админка предупредит
+        mailKeyKind: mailKey.kind,
+        // Куда подключается SMTP из админки вместо 465 и 587 — только в учебном режиме (e2e)
+        smtpConnectPort: isLocalDev(env, options) ? env.DEV_SMTP_CONNECT_PORT : undefined,
       }
     })
 

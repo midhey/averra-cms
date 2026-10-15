@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { createDb } from '../db/client'
+import { migrateDb } from '../db/migrate'
+import { mailSettings } from '../db/schema'
 import { MemberRole, NewUser } from '../modules/users/repo'
-import { CliError, check, inviteLinkNotice, run } from './common'
+import { CliError, check, inviteLinkNotice, queuedMailTransport, run } from './common'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -52,5 +55,38 @@ describe('ссылка из письма команды', () => {
   it('ссылку на localhost по настоящей почте не ставит: отказ до записи в базу', () => {
     expect(() => inviteLinkNotice('http://127.0.0.1:5173', 'smtp')).toThrow(CliError)
     expect(() => inviteLinkNotice('http://localhost:5173', 'smtp')).toThrow(/Задай ADMIN_URL/)
+  })
+})
+
+describe('почта для писем команд', () => {
+  const base = { maxAttempts: 8, retentionDays: 30 }
+  const off = { ...base, fromEnv: false, transport: 'off' as const, reason: 'Почта не настроена' }
+
+  it('SMTP из админки — тоже почта: команда не отказывает и не ставит ссылку на localhost', async () => {
+    const { db, close } = createDb()
+    try {
+      await migrateDb(db)
+      expect(await queuedMailTransport(db, off)).toEqual({
+        transport: 'off',
+        reason: 'Почта не настроена',
+      })
+      await db.insert(mailSettings).values({
+        host: 'smtp.example.ru',
+        port: 465,
+        security: 'tls',
+        username: 'noreply@example.ru',
+        passwordEncrypted: `v1.0123456789abcdef.${'A'.repeat(16)}.${'B'.repeat(22)}.Q0lQSEVS`,
+        fromAddress: 'noreply@example.ru',
+        fromName: 'Averra CMS',
+      })
+      expect(await queuedMailTransport(db, off)).toEqual({ transport: 'smtp' })
+      expect(() => inviteLinkNotice('http://localhost:5173', 'smtp')).toThrow(CliError)
+      // Окружение решило само — оно главнее админки
+      expect(
+        await queuedMailTransport(db, { ...off, fromEnv: true, reason: 'MAIL_TRANSPORT=off' }),
+      ).toEqual({ transport: 'off', reason: 'MAIL_TRANSPORT=off' })
+    } finally {
+      await close()
+    }
   })
 })

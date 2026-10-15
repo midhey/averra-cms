@@ -2,6 +2,7 @@ import { MailAddress, MailSubject } from '@averra/schema'
 import { z } from 'zod'
 import { MAIL_FOOTER, mailLayout } from '../layout'
 import { invitationTemplate } from './invitation'
+import { mailSettingsChangedTemplate } from './mail-settings-changed'
 import { mailTestTemplate } from './mail-test'
 import { passwordResetTemplate } from './password-reset'
 
@@ -10,6 +11,7 @@ export const mailTemplates = {
   'mail-test': mailTestTemplate,
   'password-reset': passwordResetTemplate,
   invitation: invitationTemplate,
+  'mail-settings-changed': mailSettingsChangedTemplate,
 } as const
 
 export type MailTemplateId = keyof typeof mailTemplates

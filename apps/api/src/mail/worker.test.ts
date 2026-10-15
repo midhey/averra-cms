@@ -6,7 +6,7 @@ import { mailOutbox } from '../db/schema'
 import { MailSendError } from './mailer'
 import { memoryMailer } from './memory-mailer'
 import { enqueueMail } from './outbox'
-import { type MailWorker, startMailWorker } from './worker'
+import { type MailWorker, processOutbox, startMailWorker } from './worker'
 
 let db: Db
 let close: () => Promise<void>
@@ -167,6 +167,61 @@ describe('обработчик в процессе API', () => {
     worker = startMailWorker({ db, ...settings, intervalMs: 20 })
     await until(async () => (await statusOf(old?.id as string)) === undefined)
     expect(await statusOf(waiting)).toBe('pending')
+  })
+
+  it('провайдер функцией: берётся перед каждым письмом — смена настроек видна посреди пачки', async () => {
+    const first = memoryMailer()
+    const second = memoryMailer()
+    let current = first
+    // Провайдер меняется, пока первое письмо отправляется: как сохранение настроек в админке
+    first.send = ((send) => async (mail) => {
+      const sent = await send(mail)
+      current = second
+      return sent
+    })(first.send.bind(first))
+    await enqueueMail(db, testMail('a@example.ru'), new Date(Date.now() - 2000))
+    await enqueueMail(db, testMail('b@example.ru'), new Date(Date.now() - 1000))
+    const result = await processOutbox({ db, mailer: async () => current, ...settings })
+    expect(result).toMatchObject({ claimed: 2, sent: 2, mailOff: false })
+    expect(first.sent.map((mail) => mail.to)).toEqual(['a@example.ru'])
+    expect(second.sent.map((mail) => mail.to)).toEqual(['b@example.ru'])
+  })
+
+  it('почта выключилась посреди пачки — остальные письма отпущены без траты попытки', async () => {
+    const mailer = memoryMailer()
+    let enabled = true
+    mailer.send = ((send) => async (mail) => {
+      const sent = await send(mail)
+      enabled = false
+      return sent
+    })(mailer.send.bind(mailer))
+    await enqueueMail(db, testMail('a@example.ru'), new Date(Date.now() - 2000))
+    const { id: second } = await enqueueMail(
+      db,
+      testMail('b@example.ru'),
+      new Date(Date.now() - 1000),
+    )
+    const result = await processOutbox({
+      db,
+      mailer: async () => (enabled ? mailer : undefined),
+      ...settings,
+    })
+    expect(result).toMatchObject({ claimed: 2, sent: 1, mailOff: true })
+    expect(await statusOf(second)).toBe('pending')
+    const [row] = await db.select().from(mailOutbox).where(eq(mailOutbox.id, second))
+    expect(row?.attempts).toBe(0)
+  })
+
+  it('обработчик с провайдером функцией: нет провайдера — только чистит, появился — шлёт', async () => {
+    let current: ReturnType<typeof memoryMailer> | undefined
+    const { id } = await enqueueMail(db, testMail())
+    worker = startMailWorker({ db, mailer: async () => current, ...settings, intervalMs: 20 })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(await statusOf(id)).toBe('pending')
+    current = memoryMailer()
+    worker.wake()
+    await until(async () => (await statusOf(id)) === 'sent')
+    expect(current.sent).toHaveLength(1)
   })
 
   it('вместе с очередью чистит и остальное по тому же сроку (приглашения)', async () => {

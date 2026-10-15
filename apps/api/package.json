@@ -4,7 +4,9 @@
   "type": "module",
   "exports": {
     ".": "./src/app.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./testing/certs": "./src/mail/testing/certs.ts",
+    "./testing/smtp": "./src/mail/testing/smtp.ts"
   },
   "devEngines": {
     "runtime": {

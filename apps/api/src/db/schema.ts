@@ -10,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
@@ -355,6 +356,50 @@ export const mailOutbox = pgTable(
     check(
       'mail_outbox_data_lifetime',
       sql`(${table.status} IN ('pending', 'sending') AND ${table.data} IS NOT NULL) OR (${table.status} = 'sent' AND ${table.data} IS NULL) OR ${table.status} = 'failed'`,
+    ),
+  ],
+)
+
+/**
+ * Настройки SMTP, которые владелец задаёт в админке (страница «Почта»). Строка с site_id = NULL —
+ * на всю установку, она одна (уникальность с NULLS NOT DISTINCT). Потом сюда лягут строки сайтов:
+ * свой SMTP у сайта для писем о заявках. SMTP из окружения (SMTP_HOST…) главнее этой таблицы.
+ * Пароль — только зашифрованным (src/crypto), и наружу он не отдаётся никогда (src/mail/settings.ts)
+ */
+export const mailSettings = pgTable(
+  'mail_settings',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    // Чьи настройки: NULL — вся установка. Пока код читает и пишет только эту строку
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    host: text().notNull(),
+    port: integer().notNull(),
+    security: text({ enum: ['tls', 'starttls'] }).notNull(),
+    username: text().notNull(),
+    // AES-256-GCM: v1.<версия ключа>.<iv>.<тег>.<шифротекст>. Формат держит CHECK ниже
+    passwordEncrypted: text().notNull(),
+    fromAddress: text().notNull(),
+    fromName: text().notNull(),
+    // Когда для этих настроек прошла проверка подключения. NULL — сохранены без проверки
+    verifiedAt: timestamp({ withTimezone: true }),
+    // Кто поменял последним. Удалили пользователя — настройки остаются
+    updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Одна строка на установку (site_id NULL) и, потом, не больше одной на сайт
+    unique('mail_settings_site_unique').on(table.siteId).nullsNotDistinct(),
+    // Только TLS сразу на 465 или обязательный STARTTLS на 587: других режимов нет
+    check(
+      'mail_settings_mode_valid',
+      sql`(${table.port} = 465 AND ${table.security} = 'tls') OR (${table.port} = 587 AND ${table.security} = 'starttls')`,
+    ),
+    // Пароль только зашифрованным: открытый пароль база не примет даже по ошибке в коде.
+    // [.] — точка как символ: обратный слеш в шаблонной строке JS потерялся бы
+    check(
+      'mail_settings_password_sealed',
+      sql`${table.passwordEncrypted} ~ '^v1[.][0-9a-f]{16}[.][A-Za-z0-9_-]{16}[.][A-Za-z0-9_-]{22}[.][A-Za-z0-9_-]+$'`,
     ),
   ],
 )

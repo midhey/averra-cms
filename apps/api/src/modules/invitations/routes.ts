@@ -56,7 +56,9 @@ function tooManyInvites(message: string, retryAfterMs: number) {
 /** Без почты приглашение бессмысленно: ссылку человек не получит. Честно отвечаем 503 */
 const requireMail = (mail: MailDeps) =>
   createMiddleware<AuthEnv>(async (c, next) => {
-    if (!mail.status.enabled) return c.json(mailDisabled(mail.status.reason), 503)
+    // Состояние — нынешнее: SMTP могли настроить или сломать в админке без перезапуска API
+    const status = mail.runtime.status()
+    if (!status.enabled) return c.json(mailDisabled(status.reason), 503)
     return next()
   })
 

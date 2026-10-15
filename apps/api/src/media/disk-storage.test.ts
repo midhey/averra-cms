@@ -16,8 +16,13 @@ const mediaId = randomUUID()
 const bytes = new Uint8Array([1, 2, 3, 4])
 
 describe('хранилище на диске', () => {
-  it('корень не создаётся, пока ничего не записали', () => {
-    expect(existsSync(root)).toBe(false)
+  it('корень не создаётся, пока ничего не записали', async () => {
+    // Своя папка: общий корень файла другие тесты (в любом порядке) уже могли создать
+    const own = join(tmpdir(), `cms-disk-storage-${randomUUID()}`)
+    const empty = diskStorage(own)
+    expect(await empty.get(mediaKey(siteId, mediaId, '480.avif'))).toBeUndefined()
+    await empty.remove([mediaKey(siteId, mediaId, '480.avif')])
+    expect(existsSync(own)).toBe(false)
   })
 
   it('пишет, читает и удаляет файл; папка картинки после удаления исчезает', async () => {

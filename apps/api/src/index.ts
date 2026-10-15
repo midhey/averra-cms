@@ -5,12 +5,15 @@ import { createApp } from './app'
 import { createAuth } from './auth/auth'
 import { serverFetch } from './client-ip'
 import { loadConfig, parseApiArgs } from './config'
+import { aesGcmSecretBox } from './crypto/aes-gcm'
 import { createDb } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
 import { seedDemo, seedDevOwner } from './db/seed'
-import { createMailer } from './mail/create-mailer'
+import { mailSources } from './mail/create-mailer'
 import { describeMailer } from './mail/mailer'
+import { createMailRuntime } from './mail/runtime'
+import { adminSmtp } from './mail/smtp-mailer'
 import { startMailWorker } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
@@ -42,11 +45,24 @@ process.on('exit', unlock)
 const { db, close } = createDb(config.PGLITE_DIR)
 await migrateDb(db)
 
-// Почта: провайдер по конфигу и обработчик очереди в этом же процессе. Выключена — обработчик
-// писем не шлёт, а только чистит очередь (письма с персональными данными не лежат дольше срока),
-// а админка говорит, что почта не настроена. Обработчик запускается до Better Auth:
-// письмо сброса пароля будит его сразу (onMailQueued)
-const { mailer, status: mailStatus } = createMailer(config.mail)
+// Куда подключается SMTP из админки вместо 465 и 587: DEV_SMTP_CONNECT_PORT, только в учебном
+// режиме (config.ts) — тестовый SMTP e2e слушает свободный порт
+const devSmtpPort = config.smtpConnectPort
+
+// Почта: окружение (SMTP_* или MAIL_TRANSPORT) главнее настроек SMTP из админки, без обоих —
+// файловый ящик в учебном режиме или выключена (src/mail/runtime.ts). Пароль SMTP из админки
+// лежит в базе зашифрованным ключом MAIL_ENCRYPTION_KEY; нет ключа — SMTP в админке только
+// для чтения. Обработчик очереди в этом же процессе берёт провайдера перед каждым письмом:
+// настройки меняются без перезапуска. Выключена почта — обработчик писем не шлёт, а только чистит
+// очередь. Обработчик запускается до Better Auth: письмо сброса пароля будит его сразу
+const mail = createMailRuntime({
+  db,
+  ...mailSources(config.mail),
+  secretBox: config.mailEncryptionKey ? aesGcmSecretBox(config.mailEncryptionKey) : undefined,
+  keyKind: config.mailKeyKind,
+  smtp: adminSmtp(devSmtpPort === undefined ? {} : { connectPort: () => devSmtpPort }),
+})
+await mail.reload()
 const mailSettings = {
   maxAttempts: config.mail.maxAttempts,
   retentionDays: config.mail.retentionDays,
@@ -54,14 +70,29 @@ const mailSettings = {
 // Закрытые приглашения (в них адрес человека) живут столько же, сколько письма
 const mailWorker = startMailWorker({
   db,
-  mailer,
+  mailer: mail.mailer,
   ...mailSettings,
   log: console.log,
   cleanupAlso: [{ what: 'приглашения', run: (before) => invitationsRepo(db).cleanup(before) }],
 })
+const mailStatus = mail.status()
+const mailSourceNote = { env: 'окружение', database: 'настройки из админки', none: 'по умолчанию' }
 console.log(
-  mailStatus.enabled ? `Почта: ${describeMailer(mailStatus.provider)}` : mailStatus.reason,
+  mailStatus.enabled
+    ? `Почта (${mailSourceNote[mail.source()]}): ${describeMailer(mailStatus.provider)}`
+    : mailStatus.reason,
 )
+// Окружение решило почту само — SMTP из админки не действует, и ключ ему не нужен
+if (config.mailKeyKind === 'dev' && !config.mail.fromEnv) {
+  console.log(
+    'Пароль SMTP из админки шифруется учебным ключом из репозитория (pnpm dev): настоящий пароль от почты здесь не вводи',
+  )
+}
+if (devSmtpPort !== undefined && !config.mail.fromEnv) {
+  console.log(
+    `SMTP из админки подключается к порту ${devSmtpPort} вместо 465 и 587 (DEV_SMTP_CONNECT_PORT, только для разработки и e2e)`,
+  )
+}
 
 const auth = createAuth({
   db,
@@ -92,7 +123,7 @@ const app = createApp({
   storage: diskStorage(config.MEDIA_DIR),
   images: sharpProcessor(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
-  mail: { status: mailStatus, settings: mailSettings, wake: () => mailWorker.wake() },
+  mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,
 })
 
@@ -132,7 +163,7 @@ async function shutdown() {
   }
   await mailWorker.stop()
   server.close()
-  await mailer?.close()
+  await mail.close()
   await close()
   process.exit(0)
 }

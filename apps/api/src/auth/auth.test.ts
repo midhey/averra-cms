@@ -1,7 +1,10 @@
-import { eq } from 'drizzle-orm'
-import { afterAll, describe, expect, it } from 'vitest'
+import { inspect } from 'node:util'
+import { eq, sql } from 'drizzle-orm'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { DEV_AUTH_SECRET } from '../config'
 import { sessions } from '../db/schema'
 import { createTestApi, TEST_PASSWORD, testOrigins } from '../testing'
+import { createAuth } from './auth'
 
 // Вход, выход, cookie и закрытость API — через настоящие HTTP-запросы к app,
 // как их шлёт админка: эндпоинты Better Auth, лимит попыток, проверка Origin
@@ -241,8 +244,9 @@ describe('без входа', () => {
 })
 
 describe('изменяющие запросы с cookie', () => {
-  const put = (headers: Record<string, string>) =>
-    app.request(`/api/sites/${demoSiteId}/pages/csrf`, {
+  // Адрес страницы свой у каждого теста: тесты идут в любом порядке (--sequence.shuffle)
+  const put = (headers: Record<string, string>, slug = 'csrf') =>
+    app.request(`/api/sites/${demoSiteId}/pages/${slug}`, {
       method: 'PUT',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'CSRF', content: { blocks: [] } }),
@@ -250,12 +254,12 @@ describe('изменяющие запросы с cookie', () => {
 
   it('с чужим Origin или без него — 403, страница не создаётся', async () => {
     const { headers } = await api.loginAs('owner')
-    const evil = await put({ cookie: headers.cookie, origin: 'https://evil.example' })
+    const evil = await put({ cookie: headers.cookie, origin: 'https://evil.example' }, 'csrf-evil')
     expect(evil.status).toBe(403)
     expect(await evil.json()).toMatchObject({ error: { code: 'forbidden' } })
-    expect((await put({ cookie: headers.cookie })).status).toBe(403)
+    expect((await put({ cookie: headers.cookie }, 'csrf-evil')).status).toBe(403)
 
-    const page = await app.request(`/api/sites/${demoSiteId}/pages/csrf`, { headers })
+    const page = await app.request(`/api/sites/${demoSiteId}/pages/csrf-evil`, { headers })
     expect(page.status).toBe(404)
   })
 
@@ -268,5 +272,49 @@ describe('изменяющие запросы с cookie', () => {
     const { headers } = await api.loginAs('owner')
     const res = await app.request('/api/sites', { headers: { cookie: headers.cookie } })
     expect(res.status).toBe(200)
+  })
+})
+
+describe('лог Better Auth', () => {
+  it('сбой базы при письме сброса — в логе нет ни ссылки с токеном, ни параметров запроса', async () => {
+    const own = await createTestApi({ resetResponseMs: 0 })
+    const errors: string[] = []
+    // Как это напечатала бы консоль: объекты — через inspect, со стеком и причинами
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(
+        args.map((arg) => (typeof arg === 'string' ? arg : inspect(arg, { depth: 10 }))).join(' '),
+      )
+    })
+    try {
+      const user = await own.createUser('member')
+      // В тестах логи Better Auth выключены (quiet): здесь свой экземпляр с логом, как в index.ts
+      const auth = createAuth({
+        db: own.db,
+        secret: DEV_AUTH_SECRET,
+        baseURL: testOrigins.api,
+        adminUrl: testOrigins.admin,
+        secureCookies: false,
+      })
+      // Письмо сброса не ложится в очередь: CHECK, который не пропускает ни одной строки
+      await own.db.execute(
+        sql`alter table mail_outbox add constraint test_always_fails check (false)`,
+      )
+      // Better Auth ловит сбой sendResetPassword и пишет его в лог, а ответ не меняется
+      await expect(
+        auth.api.requestPasswordReset({ body: { email: user.email } }),
+      ).resolves.toMatchObject({ status: true })
+
+      const logged = errors.join('\n')
+      // Строка — как у логгера Better Auth по умолчанию: время, уровень, источник
+      expect(logged).toMatch(/Z ERROR \[Better Auth\]: Failed to run background task/)
+      expect(logged).toContain('Запрос к базе не выполнен: insert into "mail_outbox"')
+      // Ссылка из письма — рабочий токен сброса на час: её в логе быть не должно
+      for (const secret of ['#token=', 'params:', 'Failing row', user.email]) {
+        expect(logged).not.toContain(secret)
+      }
+    } finally {
+      spy.mockRestore()
+      await own.close()
+    }
   })
 })

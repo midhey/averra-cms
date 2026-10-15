@@ -2,7 +2,7 @@ import { MemberRole, UserEmail, Uuid } from '@averra/schema'
 import { z } from 'zod'
 import { createInvitation } from '../modules/invitations/service'
 import { usersRepo } from '../modules/users/repo'
-import { args, CliError, check, inviteLinkNotice, openDb, run } from './common'
+import { args, CliError, check, inviteLinkNotice, openDb, queuedMailTransport, run } from './common'
 
 const usage = `Пригласить участника на сайт письмом:
   pnpm member:invite --email anna@example.ru --site <id сайта> --role editor|client [--by <почта владельца>]
@@ -33,10 +33,11 @@ await run(async () => {
   )
   const { db, auth, config, close } = await openDb()
   try {
-    // Как в API: без почты ссылку никто не получит
-    if (config.mail.transport === 'off') throw new CliError(config.mail.reason)
+    // Как в API: без почты ссылку никто не получит. SMTP из админки — тоже почта
+    const mail = await queuedMailTransport(db, config.mail)
+    if (mail.transport === 'off') throw new CliError(mail.reason)
     // До записи в базу: ссылку на localhost по SMTP не отправляем вовсе
-    const linkNotice = inviteLinkNotice(config.ADMIN_URL, config.mail.transport)
+    const linkNotice = inviteLinkNotice(config.ADMIN_URL, mail.transport)
 
     const owners = await usersRepo(db, auth).owners()
     const inviter = by ? owners.find((owner) => owner.email === by) : owners[0]

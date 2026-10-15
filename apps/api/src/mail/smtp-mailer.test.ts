@@ -280,3 +280,53 @@ describe('проверка по шагам (pnpm mail:test)', () => {
     expect(JSON.stringify(result.steps)).not.toContain(wrong)
   })
 })
+
+describe('SMTP из настроек админки', () => {
+  it('connectPort (только тесты) ведёт на другой порт, а в описании и ошибках — порт из настроек', async () => {
+    const smtp = await server({ mode: 'tls' })
+    const mailer = smtpMailer(settings(465, 'tls'), {
+      ca: ca.cert,
+      timeouts: fastTimeouts,
+      connectPort: () => smtp.port,
+    })
+    await mailer.send(mail)
+    await mailer.close()
+    expect(smtp.received).toHaveLength(1)
+    expect(mailer.info).toMatchObject({ port: 465 })
+
+    const result = await diagnoseSmtp(settings(465, 'tls', 'wrong-password'), mail, {
+      ca: ca.cert,
+      timeouts: fastTimeouts,
+      connectPort: () => smtp.port,
+    })
+    expect(result.steps.map((step) => step.ok)).toEqual([true, true, true, false])
+  })
+
+  it('подсказки называют поля формы, а не переменные окружения', async () => {
+    const smtp = await server({ mode: 'tls' })
+    const wrong = await diagnoseSmtp(settings(smtp.port, 'tls', 'wrong-password'), mail, {
+      ca: ca.cert,
+      timeouts: fastTimeouts,
+      origin: 'admin',
+    })
+    const auth = wrong.steps.at(-1)?.message ?? ''
+    expect(auth).toContain('Сервер не принял логин или пароль SMTP: проверьте логин и пароль')
+    expect(auth).not.toContain('SMTP_USER')
+
+    const dns = await diagnoseSmtp(
+      { ...settings(465, 'tls'), host: 'smtp.averra-cms-test.invalid' },
+      mail,
+      { timeouts: fastTimeouts, origin: 'admin' },
+    )
+    expect(dns.steps[0]?.message).toContain('проверьте поле «Сервер SMTP»')
+    expect(dns.steps[0]?.message).not.toContain('SMTP_HOST')
+
+    // Без origin — как раньше, для pnpm mail:test и SMTP из окружения
+    const env = await diagnoseSmtp(
+      { ...settings(465, 'tls'), host: 'smtp.averra-cms-test.invalid' },
+      mail,
+      { timeouts: fastTimeouts },
+    )
+    expect(env.steps[0]?.message).toContain('проверь SMTP_HOST')
+  })
+})

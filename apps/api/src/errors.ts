@@ -16,6 +16,27 @@ export const mailDisabled = (reason: string) => ({
   error: { code: 'mail_disabled', message: reason },
 })
 
+/**
+ * 409 — настройки SMTP в админке не поменять: их решило окружение API (SMTP_*, MAIL_TRANSPORT)
+ * или нет ключа шифрования MAIL_ENCRYPTION_KEY. message объясняет, что сделать
+ */
+export const mailSettingsLocked = (message: string) => ({
+  error: { code: 'mail_settings_locked', message },
+})
+
+/**
+ * 409 — «Сохранить» пришло с итогом проверки, но проверяли другие настройки (поменяли поле или
+ * пароль после проверки), другой владелец, или проверка устарела
+ */
+export const checkStale = () => ({
+  error: {
+    code: 'check_stale',
+    message:
+      'Проверка подключения была для других настроек или устарела (её итог живёт 15 минут). ' +
+      'Проверьте подключение ещё раз — или сохраните без проверки',
+  },
+})
+
 /** Почему ссылка приглашения не работает. not_found — нет такого или токен не совпал */
 export type InvitationProblem = 'not_found' | 'used' | 'revoked' | 'expired'
 

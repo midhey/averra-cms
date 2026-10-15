@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   type ConfigOptions,
   DEV_AUTH_SECRET,
+  DEV_MAIL_ENCRYPTION_KEY,
   isDevAuthSecret,
+  isDevMailKey,
   parseApiArgs,
   parseConfig,
 } from './config'
@@ -257,20 +259,33 @@ describe('почта', () => {
     MAIL_FROM: 'noreply@example.ru',
   }
 
-  it('в учебном режиме без SMTP_* — файловый ящик в .data/mail', () => {
+  it('в учебном режиме без SMTP_* — файловый ящик в .data/mail, и окружение почту не решало', () => {
     expect(parseConfig({}, dev).data?.mail).toEqual({
       transport: 'file',
       dir: '.data/mail',
       from: { address: 'noreply@averra.test', name: 'Averra CMS' },
       maxAttempts: 8,
       retentionDays: 30,
+      fromEnv: false,
     })
+  })
+
+  it('окружение решает почту само, только если задан SMTP_HOST или MAIL_TRANSPORT', () => {
+    expect(parseConfig(prodEnv).data?.mail.fromEnv).toBe(false)
+    expect(parseConfig({ ...prodEnv, ...smtp }).data?.mail.fromEnv).toBe(true)
+    for (const MAIL_TRANSPORT of ['off', 'file', 'smtp']) {
+      expect(parseConfig({ MAIL_TRANSPORT, ...smtp }, dev).data?.mail.fromEnv, MAIL_TRANSPORT).toBe(
+        true,
+      )
+    }
   })
 
   it('без SMTP_* и не в учебном режиме — почта выключена явно и с причиной', () => {
     const mail = parseConfig(prodEnv).data?.mail
     expect(mail?.transport).toBe('off')
     expect(mail && 'reason' in mail ? mail.reason : '').toContain('Почта не настроена')
+    // Подсказка называет и страницу «Почта» в админке, и переменные окружения
+    expect(mail && 'reason' in mail ? mail.reason : '').toContain('«Почта» в админке')
     expect(parseConfig({ MAIL_TRANSPORT: 'off' }, dev).data?.mail).toMatchObject({
       transport: 'off',
       reason: expect.stringContaining('MAIL_TRANSPORT=off'),
@@ -336,6 +351,159 @@ describe('почта', () => {
       parseConfig({ MAIL_MAX_ATTEMPTS: '5', MAIL_RETENTION_DAYS: '7' }, dev).data?.mail,
     ).toMatchObject({ maxAttempts: 5, retentionDays: 7 })
     expect(issuePaths({ MAIL_RETENTION_DAYS: '0' })).toEqual(['MAIL_RETENTION_DAYS'])
+  })
+})
+
+describe('ключ шифрования пароля SMTP', () => {
+  const ownKey = Buffer.alloc(32, 7).toString('base64')
+  const remote = { ADMIN_URL: 'https://admin.example.ru', API_URL: 'https://api.example.ru' }
+
+  it('свой ключ — 32 байта в base64 (и в base64url, без «=», с пробелами по краям)', () => {
+    for (const MAIL_ENCRYPTION_KEY of [
+      ownKey,
+      ownKey.replace(/=+$/, ''),
+      Buffer.alloc(32, 250).toString('base64url'),
+      ` ${ownKey}
+`,
+      `"${ownKey}"`,
+    ]) {
+      const config = parseConfig({ ...prodEnv, MAIL_ENCRYPTION_KEY }).data
+      expect(config?.mailEncryptionKey?.length, MAIL_ENCRYPTION_KEY).toBe(32)
+      expect(config?.mailKeyKind).toBe('env')
+    }
+    expect(
+      parseConfig({ ...prodEnv, MAIL_ENCRYPTION_KEY: ownKey }).data?.mailEncryptionKey,
+    ).toEqual(Buffer.alloc(32, 7))
+  })
+
+  it('короткий, длинный и не base64 — ошибка конфига с подсказкой и без значения', () => {
+    for (const MAIL_ENCRYPTION_KEY of [
+      Buffer.alloc(16, 1).toString('base64'),
+      Buffer.alloc(33, 1).toString('base64'),
+      'не base64 вовсе',
+      'x'.repeat(44),
+      '',
+    ]) {
+      const result = parseConfig({ ...prodEnv, MAIL_ENCRYPTION_KEY })
+      expect(
+        result.error?.issues.map((issue) => issue.path.join('.')),
+        MAIL_ENCRYPTION_KEY,
+      ).toEqual(['MAIL_ENCRYPTION_KEY'])
+      const message = result.error?.issues[0]?.message ?? ''
+      expect(message).toContain('openssl rand -base64 32')
+      if (MAIL_ENCRYPTION_KEY.length > 0) expect(message).not.toContain(MAIL_ENCRYPTION_KEY)
+    }
+  })
+
+  it('из AUTH_SECRET ключ не выводится: без MAIL_ENCRYPTION_KEY вне учебного режима ключа нет', () => {
+    const config = parseConfig(prodEnv).data
+    expect(config?.mailEncryptionKey).toBeUndefined()
+    expect(config?.mailKeyKind).toBeUndefined()
+    // API при этом стартует: просто SMTP в админке будет только для чтения
+    expect(parseConfig(prodEnv).success).toBe(true)
+    expect(
+      parseConfig({ ...remote, AUTH_SECRET: 'y'.repeat(32) }, dev).data?.mailEncryptionKey,
+    ).toBe(undefined)
+  })
+
+  it('в учебном режиме без ключа — учебный ключ из репозитория', () => {
+    const config = parseConfig({}, dev).data
+    expect(config?.mailKeyKind).toBe('dev')
+    expect(config?.mailEncryptionKey?.toString('base64')).toBe(DEV_MAIL_ENCRYPTION_KEY)
+    expect(
+      parseConfig({ MAIL_ENCRYPTION_KEY: DEV_MAIL_ENCRYPTION_KEY }, dev).data?.mailKeyKind,
+    ).toBe('dev')
+    // Свой ключ в учебном режиме — свой
+    expect(parseConfig({ MAIL_ENCRYPTION_KEY: ownKey }, dev).data?.mailKeyKind).toBe('env')
+  })
+
+  describe('варианты учебного ключа — тот же публичный ключ', () => {
+    const variants = [
+      DEV_MAIL_ENCRYPTION_KEY,
+      ` ${DEV_MAIL_ENCRYPTION_KEY} `,
+      `"${DEV_MAIL_ENCRYPTION_KEY}"`,
+      DEV_MAIL_ENCRYPTION_KEY.toLowerCase(),
+      DEV_MAIL_ENCRYPTION_KEY.toUpperCase(),
+      DEV_MAIL_ENCRYPTION_KEY.replace(/=+$/, ''),
+      Buffer.from(DEV_MAIL_ENCRYPTION_KEY, 'base64').toString('base64url'),
+      // Часть учебного ключа
+      DEV_MAIL_ENCRYPTION_KEY.slice(0, 24),
+      // Сам учебный текст и он же с другим хвостом, записанный в base64
+      'dev-only-mail-key-not-for-prod!!',
+      Buffer.from('dev-only-mail-key-not-for-prod??').toString('base64'),
+    ]
+
+    it('распознаются, а случайный ключ — нет', () => {
+      for (const value of variants) expect(isDevMailKey(value), value).toBe(true)
+      expect(isDevMailKey(ownKey)).toBe(false)
+      for (let i = 0; i < 50; i += 1) {
+        const random = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64')
+        expect(isDevMailKey(random), random).toBe(false)
+      }
+    })
+
+    it('вне учебного режима не проходят: ни в проде, ни на сервере, ни без флага', () => {
+      for (const MAIL_ENCRYPTION_KEY of variants) {
+        expect(issuePaths({ ...prodEnv, MAIL_ENCRYPTION_KEY }), MAIL_ENCRYPTION_KEY).toEqual([
+          'MAIL_ENCRYPTION_KEY',
+        ])
+        expect(
+          issuePaths({ ...remote, AUTH_SECRET: 'y'.repeat(32), MAIL_ENCRYPTION_KEY }),
+          MAIL_ENCRYPTION_KEY,
+        ).toEqual(['MAIL_ENCRYPTION_KEY'])
+        expect(
+          issuePaths({ AUTH_SECRET: 'y'.repeat(32), MAIL_ENCRYPTION_KEY }, {}),
+          MAIL_ENCRYPTION_KEY,
+        ).toEqual(['MAIL_ENCRYPTION_KEY'])
+      }
+      expect(
+        parseConfig({ ...prodEnv, MAIL_ENCRYPTION_KEY: DEV_MAIL_ENCRYPTION_KEY }).error?.issues[0]
+          ?.message,
+      ).toMatch(/учебный ключ.*openssl rand -base64 32/)
+    })
+
+    it('в учебном режиме вариант — тот же учебный ключ', () => {
+      for (const MAIL_ENCRYPTION_KEY of variants) {
+        const config = parseConfig({ MAIL_ENCRYPTION_KEY }, dev).data
+        expect(config?.mailKeyKind, MAIL_ENCRYPTION_KEY).toBe('dev')
+        expect(config?.mailEncryptionKey?.toString('base64')).toBe(DEV_MAIL_ENCRYPTION_KEY)
+      }
+    })
+  })
+})
+
+describe('порт тестового SMTP (DEV_SMTP_CONNECT_PORT)', () => {
+  const remote = { ADMIN_URL: 'https://admin.example.ru', API_URL: 'https://api.example.ru' }
+
+  it('в учебном режиме — порт, куда подключается SMTP из админки; не задан — нет подмены', () => {
+    expect(parseConfig({ DEV_SMTP_CONNECT_PORT: '2587' }, dev).data?.smtpConnectPort).toBe(2587)
+    expect(parseConfig({}, dev).data?.smtpConnectPort).toBeUndefined()
+    expect(parseConfig(prodEnv).data?.smtpConnectPort).toBeUndefined()
+  })
+
+  it('вне учебного режима — ошибка конфига: в проде SMTP из админки ходит только на 465 и 587', () => {
+    for (const [env, options] of [
+      [{ ...prodEnv, DEV_SMTP_CONNECT_PORT: '2587' }, {}],
+      [{ ...remote, AUTH_SECRET: 'y'.repeat(32), DEV_SMTP_CONNECT_PORT: '2587' }, dev],
+      [{ AUTH_SECRET: 'y'.repeat(32), DEV_SMTP_CONNECT_PORT: '2587' }, {}],
+    ] as const) {
+      const result = parseConfig(env, options)
+      expect(result.success, JSON.stringify(env)).toBe(false)
+      expect(result.error?.issues).toEqual([
+        expect.objectContaining({
+          path: ['DEV_SMTP_CONNECT_PORT'],
+          message: expect.stringContaining('только для разработки и e2e'),
+        }),
+      ])
+    }
+  })
+
+  it('не порт — ошибка конфига', () => {
+    for (const DEV_SMTP_CONNECT_PORT of ['0', '70000', 'abc', '25.5']) {
+      expect(issuePaths({ DEV_SMTP_CONNECT_PORT }), DEV_SMTP_CONNECT_PORT).toEqual([
+        'DEV_SMTP_CONNECT_PORT',
+      ])
+    }
   })
 })
 

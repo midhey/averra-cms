@@ -2,7 +2,6 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { MailSendError } from '../../mail/mailer'
 import { memoryMailer } from '../../mail/memory-mailer'
 import { enqueueMail } from '../../mail/outbox'
-import { smtpMailer } from '../../mail/smtp-mailer'
 import { processOutbox } from '../../mail/worker'
 import { createTestApi, type TestApi } from '../../testing'
 
@@ -65,21 +64,25 @@ describe('состояние', () => {
         expect.objectContaining({ id: 'mail-test', title: 'Проверка почты' }),
         expect.objectContaining({ id: 'password-reset', title: 'Сброс пароля' }),
         expect.objectContaining({ id: 'invitation', title: 'Приглашение на сайт' }),
+        expect.objectContaining({
+          id: 'mail-settings-changed',
+          title: 'Настройки почты изменены',
+        }),
       ],
     })
   })
 
-  it('SMTP показывается без пароля', async () => {
+  it('SMTP из окружения показывается без пароля', async () => {
     const password = 'smtp-very-secret-password'
     const smtpApi = await createTestApi({
-      mail: smtpMailer({
+      envSmtp: {
         host: 'smtp.example.ru',
         port: 465,
         security: 'tls',
         user: 'noreply@example.ru',
         password,
         from: { address: 'noreply@example.ru', name: 'Averra CMS' },
-      }),
+      },
     })
     try {
       const { headers } = await smtpApi.loginAs('owner')
@@ -199,7 +202,7 @@ describe('очередь', () => {
 })
 
 describe('предпросмотр', () => {
-  it.each(['mail-test', 'password-reset', 'invitation'])(
+  it.each(['mail-test', 'password-reset', 'invitation', 'mail-settings-changed'])(
     '«%s»: тема, HTML и текст на примерных данных',
     async (template) => {
       const res = await get(`/templates/${template}/preview`, owner.headers)

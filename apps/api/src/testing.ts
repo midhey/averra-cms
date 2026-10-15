@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,11 +7,14 @@ import { createApp } from './app'
 import type { MemberRole } from './auth/access'
 import { createAuth } from './auth/auth'
 import { DEV_AUTH_SECRET } from './config'
+import { aesGcmSecretBox, KEY_BYTES } from './crypto/aes-gcm'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import { seedDemo } from './db/seed'
-import type { Mailer, MailStatus } from './mail/mailer'
+import type { Mailer, SmtpSettings } from './mail/mailer'
 import { memoryMailer } from './mail/memory-mailer'
+import { createMailRuntime } from './mail/runtime'
+import { adminSmtp, type SmtpOptions, smtpMailer } from './mail/smtp-mailer'
 import { diskStorage } from './media/disk-storage'
 import type { ImageProcessor } from './media/processor'
 import { sharpProcessor } from './media/sharp-processor'
@@ -35,16 +38,30 @@ export async function createTestApi({
   mediaMaxBytes = 10 * 1024 * 1024,
   // Свой процессор — чтобы тест мог проверить, дошёл ли запрос до обработки картинки
   images = sharpProcessor(),
-  // Почта в памяти: тест видит письма в mailer.sent. 'off' — почта выключена, как без SMTP_*
+  // Почта по умолчанию — когда SMTP не задан ни в окружении, ни в админке: в памяти (тест видит
+  // письма в mailer.sent). 'off' — почта выключена, как без SMTP_* на сервере
   mail = memoryMailer(),
+  // SMTP из окружения (SMTP_*): он главнее настроек в админке
+  envSmtp,
+  // Ключ шифрования пароля SMTP из админки: по умолчанию свой случайный у каждого API.
+  // null — ключа нет (как без MAIL_ENCRYPTION_KEY): SMTP в админке только для чтения
+  mailKey,
+  // Как ходить к SMTP из настроек админки: CA тестового сервера и его порт вместо 465/587
+  smtp,
   // Порог ответа «Забыли пароль?»: тесты, которым он не важен, ставят 0
   resetResponseMs,
+  // Лог API: тест может проверить, что пишется (и чего нет) при смене настроек почты
+  log = () => {},
 }: {
   resetResponseMs?: number
   production?: boolean
   mediaMaxBytes?: number
   images?: ImageProcessor
   mail?: Mailer | 'off'
+  envSmtp?: SmtpSettings
+  mailKey?: Uint8Array | null
+  smtp?: SmtpOptions
+  log?: (message: string) => void
 } = {}) {
   // Как в index.ts: ошибки проверки — по-русски, тесты видят те же ответы, что админка
   setupZodMessages()
@@ -72,19 +89,39 @@ export async function createTestApi({
     quiet: true,
     onMailQueued: () => (wakes.count += 1),
   })
-  const mailStatus: MailStatus =
-    mail === 'off'
-      ? { enabled: false, reason: 'Почта не настроена (тест)' }
-      : { enabled: true, provider: mail.info }
+  // Почта процесса, как в index.ts: окружение главнее админки, без обоих — вариант по умолчанию
+  const secretBox =
+    mailKey === null ? undefined : aesGcmSecretBox(mailKey ?? randomBytes(KEY_BYTES))
+  const runtime = createMailRuntime({
+    db,
+    env: envSmtp
+      ? {
+          kind: 'smtp',
+          mailer: smtpMailer(envSmtp, smtp),
+          settings: {
+            host: envSmtp.host,
+            port: envSmtp.port,
+            security: envSmtp.security,
+            user: envSmtp.user,
+            from: envSmtp.from,
+          },
+        }
+      : undefined,
+    fallback: mail === 'off' ? { reason: 'Почта не настроена (тест)' } : { mailer: mail },
+    secretBox,
+    keyKind: secretBox ? 'env' : undefined,
+    smtp: adminSmtp(smtp),
+  })
+  await runtime.reload()
   const app = createApp({
     db,
     auth,
     trustedOrigins: [testOrigins.admin, testOrigins.api],
-    log: () => {},
+    log,
     storage,
     images,
     mediaMaxBytes,
-    mail: { status: mailStatus, settings: mailSettings, wake: () => (wakes.count += 1) },
+    mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
     adminUrl: testOrigins.admin,
     resetResponseMs,
   })
@@ -138,8 +175,12 @@ export async function createTestApi({
     storage,
     /** Папка медиатеки на диске: тест может проверить, что после отказа в ней ничего не легло */
     mediaDir,
-    /** Почта в памяти (или undefined, если выключена) и настройки очереди */
+    /** Почта по умолчанию — в памяти (или undefined, если выключена) — и настройки очереди */
     mailer: mail === 'off' ? undefined : mail,
+    /** Почта процесса: нынешний провайдер, настройки SMTP из админки, смена без перезапуска */
+    mailRuntime: runtime,
+    /** Шифрование пароля SMTP этого API (нет — нет ключа) */
+    secretBox,
     mailSettings,
     /** Сколько раз API будил обработчик писем */
     mailWakes: wakes,

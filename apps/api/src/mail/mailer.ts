@@ -54,6 +54,10 @@ export type MailStatus =
   | { enabled: true; provider: MailerInfo }
   | { enabled: false; reason: string }
 
+/** Что сказать владельцу, когда почта не работает: и в API, и в админке */
+export const MAIL_OFF_EFFECT =
+  'Не работают сброс пароля, приглашения участников и уведомления о заявках'
+
 /**
  * Ошибка отправки: текст уже без секретов и по-русски. permanent — повторять бессмысленно
  * (сервер навсегда отказал адресу или письму), такое письмо сразу помечается неотправленным
@@ -70,8 +74,29 @@ export class MailSendError extends Error {
   }
 }
 
+/**
+ * Настройки SMTP: из окружения (SMTP_*) или из админки. Пароль живёт только здесь и в замыкании
+ * smtpMailer — наружу идёт MailerInfo без него. Тип здесь, а не в smtp-mailer.ts: его видят
+ * маршруты (настройки в админке), а smtp-mailer.ts тянет Node API
+ */
+export type SmtpSettings = {
+  host: string
+  port: number
+  /** tls — TLS сразу (465), starttls — обязательный STARTTLS (587). Без шифрования нельзя */
+  security: 'tls' | 'starttls'
+  user: string
+  password: string
+  from: MailSender
+}
+
 /** Шаги отправки через SMTP: на каком из них сломалось, говорит pnpm mail:test */
 export type MailStep = 'dns' | 'connection' | 'tls' | 'auth' | 'send'
+
+/** Итог одного шага проверки (pnpm mail:test, «Проверить подключение» в админке) */
+export type DiagnosisStep = { step: MailStep; ok: boolean; message: string }
+
+/** Итог проверки по шагам: ok — письмо принято сервером */
+export type SmtpDiagnosis = { ok: boolean; steps: DiagnosisStep[] }
 
 export const mailStepTitles: Record<MailStep, string> = {
   dns: 'DNS: имя сервера',

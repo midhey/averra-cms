@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import type { Db } from '../db/client'
 import { accounts, sessions, users, verifications } from '../db/schema'
+import { errorForLog, withoutQueryParams } from '../log-error'
 import {
   hashVerificationIdentifier,
   PASSWORD_RESET_TTL_MINUTES,
@@ -23,6 +24,16 @@ export type AuthOptions = {
   /** Письмо легло в очередь: разбудить обработчик, чтобы оно ушло сразу, а не через опрос */
   onMailQueued?: () => void
 }
+
+/**
+ * Эндпоинты Better Auth, закрытые по HTTP (404). verify-password (проверить пароль вошедшего)
+ * Better Auth открывает и по HTTP: пометка scope: 'server' доступа не закрывает, router закрывает
+ * только SERVER_ONLY. С уведённой сессией через него подбирали бы пароль мимо общего счётчика
+ * неудач (auth/confirm-password.ts) — с лимитом Better Auth по умолчанию, 100 запросов
+ * за 10 секунд с IP. Нам он нужен только серверным вызовом auth.api.verifyPassword, а его
+ * disabledPaths не трогает. Варианты написания путей не доходят и до Better Auth (routes.ts)
+ */
+export const CLOSED_AUTH_PATHS = ['/verify-password'] as const
 
 /** Сколько запросов сброса пароля пускать с одного IP: за 15 минут. Считает обёртка (routes.ts) */
 export const RESET_REQUESTS_PER_IP = { window: 15 * 60, max: 5 } as const
@@ -51,6 +62,7 @@ export function createAuth({
     baseURL,
     basePath: '/api/auth',
     trustedOrigins: [adminUrl],
+    disabledPaths: [...CLOSED_AUTH_PATHS],
     database: drizzleAdapter(db, {
       provider: 'pg',
       usePlural: true,
@@ -86,7 +98,8 @@ export function createAuth({
     },
     // По умолчанию Better Auth включает лимит только в проде. Нам он нужен везде:
     // и чтобы тесты проверяли то же, что работает в проде. Для входа встроенное правило —
-    // 3 попытки за 10 секунд с одного IP
+    // 3 попытки за 10 секунд с одного IP. У смены пароля такое же, но главный лимит у неё —
+    // общий счётчик неудач пароля на пользователя (auth/confirm-password.ts)
     rateLimit: {
       enabled: true,
       storage: 'memory',
@@ -103,7 +116,19 @@ export function createAuth({
       database: { generateId: 'uuid' },
     },
     telemetry: { enabled: false },
-    logger: quiet ? { disabled: true } : { level: 'warn' },
+    // Логи Better Auth — через errorForLog: ошибку базы он печатает с параметрами запроса, а там
+    // токены сессий, хеши паролей и ссылка сброса пароля из очереди писем (log-error.ts)
+    logger: quiet
+      ? { disabled: true }
+      : {
+          level: 'warn',
+          // Строка — как у логгера Better Auth по умолчанию, только без цветов
+          log: (level, message, ...args) => {
+            const print = level === 'error' ? console.error : console.warn
+            const head = `${new Date().toISOString()} ${level.toUpperCase()} [Better Auth]:`
+            print(`${head} ${withoutQueryParams(message)}`, ...args.map(errorForLog))
+          },
+        },
   })
 }
 

@@ -28,6 +28,21 @@ describe('createRateLimiter', () => {
     expect(limiter.take('b').allowed).toBe(true)
     expect(limiter.take('a').allowed).toBe(false)
   })
+
+  it('refund возвращает последнюю попытку: так считают только неудачи', () => {
+    const limiter = createRateLimiter({ max: 2, windowMs: 60_000 })
+    for (let i = 0; i < 10; i++) {
+      expect(limiter.take('ok').allowed).toBe(true)
+      limiter.refund('ok')
+    }
+    expect(limiter.size()).toBe(0)
+    expect(limiter.take('bad').allowed).toBe(true)
+    expect(limiter.take('bad').allowed).toBe(true)
+    expect(limiter.take('bad').allowed).toBe(false)
+    // Возврат у неизвестного ключа ничего не ломает
+    limiter.refund('unknown')
+    expect(limiter.size()).toBe(1)
+  })
 })
 
 describe('память счётчика', () => {

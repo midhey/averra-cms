@@ -63,6 +63,17 @@ export function createRateLimiter({
       return { allowed: true }
     },
 
+    /**
+     * Вернуть последнюю учтённую попытку ключа. Так считают только неудачи: попытку учитывают
+     * до проверки (иначе перебор шёл бы без лимита, пока проверка думает), а удачную возвращают
+     */
+    refund(key: string) {
+      const times = hits.get(key)
+      if (!times) return
+      times.pop()
+      if (times.length === 0) hits.delete(key)
+    },
+
     /** Сколько ключей сейчас в памяти: для тестов */
     size: () => hits.size,
   }

@@ -105,4 +105,40 @@ describe('шаблоны писем', () => {
       if (url !== undefined) expect(url).not.toContain('?token=')
     }
   })
+
+  it('проверочное письмо говорит, кто его отправил: команда или кнопка в админке', () => {
+    const data = mailTemplates['mail-test'].example
+    expect(renderMail('mail-test', data).text).toContain('команда pnpm mail:test')
+    const admin = renderMail('mail-test', { ...data, via: 'admin' })
+    expect(admin.text).toContain('кнопка «Проверить подключение» на странице «Почта»')
+    expect(() => renderMail('mail-test', { ...data, via: 'cron' })).toThrow(MailDataError)
+  })
+
+  it('«Настройки почты изменены»: кто, когда, какие поля и через что теперь письма — без пароля', () => {
+    const mail = previewMail('mail-settings-changed')
+    expect(mail.subject).toBe('Настройки почты Averra CMS изменены')
+    expect(mail.text).toContain('Кто: Анна (anna@example.ru)')
+    expect(mail.text).toContain('Что изменено: сервер, пароль')
+    expect(mail.text).toContain('Проверка подключения: пройдена перед сохранением')
+    expect(mail.text).toContain('Теперь письма уходят: SMTP smtp.example.ru:465')
+    expect(mail.text).toContain('Если это были не вы')
+
+    const removed = renderMail('mail-settings-changed', {
+      ...mailTemplates['mail-settings-changed'].example,
+      action: 'removed',
+      fields: [],
+      provider: 'файловый ящик .data/mail',
+      verified: false,
+    })
+    expect(removed.text).toContain('Настройки SMTP удалены из админки')
+    expect(removed.text).not.toContain('Что изменено')
+
+    const unchecked = renderMail('mail-settings-changed', {
+      ...mailTemplates['mail-settings-changed'].example,
+      verified: false,
+      changedBy: '<b>Анна</b>',
+    })
+    expect(unchecked.text).toContain('не делалась: сохранено без проверки')
+    expect(unchecked.html).toContain('&lt;b&gt;Анна&lt;/b&gt;')
+  })
 })
