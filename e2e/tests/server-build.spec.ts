@@ -100,3 +100,34 @@ test('упавшая сборка видна на экране сайта с п�
   await expect(alert).toContainText('[ERROR] блок «hero» без заголовка')
   await expect(section).toContainText('сборка заняла 360 МБ памяти')
 })
+
+test('сайт выгружается статическим архивом, а все данные — архивом с site.json', async ({
+  page,
+  demoSite,
+}) => {
+  await page.goto(`/sites/${demoSite.id}`)
+  // Архив сайта — текущая версия на сервере: дожидаемся, пока фикстурная публикация соберётся
+  await expect(
+    page.getByRole('region', { name: 'Сайт на сервере' }).getByText(/На сайте версия, собранная/),
+  ).toBeVisible({ timeout: 60_000 })
+  const section = page.getByRole('region', { name: 'Выгрузка' })
+
+  const siteDownload = page.waitForEvent('download')
+  await section.getByRole('button', { name: 'Скачать сайт архивом' }).click()
+  const site = await siteDownload
+  expect(site.suggestedFilename()).toMatch(/^averra-d0000000-site-\d{8}\.zip$/)
+  const siteZip = await readFile(await site.path())
+  // ZIP: сигнатура PK и имена файлов в каталоге архива
+  expect(siteZip.subarray(0, 2).toString('latin1')).toBe('PK')
+  expect(siteZip.includes('index.html')).toBe(true)
+  expect(siteZip.includes('_astro/')).toBe(true)
+
+  const dataDownload = page.waitForEvent('download')
+  await section.getByRole('button', { name: 'Выгрузить все данные' }).click()
+  const data = await dataDownload
+  expect(data.suggestedFilename()).toMatch(/^averra-d0000000-data-\d{8}\.zip$/)
+  const dataZip = await readFile(await data.path())
+  expect(dataZip.includes('site.json')).toBe(true)
+  expect(dataZip.includes('README.txt')).toBe(true)
+  await expect(section.getByRole('alert')).toHaveCount(0)
+})
