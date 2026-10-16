@@ -1,0 +1,24 @@
+# Проверки на каждый push в master и на pull request: pnpm check на Linux. Так тесты, которые
+# значат что-то только на Linux (права 600 у .env установщика), идут регулярно, а не только при
+# выпуске версии. e2e (Playwright) — локально перед коммитом, как и раньше
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.0
+      - run: corepack enable && corepack prepare pnpm@12.9.1 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
