@@ -1,0 +1,103 @@
+# Установка Averra на VPS клиента (модуль 9): PostgreSQL, API и Caddy.
+# Значения — из .env рядом (его создаёт install.sh, права 600). Запуск — из папки установки:
+#   docker compose up -d
+# API наружу не открыт: в него ходит только Caddy по внутренней сети.
+
+name: averra
+
+services:
+  postgres:
+    image: postgres:17.11-alpine3.24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: averra
+      POSTGRES_DB: averra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env (install.sh)}
+    # VPS на 1–2 ГБ: небольшие буферы и мало соединений — API держит пул из 5
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=4MB
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U averra -d averra']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  api:
+    image: ${AVERRA_API_IMAGE:-ghcr.io/midhey/averra-api}:${AVERRA_VERSION:?задайте AVERRA_VERSION в .env}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://averra:${POSTGRES_PASSWORD}@postgres:5432/averra
+      AUTH_SECRET: ${AUTH_SECRET:?задайте AUTH_SECRET в .env (install.sh)}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?задайте MAIL_ENCRYPTION_KEY в .env (install.sh)}
+      # Админка и API — один источник (Caddyfile): cookie без CORS
+      ADMIN_URL: https://${ADMIN_DOMAIN:?задайте ADMIN_DOMAIN в .env}
+      API_URL: https://${ADMIN_DOMAIN}
+      # Перед API только Caddy, и X-Forwarded-For ставит он сам
+      TRUST_PROXY: 'true'
+      PUBLISH_DIR: /data/sites
+      MEDIA_DIR: /data/media
+      # SMTP задают в админке (страница «Почта»): пароль шифруется MAIL_ENCRYPTION_KEY.
+      # SMTP из окружения — через compose.override.yaml (см. README, «Установка на сервер»)
+    volumes:
+      - sites:/data/sites
+      - media:/data/media
+    # Node — PID 1 и запускает сборщик сайта, у которого свои потомки (esbuild): init (tini)
+    # пожинает осиротевших после таймаута сборки, зомби не копятся
+    init: true
+    # Не root (USER node в образе), ни одной capability и без повышения прав через setuid:
+    # API нужны только тома и папка рендерера
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    networks: [internal]
+
+  caddy:
+    image: ${AVERRA_WEB_IMAGE:-ghcr.io/midhey/averra-web}:${AVERRA_VERSION}
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}
+      # Какой сайт установки отдаётся на SITE_DOMAIN (его заводит install.sh)
+      SITE_ID: ${SITE_ID:-}
+    # Caddy в образе не от root (USER caddy). Ему нужно только занять порты 80 и 443: порты ниже
+    # 1024 открыты непривилегированным внутри контейнера, а capability оставлена для бинарника с
+    # file capability (без неё в ограничивающем наборе exec падает). no-new-privileges здесь нет:
+    # он отключил бы эту file capability
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      # Собранные сайты — только чтение: менять их может только API
+      - sites:/srv/sites:ro
+    networks: [internal]
+
+volumes:
+  postgres:
+  sites:
+  media:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:

@@ -1,0 +1,89 @@
+# Caddy установки Averra (модуль 9). Значения — из окружения контейнера (deploy/.env через
+# compose.yaml): SITE_DOMAIN, ADMIN_DOMAIN, ACME_EMAIL, SITE_ID.
+#
+# Сертификаты Let's Encrypt Caddy выпускает и продлевает сам (тома caddy_data и caddy_config).
+# Для этого DNS обоих доменов должен указывать на сервер, а порты 80 и 443 — быть открыты.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Заголовки безопасности, общие для сайта и админки
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# ── Админка и API: один источник ──────────────────────────────────────────────────────────────
+# Админка ходит в API тем же адресом (/api/…), поэтому cookie сессии без CORS и без SameSite=None.
+# ADMIN_URL и API_URL у API — оба https://ADMIN_DOMAIN
+{$ADMIN_DOMAIN} {
+	import security
+	encode zstd gzip
+
+	handle /api/* {
+		# Caddy передаёт API настоящий Host и ставит X-Forwarded-For адресом клиента: присланный
+		# клиентом заголовок он отбрасывает (доверенных прокси перед ним нет). Поэтому у API
+		# TRUST_PROXY=true — лимиты считаются по настоящему IP посетителя
+		reverse_proxy api:4000
+	}
+
+	# Файлы сборки Vite с хешем в имени не меняются никогда. Своя ветка без try_files: файла нет
+	# (старая вкладка просит ассет прошлой версии) — 404, а не index.html под видом скрипта
+	handle /assets/* {
+		root * /srv/admin
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle {
+		root * /srv/admin
+		# Чужой сайт в рамке не покажет админку (кликджекинг). Предпросмотр — свой iframe, тот же источник
+		header X-Frame-Options "SAMEORIGIN"
+		# index.html и всё вне /assets — всегда свежее. Заголовок ставится на этот блок целиком, а не
+		# по пути /index.html: header выполняется раньше try_files и видит исходный путь (/, /sites/…).
+		# Иначе после обновления браузер держал бы старый index.html со ссылками на удалённые ассеты
+		header Cache-Control "no-cache"
+		# Адреса экранов админки (/sites/…) — это index.html: маршруты решает сама админка
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# ── Сайт: опубликованная статика ──────────────────────────────────────────────────────────────
+# API собирает сайт в /srv/sites/<id сайта>/releases/<версия>, а ссылка current указывает
+# на текущую версию. Подмена ссылки атомарна: новая версия видна со следующего запроса,
+# без перезапуска Caddy и без простоя
+{$SITE_DOMAIN} {
+	import security
+	encode zstd gzip
+
+	# Формы сайта шлют заявки на свой же домен (/api/forms/… от корня сайта): тот же источник,
+	# никакого CORS, а API видит Origin и Referer сайта и возвращает посетителя на его страницу.
+	# Больше ничего из API на домене сайта не открыто
+	handle /api/forms/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		root * /srv/sites/{$SITE_ID}/current
+		# Картинки (копии из медиатеки) и файлы Astro не меняются под своим адресом.
+		# Картинки — только /media/<uuid>/<файл>: страница сайта с адресом media (/media/) под
+		# этот матчер не попадает и не застревает в кеше на год
+		@immutable path_regexp ^/(_astro/|media/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		# Страницы проверяются при каждом заходе: после публикации посетитель сразу видит новую
+		@pages not path_regexp ^/(_astro/|media/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)
+		header @pages Cache-Control "no-cache"
+		file_server
+	}
+
+	handle_errors 404 {
+		header Content-Type "text/plain; charset=utf-8"
+		respond "Страница не найдена" 404
+	}
+}
