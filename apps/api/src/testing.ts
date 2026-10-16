@@ -8,7 +8,7 @@ import type { MemberRole } from './auth/access'
 import { createAuth } from './auth/auth'
 import { DEV_AUTH_SECRET } from './config'
 import { aesGcmSecretBox, KEY_BYTES } from './crypto/aes-gcm'
-import { createDb } from './db/client'
+import { createDb, type DbTarget } from './db/client'
 import { migrateDb } from './db/migrate'
 import { seedDemo } from './db/seed'
 import { errorForLog } from './log-error'
@@ -23,6 +23,7 @@ import { sharpProcessor } from './media/sharp-processor'
 import type { LeadLimits } from './modules/leads/public-routes'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
+import type { SitePublisher } from './publish/queue'
 
 /** Адреса, под которыми API видит себя и админку в тестах */
 export const testOrigins = { api: 'http://localhost:4000', admin: 'http://localhost:5173' } as const
@@ -62,7 +63,14 @@ export async function createTestApi({
     perSiteDailyBytes: 1024 * 1024 * 1024,
     smallLeadBytes: 8 * 1024,
   },
+  // База: по умолчанию PGlite в памяти. Тест на настоящем драйвере PostgreSQL даёт свою
+  // (db/postgres.test.ts: node-postgres к серверу протокола Postgres поверх PGlite)
+  database,
+  // Сборка сайта после публикации (модуль 9): тесты публикации дают свою очередь
+  publisher,
 }: {
+  database?: DbTarget
+  publisher?: SitePublisher
   leadLimits?: LeadLimits
   resetResponseMs?: number
   production?: boolean
@@ -76,7 +84,7 @@ export async function createTestApi({
 } = {}) {
   // Как в index.ts: ошибки проверки — по-русски, тесты видят те же ответы, что админка
   setupZodMessages()
-  const { db, close: closeDb } = createDb()
+  const { db, close: closeDb } = createDb(database)
   // Своя временная папка медиатеки на каждый API. Создаётся при первой записи, удаляется в close
   const mediaDir = join(tmpdir(), `cms-test-media-${randomUUID()}`)
   const storage = diskStorage(mediaDir)
@@ -137,6 +145,7 @@ export async function createTestApi({
     adminUrl: testOrigins.admin,
     resetResponseMs,
     leadLimits,
+    publisher,
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)

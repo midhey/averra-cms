@@ -152,13 +152,25 @@ export function sitesRepo(db: Db) {
       })
     },
 
-    /** false — такой страницы не было */
+    /**
+     * Удаляет страницу. undefined — такой страницы не было; wasPublished — была ли она на сайте
+     * (тогда сайт на сервере надо пересобрать без неё)
+     */
     async deletePage(siteId: string, slug: string) {
-      const deleted = await db
+      const [deleted] = await db
         .delete(pages)
         .where(pageIs(siteId, slug))
-        .returning({ slug: pages.slug })
-      return deleted.length > 0
+        .returning({ wasPublished: sql<boolean>`${pages.published} is not null` })
+      return deleted
+    },
+
+    /** Сайты, у которых есть опубликованные страницы: их сайт на сервере должен быть собран */
+    async sitesWithPublishedPages() {
+      const rows = await db
+        .selectDistinct({ siteId: pages.siteId })
+        .from(pages)
+        .where(isNotNull(pages.published))
+      return rows.map((row) => row.siteId)
     },
 
     async publishedPages(siteId: string) {

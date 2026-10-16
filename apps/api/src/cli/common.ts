@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { createAuth } from '../auth/auth'
 import { loadConfig, type MailConfig } from '../config'
 import { aesGcmSecretBox } from '../crypto/aes-gcm'
-import { createDb, type Db } from '../db/client'
+import { createDb, type Db, dbTargetOf } from '../db/client'
 import { DbLockedError, lockDb } from '../db/lock'
 import { migrateDb } from '../db/migrate'
 import { isLocalAdminUrl } from '../mail/link-warning'
@@ -43,16 +43,22 @@ export async function openDb() {
   // хеша пароля, который от секрета не зависит. Демо-сайт и владельца команды не заводят.
   // Без этого pnpm user:create на свежем клоне требовал бы AUTH_SECRET в .env
   const config = loadConfig({ dev: true })
-  mkdirSync(config.PGLITE_DIR, { recursive: true })
-  const unlock = await lockDb(config.PGLITE_DIR).catch((error: unknown) => {
-    if (!(error instanceof DbLockedError)) throw error
-    throw new CliError(
-      `База ${config.PGLITE_DIR} открыта процессом ${error.pid ?? '(неизвестно)'} — скорее всего, это API из pnpm dev.\n` +
-        'Встроенная база не выдерживает два процесса сразу: останови pnpm dev и повтори команду.\n' +
-        error.hint,
-    )
-  })
-  const { db, close } = createDb(config.PGLITE_DIR)
+  const target = dbTargetOf(config)
+  // Замок — только у встроенной базы. PostgreSQL (DATABASE_URL, сервер) держит и API, и команду
+  // сразу: на сервере команды запускаются при работающем API (docker compose exec)
+  let unlock = () => {}
+  if (target.kind === 'pglite') {
+    mkdirSync(config.PGLITE_DIR, { recursive: true })
+    unlock = await lockDb(config.PGLITE_DIR).catch((error: unknown) => {
+      if (!(error instanceof DbLockedError)) throw error
+      throw new CliError(
+        `База ${config.PGLITE_DIR} открыта процессом ${error.pid ?? '(неизвестно)'} — скорее всего, это API из pnpm dev.\n` +
+          'Встроенная база не выдерживает два процесса сразу: останови pnpm dev и повтори команду.\n' +
+          error.hint,
+      )
+    })
+  }
+  const { db, close } = createDb(target)
   const closeAll = async () => {
     await close()
     unlock()

@@ -10,6 +10,7 @@ import { errorForLog } from './log-error'
 import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
+import { buildsRoutes } from './modules/builds/routes'
 import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/routes'
 import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
@@ -17,6 +18,7 @@ import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
+import type { SitePublisher } from './publish/queue'
 import { createRateLimiter } from './rate-limit'
 
 // Здесь не импортируем Node API (fs, process и т.п.): админка читает типы этого файла.
@@ -47,6 +49,11 @@ export type AppDeps = {
   resetResponseMs?: number
   /** Лимиты приёма заявок с форм: по умолчанию LEAD_LIMITS, тесты ставят свои */
   leadLimits?: LeadLimits
+  /**
+   * Сборка сайта на сервере после публикации (модуль 9): очередь из src/publish/queue.ts.
+   * Нет (разработка, PUBLISH_DIR не задан) — публикация только меняет базу
+   */
+  publisher?: SitePublisher
 }
 
 /** Запросов сброса пароля на один адрес: не больше трёх за 15 минут */
@@ -92,7 +99,8 @@ export function createApp(deps: AppDeps) {
         resetResponseMs: deps.resetResponseMs ?? 300,
       }),
     )
-    .route('/sites', sitesRoutes({ db }))
+    .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log }))
+    .route('/sites/:siteId/build', buildsRoutes({ db, publisher: deps.publisher }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))
     .route('/media', mediaFilesRoutes(deps))

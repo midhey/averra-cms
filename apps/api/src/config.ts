@@ -233,8 +233,31 @@ const envSchema = (options: ConfigOptions) =>
       // всё равно не пройдёт: без флага --dev учебного режима нет (см. isLocalDev)
       NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
       PORT: z.coerce.number().int().positive().default(4000),
-      // Папка встроенного Postgres (PGlite) для разработки. Для прода появится DATABASE_URL
+      // Настоящий PostgreSQL (сервер): postgres://пользователь:пароль@хост:порт/база. Задан —
+      // API и команды работают с ним, PGLITE_DIR не нужен. Не задан — встроенный PGlite.
+      // Сообщения Zod значение не печатают, так что пароль из адреса в ошибку конфига не попадёт
+      DATABASE_URL: z
+        .string()
+        .trim()
+        .regex(/^postgres(ql)?:\/\/\S+$/, {
+          error: 'DATABASE_URL — адрес вида postgres://пользователь:пароль@хост:5432/база',
+        })
+        .optional(),
+      // Папка встроенного Postgres (PGlite) для разработки, когда DATABASE_URL не задан
       PGLITE_DIR: z.string().min(1).default('.data/pglite'),
+      // Публикация на сервере (модуль 9): папка, где лежат собранные сайты — <id сайта>/releases/…
+      // и ссылка current на текущую версию, которую отдаёт Caddy. Не задана — публикация только
+      // меняет базу, а сайт собирают отдельно (pnpm dev, рендерер руками)
+      PUBLISH_DIR: z.string().min(1).optional(),
+      // Сколько последних версий сайта хранить на диске (текущая не удаляется никогда)
+      PUBLISH_KEEP_RELEASES: z.coerce.number().int().min(2).max(50).default(5),
+      // Сколько секунд ждать сборку сайта, прежде чем остановить её и считать упавшей
+      PUBLISH_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(3600).default(300),
+      // Предел кучи JavaScript процесса сборки, МБ (--max-old-space-size): сборка не съест память VPS.
+      // Замер демо-сайта — около 360 МБ RSS всего процесса (docs/steps/3.6-vps-install.md)
+      PUBLISH_MAX_MEMORY_MB: z.coerce.number().int().min(128).max(8192).default(768),
+      // Папка пакета рендерера (apps/renderer). По умолчанию — рядом с API в репозитории или образе
+      RENDERER_DIR: z.string().min(1).optional(),
       // Папка с картинками медиатеки. В проде её место займёт S3-совместимое хранилище
       MEDIA_DIR: z.string().min(1).default('.data/media'),
       // Самый большой файл, который принимает медиатека, в байтах. По умолчанию 10 МБ

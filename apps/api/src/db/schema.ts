@@ -4,10 +4,12 @@ import type {
   ImageMimeType,
   LeadStatus,
   PageContent,
+  SiteBuildStatus,
   Theme,
 } from '@averra/schema'
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -483,5 +485,47 @@ export const mailSettings = pgTable(
       'mail_settings_password_sealed',
       sql`${table.passwordEncrypted} ~ '^v1[.][0-9a-f]{16}[.][A-Za-z0-9_-]{16}[.][A-Za-z0-9_-]{22}[.][A-Za-z0-9_-]+$'`,
     ),
+  ],
+)
+
+/**
+ * Журнал сборок сайта на сервере (модуль 9): после публикации API собирает статику в новую папку
+ * релиза и подменяет ею текущую (src/publish). Строка — одна сборка: ждёт, идёт, готова или упала.
+ * У сайта одновременно не больше одной ждущей сборки: повторная публикация, пока сборка ждёт,
+ * новой не заводит (её подхватит та же). Хранятся последние сборки сайта (buildsRepo.finish)
+ */
+export const siteBuilds = pgTable(
+  'site_builds',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    status: text().$type<SiteBuildStatus>().notNull().default('queued'),
+    // Имя папки релиза, которую сборка сделала текущей. Только у готовой
+    release: text(),
+    // Почему упала: хвост вывода сборщика, без секретов (сборщику они не передаются)
+    error: text(),
+    // Пиковая память процесса сборки в байтах: хватает ли VPS (цель — 1–2 ГБ)
+    peakRssBytes: bigint({ mode: 'number' }),
+    requestedAt: timestamp({ withTimezone: true }).notNull(),
+    startedAt: timestamp({ withTimezone: true }),
+    finishedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    index('site_builds_site_requested_idx').on(table.siteId, table.requestedAt),
+    check(
+      'site_builds_status_valid',
+      sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed')`,
+    ),
+    // Готовая знает свой релиз, упавшая — причину, и обе — когда закончили
+    check(
+      'site_builds_result_valid',
+      sql`(${table.status} = 'succeeded') = (${table.release} IS NOT NULL)
+        AND (${table.status} = 'failed') = (${table.error} IS NOT NULL)
+        AND (${table.status} IN ('succeeded', 'failed')) = (${table.finishedAt} IS NOT NULL)`,
+    ),
+    // Одна ждущая сборка на сайт: повторный запрос ждущую не плодит (и при гонке тоже)
+    uniqueIndex('site_builds_one_queued').on(table.siteId).where(sql`${table.status} = 'queued'`),
   ],
 )

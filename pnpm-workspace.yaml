@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - e2e
+  - deploy
 
 # Одна версия общих зависимостей на весь репозиторий.
 # В package.json пакетов вместо версии пишем "catalog:"
@@ -35,3 +36,17 @@ allowBuilds:
   # Нам хватает запускалок: корневые скрипты вызывают pnpm на закреплённой Node
   pnpm: false
   sharp: true
+
+# pglite-socket (сервер протокола Postgres поверх PGlite, только для тестов API на настоящем
+# драйвере) объявляет расширения PGlite обязательными peer-зависимостями, хотя они нужны лишь тем,
+# кто их подключает. Помечаем необязательными, чтобы pnpm не ставил их сам
+packageExtensions:
+  '@electric-sql/pglite-socket':
+    peerDependenciesMeta:
+      '@electric-sql/pglite-age': { optional: true }
+      '@electric-sql/pglite-pgtap': { optional: true }
+      '@electric-sql/pglite-pg_ivm': { optional: true }
+      '@electric-sql/pglite-pgvector': { optional: true }
+      '@electric-sql/pglite-pg_uuidv7': { optional: true }
+      '@electric-sql/pglite-pg_hashids': { optional: true }
+      '@electric-sql/pglite-pg_textsearch': { optional: true }

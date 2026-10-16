@@ -17,6 +17,8 @@ import { can } from '../../auth/access'
 import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
+import { errorForLog } from '../../log-error'
+import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
 import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
@@ -36,8 +38,27 @@ const SaveDraft = z.strictObject({
 
 // Вход проверил authenticate в app.ts. Здесь каждый маршрут сайта объявляет действие
 // через requireSite: он же отвечает 404 на чужой или несуществующий сайт
-export function sitesRoutes({ db }: { db: Db }) {
+export function sitesRoutes({
+  db,
+  publisher,
+  log,
+}: {
+  db: Db
+  /** Сборка сайта на сервере после публикации (модуль 9). Нет — публикация только меняет базу */
+  publisher?: SitePublisher
+  log: (message: string) => void
+}) {
   const repo = sitesRepo(db)
+  // Сайт на сервере пересобирается после того, как опубликованное в базе уже поменялось. Сбой
+  // постановки в очередь не отменяет публикацию: она случилась, а «Собрать заново» на экране
+  // сайта поставит сборку ещё раз
+  const rebuild = async (siteId: string) => {
+    try {
+      await publisher?.request(siteId)
+    } catch (error) {
+      log(`Сайт ${siteId}: не удалось поставить сборку в очередь — ${String(errorForLog(error))}`)
+    }
+  }
   const media = mediaRepo(db)
   const leads = leadsRepo(db)
   const site = (permission: Parameters<typeof requireSite>[1]) => requireSite(db, permission)
@@ -160,9 +181,10 @@ export function sitesRoutes({ db }: { db: Db }) {
           if (slug === MAIN_PAGE_SLUG) {
             return c.json(conflict('Главную страницу удалить нельзя'), 409)
           }
-          if (!(await repo.deletePage(siteId, slug))) {
-            return c.json(notFound('Страница не найдена'), 404)
-          }
+          const deleted = await repo.deletePage(siteId, slug)
+          if (!deleted) return c.json(notFound('Страница не найдена'), 404)
+          // Страница была на сайте — сайт на сервере собирается заново, уже без неё
+          if (deleted.wasPublished) await rebuild(siteId)
           return c.body(null, 204)
         },
       )
@@ -175,6 +197,7 @@ export function sitesRoutes({ db }: { db: Db }) {
           const { siteId, slug } = c.req.valid('param')
           const page = await repo.publish(siteId, slug, c.var.actor)
           if (!page) return c.json(notFound('Страница не найдена'), 404)
+          await rebuild(siteId)
           return c.json(page)
         },
       )

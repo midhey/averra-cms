@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { setupZodMessages } from '@averra/schema'
 import { serve } from '@hono/node-server'
 import { createApp } from './app'
@@ -6,7 +7,7 @@ import { createAuth } from './auth/auth'
 import { serverFetch } from './client-ip'
 import { loadConfig, parseApiArgs } from './config'
 import { aesGcmSecretBox } from './crypto/aes-gcm'
-import { createDb } from './db/client'
+import { createDb, dbTargetOf } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
 import { seedDemo, seedDevOwner } from './db/seed'
@@ -21,6 +22,10 @@ import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
+import { sitesRepo } from './modules/sites/repo'
+import { createPublishQueue } from './publish/queue'
+import { defaultRendererDir, rendererProcess } from './publish/renderer'
+import { hasCurrentRelease, staticSiteBuilder } from './publish/site-builder'
 
 setupZodMessages()
 // --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
@@ -33,19 +38,30 @@ if (!args.success) {
 }
 const config = loadConfig({ dev: args.dev })
 
-mkdirSync(config.PGLITE_DIR, { recursive: true })
-const unlock = await lockDb(config.PGLITE_DIR, { waitMs: 5000 }).catch((error: unknown) => {
-  if (!(error instanceof DbLockedError)) throw error
-  console.error(
-    `База ${config.PGLITE_DIR} уже открыта процессом ${error.pid ?? '(неизвестно)'}. ` +
-      'Встроенная база не выдерживает два процесса сразу: останови второй API или команду.\n' +
-      error.hint,
-  )
-  process.exit(1)
-})
-// Замок снимается при любом выходе, в том числе по ошибке старта
-process.on('exit', unlock)
-const { db, close } = createDb(config.PGLITE_DIR)
+// База: PostgreSQL по DATABASE_URL (сервер) или встроенный PGlite в PGLITE_DIR (разработка)
+const target = dbTargetOf(config)
+if (target.kind === 'pglite' && target.dataDir) {
+  const dataDir = target.dataDir
+  mkdirSync(dataDir, { recursive: true })
+  // Замок нужен только встроенной базе: PostgreSQL сам держит много соединений и процессов
+  const unlock = await lockDb(dataDir, { waitMs: 5000 }).catch((error: unknown) => {
+    if (!(error instanceof DbLockedError)) throw error
+    console.error(
+      `База ${dataDir} уже открыта процессом ${error.pid ?? '(неизвестно)'}. ` +
+        'Встроенная база не выдерживает два процесса сразу: останови второй API или команду.\n' +
+        error.hint,
+    )
+    process.exit(1)
+  })
+  // Замок снимается при любом выходе, в том числе по ошибке старта
+  process.on('exit', unlock)
+}
+const { db, close } = createDb(target)
+console.log(
+  target.kind === 'postgres'
+    ? 'База: PostgreSQL (DATABASE_URL)'
+    : `База: PGlite в ${target.dataDir}`,
+)
 await migrateDb(db)
 
 // Куда подключается SMTP из админки вместо 465 и 587: DEV_SMTP_CONNECT_PORT, только в учебном
@@ -128,16 +144,45 @@ if (config.devSeed) {
   }
 }
 
+// Публикация на сервере (модуль 9): после «Опубликовать» API собирает сайт отдельным процессом
+// Astro в новую папку релиза в PUBLISH_DIR и подменяет ею текущую. Без PUBLISH_DIR — выключена
+const storage = diskStorage(config.MEDIA_DIR)
+const publishQueue = config.PUBLISH_DIR
+  ? createPublishQueue({
+      db,
+      log: console.log,
+      build: staticSiteBuilder({
+        publishDir: config.PUBLISH_DIR,
+        keepReleases: config.PUBLISH_KEEP_RELEASES,
+        storage,
+        log: console.log,
+        render: rendererProcess({
+          rendererDir: config.RENDERER_DIR ?? defaultRendererDir(),
+          // Сборщик берёт снимок сайта у этого же API напрямую, мимо прокси
+          apiUrl: `http://127.0.0.1:${config.PORT}`,
+          cacheDir: join(config.PUBLISH_DIR, '.cache'),
+          timeoutMs: config.PUBLISH_TIMEOUT_SECONDS * 1000,
+          maxMemoryMb: config.PUBLISH_MAX_MEMORY_MB,
+        }),
+      }),
+    })
+  : undefined
+
+// Сборки, прерванные прошлым перезапуском, помечаются до serve(): иначе публикация, пришедшая
+// раньше этой пометки, начала бы сборку, которую сочли бы прерванной (publish/queue.ts)
+const interruptedSites = publishQueue ? await publishQueue.markInterrupted() : []
+
 const app = createApp({
   db,
   auth,
   trustedOrigins: [config.ADMIN_URL, config.API_URL],
   log: console.log,
-  storage: diskStorage(config.MEDIA_DIR),
+  storage,
   images: sharpProcessor(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
   mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,
+  publisher: publishQueue,
 })
 
 const server = serve(
@@ -147,6 +192,23 @@ const server = serve(
   },
   (info) => {
     console.log(`API: http://localhost:${info.port}/api/health`)
+    if (publishQueue && config.PUBLISH_DIR) {
+      const publishDir = config.PUBLISH_DIR
+      console.log(`Публикация на сервере: сайты собираются в ${publishDir}`)
+      // Сборщик ходит в этот API, поэтому очередь оживает, когда сервер уже слушает порт.
+      // Прерванные перезапуском сборки и опубликованные сайты без текущей версии на диске
+      // (свежая установка, потерянный том) собираются заново
+      void (async () => {
+        const published = await sitesRepo(db).sitesWithPublishedPages()
+        const missing: string[] = []
+        for (const siteId of published) {
+          if (!(await hasCurrentRelease(publishDir, siteId))) missing.push(siteId)
+        }
+        await publishQueue.resume(interruptedSites, missing)
+      })().catch((error: unknown) =>
+        console.error('Не удалось возобновить сборки сайтов:', errorForLog(error)),
+      )
+    }
     if (config.loopbackOnly) {
       console.log(
         'Учебный режим (--dev, учебный секрет AUTH_SECRET): только для разработки. ' +
@@ -174,6 +236,8 @@ async function shutdown() {
         '(при зависшем SMTP — до пары минут). Ctrl+C ещё раз — выйти сразу',
     )
   }
+  // Идущая сборка сайта прерывается и соберётся заново при следующем старте (publish/queue.ts)
+  await publishQueue?.stop()
   await mailWorker.stop()
   server.close()
   await mail.close()
