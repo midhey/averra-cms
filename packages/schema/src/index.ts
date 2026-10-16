@@ -93,7 +93,26 @@ export {
   PageTitle,
   pageTemplateContent,
 } from './page'
-export { SiteBuildStatus } from './publish'
+export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
 export { NewSite, SiteName } from './site'
+export {
+  BackupKind,
+  BackupRemote,
+  BackupRun,
+  DiskSpace,
+  formatGigabytes,
+  InstallationFacts,
+  InstallationStatus,
+  mailStuck,
+  SERVICE_DATABASE,
+  STATUS_LIMITS,
+  StatusProblem,
+  StatusProblemCode,
+  statusProblems,
+  UPDATE_RESULT_LABELS,
+  UpdateResult,
+  UpdateRun,
+  updateResultText,
+} from './status'
 export { Theme } from './theme'
 export { setupZodMessages } from './zod-messages'
