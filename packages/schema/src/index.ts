@@ -15,13 +15,37 @@ export {
   UserEmail,
   UserName,
 } from './auth'
-export { BlockInstance, type BlockType, blocks, cta, features, hero } from './blocks'
+export { BlockInstance, type BlockType, blocks, cta, features, form, hero } from './blocks'
 export { Button, Href } from './common'
 export { BlockId, defineBlock } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
+export {
+  CHECKED_VALUE,
+  CONSENT_FIELD,
+  EMAIL_PATTERN,
+  FORM_MAX_FIELDS,
+  FormField,
+  type FormFieldInput,
+  FormFieldName,
+  FormFieldType,
+  fieldRules,
+  formFieldInput,
+  formFieldTypes,
+  formFieldTypeTitles,
+  HONEYPOT_FIELD,
+  LEAD_RETENTION_DAYS,
+  LeadSettings,
+  LeadStatus,
+  type LeadValue,
+  leadValuesSchema,
+  PHONE_PATTERN,
+  patternRegExp,
+  UpdateLead,
+} from './forms'
 export { Uuid } from './id'
 export {
   hasHeaderBreak,
+  MAIL_ADDRESS_PATTERN,
   MailAddress,
   MailLine,
   MailSenderName,

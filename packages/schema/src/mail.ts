@@ -19,9 +19,22 @@ const singleLine = () =>
     .refine((value) => !hasHeaderBreak(value), BREAK_MESSAGE)
     .trim()
 
+/**
+ * Шаблон адреса почты — строка для HTML-атрибута pattern (браузер собирает его как ^(?:…)$
+ * с флагом v) и для сервера: так форма на сайте и API принимают одно и то же.
+ * Имя ящика — латиница, цифры и _ ' + -, точки только между ними. Запятых, кавычек, угловых
+ * скобок и пробелов нет — адрес не разобрать как несколько и не вставить в заголовок своё.
+ * Домен — буквы любого алфавита и цифры: anna@пример.рф и его punycode
+ * (anna@xn--e1afmkfd.xn--p1ai — так IDN отправляет Chrome). Зона — не короче двух знаков
+ * и начинается с буквы. Кириллический домен nodemailer сам переводит в punycode при отправке
+ */
+export const MAIL_ADDRESS_PATTERN = String.raw`[A-Za-z0-9_'\+\-]+(?:\.[A-Za-z0-9_'\+\-]+)*@(?:[\p{L}\p{N}](?:[\p{L}\p{N}\-]*[\p{L}\p{N}])?\.)+\p{L}[\p{L}\p{N}\-]*[\p{L}\p{N}]`
+
+const MAIL_ADDRESS_REGEXP = new RegExp(`^(?:${MAIL_ADDRESS_PATTERN})$`, 'v')
+
 /** Адрес почты для заголовков письма: получатель, отправитель, Reply-To */
 export const MailAddress = singleLine().pipe(
-  z.email('Нужен адрес почты, например anna@example.ru').max(254),
+  z.string().max(254).regex(MAIL_ADDRESS_REGEXP, 'Нужен адрес почты, например anna@example.ru'),
 )
 export type MailAddress = z.infer<typeof MailAddress>
 
