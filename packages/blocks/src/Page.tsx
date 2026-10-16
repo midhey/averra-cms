@@ -1,15 +1,18 @@
 import type { BlockInstance, MediaMap, PageContent } from '@averra/schema'
 import { Cta } from './cta/Cta'
 import { Features } from './features/Features'
+import { Form } from './form/Form'
 import { Hero } from './hero/Hero'
 
 type PageProps = {
   content: PageContent
   /** Картинки, на которые ссылаются блоки. Без справочника блоки выводятся без картинок */
   media?: MediaMap
+  /** Адрес приёма заявок формы по id блока. Без него (предпросмотр) формы не отправляются */
+  formAction?: (blockId: string) => string
 }
 
-export function Page({ content, media = {} }: PageProps) {
+export function Page({ content, media = {}, formAction }: PageProps) {
   // h1 на странице один: его получает первый блок «Первый экран»
   const mainHeroId = content.blocks.find((block) => block.type === 'hero')?.id
   return (
@@ -20,6 +23,7 @@ export function Page({ content, media = {} }: PageProps) {
           block={block}
           headingLevel={block.id === mainHeroId ? 1 : 2}
           media={media}
+          formAction={formAction}
           // Первый блок виден сразу при открытии: его картинку не откладываем
           priority={index === 0}
         />
@@ -28,7 +32,13 @@ export function Page({ content, media = {} }: PageProps) {
   )
 }
 
-type BlockProps = { block: BlockInstance; headingLevel: 1 | 2; media: MediaMap; priority: boolean }
+type BlockProps = {
+  block: BlockInstance
+  headingLevel: 1 | 2
+  media: MediaMap
+  priority: boolean
+  formAction?: ((blockId: string) => string) | undefined
+}
 
 function Block({ block, ...common }: BlockProps) {
   switch (block.type) {
@@ -38,6 +48,8 @@ function Block({ block, ...common }: BlockProps) {
       return <Features id={block.id} data={block.props} {...common} />
     case 'cta':
       return <Cta id={block.id} data={block.props} {...common} />
+    case 'form':
+      return <Form id={block.id} data={block.props} {...common} />
     default: {
       // Появится в схеме блок без компонента — здесь будет ошибка компиляции
       const missing: never = block

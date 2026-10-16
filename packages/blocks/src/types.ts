@@ -13,4 +13,9 @@ export type BlockComponentProps<T extends BlockType> = {
   media: MediaMap
   /** Блок наверху страницы: его картинку браузер грузит сразу и в первую очередь */
   priority: boolean
+  /**
+   * Куда форма блока шлёт заявку: адрес приёма в API по id блока. Нет (предпросмотр в админке) —
+   * форма не отправляется
+   */
+  formAction?: ((blockId: string) => string) | undefined
 }

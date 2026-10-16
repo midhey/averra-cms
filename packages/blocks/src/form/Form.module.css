@@ -1,0 +1,128 @@
+.box {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 36rem;
+  margin-inline: auto;
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.text {
+  color: var(--color-muted);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.label {
+  font-weight: 600;
+}
+
+.required {
+  color: var(--color-accent);
+}
+
+.input {
+  width: 100%;
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+}
+
+textarea.input {
+  resize: vertical;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.check,
+.consent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.check input,
+.consent input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--color-accent);
+}
+
+.check label,
+.consent label {
+  flex: 1;
+}
+
+.check .hint {
+  flex-basis: 100%;
+}
+
+.consent {
+  font-size: var(--text-sm);
+}
+
+.link {
+  color: inherit;
+}
+
+.submit {
+  justify-self: start;
+  min-height: 3rem;
+  padding: var(--space-3) var(--space-6);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:hover {
+  filter: brightness(1.08);
+}
+
+/* Ловушка для ботов: вне экрана, но не display: none — его боты узнают и пропускают */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Текст успеха виден только после возврата из API на #<id>-sent, форма тогда прячется */
+.sent {
+  display: none;
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: var(--text-lg);
+}
+
+.sent:target {
+  display: block;
+}
+
+.sent:target ~ .form {
+  display: none;
+}
