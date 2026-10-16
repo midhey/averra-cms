@@ -31,7 +31,8 @@
     "token:create": "tsx src/cli/token-create.ts",
     "token:list": "tsx src/cli/token-list.ts",
     "token:revoke": "tsx src/cli/token-revoke.ts",
-    "mail:test": "tsx src/cli/mail-test.ts"
+    "mail:test": "tsx src/cli/mail-test.ts",
+    "status": "tsx src/cli/status.ts"
   },
   "dependencies": {
     "@averra/schema": "workspace:*",
@@ -41,6 +42,7 @@
     "@hono/zod-validator": "^0.9.1",
     "better-auth": "^1.7.7",
     "drizzle-orm": "^0.45.3",
+    "fflate": "0.8.3",
     "hono": "catalog:",
     "nodemailer": "^10.1.0",
     "pg": "8.23.1",

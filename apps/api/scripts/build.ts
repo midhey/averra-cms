@@ -37,6 +37,7 @@ const entryPoints = {
   'token-list': 'src/cli/token-list.ts',
   'token-revoke': 'src/cli/token-revoke.ts',
   'mail-test': 'src/cli/mail-test.ts',
+  status: 'src/cli/status.ts',
 }
 
 rmSync(outdir, { recursive: true, force: true })

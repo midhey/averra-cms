@@ -11,6 +11,7 @@ import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
 import { buildsRoutes } from './modules/builds/routes'
+import { exportRoutes, type PublishedSite } from './modules/export/routes'
 import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/routes'
 import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
@@ -18,6 +19,8 @@ import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { sitesRoutes } from './modules/sites/routes'
+import { statusRoutes } from './modules/status/routes'
+import { type HostStatus, noHostStatus } from './modules/status/service'
 import type { SitePublisher } from './publish/queue'
 import { createRateLimiter } from './rate-limit'
 
@@ -54,6 +57,18 @@ export type AppDeps = {
    * Нет (разработка, PUBLISH_DIR не задан) — публикация только меняет базу
    */
   publisher?: SitePublisher
+  /**
+   * Опубликованные сайты на диске — для выгрузки статическим архивом. Есть вместе с publisher
+   * (PUBLISH_DIR)
+   */
+  published?: PublishedSite
+  /** Версия установки (AVERRA_VERSION из образа). По умолчанию dev */
+  version?: string
+  /**
+   * Сведения с сервера для состояния установки: итоги бэкапов и обновлений из папки состояния
+   * (deploy/averra.sh) и место на диске. Нет — ни бэкапов, ни дисков (разработка)
+   */
+  host?: HostStatus
 }
 
 /** Запросов сброса пароля на один адрес: не больше трёх за 15 минут */
@@ -108,6 +123,26 @@ export function createApp(deps: AppDeps) {
     .route('/invitations', invitationsRoutes({ db, auth }))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
     .route('/sites/:siteId/leads', leadsRoutes({ db, mail }))
+    .route(
+      '/sites/:siteId/export',
+      exportRoutes({
+        db,
+        storage: deps.storage,
+        version: deps.version ?? 'dev',
+        published: deps.published,
+      }),
+    )
+    // Состояние установки — только владельцу (modules/status)
+    .route(
+      '/status',
+      statusRoutes({
+        db,
+        mail,
+        version: deps.version ?? 'dev',
+        host: deps.host ?? noHostStatus,
+        publishEnabled: deps.publisher !== undefined,
+      }),
+    )
     // Открытый приём заявок с форм опубликованного сайта (без входа, см. auth/middleware.ts)
     .route(
       '/forms',

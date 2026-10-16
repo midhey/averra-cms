@@ -39,6 +39,9 @@ const permissions = {
   'leads.manage': ['owner', 'client'],
   // Куда уходят уведомления, сколько хранить заявки, подтверждать ли посетителю
   'leads.settings': ['owner', 'client'],
+  // Полный экспорт данных сайта (принцип 8 «клиент не заложник»): в нём заявки, поэтому — тем же,
+  // кто видит заявки. Клиент забирает свои данные сам, без студии
+  'site.export': ['owner', 'client'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -51,6 +54,7 @@ export const personalData: ReadonlySet<Permission> = new Set([
   'leads.read',
   'leads.manage',
   'leads.settings',
+  'site.export',
 ])
 
 export const TOKEN_PERSONAL_DATA_MESSAGE =
@@ -73,6 +77,7 @@ export const forbiddenMessages: Record<Permission, string> = {
   'leads.read': 'Заявки видят владелец и клиент сайта',
   'leads.manage': 'Обрабатывать заявки могут владелец и клиент сайта',
   'leads.settings': 'Настройки заявок меняют владелец и клиент сайта',
+  'site.export': 'Выгрузить все данные сайта могут владелец и клиент: в них заявки',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

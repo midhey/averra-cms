@@ -20,7 +20,9 @@ import { processOutbox } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import type { ImageProcessor } from './media/processor'
 import { sharpProcessor } from './media/sharp-processor'
+import type { PublishedSite } from './modules/export/routes'
 import type { LeadLimits } from './modules/leads/public-routes'
+import type { HostStatus } from './modules/status/service'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
 import type { SitePublisher } from './publish/queue'
@@ -68,7 +70,15 @@ export async function createTestApi({
   database,
   // Сборка сайта после публикации (модуль 9): тесты публикации дают свою очередь
   publisher,
+  // Опубликованные сайты на диске (выгрузка статикой): тесты экспорта дают свою папку
+  published,
+  // Версия установки и сведения с сервера для GET /api/status
+  version,
+  host,
 }: {
+  published?: PublishedSite
+  version?: string
+  host?: HostStatus
   database?: DbTarget
   publisher?: SitePublisher
   leadLimits?: LeadLimits
@@ -146,6 +156,9 @@ export async function createTestApi({
     resetResponseMs,
     leadLimits,
     publisher,
+    published,
+    version,
+    host,
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)

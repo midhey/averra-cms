@@ -23,9 +23,11 @@ import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
 import { sitesRepo } from './modules/sites/repo'
+import { publishedSite } from './publish/published-site'
 import { createPublishQueue } from './publish/queue'
 import { defaultRendererDir, rendererProcess } from './publish/renderer'
 import { hasCurrentRelease, staticSiteBuilder } from './publish/site-builder'
+import { diskTargets, hostStatus } from './status/host'
 
 setupZodMessages()
 // --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
@@ -183,6 +185,10 @@ const app = createApp({
   mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,
   publisher: publishQueue,
+  published: config.PUBLISH_DIR ? publishedSite(config.PUBLISH_DIR) : undefined,
+  version: config.AVERRA_VERSION,
+  // Состояние установки: итоги бэкапов и обновлений от deploy/averra.sh и место на дисках
+  host: hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) }),
 })
 
 const server = serve(

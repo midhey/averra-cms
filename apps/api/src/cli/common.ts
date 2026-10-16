@@ -37,8 +37,12 @@ export function check<S extends z.ZodType>(schema: S, value: unknown, usage: str
   throw new CliError(`${z.prettifyError(parsed.error)}\n\n${usage}`)
 }
 
-/** База и Better Auth той же конфигурации, что у API. Пока API запущен, база занята */
-export async function openDb() {
+/**
+ * База и Better Auth той же конфигурации, что у API. Пока API запущен, встроенная база занята.
+ * migrate: false — только читать (status.js): команда наблюдения не должна менять схему базы,
+ * например посреди отката обновления
+ */
+export async function openDb({ migrate = true }: { migrate?: boolean } = {}) {
   // Учебный секрет команде не опасен: она не слушает сеть, а Better Auth нужен ей только для
   // хеша пароля, который от секрета не зависит. Демо-сайт и владельца команды не заводят.
   // Без этого pnpm user:create на свежем клоне требовал бы AUTH_SECRET в .env
@@ -64,7 +68,7 @@ export async function openDb() {
     unlock()
   }
   try {
-    await migrateDb(db)
+    if (migrate) await migrateDb(db)
   } catch (error) {
     await closeAll()
     throw error

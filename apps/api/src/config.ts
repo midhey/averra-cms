@@ -233,6 +233,18 @@ const envSchema = (options: ConfigOptions) =>
       // всё равно не пройдёт: без флага --dev учебного режима нет (см. isLocalDev)
       NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
       PORT: z.coerce.number().int().positive().default(4000),
+      // Версия установки: её кладёт в образ сборка релиза (deploy/Dockerfile, ARG AVERRA_VERSION).
+      // Без неё — dev (разработка, e2e). Видна владельцу в «Состоянии» и в averra.sh status
+      AVERRA_VERSION: z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/, {
+          error: 'AVERRA_VERSION — тег версии, например 0.7.0',
+        })
+        .default('dev'),
+      // Папка состояния установки: итоги бэкапов и обновлений, которые пишет deploy/averra.sh
+      // на сервере (в контейнере — только на чтение). Не задана — бэкапов у установки нет (разработка)
+      STATE_DIR: z.string().min(1).optional(),
       // Настоящий PostgreSQL (сервер): postgres://пользователь:пароль@хост:порт/база. Задан —
       // API и команды работают с ним, PGLITE_DIR не нужен. Не задан — встроенный PGlite.
       // Сообщения Zod значение не печатают, так что пароль из адреса в ошибку конфига не попадёт
