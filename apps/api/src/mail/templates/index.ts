@@ -2,6 +2,9 @@ import { MailAddress, MailSubject } from '@averra/schema'
 import { z } from 'zod'
 import { MAIL_FOOTER, mailLayout } from '../layout'
 import { invitationTemplate } from './invitation'
+import { leadNewTemplate } from './lead-new'
+import { leadReceivedTemplate } from './lead-received'
+import { leadRecipientsChangedTemplate } from './lead-recipients-changed'
 import { mailSettingsChangedTemplate } from './mail-settings-changed'
 import { mailTestTemplate } from './mail-test'
 import { passwordResetTemplate } from './password-reset'
@@ -12,6 +15,9 @@ export const mailTemplates = {
   'password-reset': passwordResetTemplate,
   invitation: invitationTemplate,
   'mail-settings-changed': mailSettingsChangedTemplate,
+  'lead-new': leadNewTemplate,
+  'lead-received': leadReceivedTemplate,
+  'lead-recipients-changed': leadRecipientsChangedTemplate,
 } as const
 
 export type MailTemplateId = keyof typeof mailTemplates
@@ -74,8 +80,13 @@ export function renderMail(template: MailTemplateId, data: unknown): RenderedMai
   const subject = header(template, 'subject', MailSubject, content.subject)
   return {
     subject,
-    html: mailLayout({ subject, preheader: content.preheader, body: content.body }),
-    text: `${content.text}\n\n—\n${MAIL_FOOTER}\n`,
+    html: mailLayout({
+      subject,
+      preheader: content.preheader,
+      body: content.body,
+      ...(content.footer === undefined ? {} : { footer: content.footer }),
+    }),
+    text: `${content.text}\n\n—\n${content.footer ?? MAIL_FOOTER}\n`,
     ...(content.replyTo === undefined
       ? {}
       : { replyTo: header(template, 'replyTo', MailAddress, content.replyTo) }),

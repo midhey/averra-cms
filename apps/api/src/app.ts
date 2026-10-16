@@ -11,6 +11,8 @@ import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
 import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/routes'
+import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
+import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
@@ -43,6 +45,8 @@ export type AppDeps = {
    * не должно быть видно, есть ли такой адрес. По умолчанию 300
    */
   resetResponseMs?: number
+  /** Лимиты приёма заявок с форм: по умолчанию LEAD_LIMITS, тесты ставят свои */
+  leadLimits?: LeadLimits
 }
 
 /** Запросов сброса пароля на один адрес: не больше трёх за 15 минут */
@@ -95,6 +99,19 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
+    .route('/sites/:siteId/leads', leadsRoutes({ db, mail }))
+    // Открытый приём заявок с форм опубликованного сайта (без входа, см. auth/middleware.ts)
+    .route(
+      '/forms',
+      formsRoutes({
+        db,
+        auth,
+        mail,
+        adminUrl,
+        log,
+        ...(deps.leadLimits ? { limits: deps.leadLimits } : {}),
+      }),
+    )
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404))
 

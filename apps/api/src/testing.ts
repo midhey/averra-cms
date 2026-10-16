@@ -16,9 +16,11 @@ import type { Mailer, SmtpSettings } from './mail/mailer'
 import { memoryMailer } from './mail/memory-mailer'
 import { createMailRuntime } from './mail/runtime'
 import { adminSmtp, type SmtpOptions, smtpMailer } from './mail/smtp-mailer'
+import { processOutbox } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import type { ImageProcessor } from './media/processor'
 import { sharpProcessor } from './media/sharp-processor'
+import type { LeadLimits } from './modules/leads/public-routes'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
 
@@ -53,7 +55,13 @@ export async function createTestApi({
   resetResponseMs,
   // Лог API: тест может проверить, что пишется (и чего нет) при смене настроек почты
   log = () => {},
+  // Лимиты приёма заявок: тесты лимитов ставят маленькие, остальные — большие, чтобы не мешали
+  leadLimits = {
+    perIp: { max: 1000, windowMs: 60_000 },
+    perSite: { max: 1000, windowMs: 60_000 },
+  },
 }: {
+  leadLimits?: LeadLimits
   resetResponseMs?: number
   production?: boolean
   mediaMaxBytes?: number
@@ -126,6 +134,7 @@ export async function createTestApi({
     mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
     adminUrl: testOrigins.admin,
     resetResponseMs,
+    leadLimits,
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)
@@ -197,3 +206,18 @@ export async function createTestApi({
 }
 
 export type TestApi = Awaited<ReturnType<typeof createTestApi>>
+
+/**
+ * Отправить всю очередь писем тестового API через его почту. Проход, который ничего не отправил
+ * (почта выключена или на паузе, сервер не принял, обработчик остановлен), — конец: иначе письма
+ * отпускаются и берутся снова, и цикл не кончится. Предел проходов — на случай поломки: тест
+ * должен упасть, а не зависнуть
+ */
+export async function sendQueue(api: TestApi, maxPasses = 50) {
+  const options = { db: api.db, mailer: api.mailRuntime.mailer, ...api.mailSettings }
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const result = await processOutbox(options)
+    if (result.claimed === 0 || result.mailOff || result.serverDown || result.aborted) return
+  }
+  throw new Error(`Очередь писем не опустела за ${maxPasses} проходов`)
+}

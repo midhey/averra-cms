@@ -171,7 +171,7 @@ export async function processOutbox({
         result.serverDown = true
         log(
           `Письмо ${mail.id} (${mail.template}) не отправлено: ${errorText(error)}. ` +
-            'Это настройки почты, а не письмо: попытка не засчитана, письма ждут исправления',
+            'Виновато не письмо, а настройки почты или лимит отправителя: попытка не засчитана, письма ждут',
         )
         await releaseRest([mail], errorText(error))
         await releaseRest(batch.slice(index + 1))
@@ -227,10 +227,11 @@ export type MailWorkerOptions = Omit<ProcessOptions, 'stopped' | 'mailer'> & {
   /** Как часто чистить старые письма, мс */
   cleanupEveryMs?: number
   /**
-   * Что ещё чистить вместе с очередью и по тому же сроку retentionDays: например, закрытые
-   * приглашения (index.ts). run удаляет записи, закрытые раньше before, и говорит, сколько
+   * Что ещё чистить вместе с очередью: например, закрытые приглашения (index.ts) — по тому же
+   * сроку retentionDays, или заявки — по сроку своего сайта. run удаляет записи, закрытые раньше
+   * before (сейчас минус retentionDays), или считает свой срок от now, и говорит, сколько удалил
    */
-  cleanupAlso?: ReadonlyArray<{ what: string; run: (before: Date) => Promise<number> }>
+  cleanupAlso?: ReadonlyArray<{ what: string; run: (before: Date, now: Date) => Promise<number> }>
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -278,7 +279,7 @@ export function startMailWorker({
         if (removed > 0) log(`Из очереди писем удалено старых: ${removed}`)
         const before = new Date(now().getTime() - retentionDays * DAY_MS)
         for (const { what, run } of cleanupAlso) {
-          const count = await run(before)
+          const count = await run(before, now())
           if (count > 0) log(`Удалено старых записей (${what}): ${count}`)
         }
       }

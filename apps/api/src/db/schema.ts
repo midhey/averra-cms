@@ -1,4 +1,11 @@
-import type { ImageFormat, ImageMimeType, PageContent, Theme } from '@averra/schema'
+import type {
+  FormFieldType,
+  ImageFormat,
+  ImageMimeType,
+  LeadStatus,
+  PageContent,
+  Theme,
+} from '@averra/schema'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
@@ -17,12 +24,26 @@ import {
 
 // В коде поля в camelCase, в базе колонки в snake_case: casing задан в drizzle.config.ts и client.ts
 
-export const sites = pgTable('sites', {
-  id: uuid().primaryKey().defaultRandom(),
-  name: text().notNull(),
-  theme: jsonb().$type<Theme>().notNull(),
-  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-})
+export const sites = pgTable(
+  'sites',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    theme: jsonb().$type<Theme>().notNull(),
+    // Заявки с форм сайта (модуль 8). Кому слать уведомления: пусто — всем владельцам админки.
+    // Адреса проверены LeadSettings при сохранении
+    leadRecipients: jsonb().$type<string[]>().notNull().default([]),
+    // Сколько дней хранить заявки: в них персональные данные (152-ФЗ)
+    leadRetentionDays: integer().notNull().default(180),
+    // Слать ли посетителю подтверждение, что заявка получена (фиксированный текст)
+    leadConfirmation: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('sites_lead_retention_valid', sql`${table.leadRetentionDays} BETWEEN 7 AND 1825`),
+    check('sites_lead_recipients_array', sql`jsonb_typeof(${table.leadRecipients}) = 'array'`),
+  ],
+)
 
 export const pages = pgTable(
   'pages',
@@ -246,6 +267,56 @@ export const pageRevisions = pgTable(
   ],
 )
 
+/** Значение поля в заявке так, как его видела форма: ключ, подпись, тип и что ввёл посетитель */
+export type StoredLeadField = {
+  name: string
+  label: string
+  type: FormFieldType
+  value: string | boolean
+}
+
+/**
+ * Заявки с форм сайта (модуль 8). Пишет их открытый приём (modules/leads) в той же транзакции,
+ * что и письма о них. Подписи полей хранятся вместе со значениями: форму потом переименуют,
+ * а заявка должна читаться так, как её видел посетитель. IP посетителя не храним (152-ФЗ):
+ * для лимитов он живёт только в памяти процесса. Удаляются через lead_retention_days сайта
+ */
+export const leads = pgTable(
+  'leads',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    // Страницу удалили — заявка остаётся, адрес страницы и id блока — в своих колонках
+    pageId: uuid().references(() => pages.id, { onDelete: 'set null' }),
+    pageSlug: text().notNull(),
+    blockId: text().notNull(),
+    formTitle: text().notNull(),
+    data: jsonb().$type<StoredLeadField[]>().notNull(),
+    // Согласие на обработку персональных данных: какой текст и какая политика были на странице,
+    // какая версия страницы была опубликована и когда посетитель согласился
+    consentText: text().notNull(),
+    consentPolicyUrl: text().notNull(),
+    pageVersion: integer(),
+    consentedAt: timestamp({ withTimezone: true }).notNull(),
+    status: text().$type<LeadStatus>().notNull().default('new'),
+    processedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('leads_site_created_idx').on(table.siteId, table.createdAt),
+    index('leads_created_at_idx').on(table.createdAt),
+    check('leads_status_valid', sql`${table.status} IN ('new', 'processed')`),
+    // Обработанная знает, когда её обработали, а новая не притворяется обработанной
+    check(
+      'leads_processed_at_valid',
+      sql`(${table.status} = 'processed') = (${table.processedAt} IS NOT NULL)`,
+    ),
+    check('leads_data_array', sql`jsonb_typeof(${table.data}) = 'array'`),
+  ],
+)
+
 /** Вариант картинки: какой файл лежит в хранилище и что в нём. Имя файла строит сервер */
 export type StoredVariant = {
   format: ImageFormat
@@ -314,6 +385,9 @@ export const mailOutbox = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     // Письма о заявках относятся к сайту, письма системы (сброс пароля) — нет
     siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    // Заявка, о которой письмо. Удалили заявку (руками или по сроку хранения) — уходят и письма
+    // о ней: в неотправленных лежит копия её полей, в подтверждении — почта посетителя (152-ФЗ)
+    leadId: uuid().references(() => leads.id, { onDelete: 'cascade' }),
     // Id шаблона из src/mail/templates. Данные проверены его схемой при постановке в очередь
     template: text().notNull(),
     // Данные шаблона. null — стёрты: письмо отправлено или в нём была одноразовая ссылка
@@ -341,6 +415,7 @@ export const mailOutbox = pgTable(
     index('mail_outbox_due_idx').on(table.status, table.nextAttemptAt),
     index('mail_outbox_sent_at_idx').on(table.sentAt),
     index('mail_outbox_site_id_idx').on(table.siteId),
+    index('mail_outbox_lead_id_idx').on(table.leadId),
     check(
       'mail_outbox_status_valid',
       sql`${table.status} IN ('pending', 'sending', 'sent', 'failed')`,

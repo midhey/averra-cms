@@ -71,6 +71,20 @@
       "when": 1792043220408,
       "tag": "0009_mail_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792063543410,
+      "tag": "0010_leads",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792066702366,
+      "tag": "0011_outbox_lead_link",
+      "breakpoints": true
     }
   ]
 }

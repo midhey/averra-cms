@@ -41,6 +41,21 @@ export const button = (
 </table>
 ${note(html`Если кнопка не открывается, скопируйте ссылку в браузер:<br><a href="${url}" style="color:${mailColors.accent};word-break:break-all">${url}</a>`)}`
 
+/**
+ * Таблица «подпись — значение» с многострочными значениями: переводы строк сохраняются
+ * (white-space: pre-wrap), а сами значения, как всё в html`…`, экранируются
+ */
+export const fieldTable = (
+  rows: readonly (readonly [string, string])[],
+) => html`<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 16px;border-collapse:collapse">
+  ${rows.map(
+    ([label, value]) => html`<tr>
+    <td style="padding:8px 12px 8px 0;font-family:${FONT};font-size:14px;line-height:20px;color:${mailColors.muted};vertical-align:top;width:35%">${label}</td>
+    <td style="padding:8px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${mailColors.text};white-space:pre-wrap;word-break:break-word">${value}</td>
+  </tr>`,
+  )}
+</table>`
+
 /** Таблица «подпись — значение» */
 export const details = (
   rows: readonly (readonly [string, string])[],
@@ -63,10 +78,12 @@ export function mailLayout({
   subject,
   preheader,
   body,
+  footer = MAIL_FOOTER,
 }: {
   subject: string
   preheader: string
   body: SafeHtml
+  footer?: string
 }) {
   return html`<!doctype html>
 <html lang="ru">
@@ -91,7 +108,7 @@ export function mailLayout({
           </td>
         </tr>
         <tr>
-          <td style="padding:12px 4px;font-family:${FONT};font-size:12px;line-height:18px;color:${mailColors.muted}">${MAIL_FOOTER}</td>
+          <td style="padding:12px 4px;font-family:${FONT};font-size:12px;line-height:18px;color:${mailColors.muted}">${footer}</td>
         </tr>
       </table>
     </td>

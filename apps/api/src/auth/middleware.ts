@@ -6,8 +6,10 @@ import {
   can,
   forbiddenMessages,
   type Permission,
+  personalData,
   type SiteRole,
   siteRoleOf,
+  TOKEN_PERSONAL_DATA_MESSAGE,
 } from './access'
 import type { Auth } from './auth'
 
@@ -32,8 +34,13 @@ const publicRoutes = [
 ]
 
 // Изменяющие запросы без входа: принять приглашение новым пользователем (у него ещё нет
-// входа). Пускает только токен из письма, его проверяет сам маршрут
-const publicPostRoutes = [/^\/api\/invitations\/(lookup|register)$/]
+// входа) — пускает только токен из письма, его проверяет сам маршрут. И приём заявок с форм
+// сайта: его шлёт посетитель опубликованного сайта, у него входа нет. Маршрут сам ищет форму
+// в опубликованной версии страницы и держит антиспам (modules/leads/public-routes.ts)
+const publicPostRoutes = [
+  /^\/api\/invitations\/(lookup|register)$/,
+  /^\/api\/forms\/[^/]+\/[^/]+\/[^/]+$/,
+]
 
 function isPublic(method: string, path: string) {
   // /api/auth/* — эндпоинты Better Auth: что там можно без входа, решает он сам
@@ -108,6 +115,9 @@ export function requireSite(db: Db, permission: Permission) {
     const siteId = c.req.param('siteId')?.toLowerCase()
     const role = siteId === undefined ? undefined : await siteRoleOf(db, c.var.actor, siteId)
     if (!role) return c.json(notFound('Сайт не найден'), 404)
+    if (c.var.actor.kind === 'token' && personalData.has(permission)) {
+      return c.json(forbidden(TOKEN_PERSONAL_DATA_MESSAGE), 403)
+    }
     if (!can(role, permission)) return c.json(forbidden(forbiddenMessages[permission]), 403)
     c.set('siteRole', role)
     return next()

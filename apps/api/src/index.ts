@@ -20,6 +20,7 @@ import { startMailWorker } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
+import { leadsRepo } from './modules/leads/repo'
 
 setupZodMessages()
 // --dev включает учебный режим (см. isLocalDev в config.ts). Его ставят только скрипт dev
@@ -71,13 +72,17 @@ const mailSettings = {
   maxAttempts: config.mail.maxAttempts,
   retentionDays: config.mail.retentionDays,
 }
-// Закрытые приглашения (в них адрес человека) живут столько же, сколько письма
+// Закрытые приглашения (в них адрес человека) живут столько же, сколько письма, а заявки —
+// столько, сколько задано у их сайта (lead_retention_days)
 const mailWorker = startMailWorker({
   db,
   mailer: mail.mailer,
   ...mailSettings,
   log: console.log,
-  cleanupAlso: [{ what: 'приглашения', run: (before) => invitationsRepo(db).cleanup(before) }],
+  cleanupAlso: [
+    { what: 'приглашения', run: (before) => invitationsRepo(db).cleanup(before) },
+    { what: 'заявки', run: (_before, now) => leadsRepo(db).cleanup(now) },
+  ],
 })
 const mailStatus = mail.status()
 const mailSourceNote = { env: 'окружение', database: 'настройки из админки', none: 'по умолчанию' }

@@ -1,3 +1,4 @@
+import { createServer } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { MailSendError } from './mailer'
 import { diagnoseSmtp, type SmtpSettings, smtpFailure, smtpMailer } from './smtp-mailer'
@@ -256,6 +257,27 @@ describe('какой отказ окончательный', () => {
       expect(error).toMatchObject({ step: 'send', permanent: false, rejectedSender: true })
     },
   )
+
+  it('5xx на MAIL FROM — подсказка про ящик, под которым вход', () => {
+    const error = smtpFailure(
+      envelopeError('MAIL FROM', '553 5.7.1 Sender address rejected: not owned by auth user.'),
+      settings(465, 'tls'),
+    )
+    expect(error.message).toContain('Сервер не принял адрес отправителя')
+    expect(error.message).toContain('у Яндекс 360 — совпадать с логином')
+  })
+
+  it('4xx на MAIL FROM — временный лимит: настройки не трогать, подсказки про Яндекс нет', () => {
+    const error = smtpFailure(
+      envelopeError('MAIL FROM', '451 4.7.1 Too many messages, try later'),
+      settings(465, 'tls'),
+    )
+    expect(error.message).toContain('Сервер временно не принимает письма от noreply@averra.test')
+    expect(error.message).toContain('ответ 451: обычно это лимит писем отправителя')
+    expect(error.message).toContain('Настройки менять не нужно')
+    expect(error.message).not.toContain('Яндекс')
+    expect(error.message).not.toContain('Проверь MAIL_FROM')
+  })
 })
 
 describe('проверка по шагам (pnpm mail:test)', () => {
@@ -276,6 +298,21 @@ describe('проверка по шагам (pnpm mail:test)', () => {
       'send:ok',
     ])
     expect(smtp.received).toHaveLength(1)
+  })
+
+  it('TLS сразу (465): все шаги проходят', async () => {
+    const smtp = await server({ mode: 'tls' })
+    const result = await diagnoseSmtp(settings(smtp.port, 'tls'), mail, {
+      ca: ca.cert,
+      timeouts: fastTimeouts,
+    })
+    expect(titles(result.steps)).toEqual([
+      'dns:ok',
+      'connection:ok',
+      'tls:ok',
+      'auth:ok',
+      'send:ok',
+    ])
   })
 
   it('неизвестное имя — ломается DNS', async () => {
@@ -364,6 +401,37 @@ describe('проверка по шагам (pnpm mail:test)', () => {
     const message = result.steps.at(-1)?.message ?? ''
     expect(message).toContain('похоже, порт ждёт TLS сразу: для 465 нужен SMTP_SECURITY=tls')
     expect(message).not.toContain('файрвол')
+  })
+})
+
+describe('обрыв после TCP-соединения', () => {
+  const titles = (steps: { step: string; ok: boolean }[]) =>
+    steps.map(({ step, ok }) => `${step}:${ok ? 'ok' : 'fail'}`)
+
+  it('сервер принял соединение и сразу закрыл — шаг TLS без подсказки про файрвол', async () => {
+    // Не SMTP-сервер: принимает TCP и тут же закрывает сокет
+    const tcp = createServer((socket) => socket.destroy())
+    await new Promise<void>((resolve) => tcp.listen(0, '127.0.0.1', resolve))
+    servers.push({ close: () => new Promise<void>((resolve) => tcp.close(() => resolve())) })
+    const address = tcp.address()
+    const port = typeof address === 'object' && address ? address.port : 0
+    const result = await diagnoseSmtp(settings(port, 'starttls'), mail, {
+      ca: ca.cert,
+      timeouts: fastTimeouts,
+    })
+    expect(titles(result.steps)).toEqual(['dns:ok', 'connection:ok', 'tls:fail'])
+    const message = result.steps.at(-1)?.message ?? ''
+    expect(message).toContain('принял соединение и сразу закрыл его или ответил не как SMTP-сервер')
+    expect(message).toContain('проверь SMTP_PORT и SMTP_SECURITY')
+    expect(message).not.toContain('файрвол')
+  })
+
+  it('тот же обрыв в обычной отправке (до соединения ничего не известно) — прежний текст', () => {
+    const error = smtpFailure(
+      Object.assign(new Error('Connection closed unexpectedly'), { code: 'ECONNECTION' }),
+      settings(587, 'starttls'),
+    )
+    expect(error.message).toContain('Не удалось соединиться')
   })
 })
 

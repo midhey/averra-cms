@@ -191,8 +191,8 @@ describe('обработчик в процессе API', () => {
       intervalMs: 20,
       log: (message) => logs.push(message),
     })
-    await until(() => sends === 1)
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    // Ждём не паузу, а итог: запись о паузе после отказа. Проход к этому времени закончен
+    await until(() => logs.some((line) => line.includes('следующая попытка через 60 с')))
     expect(sends).toBe(1)
     const rows = await db
       .select({ status: mailOutbox.status, attempts: mailOutbox.attempts })

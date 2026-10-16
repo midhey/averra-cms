@@ -31,9 +31,30 @@ const permissions = {
   'media.delete': ['owner', 'editor'],
   // Раздавать доступ к сайту (приглашения) — решение владельца студии, а не участника
   'members.invite': ['owner'],
+  // Заявки с форм — персональные данные посетителей. Их видит и обрабатывает клиент: это его
+  // бизнес и его заявки (оператор персональных данных), и владелец студии. Редактору, который
+  // делает контент, они не нужны. Токену API (MCP) — никогда, см. personalData
+  'leads.read': ['owner', 'client'],
+  // «Обработана», удаление (в том числе по просьбе посетителя)
+  'leads.manage': ['owner', 'client'],
+  // Куда уходят уведомления, сколько хранить заявки, подтверждать ли посетителю
+  'leads.settings': ['owner', 'client'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
+
+/**
+ * Действия с персональными данными посетителей. Токену API в них отказано при любой таблице выше:
+ * токен живёт в конфиге программы (MCP, нейронка), и через него персональные данные не уходят
+ */
+export const personalData: ReadonlySet<Permission> = new Set([
+  'leads.read',
+  'leads.manage',
+  'leads.settings',
+])
+
+export const TOKEN_PERSONAL_DATA_MESSAGE =
+  'Токену API заявки недоступны: в них персональные данные посетителей. Смотрите их в админке'
 
 export function can(role: SiteRole, permission: Permission) {
   return (permissions[permission] as readonly SiteRole[]).includes(role)
@@ -49,6 +70,9 @@ export const forbiddenMessages: Record<Permission, string> = {
   'media.upload': 'Загружать картинки на этот сайт нельзя',
   'media.delete': 'Удалять картинки может владелец или редактор сайта',
   'members.invite': 'Приглашать участников может только владелец',
+  'leads.read': 'Заявки видят владелец и клиент сайта',
+  'leads.manage': 'Обрабатывать заявки могут владелец и клиент сайта',
+  'leads.settings': 'Настройки заявок меняют владелец и клиент сайта',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

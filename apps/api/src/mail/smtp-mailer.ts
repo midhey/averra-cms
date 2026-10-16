@@ -154,11 +154,21 @@ const hints: Record<
   },
 }
 
+/** Что известно о сбое кроме самой ошибки: например, TCP-соединение уже было */
+export type FailureContext = {
+  /**
+   * TCP-соединение уже открылось (шаг «соединение» проверки пройден). Тогда обрыв — не файрвол:
+   * сервер принял соединение и закрыл его или ответил не по протоколу SMTP
+   */
+  connected?: boolean
+}
+
 function explain(
   step: MailStep,
   error: NodemailerFailure,
   settings: SmtpSettings,
   origin: SmtpOrigin,
+  { connected = false }: FailureContext = {},
 ) {
   const where = `${settings.host}:${settings.port}`
   const hint = hints[origin]
@@ -171,8 +181,10 @@ function explain(
       if (isGreetingTimeout(error)) {
         return `${where} принял соединение, но не прислал приветствие SMTP: ${hint.mode}`
       }
-      return error.code === 'EPROTOCOL'
-        ? `${where} ответил не как SMTP-сервер: ${hint.mode}`
+      if (error.code === 'EPROTOCOL') return `${where} ответил не как SMTP-сервер: ${hint.mode}`
+      // Порт открыт, раз TCP-соединение было: про файрвол здесь говорить нечего
+      return connected
+        ? `${where} принял соединение и сразу закрыл его или ответил не как SMTP-сервер: ${hint.mode}`
         : `Не удалось соединиться с ${where}: ${hint.hostPort} и что порт не закрыт файрволом`
     case 'tls':
       if (isGreetingTimeout(error)) {
@@ -190,6 +202,14 @@ function explain(
     case 'auth':
       return `Сервер не принял логин или пароль${hint.login}`
     case 'send':
+      if (isSenderRejection(error) && (error.responseCode ?? 0) < 500) {
+        // 4xx — временный отказ (обычно лимит писем отправителя): настройки верные, их не трогать
+        return (
+          `Сервер временно не принимает письма от ${settings.from.address}` +
+          ` (ответ ${error.responseCode ?? '4xx'}: обычно это лимит писем отправителя). ` +
+          'Настройки менять не нужно: письма подождут в очереди и уйдут позже'
+        )
+      }
       if (isSenderRejection(error)) {
         return (
           `Сервер не принял адрес отправителя ${settings.from.address}: он должен принадлежать ` +
@@ -208,7 +228,12 @@ function explain(
  * Ошибка nodemailer → MailSendError по-русски, с шагом и подробностями от сервера. Пароль и его
  * base64-формы из текста убираются: сервер мог повторить в ответе то, что ему прислали
  */
-export function smtpFailure(error: unknown, settings: SmtpSettings, origin: SmtpOrigin = 'env') {
+export function smtpFailure(
+  error: unknown,
+  settings: SmtpSettings,
+  origin: SmtpOrigin = 'env',
+  context: FailureContext = {},
+) {
   if (error instanceof MailSendError) return error
   const failure = (error instanceof Error ? error : new Error(String(error))) as NodemailerFailure
   const step = stepOf(failure, settings)
@@ -222,7 +247,7 @@ export function smtpFailure(error: unknown, settings: SmtpSettings, origin: Smtp
     (failure.command === 'RCPT TO' || failure.command === 'DATA') &&
     (failure.responseCode ?? 0) >= 500
   return new MailSendError(
-    `${explain(step, failure, settings, origin)}. Подробности: ${details}`,
+    `${explain(step, failure, settings, origin, context)}. Подробности: ${details}`,
     permanent,
     step,
     rejectedSender,
@@ -405,6 +430,17 @@ export async function diagnoseSmtp(
         connection.once('error', reject)
         connection.connect(() => {
           connection.off('error', reject)
+          // Сервер, закрывший сокет сразу после TCP, nodemailer тоже доводит до колбэка connect,
+          // хотя ни приветствия, ни шифрования не было. Это сбой, а не «TLS установлен»
+          if (connection.destroyed || !connection.secure) {
+            reject(
+              lastError ??
+                Object.assign(new Error('Соединение закрыто до приветствия SMTP'), {
+                  code: 'ECONNECTION',
+                }),
+            )
+            return
+          }
           resolve()
         })
       })
@@ -417,7 +453,10 @@ export async function diagnoseSmtp(
     } catch (error) {
       // Шаг «соединение» уже пройден: TCP открыт. Всё, что сломалось дальше, до входа (TLS,
       // приветствие SMTP), — шаг TLS, а не второй итог соединения
-      return fail('tls', smtpFailure(error ?? lastError, settings, options.origin))
+      return fail(
+        'tls',
+        smtpFailure(error ?? lastError, settings, options.origin, { connected: true }),
+      )
     }
 
     try {

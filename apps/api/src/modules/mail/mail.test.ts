@@ -70,6 +70,12 @@ describe('состояние', () => {
           id: 'mail-settings-changed',
           title: 'Настройки почты изменены',
         }),
+        expect.objectContaining({ id: 'lead-new', title: 'Новая заявка' }),
+        expect.objectContaining({ id: 'lead-received', title: 'Заявка получена' }),
+        expect.objectContaining({
+          id: 'lead-recipients-changed',
+          title: 'Адреса уведомлений о заявках изменены',
+        }),
       ],
     })
   })

@@ -18,6 +18,7 @@ import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/mi
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { validate, validationError } from '../../validate'
+import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from './repo'
@@ -38,6 +39,7 @@ const SaveDraft = z.strictObject({
 export function sitesRoutes({ db }: { db: Db }) {
   const repo = sitesRepo(db)
   const media = mediaRepo(db)
+  const leads = leadsRepo(db)
   const site = (permission: Parameters<typeof requireSite>[1]) => requireSite(db, permission)
 
   return (
@@ -54,16 +56,20 @@ export function sitesRoutes({ db }: { db: Db }) {
         },
       )
 
-      // Роль на сайте (access) нужна админке, чтобы не показывать то, что этой роли нельзя
+      // Роль на сайте (access) нужна админке, чтобы не показывать то, что этой роли нельзя.
+      // newLeads — сколько новых заявок (счётчик в навигации сайта); null — заявки этой роли
+      // не видны (редактор, токен API)
       .get('/:siteId', validate('param', SiteParams), site('site.read'), async (c) => {
         const { siteId } = c.req.valid('param')
         const found = await repo.find(siteId)
         if (!found) return c.json(notFound('Сайт не найден'), 404)
+        const seesLeads = c.var.actor.kind === 'user' && can(c.var.siteRole, 'leads.read')
         return c.json({
           id: found.id,
           name: found.name,
           theme: found.theme,
           access: c.var.siteRole,
+          newLeads: seesLeads ? await leads.countNew(siteId) : null,
         })
       })
 

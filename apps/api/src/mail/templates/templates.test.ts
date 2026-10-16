@@ -21,7 +21,8 @@ describe('шаблоны писем', () => {
     // Почтовые клиенты режут <style>: оформление только инлайн
     expect(mail.html).not.toContain('<style')
     expect(mail.html).toContain('style="')
-    expect(mail.text).toContain('Averra CMS · письмо отправлено автоматически')
+    // Подвал — после черты: общий или свой у шаблона (у заявки — что «Ответить» напишет посетителю)
+    expect(mail.text).toMatch(/\n—\nAverra CMS · .+\n$/)
     expect(mail.text).not.toContain('<')
   })
 
@@ -140,5 +141,81 @@ describe('шаблоны писем', () => {
     })
     expect(unchecked.text).toContain('не делалась: сохранено без проверки')
     expect(unchecked.html).toContain('&lt;b&gt;Анна&lt;/b&gt;')
+  })
+
+  it('«Новая заявка»: все поля экранированы, многострочное — с переносами, Reply-To посетителя', () => {
+    const mail = renderMail('lead-new', {
+      ...mailTemplates['lead-new'].example,
+      fields: [
+        { label: 'Имя', value: '<script>alert(1)</script>' },
+        { label: 'Комментарий', value: 'первая строка\nвторая "строка" & ещё' },
+        { label: 'Компания', value: '' },
+      ],
+    })
+    expect(mail.html).not.toContain('<script>')
+    expect(mail.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(mail.html).toContain('первая строка\nвторая &quot;строка&quot; &amp; ещё')
+    expect(mail.html).toContain('white-space:pre-wrap')
+    expect(mail.text).toContain('Комментарий: первая строка\n  вторая "строка" & ещё')
+    expect(mail.text).toContain('Компания: —')
+    expect(mail.replyTo).toBe('anna@example.ru')
+    // В теме — только название сайта, его задаёт студия
+    expect(mail.subject).toBe('Новая заявка с сайта «Ремонт квартир под ключ»')
+    expect(mail.text).toContain('«Ответить» напишет посетителю')
+  })
+
+  it('«Новая заявка» без почты посетителя: без Reply-To и без обещания «Ответить»', () => {
+    const { replyTo: _, ...withoutReply } = mailTemplates['lead-new'].example
+    const mail = renderMail('lead-new', withoutReply)
+    expect(mail.replyTo).toBeUndefined()
+    expect(mail.text).toContain('Почту посетитель не оставил')
+    expect(mail.text).not.toContain('«Ответить» напишет посетителю')
+  })
+
+  it('«Новая заявка»: перевод строки в Reply-To или подписи отклоняется схемой', () => {
+    const example = mailTemplates['lead-new'].example
+    const replyTo = 'a@b.ru\nBcc: x@y.ru'
+    expect(errorOf(() => renderMail('lead-new', { ...example, replyTo }))).toBeInstanceOf(
+      MailDataError,
+    )
+    const fields = [{ label: 'Имя\nBcc: x', value: 'Анна' }]
+    expect(errorOf(() => renderMail('lead-new', { ...example, fields }))).toBeInstanceOf(
+      MailDataError,
+    )
+  })
+
+  it('«Заявка получена»: фиксированный текст, кроме названия сайта ничего не принимает', () => {
+    const mail = previewMail('lead-received')
+    expect(mail.subject).toBe('Заявка получена — Ремонт квартир под ключ')
+    expect(mail.text).toContain('Мы получили вашу заявку на сайте «Ремонт квартир под ключ»')
+    expect(mail.replyTo).toBeUndefined()
+    // Имя, телефон, комментарий посетителя в письмо не попадут: схема строгая
+    expect(
+      errorOf(() =>
+        renderMail('lead-received', { siteName: 'Сайт', name: 'Купите слонов: spam.example' }),
+      ),
+    ).toBeInstanceOf(MailDataError)
+  })
+
+  it('«Адреса уведомлений изменены»: кто, когда и новые адреса; пусто — владельцам', () => {
+    const mail = previewMail('lead-recipients-changed')
+    expect(mail.subject).toBe('Адреса уведомлений о заявках изменены — Ремонт квартир под ключ')
+    expect(mail.text).toContain('Кто: Анна (anna@example.ru)')
+    expect(mail.text).toContain('Теперь заявки приходят: manager@example.ru, sales@example.ru')
+    const owners = renderMail('lead-recipients-changed', {
+      ...mailTemplates['lead-recipients-changed'].example,
+      changedBy: '<b>Клиент</b>',
+      recipients: [],
+    })
+    expect(owners.text).toContain('Теперь заявки приходят: владельцам админки')
+    expect(owners.html).toContain('&lt;b&gt;Клиент&lt;/b&gt;')
+    expect(
+      errorOf(() =>
+        renderMail('lead-recipients-changed', {
+          ...mailTemplates['lead-recipients-changed'].example,
+          recipients: ['a@b.ru\nBcc: x@evil.ru'],
+        }),
+      ),
+    ).toBeInstanceOf(MailDataError)
   })
 })

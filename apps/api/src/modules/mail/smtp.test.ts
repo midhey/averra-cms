@@ -11,8 +11,8 @@ import { memoryMailer } from '../../mail/memory-mailer'
 import { enqueueMail } from '../../mail/outbox'
 import { MAIL_PASSWORD_CONTEXT } from '../../mail/settings'
 import { createTestCa, issueServerCert, startTestSmtpServer } from '../../mail/testing/smtp'
-import { processOutbox, startMailWorker } from '../../mail/worker'
-import { createTestApi, TEST_PASSWORD, type TestApi } from '../../testing'
+import { startMailWorker } from '../../mail/worker'
+import { createTestApi, sendQueue, TEST_PASSWORD, type TestApi } from '../../testing'
 import { SMTP_CHECKS } from './routes'
 
 // Настройки SMTP в админке: настоящие SMTP-серверы (smtp-server) на свободных портах с сертификатом
@@ -98,12 +98,6 @@ const saveDirect = (port: 465 | 587 = 465, password = SMTP_PASSWORD) => ({
   currentPassword: TEST_PASSWORD,
   skipCheck: true,
 })
-
-/** Отправить всю очередь через почту процесса: владельцев бывает больше пачки в 10 писем */
-async function sendQueue(api: TestApi) {
-  const options = { db: api.db, mailer: api.mailRuntime.mailer, ...api.mailSettings }
-  while ((await processOutbox(options)).claimed > 0) {}
-}
 
 async function settingsRow(api: TestApi) {
   const [row] = await api.db.select().from(mailSettings)

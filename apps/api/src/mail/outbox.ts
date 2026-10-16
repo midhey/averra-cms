@@ -45,6 +45,8 @@ export type NewMail<T extends MailTemplateId> = {
   to: string
   /** Сайт, к которому относится письмо (заявка). У писем системы — нет */
   siteId?: string
+  /** Заявка, о которой письмо: удалится заявка — удалится и письмо */
+  leadId?: string
 }
 
 /**
@@ -74,6 +76,7 @@ export async function enqueueMail<T extends MailTemplateId>(
       data,
       recipient: to.data,
       siteId: mail.siteId,
+      leadId: mail.leadId,
       nextAttemptAt: now,
       expiresAt: mailExpiresAt(mail.template, data, now),
       createdAt: now,
