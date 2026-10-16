@@ -120,7 +120,27 @@ describe('браузер и сервер проверяют поле одина�
       checkbox: false,
       consent: true,
     })
+    expect(leadValuesSchema([optional]).parse({ checkbox: 'yes', consent: 'yes' })).toEqual({
+      checkbox: true,
+      consent: true,
+    })
   })
+
+  it.each(['no', '0', 'false', 'on', 'true', ' yes', 'YES'])(
+    'флажок со значением %j, которого форма не шлёт, — ошибка, а не догадка',
+    (value) => {
+      for (const required of [true, false]) {
+        const result = leadValuesSchema([field({ type: 'checkbox', required })]).safeParse({
+          checkbox: value,
+          consent: 'yes',
+        })
+        expect(result.error?.issues[0]).toMatchObject({
+          path: ['checkbox'],
+          message: 'Неверное значение флажка: отметьте его в форме или снимите отметку',
+        })
+      }
+    },
+  )
 
   it('maxlength в браузере — предел схемы сервера', () => {
     for (const type of formFieldTypes) {
@@ -231,6 +251,24 @@ describe('заявка на сервере', () => {
       message: 'Нужно согласие на обработку персональных данных',
     })
   })
+
+  it.each(['no', '0', 'false', '', '   ', 'on', 'true', ' yes ', 'YES', 'yes\n'])(
+    'согласие — только значение флажка: %j — согласия нет',
+    (consent) => {
+      const result = leadValuesSchema(fields).safeParse({ name: 'Анна', consent })
+      expect(result.success).toBe(false)
+      expect(result.error?.issues).toEqual([
+        expect.objectContaining({
+          path: [CONSENT_FIELD],
+          message: 'Нужно согласие на обработку персональных данных',
+        }),
+      ])
+    },
+  )
+
+  it('согласие значением флажка — true', () => {
+    expect(parse({ name: 'Анна' }).data?.[CONSENT_FIELD]).toBe(true)
+  })
 })
 
 describe('блок «Форма»', () => {
@@ -268,6 +306,22 @@ describe('блок «Форма»', () => {
     const repeated = { ...select, options: [{ label: 'А' }, { label: 'А' }] }
     expect(form.props.safeParse({ ...valid, fields: [repeated] }).success).toBe(false)
   })
+
+  it.each(['\n', '\r', '\r\n', '\u0000', '\t', '\u007f', '\u0085', '\u2028', '\u2029'])(
+    'вариант выбора с %j не проходит блок — сервер такое значение не примет',
+    (char) => {
+      const option = { label: `Ремонт${char}ванной` }
+      const select = { name: 'service', type: 'select', label: 'Услуга', options: [option] }
+      const result = form.props.safeParse({ ...valid, fields: [select] })
+      expect(result.error?.issues[0]).toMatchObject({
+        path: ['fields', 0, 'options', 0, 'label'],
+        message: 'Без переводов строки и управляющих символов',
+      })
+      // И правда не примет: значение выбора проверяется как одна строка
+      const definition = field({ type: 'select', options: [option] })
+      expect(serverAccepts(definition, option.label)).toBe(false)
+    },
+  )
 })
 
 describe('настройки заявок', () => {

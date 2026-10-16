@@ -108,8 +108,20 @@ export const FormFieldName = z
     `Ключи ${HONEYPOT_FIELD} и ${CONSENT_FIELD} заняты служебными полями формы`,
   )
 
+const BREAK_MESSAGE = 'Без переводов строки и управляющих символов'
+
+/**
+ * Вариант выбора — одна строка, как и значение, которое сервер примет: вариант с переводом
+ * строки форма опубликовала бы, а заявку с ним сервер отклонял бы всегда
+ */
 const FieldOption = z.strictObject({
-  label: z.string().trim().min(1).max(fieldRules.select.max).meta({ title: 'Вариант' }),
+  label: z
+    .string()
+    .refine((value) => !hasHeaderBreak(value), BREAK_MESSAGE)
+    .trim()
+    .min(1)
+    .max(fieldRules.select.max)
+    .meta({ title: 'Вариант' }),
 })
 
 export const FormField = z
@@ -197,7 +209,6 @@ export function formFieldInput(
 }
 
 const REQUIRED_MESSAGE = 'Заполните поле'
-const BREAK_MESSAGE = 'Без переводов строки и управляющих символов'
 const CONTROL_MESSAGE = 'Без управляющих символов'
 
 /**
@@ -254,7 +265,7 @@ function valueSchema(field: FormField): z.ZodType {
       )
     }
     case 'checkbox':
-      return z.boolean()
+      return checkboxValue()
     default: {
       const line = singleLine(rule.max)
       if (!rule.pattern) return line
@@ -263,10 +274,25 @@ function valueSchema(field: FormField): z.ZodType {
   }
 }
 
+const CONSENT_MESSAGE = 'Нужно согласие на обработку персональных данных'
+const CHECKBOX_MESSAGE = 'Неверное значение флажка: отметьте его в форме или снимите отметку'
+
+/**
+ * Флажок: отмеченный браузер шлёт ровно CHECKED_VALUE, неотмеченный не шлёт вовсе. Пусто — тоже
+ * не отмечен. Любое другое значение (no, 0, false, on) — ошибка, а не догадка: в заявку попадает
+ * только то, что можно было отправить из формы
+ */
+const checkboxValue = () =>
+  z.preprocess(
+    blankToUndefined,
+    z
+      .union([z.undefined(), z.literal(CHECKED_VALUE)], { error: CHECKBOX_MESSAGE })
+      .transform((value) => value === CHECKED_VALUE),
+  )
+
 function fieldSchema(field: FormField): z.ZodType {
   if (field.type === 'checkbox') {
-    // Неотмеченный флажок браузер не шлёт вовсе
-    const checked = z.preprocess((value) => blankToUndefined(value) !== undefined, z.boolean())
+    const checked = checkboxValue()
     return field.required
       ? checked.refine((value) => value, 'Отметьте, чтобы отправить форму')
       : checked
@@ -285,10 +311,11 @@ export type LeadValue = string | boolean | undefined
 export function leadValuesSchema(fields: readonly FormField[]) {
   const shape: Record<string, z.ZodType> = {}
   for (const field of fields) shape[field.name] = fieldSchema(field)
-  shape[CONSENT_FIELD] = z.preprocess(
-    (value) => blankToUndefined(value) !== undefined,
-    z.literal(true, { error: 'Нужно согласие на обработку персональных данных' }),
-  )
+  // Согласие по 152-ФЗ — явное: только значение отмеченного флажка. Не прислано, пусто
+  // или что угодно другое (no, 0, false) — согласия нет, и запись «согласие дано» была бы неправдой
+  shape[CONSENT_FIELD] = z
+    .literal(CHECKED_VALUE, { error: CONSENT_MESSAGE })
+    .transform((): true => true)
   return z.object(shape) as z.ZodType<Record<string, LeadValue>>
 }
 
