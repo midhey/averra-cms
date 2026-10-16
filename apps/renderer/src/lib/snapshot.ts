@@ -63,6 +63,16 @@ function withAbsoluteUrls(media: MediaMap): MediaMap {
   )
 }
 
+/**
+ * Куда формы страницы шлют заявки: открытый адрес приёма в API (CMS_API_URL — тот же, откуда
+ * сайт берёт картинки). Форма — обычная HTML-форма method="post", JS на сайте для неё не нужен
+ */
+export const formActionFor = (siteId: string, slug: string) => (blockId: string) =>
+  new URL(
+    `/api/forms/${encodeURIComponent(siteId)}/${encodeURIComponent(slug)}/${encodeURIComponent(blockId)}`,
+    CMS_API_URL,
+  ).href
+
 async function request<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call()

@@ -2,7 +2,7 @@
 import { Page } from '@averra/blocks'
 import '@averra/blocks/base.css'
 import { themeToCss } from '@averra/tokens'
-import { loadSnapshot } from '../lib/snapshot'
+import { formActionFor, loadSnapshot } from '../lib/snapshot'
 
 // Маршрут подключается в astro.config.mjs: при сборке он статический, в dev — по запросу.
 // Поэтому в dev Astro пишет в лог «getStaticPaths() ignored in dynamic page…» и советует
@@ -36,6 +36,6 @@ const themeCss = themeToCss(site.theme)
     <style is:inline set:html={themeCss}></style>
   </head>
   <body>
-    <Page content={page.content} media={media} />
+    <Page content={page.content} media={media} formAction={formActionFor(site.id, page.slug)} />
   </body>
 </html>
