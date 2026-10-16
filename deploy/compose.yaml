@@ -49,11 +49,16 @@ services:
       TRUST_PROXY: 'true'
       PUBLISH_DIR: /data/sites
       MEDIA_DIR: /data/media
+      # Итоги бэкапов и обновлений от averra.sh — для «Состояния» в админке
+      STATE_DIR: /data/state
       # SMTP задают в админке (страница «Почта»): пароль шифруется MAIL_ENCRYPTION_KEY.
       # SMTP из окружения — через compose.override.yaml (см. README, «Установка на сервер»)
     volumes:
       - sites:/data/sites
       - media:/data/media
+      # Папка состояния установки (/opt/averra/state): пишет её только averra.sh на хосте,
+      # API читает. Бэкапы (/opt/averra/backups) в контейнер не попадают
+      - ./state:/data/state:ro
     # Node — PID 1 и запускает сборщик сайта, у которого свои потомки (esbuild): init (tini)
     # пожинает осиротевших после таймаута сборки, зомби не копятся
     init: true

@@ -14,3 +14,5 @@ coverage
 e2e/playwright-report
 e2e/test-results
 deploy/.env
+# Список серверов студии (pnpm fleet): в образ клиента он попадать не должен
+**/servers.txt

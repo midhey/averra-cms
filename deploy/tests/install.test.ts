@@ -1,18 +1,9 @@
 import { spawnSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { bash, pathEntry, posix, tempDir } from './bash'
 
 // Установщик deploy/install.sh без Docker и без настоящего VPS: сухой прогон, разбор флагов,
 // .env (секреты, права, повторный запуск) и полный прогон с подделками docker, ss, getent и
@@ -21,49 +12,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 const script = fileURLToPath(new URL('../install.sh', import.meta.url))
 const composeFile = fileURLToPath(new URL('../compose.yaml', import.meta.url))
-
-/** bash: на Linux — системный, на Windows — Git Bash (bash.exe из System32 — это WSL, не он) */
-function findBash() {
-  if (process.env.AVERRA_BASH) return process.env.AVERRA_BASH
-  if (process.platform !== 'win32') return 'bash'
-  // Git для Windows ставится и в Program Files, и в профиль пользователя: ищем ещё от git.exe в PATH
-  // (…\Git\cmd или …\Git\mingw64\bin)
-  const fromPath = (process.env.PATH ?? '')
-    .split(';')
-    .filter((dir) => existsSync(join(dir, 'git.exe')))
-    .flatMap((dir) => [
-      join(dir, '..', 'bin', 'bash.exe'),
-      join(dir, '..', '..', 'bin', 'bash.exe'),
-    ])
-  for (const candidate of [
-    ...fromPath,
-    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Git', 'bin', 'bash.exe'),
-    'C:\\Program Files\\Git\\bin\\bash.exe',
-  ]) {
-    if (existsSync(candidate)) return candidate
-  }
-  throw new Error('Не нашёл Git Bash: задайте путь к bash в AVERRA_BASH')
-}
-const bash = findBash()
-
-/** Путь для bash: на Windows Git Bash понимает C:/… с прямыми слешами */
-const posix = (path: string) => path.replaceAll('\\', '/')
-
-/** Папка для PATH внутри bash: там «:» — разделитель, поэтому C:/x на Windows — это /c/x */
-const pathEntry = (path: string) =>
-  posix(path).replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`)
-
-const dirs: string[] = []
-afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
-
-function tempDir() {
-  const dir = join(tmpdir(), `averra-install-${randomUUID()}`)
-  mkdirSync(dir, { recursive: true })
-  dirs.push(dir)
-  return dir
-}
 
 type Fakes = {
   /** Что отвечает getent ahosts: адреса доменов */
@@ -97,6 +45,8 @@ function fakeBin(root: string, fakes: Fakes) {
   write('getent', `case "$2" in\n${dns}\n  *) exit 2 ;;\nesac`)
   // chmod — настоящий, но вызов записан: права .env видны и на Windows, где NTFS их не держит
   write('chmod', `printf '%s\\n' "$*" >> "${posix(chmodLog)}"\nexec /usr/bin/chmod "$@"`)
+  // systemctl — подделка: таймер бэкапов ставится в свою папку теста, а не в /etc/systemd
+  write('systemctl', `printf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`)
   write('hostname', `echo "${fakes.serverIps ?? '203.0.113.5 10.0.0.2'}"`)
   const busy = (fakes.busyPorts ?? []).map(
     (port) => `*":${port}"*) echo "LISTEN 0 4096 *:${port} *:*" ;;`,
@@ -122,12 +72,19 @@ type Run = { status: number | null; stdout: string; stderr: string; output: stri
 function install(args: string[], options: { fakes?: Fakes; env?: Record<string, string> } = {}) {
   const root = tempDir()
   const { bin, log, chmodLog } = fakeBin(root, options.fakes ?? {})
+  const systemd = join(root, 'systemd')
+  mkdirSync(systemd)
   // Подделки — первыми в PATH уже внутри bash: Git Bash на Windows сам ставит /usr/bin впереди
   // унаследованного PATH, и настоящий hostname заслонил бы подделку
   const inBash = 'PATH="$AVERRA_FAKE_BIN:$PATH" exec bash "$@"'
   const result = spawnSync(bash, ['-c', inBash, 'bash', posix(script), ...args], {
     encoding: 'utf8',
-    env: { ...process.env, AVERRA_FAKE_BIN: pathEntry(bin), ...options.env },
+    env: {
+      ...process.env,
+      AVERRA_FAKE_BIN: pathEntry(bin),
+      AVERRA_SYSTEMD_DIR: posix(systemd),
+      ...options.env,
+    },
     // Без терминала: установщик ничего не спрашивает
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -139,7 +96,9 @@ function install(args: string[], options: { fakes?: Fakes; env?: Record<string, 
   }
   const calls = () => (existsSync(log) ? readFileSync(log, 'utf8') : '')
   const chmods = () => (existsSync(chmodLog) ? readFileSync(chmodLog, 'utf8') : '')
-  return { ...run, calls, chmods }
+  const systemctl = () =>
+    existsSync(join(root, 'systemctl.log')) ? readFileSync(join(root, 'systemctl.log'), 'utf8') : ''
+  return { ...run, calls, chmods, systemd, systemctl }
 }
 
 const required = ['--site-domain', 'remont.ru', '--email', 'studio@averra.ru', '--version', '0.6.0']
@@ -222,7 +181,7 @@ describe('сухой прогон', () => {
     expect(run.status, run.output).toBe(0)
     expect(run.stdout).toContain('Сухой прогон: ничего не меняется.')
     expect(run.stdout).toContain(
-      'Новые секреты:     POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY',
+      'Новые секреты:     POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE',
     )
     expect(run.stdout).toContain('ghcr.io/midhey/averra-api:0.6.0')
     expect(run.stdout).toContain('всё в порядке')
@@ -330,7 +289,12 @@ describe('.env установки', () => {
     expect(again.status, again.output).toBe(0)
     expect(again.stdout).toContain('не менялись')
     const after = readEnv(dir)
-    for (const key of ['POSTGRES_PASSWORD', 'AUTH_SECRET', 'MAIL_ENCRYPTION_KEY']) {
+    for (const key of [
+      'POSTGRES_PASSWORD',
+      'AUTH_SECRET',
+      'MAIL_ENCRYPTION_KEY',
+      'BACKUP_PASSPHRASE',
+    ]) {
       expect(after[key], key).toBe(before[key])
     }
     expect(after).toMatchObject({
@@ -395,6 +359,24 @@ describe('полная установка (подделки docker и сети)'
     )
     expect(readEnv(dir)).toMatchObject({ OWNER_EMAIL: 'studio@averra.ru', SITE_ID })
     expect(run.stdout).toContain('Админка: https://admin.remont.ru')
+    // Скрипт управления и папки бэкапов и состояния — в папке установки, таймер бэкапов — в systemd
+    expect(readFileSync(join(dir, 'averra.sh'), 'utf8')).toBe(
+      readFileSync(fileURLToPath(new URL('../averra.sh', import.meta.url)), 'utf8'),
+    )
+    expect(existsSync(join(dir, 'backups'))).toBe(true)
+    expect(existsSync(join(dir, 'state'))).toBe(true)
+    if (process.platform !== 'win32') {
+      expect(statSync(join(dir, 'averra.sh')).mode & 0o777).toBe(0o700)
+      expect(statSync(join(dir, 'backups')).mode & 0o777).toBe(0o700)
+    }
+    const service = readFileSync(join(run.systemd, 'averra-backup.service'), 'utf8')
+    expect(service).toContain(`ExecStart=${posix(dir)}/averra.sh backup --kind scheduled`)
+    expect(readFileSync(join(run.systemd, 'averra-backup.timer'), 'utf8')).toContain(
+      'Persistent=true',
+    )
+    expect(run.systemctl()).toBe('daemon-reload\nenable --now averra-backup.timer\n')
+    expect(readEnv(dir).BACKUP_PASSPHRASE).toMatch(/^[A-Za-z0-9+/]{43}=$/)
+    expect(run.output).toContain('Сохраните BACKUP_PASSPHRASE')
   })
 
   it('--ghcr-user: токен из окружения через stdin, без терминала и токена — отказ до pull', () => {
@@ -558,6 +540,27 @@ describe('контейнеры не от root и без лишних прав', 
     expect(caddy).toMatch(/^ {4}cap_drop: \[ALL\]$/m)
     expect(caddy).toMatch(/^ {4}cap_add: \[NET_BIND_SERVICE\]$/m)
     expect(caddy).toMatch(/net\.ipv4\.ip_unprivileged_port_start: 0/)
+  })
+
+  it('версия и конфигурация установки — в образе API, состояние — только на чтение, бэкапов в контейнере нет', () => {
+    const api = stage('api')
+    expect(api).toMatch(/^ARG AVERRA_VERSION=dev$/m)
+    expect(api).toMatch(/AVERRA_VERSION=\$\{AVERRA_VERSION\}/)
+    // averra.sh update берёт compose.yaml и себя из образа новой версии
+    expect(stage('runtime-tree')).toMatch(
+      /^COPY deploy\/compose\.yaml deploy\/averra\.sh deploy\/$/m,
+    )
+    expect(service('api')).toContain('- ./state:/data/state:ro')
+    expect(service('api')).toContain('STATE_DIR: /data/state')
+    expect(compose).not.toContain('backups')
+  })
+
+  it('список серверов студии не попадает в контекст сборки образа', () => {
+    const ignore = readFileSync(
+      fileURLToPath(new URL('../../.dockerignore', import.meta.url)),
+      'utf8',
+    )
+    expect(ignore).toMatch(/^\*\*\/servers\.txt$/m)
   })
 })
 

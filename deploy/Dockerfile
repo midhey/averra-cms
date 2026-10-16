@@ -75,12 +75,19 @@ COPY apps/api/drizzle apps/api/drizzle
 COPY --from=build /repo/apps/api/dist apps/api/dist
 # Манифесты, которые нужны только сборке, в итоговом образе не нужны
 RUN rm -rf apps/admin apps/mcp e2e deploy
+# Конфигурация установки этой версии: averra.sh update берёт compose.yaml и сам averra.sh отсюда,
+# поэтому они меняются вместе с версией, а не отдельной ручной правкой на сервере
+COPY deploy/compose.yaml deploy/averra.sh deploy/
 
 # ── API ─────────────────────────────────────────────────────────────────────────────────────
 FROM ${NODE_IMAGE} AS api
+# Версия установки (тег релиза без «v»): её показывают «Состояние» в админке и averra.sh status.
+# Передаёт release.yml (build-args); образ, собранный руками без неё, — dev
+ARG AVERRA_VERSION=dev
 # TRUST_PROXY здесь нет: по умолчанию API не верит X-Forwarded-For (иначе «docker run -p 4000:4000»
 # без прокси дал бы обходить лимиты входа и заявок). Включает его compose.yaml: перед API там Caddy
 ENV NODE_ENV=production \
+  AVERRA_VERSION=${AVERRA_VERSION} \
   PORT=4000 \
   PUBLISH_DIR=/data/sites \
   MEDIA_DIR=/data/media \

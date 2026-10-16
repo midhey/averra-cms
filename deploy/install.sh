@@ -124,7 +124,7 @@ env_get() {
 # Ключи, которые ведёт установщик. Остальные строки .env (свои добавки) переносятся как есть
 MANAGED_KEYS=(
   AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN ACME_EMAIL
-  OWNER_EMAIL SITE_ID POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY
+  OWNER_EMAIL SITE_ID POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
 )
 
 # ── Значения: флаг → .env → вопрос ─────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ secret_or_new() {
 }
 
 NEW_SECRETS=()
-for key in POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY; do
+for key in POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE; do
   [[ -n "$(env_get "$key")" ]] || NEW_SECRETS+=("$key")
 done
 
@@ -363,6 +363,9 @@ write_env() {
         POSTGRES_PASSWORD) value="$(secret_or_new POSTGRES_PASSWORD random_hex 24)" ;;
         AUTH_SECRET) value="$(secret_or_new AUTH_SECRET random_base64 32)" ;;
         MAIL_ENCRYPTION_KEY) value="$(secret_or_new MAIL_ENCRYPTION_KEY random_base64 32)" ;;
+        # Пароль шифрования копий бэкапов во внешнем хранилище (averra.sh). Новый сделал бы
+        # нечитаемыми уже выгруженные копии — не меняется, как остальные секреты
+        BACKUP_PASSPHRASE) value="$(secret_or_new BACKUP_PASSPHRASE random_base64 32)" ;;
         *) value="${!key}" ;;
       esac
       printf '%s=%s\n' "$key" "$value"
@@ -382,7 +385,12 @@ step "Пишу $INSTALL_DIR"
 if [[ "$SCRIPT_DIR" != "$(cd "$INSTALL_DIR" 2>/dev/null && pwd || true)" ]]; then
   mkdir -p "$INSTALL_DIR"
   cp "$SCRIPT_DIR/compose.yaml" "$INSTALL_DIR/compose.yaml"
+  # Скрипт управления установкой: бэкапы, восстановление, обновление, состояние. Только root
+  install -m 700 "$SCRIPT_DIR/averra.sh" "$INSTALL_DIR/averra.sh"
 fi
+# Бэкапы (в них персональные данные) — только root; состояние читает API в контейнере
+(umask 077 && mkdir -p "$INSTALL_DIR/backups")
+(umask 022 && mkdir -p "$INSTALL_DIR/state")
 write_env
 if [[ ${#NEW_SECRETS[@]} -gt 0 ]]; then
   say "Созданы секреты: ${NEW_SECRETS[*]} (в $ENV_FILE, права 600)"
@@ -466,8 +474,47 @@ fi
 step 'Поднимаю Caddy (сертификаты он выпустит сам)'
 compose up -d
 
+# Бэкап по расписанию: таймер systemd раз в сутки. Persistent — пропущенный, пока сервер был
+# выключен, сделается при старте. Журнал: journalctl -u averra-backup
+install_backup_timer() {
+  local units="${AVERRA_SYSTEMD_DIR:-/etc/systemd/system}"
+  if ! command -v systemctl >/dev/null 2>&1; then
+    say "Нет systemd: бэкап по расписанию не поставлен. Добавьте в cron: $INSTALL_DIR/averra.sh backup --kind scheduled"
+    return
+  fi
+  step 'Ставлю бэкап по расписанию (averra-backup.timer, каждый день около 03:30)'
+  cat >"$units/averra-backup.service" <<UNIT
+[Unit]
+Description=Бэкап установки Averra (база и медиа, с проверкой восстановлением)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=$INSTALL_DIR/averra.sh backup --kind scheduled
+UNIT
+  cat >"$units/averra-backup.timer" <<UNIT
+[Unit]
+Description=Бэкап установки Averra раз в сутки
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now averra-backup.timer
+}
+install_backup_timer
+
 step 'Готово'
 say "Админка: https://$ADMIN_DOMAIN (вход: $OWNER_EMAIL)"
 say "Сайт:    https://$SITE_DOMAIN — появится после первой публикации в админке"
 say 'Дальше: задайте SMTP на странице «Почта» в админке и проверьте подключение.'
+say "Сохраните BACKUP_PASSPHRASE из $ENV_FILE в менеджер паролей студии: без него копии бэкапов"
+say 'во внешнем хранилище не расшифровать, если сервер пропадёт вместе с .env.'
+say "Бэкап руками: $INSTALL_DIR/averra.sh backup. Обновление: $INSTALL_DIR/averra.sh update --version <версия>"
 say "Повторный запуск с теми же флагами безопасен. Логи: docker compose --project-directory $INSTALL_DIR logs -f"
