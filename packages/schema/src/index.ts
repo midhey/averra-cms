@@ -93,6 +93,7 @@ export {
   PageTitle,
   pageTemplateContent,
 } from './page'
+export { SiteBuildStatus } from './publish'
 export { NewSite, SiteName } from './site'
 export { Theme } from './theme'
 export { setupZodMessages } from './zod-messages'
