@@ -1,4 +1,4 @@
-import { CMS_API_URL, CMS_SITE_ID } from 'astro:env/server'
+import { CMS_API_URL, CMS_LINKS, CMS_SITE_ID } from 'astro:env/server'
 import type { AppType } from '@averra/api'
 import { demoSiteId, type MediaMap } from '@averra/schema'
 import { hc } from 'hono/client'
@@ -18,7 +18,7 @@ export async function loadSnapshot() {
   }
   if (res.status !== 200) throw new Error(`API ответил ${res.status} на сайт ${siteId}`)
   const snapshot = await res.json()
-  return { ...snapshot, media: withAbsoluteUrls(snapshot.media) }
+  return { ...snapshot, media: withSiteUrls(snapshot.media) }
 }
 
 const setSiteIdHint =
@@ -43,35 +43,47 @@ function resolveSiteId() {
   return demoSiteId
 }
 
+/** Путь файла картинки в API: /api/media/<id картинки>/<файл> */
+const API_MEDIA_PREFIX = '/api/media/'
+
 /**
- * API отдаёт адреса файлов картинок от своего корня (/api/media/…), а страницу сайта открывают
- * с другого адреса — ссылки должны вести на сам API. Когда публикация начнёт выкладывать
- * файлы вместе со статикой (модуль 9), адреса будут указывать туда
+ * Адрес файла картинки на сайте. API отдаёт адреса от своего корня (/api/media/…), а страницу
+ * открывают с другого адреса. В режиме api ссылка ведёт на сам API. В режиме relative (публикация
+ * на сервере) — на /media/<id>/<файл> от корня сайта: эти файлы публикация кладёт в папку релиза
+ * (apps/api/src/publish), и сайт целиком — статика без API
  */
-function withAbsoluteUrls(media: MediaMap): MediaMap {
+export function siteMediaUrl(apiUrl: string, links: 'api' | 'relative' = CMS_LINKS) {
+  if (links === 'api') return new URL(apiUrl, CMS_API_URL).href
+  if (!apiUrl.startsWith(API_MEDIA_PREFIX)) {
+    throw new Error(`Неожиданный адрес файла картинки: ${apiUrl}`)
+  }
+  return `/media/${apiUrl.slice(API_MEDIA_PREFIX.length)}`
+}
+
+function withSiteUrls(media: MediaMap): MediaMap {
   return Object.fromEntries(
     Object.entries(media).map(([id, file]) => [
       id,
       {
         ...file,
-        variants: file.variants.map((variant) => ({
-          ...variant,
-          url: new URL(variant.url, CMS_API_URL).href,
-        })),
+        variants: file.variants.map((variant) => ({ ...variant, url: siteMediaUrl(variant.url) })),
       },
     ]),
   )
 }
 
 /**
- * Куда формы страницы шлют заявки: открытый адрес приёма в API (CMS_API_URL — тот же, откуда
- * сайт берёт картинки). Форма — обычная HTML-форма method="post", JS на сайте для неё не нужен
+ * Куда формы страницы шлют заявки: открытый адрес приёма в API. Форма — обычная HTML-форма
+ * method="post", JS на сайте для неё не нужен. В режиме api — на CMS_API_URL (тот же, откуда сайт
+ * берёт картинки). В режиме relative — путь от корня сайта: Caddy домена сайта передаёт его в API,
+ * и форма уходит на свой же источник
  */
-export const formActionFor = (siteId: string, slug: string) => (blockId: string) =>
-  new URL(
-    `/api/forms/${encodeURIComponent(siteId)}/${encodeURIComponent(slug)}/${encodeURIComponent(blockId)}`,
-    CMS_API_URL,
-  ).href
+export const formActionFor =
+  (siteId: string, slug: string, links: 'api' | 'relative' = CMS_LINKS) =>
+  (blockId: string) => {
+    const path = `/api/forms/${encodeURIComponent(siteId)}/${encodeURIComponent(slug)}/${encodeURIComponent(blockId)}`
+    return links === 'relative' ? path : new URL(path, CMS_API_URL).href
+  }
 
 async function request<T>(call: () => Promise<T>): Promise<T> {
   try {

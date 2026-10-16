@@ -35,6 +35,16 @@ export default defineConfig({
       // Какой сайт собирать (apps/renderer/.env). Список сайтов в API закрыт входом, поэтому
       // «первый сайт» рендерер узнать не может, а снимок сайта открыт и берётся по id
       CMS_SITE_ID: envField.string({ context: 'server', access: 'public', optional: true }),
+      // Куда ведут ссылки на картинки и формы. api — на CMS_API_URL (pnpm dev, e2e, сборка руками).
+      // relative — от корня сайта: публикация на сервере (модуль 9) кладёт файлы картинок в папку
+      // релиза (/media/…), а Caddy домена сайта передаёт /api/forms/… в API. Так сайт не зависит
+      // от адреса API, а форма уходит на тот же источник — без CORS
+      CMS_LINKS: envField.enum({
+        context: 'server',
+        access: 'public',
+        values: ['api', 'relative'],
+        default: 'api',
+      }),
     },
   },
 })
