@@ -1,4 +1,4 @@
-import { ExistingPageSlug, Uuid } from '@averra/schema'
+import { ExistingPageSlug, LeadStatus, Uuid } from '@averra/schema'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
@@ -11,6 +11,9 @@ import {
 import { safeRedirect } from './permissions'
 import {
   invitationsQuery,
+  leadQuery,
+  leadSettingsQuery,
+  leadsQuery,
   mailOutboxQuery,
   mailQuery,
   mailSmtpQuery,
@@ -25,6 +28,8 @@ import {
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { InviteScreen } from './screens/InviteScreen'
+import { LeadScreen } from './screens/LeadScreen'
+import { LeadsScreen } from './screens/LeadsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MailScreen } from './screens/MailScreen'
 import { MediaScreen } from './screens/MediaScreen'
@@ -34,7 +39,7 @@ import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AppHeader } from './ui/AppHeader'
 
-// Маршруты описаны в коде, без генератора: экранов девять, всё дерево видно здесь.
+// Маршруты описаны в коде, без генератора: экранов одиннадцать, всё дерево видно здесь.
 // Данные загружаются в кеш TanStack Query, роутер только ждёт их перед показом экрана
 
 type RouterContext = { queryClient: QueryClient }
@@ -159,6 +164,41 @@ const mediaRoute = createRoute({
   component: MediaScreen,
 })
 
+// Заявки — владельцу и клиенту сайта. Редактору API ответит 403, и экран ошибки скажет почему
+const leadsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sites/$siteId/leads',
+  // ?status=new | processed — фильтр списка; остальное — все заявки
+  validateSearch: (search: Record<string, unknown>): { status?: LeadStatus } => {
+    const status = LeadStatus.safeParse(search.status)
+    return status.success ? { status: status.data } : {}
+  },
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
+  loaderDeps: ({ search }) => ({ status: search.status }),
+  loader: ({ context: { queryClient }, params: { siteId }, deps: { status } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(siteQuery(siteId)),
+      queryClient.ensureQueryData(leadsQuery(siteId, status)),
+      queryClient.ensureQueryData(leadSettingsQuery(siteId)),
+    ]),
+  component: LeadsScreen,
+})
+
+const leadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sites/$siteId/leads/$leadId',
+  beforeLoad: ({ params }) => {
+    checkSiteId(params.siteId)
+    if (!Uuid().safeParse(params.leadId).success) throw notFound({ data: 'Заявка не найдена' })
+  },
+  loader: ({ context: { queryClient }, params: { siteId, leadId } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(siteQuery(siteId)),
+      queryClient.ensureQueryData(leadQuery(siteId, leadId)),
+    ]),
+  component: LeadScreen,
+})
+
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/pages/$slug',
@@ -202,6 +242,8 @@ const routeTree = rootRoute.addChildren([
   sitesRoute,
   siteRoute,
   mediaRoute,
+  leadsRoute,
+  leadRoute,
   editorRoute,
   mailRoute,
 ])

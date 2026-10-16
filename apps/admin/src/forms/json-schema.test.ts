@@ -20,6 +20,17 @@ describe('fieldKind', () => {
     // Картинка — объект, но со своим виджетом: выбор из медиатеки и alt
     expect(fieldKind(field(hero, 'image'))).toBe('image')
   })
+
+  it('поля блока «Форма»: флажок «Обязательное», тип с русскими подписями, варианты списком', () => {
+    const fields = field(catalogEntry('form').schema, 'fields')
+    expect(fieldKind(fields)).toBe('list')
+    const item = fields.items ?? {}
+    expect(fieldKind(field(item, 'required'))).toBe('checkbox')
+    expect(fieldKind(field(item, 'type'))).toBe('select')
+    expect(field(item, 'type')['x-enum-titles']).toMatchObject({ phone: 'Телефон' })
+    expect(fieldKind(field(item, 'options'))).toBe('list')
+    expect(emptyValue(item)).toEqual({ name: '', type: 'name', label: '' })
+  })
 })
 
 describe('emptyValue', () => {

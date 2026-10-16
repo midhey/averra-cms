@@ -14,9 +14,19 @@ export type JsonSchema = {
   maxItems?: number
   /** Свой виджет вместо обычных полей: пометку ставит схема в @averra/schema (например, Image) */
   'x-widget'?: string
+  /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
+  'x-enum-titles'?: Readonly<Record<string, string>>
 }
 
-export type FieldKind = 'text' | 'textarea' | 'select' | 'object' | 'list' | 'image' | 'unsupported'
+export type FieldKind =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'checkbox'
+  | 'object'
+  | 'list'
+  | 'image'
+  | 'unsupported'
 
 /** Каким полем формы показывать значение. Длинный текст — многострочным полем */
 export function fieldKind(schema: JsonSchema): FieldKind {
@@ -27,6 +37,8 @@ export function fieldKind(schema: JsonSchema): FieldKind {
     case 'string':
       // Строка с шаблоном (ссылка и т.п.) всегда однострочная, даже если допускает 2048 символов
       return (schema.maxLength ?? 0) > 150 && !schema.pattern ? 'textarea' : 'text'
+    case 'boolean':
+      return 'checkbox'
     case 'object':
       return 'object'
     case 'array':

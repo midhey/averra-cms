@@ -1,3 +1,4 @@
+import type { LeadStatus } from '@averra/schema'
 import { type QueryClient, queryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import { apiRequestError } from './errors'
@@ -16,6 +17,11 @@ export const queryKeys = {
     ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
   media: (siteId: string) => ['sites', siteId, 'media'] as const,
   invitations: (siteId: string) => ['sites', siteId, 'invitations'] as const,
+  leads: (siteId: string) => ['sites', siteId, 'leads'] as const,
+  leadList: (siteId: string, status: LeadStatus | undefined) =>
+    ['sites', siteId, 'leads', 'list', status ?? 'all'] as const,
+  lead: (siteId: string, leadId: string) => ['sites', siteId, 'leads', 'item', leadId] as const,
+  leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   mail: ['mail'] as const,
@@ -108,6 +114,45 @@ export const invitationsQuery = (siteId: string) =>
     queryKey: queryKeys.invitations(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].invitations.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Заявки сайта, новые сверху (только новые или только обработанные — status), и уходят ли
+ * уведомления о них. Видят владелец и клиент сайта, редактору API ответит 403
+ */
+export const leadsQuery = (siteId: string, status?: LeadStatus) =>
+  queryOptions({
+    queryKey: queryKeys.leadList(siteId, status),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].leads.$get({
+        param: { siteId },
+        query: status ? { status } : {},
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Заявка целиком: поля, согласие, статус */
+export const leadQuery = (siteId: string, leadId: string) =>
+  queryOptions({
+    queryKey: queryKeys.lead(siteId, leadId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].leads[':leadId'].$get({ param: { siteId, leadId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Настройки заявок сайта: адреса уведомлений, срок хранения, подтверждение посетителю */
+export const leadSettingsQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.leadSettings(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].leads.settings.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

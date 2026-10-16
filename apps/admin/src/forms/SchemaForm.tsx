@@ -78,6 +78,8 @@ function Field(props: FieldProps) {
       return <TextField {...props} multiline />
     case 'select':
       return <SelectField {...props} />
+    case 'checkbox':
+      return <CheckboxField {...props} />
     case 'object':
       return <ObjectField {...props} />
     case 'list':
@@ -135,6 +137,7 @@ function TextField(props: FieldProps & { multiline?: boolean }) {
 function SelectField({ schema, value, path, label, onChange }: FieldProps) {
   const id = useId()
   const options = schema.enum ?? []
+  const titles = schema['x-enum-titles'] ?? {}
   const current = value ?? schema.default ?? options[0]
   const pick = (raw: string) =>
     onChange(
@@ -155,10 +158,35 @@ function SelectField({ schema, value, path, label, onChange }: FieldProps) {
       >
         {options.map((option) => (
           <option key={String(option)} value={String(option)}>
-            {String(option)}
+            {titles[String(option)] ?? String(option)}
           </option>
         ))}
       </select>
+    </div>
+  )
+}
+
+/** Да или нет: флажок с подписью. Значение по умолчанию — из схемы */
+function CheckboxField({ schema, value, path, label, onChange }: FieldProps) {
+  const id = useId()
+  const checked = typeof value === 'boolean' ? value : schema.default === true
+  return (
+    <div className={styles.field}>
+      <label htmlFor={id} className={styles.toggle}>
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          aria-describedby={schema.description ? `${id}-hint` : undefined}
+          onChange={(event) => onChange(path, event.target.checked)}
+        />
+        {label}
+      </label>
+      {schema.description && (
+        <div id={`${id}-hint`} className={styles.hint}>
+          {schema.description}
+        </div>
+      )}
     </div>
   )
 }
@@ -306,9 +334,11 @@ function ListItem(props: ListItemProps) {
   )
 }
 
-/** Имя пункта для диктора: его заголовок, если он есть, иначе номер */
+/** Имя пункта для диктора: его заголовок или подпись (поле формы, вариант), иначе номер */
 function itemLabel(item: unknown, index: number) {
-  const title =
-    typeof item === 'object' && item !== null ? (item as Record<string, unknown>).title : undefined
-  return typeof title === 'string' && title.trim() !== '' ? title : `№ ${index + 1}`
+  const fields = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {}
+  const name = [fields.title, fields.label].find(
+    (candidate) => typeof candidate === 'string' && candidate.trim() !== '',
+  )
+  return typeof name === 'string' ? name : `№ ${index + 1}`
 }

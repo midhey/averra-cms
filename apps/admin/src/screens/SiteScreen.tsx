@@ -7,8 +7,9 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { InvitationsSection } from '../invitations/InvitationsSection'
+import { newLeadsLabel } from '../leads/lead-format'
 import { formatDateTime, pagePath, pageState } from '../pages-format'
-import { canInvite, canManagePages } from '../permissions'
+import { canInvite, canManagePages, canSeeLeads } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
@@ -70,6 +71,15 @@ function SitePages({ siteId }: { siteId: string }) {
           <Link to="/sites/$siteId/media" params={{ siteId }} className={styles.pageLink}>
             Медиатека
           </Link>
+          {/* Заявки — владельцу и клиенту сайта (у редактора API отдаёт newLeads: null) */}
+          {canSeeLeads(site.access) && site.newLeads !== null && (
+            <Link to="/sites/$siteId/leads" params={{ siteId }} className={styles.pageLink}>
+              Заявки
+              {site.newLeads > 0 && (
+                <span className={styles.badge}>{newLeadsLabel(site.newLeads)}</span>
+              )}
+            </Link>
+          )}
         </nav>
       </header>
 

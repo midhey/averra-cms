@@ -211,7 +211,91 @@
   white-space: pre-line;
 }
 
-/* Разделы сайта под заголовком: пока только медиатека */
+/* Разделы сайта под заголовком: медиатека и заявки */
 .sectionNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   margin: -12px 0 16px;
+}
+
+/* Счётчик новых заявок рядом со ссылкой «Заявки» */
+.badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #2f5bea;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter {
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #2f5bea;
+  text-decoration: none;
+}
+
+.filter:hover {
+  background: #eef2fd;
+}
+
+.filter[aria-current="page"] {
+  background: #2f5bea;
+  color: #fff;
+}
+
+.state[data-new="true"] {
+  color: #2f5bea;
+  font-weight: 600;
+}
+
+/* Поля заявки: подпись над значением, многострочный текст — с переносами */
+.details {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.details dt {
+  color: #5b6170;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.details dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.checkLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.checkLine input {
+  margin-top: 4px;
+}
+
+/* Строка под заголовком экрана перед разделами */
+.intro {
+  margin-bottom: 16px;
 }

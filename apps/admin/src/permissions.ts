@@ -28,5 +28,11 @@ export function safeRedirect(target: unknown) {
   return `${url.pathname}${url.search}${url.hash}`
 }
 
+/**
+ * Заявки с форм — персональные данные посетителей: их видят, обрабатывают и настраивают владелец
+ * и клиент сайта (это его заявки). Редактору, который делает контент, они не нужны
+ */
+export const canSeeLeads = (access: SiteAccess) => access !== 'editor'
+
 /** Приглашать участников и отзывать приглашения может только владелец */
 export const canInvite = (access: SiteAccess) => access === 'owner'
