@@ -294,6 +294,9 @@ export const leads = pgTable(
     blockId: text().notNull(),
     formTitle: text().notNull(),
     data: jsonb().$type<StoredLeadField[]>().notNull(),
+    // Размер data в байтах (UTF-8 JSON) — для дневного предела объёма: сумма по колонке, а не
+    // распаковка jsonb всех заявок сайта за сутки на каждой отправке формы
+    dataBytes: integer().notNull().default(0),
     // Согласие на обработку персональных данных: какой текст и какая политика были на странице,
     // какая версия страницы была опубликована и когда посетитель согласился
     consentText: text().notNull(),
@@ -393,6 +396,9 @@ export const mailOutbox = pgTable(
     // Данные шаблона. null — стёрты: письмо отправлено или в нём была одноразовая ссылка
     data: jsonb().$type<unknown>(),
     recipient: text().notNull(),
+    // Ящик, куда ведёт адрес (mailboxKey: нижний регистр, без метки «+», gmail без точек) —
+    // по нему лимит «подтверждение не чаще раза в сутки на адрес» не обходится vasya+1@…
+    recipientKey: text(),
     status: text().$type<MailStatusValue>().notNull().default('pending'),
     // Сколько раз письмо брали в отправку
     attempts: integer().notNull().default(0),
@@ -416,6 +422,7 @@ export const mailOutbox = pgTable(
     index('mail_outbox_sent_at_idx').on(table.sentAt),
     index('mail_outbox_site_id_idx').on(table.siteId),
     index('mail_outbox_lead_id_idx').on(table.leadId),
+    index('mail_outbox_recipient_key_idx').on(table.siteId, table.recipientKey, table.createdAt),
     check(
       'mail_outbox_status_valid',
       sql`${table.status} IN ('pending', 'sending', 'sent', 'failed')`,

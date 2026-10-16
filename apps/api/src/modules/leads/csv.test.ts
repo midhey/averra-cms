@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { csvCell, leadsCsv, toCsv } from './csv'
+import { CSV_BOM, csvCell, csvLine, leadCsvRow, leadsCsv, leadsCsvHeader, toCsv } from './csv'
 
 describe('CSV заявок', () => {
   it.each([
@@ -53,5 +53,22 @@ describe('CSV заявок', () => {
     expect(header).toBe('"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город"')
     expect(first).toBe('"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";""')
     expect(second).toBe('"14.10.2026, 12:30";"новая";"/";"Другая";"";"";"Тверь"')
+  })
+
+  it('поток из заголовка и строк по одной даёт тот же файл, что и целиком', () => {
+    const lead = {
+      createdAt: new Date('2026-10-15T09:30:00.000Z'),
+      status: 'new' as const,
+      pageSlug: 'index',
+      formTitle: 'Заявка',
+      data: [{ name: 'name', label: 'Имя', type: 'name' as const, value: '=1+1' }],
+    }
+    const labels = ['Имя']
+    const streamed =
+      CSV_BOM +
+      csvLine(leadsCsvHeader(labels)) +
+      csvLine(leadCsvRow(lead, labels)) +
+      csvLine(leadCsvRow(lead, labels))
+    expect(streamed).toBe(leadsCsv([lead, lead]))
   })
 })

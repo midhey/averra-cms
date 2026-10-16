@@ -19,18 +19,41 @@ import { errorForLog } from '../../log-error'
 import { createRateLimiter } from '../../rate-limit'
 import type { MailDeps } from '../mail/routes'
 import { messagePage, PAGE_HEADERS } from './pages'
-import { acceptLead, findPublishedForm, pagePath } from './service'
+import { leadsRepo, storedLeadBytes } from './repo'
+import { acceptLead, findPublishedForm, leadSnapshot, pagePath } from './service'
 
 /** Лимиты приёма заявок. По IP считается первым: ключ сайта выбирает клиент (CONVENTIONS) */
 export type LeadLimits = {
   perIp: { max: number; windowMs: number }
   perSite: { max: number; windowMs: number }
+  /**
+   * Сколько байт данных заявок сайт принимает за последние сутки (считается в базе). Предел
+   * отсекает только крупные заявки: см. smallLeadBytes
+   */
+  perSiteDailyBytes: number
+  /**
+   * Заявка с данными не больше этого принимается и сверх дневного предела объёма — под обычными
+   * лимитами частоты. Иначе спамер, набив предел крупными заявками, закрыл бы форму для всех
+   */
+  smallLeadBytes: number
 }
 
-/** С одного IP — 5 заявок за 10 минут, на сайт — 100 за час */
+/** Окно дневного предела объёма */
+export const LEAD_VOLUME_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/**
+ * С одного IP — 5 заявок за 10 минут, на сайт — 100 за час и не больше 10 МБ данных крупных
+ * заявок за сутки. Честная заявка — 0,5–2 КБ (с одним многострочным полем, заполненным до
+ * предела, — около 4,5 КБ), и она меньше smallLeadBytes (8 КБ): её дневной предел не касается,
+ * даже когда спамер его выбрал. Заявка спамера, набитая до предела тела, — до ~100 КБ в базе,
+ * и предел останавливает такие на сотне. Худший рост базы — 10 МБ крупных плюс 8 КБ × 2400
+ * маленьких (≈19 МБ) в сутки на сайт, а не ~240 МБ без предела
+ */
 export const LEAD_LIMITS: LeadLimits = {
   perIp: { max: 5, windowMs: 10 * 60 * 1000 },
   perSite: { max: 100, windowMs: 60 * 60 * 1000 },
+  perSiteDailyBytes: 10 * 1024 * 1024,
+  smallLeadBytes: 8 * 1024,
 }
 
 /**
@@ -119,6 +142,7 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
   // Свои на каждый экземпляр API: глобального состояния нет. IP живёт только здесь, в памяти
   const byIp = createRateLimiter(limits.perIp)
   const bySite = createRateLimiter(limits.perSite)
+  const repo = leadsRepo(db)
 
   const wantsJson = (c: Context) => {
     const accept = c.req.header('accept') ?? ''
@@ -184,6 +208,17 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
     })
   }
 
+  /** Дневной предел объёма сайта исчерпан: честный отказ, а не молчаливая потеря заявки */
+  const siteFull = (c: Context) => {
+    c.header('Retry-After', String(60 * 60))
+    return failure(c, 429, {
+      code: 'rate_limited',
+      title: 'Форма сейчас не принимает заявки',
+      message:
+        'На этот сайт за сутки пришло слишком много длинных заявок, и форма временно их не принимает. Сократите текст в полях и отправьте снова, попробуйте позже или свяжитесь с компанией другим способом',
+    })
+  }
+
   return new Hono().post(
     '/:siteId/:slug/:blockId',
     // Тело больше лимита отклоняется до чтения целиком
@@ -216,7 +251,7 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
         })
       }
 
-      const published = await findPublishedForm(db, siteId, slug, blockId)
+      const published = await findPublishedForm(db, siteId, slug, blockId, log)
       if (!published) return notFound(c)
 
       // Повторённый ключ — первое значение: так поле читает и браузерная форма. Объект без
@@ -253,6 +288,19 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
           },
           { problems, ...(back ? { back: `${back}#${blockId}` } : {}) },
         )
+      }
+
+      // Дневной предел объёма — в базе, по заявкам, которые уже сохранены: рост базы спамом
+      // ограничен, даже если API перезапускали. Он касается только крупных заявок: маленькие
+      // (все честные) проходят и сверх него, иначе спамер закрыл бы форму для всех. Пишем в лог,
+      // чтобы студия заметила атаку
+      const bytes = storedLeadBytes(leadSnapshot(props.fields, parsed.data))
+      if (bytes > limits.smallLeadBytes) {
+        const since = new Date(Date.now() - LEAD_VOLUME_WINDOW_MS)
+        if ((await repo.storedBytesSince(siteId, since)) >= limits.perSiteDailyBytes) {
+          log(`Форма ${siteId}/${slug}/${blockId}: исчерпан дневной предел объёма заявок сайта`)
+          return siteFull(c)
+        }
       }
 
       // Лимит сайта — только для заявок, которые будут сохранены. Ловушка и неверные формы его

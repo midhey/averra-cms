@@ -1,11 +1,25 @@
 import type { LeadSettings, LeadStatus } from '@averra/schema'
-import { and, count, desc, eq, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gt, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { leads, type StoredLeadField, sites } from '../../db/schema'
 import type { DbOrTx } from '../../mail/outbox'
 
 /** Сколько заявок отдаёт список в админке за раз: новые сверху */
 export const LEADS_LIST_LIMIT = 500
+
+/** Порция выгрузки CSV: в памяти API лежит она, а не все заявки сайта */
+export const LEADS_EXPORT_BATCH = 500
+
+/**
+ * Размер данных заявки в байтах — UTF-8 её JSON. Его пишет колонка data_bytes, по нему считаются
+ * дневной предел объёма и порог «маленькой» заявки. Веб-стандартный TextEncoder, не Node API
+ */
+export function storedLeadBytes(data: readonly StoredLeadField[]) {
+  return new TextEncoder().encode(JSON.stringify(data)).length
+}
+
+/** Курсор выгрузки: время последней строки порции текстом (с микросекундами) и её id */
+export type ExportCursor = { at: string; id: string }
 
 export type NewLead = {
   siteId: string
@@ -44,22 +58,23 @@ export function leadsRepo(db: Db) {
       const { now, ...values } = lead
       const [row] = await tx
         .insert(leads)
-        .values({ ...values, consentedAt: now, createdAt: now })
+        .values({
+          ...values,
+          dataBytes: storedLeadBytes(values.data),
+          consentedAt: now,
+          createdAt: now,
+        })
         .returning({ id: leads.id })
       if (!row) throw new Error('База не вернула сохранённую заявку')
       return row
     },
 
     /**
-     * Заявки сайта, новые сверху. status — только новые или только обработанные. Список
-     * в админке — последние LEADS_LIST_LIMIT, выгрузка CSV — все (limit: null): их и так
-     * не больше, чем живёт за срок хранения сайта
+     * Заявки сайта, новые сверху, последние LEADS_LIST_LIMIT. status — только новые или только
+     * обработанные. Все заявки сайта — порциями через exportBatch
      */
-    list(
-      siteId: string,
-      { status, limit = LEADS_LIST_LIMIT }: { status?: LeadStatus; limit?: number | null } = {},
-    ) {
-      const query = db
+    list(siteId: string, { status }: { status?: LeadStatus } = {}) {
+      return db
         .select(leadColumns)
         .from(leads)
         .where(
@@ -68,7 +83,61 @@ export function leadsRepo(db: Db) {
             : eq(leads.siteId, siteId),
         )
         .orderBy(desc(leads.createdAt), desc(leads.id))
-      return limit === null ? query : query.limit(limit)
+        .limit(LEADS_LIST_LIMIT)
+    },
+
+    /**
+     * Подписи полей всех заявок сайта — колонки CSV. Каждая подпись берётся из самой свежей
+     * заявки, где она есть (distinct on), вместе со своим местом в ней. Порядок: подписи свежих
+     * заявок слева и в порядке полей этой заявки, старые подписи справа. Переставили поля
+     * в форме — колонки идут как в новой форме
+     */
+    async exportLabels(siteId: string) {
+      const rows = await db.execute<{ label: string }>(sql`
+        select label from (
+          select distinct on (field.value ->> 'label')
+            field.value ->> 'label' as label, l.created_at, l.id, field.position
+          from ${leads} l
+            cross join lateral jsonb_array_elements(l.data) with ordinality as field(value, position)
+          where l.site_id = ${siteId}
+          order by field.value ->> 'label', l.created_at desc, l.id desc
+        ) latest
+        order by created_at desc, id desc, position, label`)
+      return rows.rows.map((row) => row.label)
+    },
+
+    /**
+     * Следующая порция заявок сайта для выгрузки, новые сверху. after — курсор последней строки
+     * прошлой порции (cursorAt и id из неё). Время ходит текстом timestamptz, без перевода в Date:
+     * микросекунды не теряются, строки не повторяются и не пропадают. Курсор — значения, а не
+     * ссылка на строку: удалили граничную заявку во время выгрузки (руками или чисткой по сроку) —
+     * выгрузка продолжается со следующей
+     */
+    exportBatch(siteId: string, after?: ExportCursor, size = LEADS_EXPORT_BATCH) {
+      const cursor = after
+        ? sql`(${leads.createdAt}, ${leads.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`
+        : undefined
+      return db
+        .select({ ...leadColumns, cursorAt: sql<string>`${leads.createdAt}::text` })
+        .from(leads)
+        .where(cursor ? and(eq(leads.siteId, siteId), cursor) : eq(leads.siteId, siteId))
+        .orderBy(desc(leads.createdAt), desc(leads.id))
+        .limit(size)
+    },
+
+    /**
+     * Сколько байт данных заявок сайт принял с момента since — для дневного предела объёма.
+     * Считается в базе, поэтому переживает перезапуск API. Сумма колонки data_bytes по индексу
+     * сайта и времени — jsonb заявок не распаковывается
+     */
+    async storedBytesSince(siteId: string, since: Date) {
+      const [row] = await db
+        .select({
+          bytes: sql`coalesce(sum(${leads.dataBytes}), 0)`.mapWith(Number),
+        })
+        .from(leads)
+        .where(and(eq(leads.siteId, siteId), gt(leads.createdAt, since)))
+      return row?.bytes ?? 0
     },
 
     async find(siteId: string, id: string) {

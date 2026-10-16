@@ -1,12 +1,14 @@
 import { LeadSettings, LeadStatus, UpdateLead, Uuid } from '@averra/schema'
 import { Hono } from 'hono'
+import { stream } from 'hono/streaming'
 import { z } from 'zod'
 import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { errorForLog } from '../../log-error'
 import { validate } from '../../validate'
 import type { MailDeps } from '../mail/routes'
-import { leadsCsv } from './csv'
-import { leadsRepo } from './repo'
+import { CSV_BOM, csvLine, leadCsvRow, leadsCsvHeader } from './csv'
+import { type ExportCursor, leadsRepo } from './repo'
 import { saveLeadSettings } from './service'
 
 const SiteParams = z.object({ siteId: Uuid() })
@@ -55,16 +57,34 @@ export function leadsRoutes({ db, mail }: { db: Db; mail: MailDeps }) {
         },
       )
 
-      // CSV всех заявок сайта: значения-формулы обезврежены (csv.ts)
+      // CSV всех заявок сайта потоком: подписи колонок — одним запросом, заявки — порциями
+      // по LEADS_EXPORT_BATCH, и каждая порция сразу уходит в ответ. В памяти API — одна
+      // порция, а не все заявки за срок хранения. Значения-формулы обезврежены (csv.ts)
       .get('/export', validate('param', SiteParams), site('leads.read'), async (c) => {
         const { siteId } = c.req.valid('param')
-        const csv = leadsCsv(await repo.list(siteId, { limit: null }))
+        const labels = await repo.exportLabels(siteId)
         const date = new Date().toISOString().slice(0, 10)
-        return c.body(csv, 200, {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="leads-${date}.csv"`,
-          'Cache-Control': 'no-store',
-        })
+        c.header('Content-Type', 'text/csv; charset=utf-8')
+        c.header('Content-Disposition', `attachment; filename="leads-${date}.csv"`)
+        c.header('Cache-Control', 'no-store')
+        return stream(
+          c,
+          async (out) => {
+            await out.write(CSV_BOM + csvLine(leadsCsvHeader(labels)))
+            let after: ExportCursor | undefined
+            while (!out.aborted) {
+              const batch = await repo.exportBatch(siteId, after)
+              const last = batch.at(-1)
+              if (!last) break
+              await out.write(batch.map((lead) => csvLine(leadCsvRow(lead, labels))).join(''))
+              after = { at: last.cursorAt, id: last.id }
+            }
+          },
+          // Заголовки уже ушли: статус не сменить, файл оборвётся. В лог — без данных заявок
+          async (error) => {
+            console.error(`Выгрузка CSV заявок сайта ${siteId} оборвалась`, errorForLog(error))
+          },
+        )
       })
 
       .get('/settings', validate('param', SiteParams), site('leads.read'), async (c) => {

@@ -2,6 +2,7 @@ import { MailAddress } from '@averra/schema'
 import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { mailOutbox } from '../db/schema'
+import { mailboxKey } from './mailbox-key'
 import {
   MailDataError,
   type MailTemplateData,
@@ -75,6 +76,7 @@ export async function enqueueMail<T extends MailTemplateId>(
       template: mail.template,
       data,
       recipient: to.data,
+      recipientKey: mailboxKey(to.data),
       siteId: mail.siteId,
       leadId: mail.leadId,
       nextAttemptAt: now,

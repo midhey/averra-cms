@@ -477,3 +477,79 @@ describe('миграция 0009_mail_settings', () => {
     expect(rows).toEqual([{ site_id: null }])
   })
 })
+
+describe('миграция 0012_outbox_recipient_key', () => {
+  it('дозаполняет ключ ящика у старых писем: нижний регистр и без метки «+»', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+      '0005_media',
+      '0006_mail_outbox',
+      '0007_mail_outbox_data_lifetime',
+      '0008_user_invitations',
+      '0009_mail_settings',
+      '0010_leads',
+      '0011_outbox_lead_link',
+    ]) {
+      await applyMigration(client, name)
+    }
+    for (const recipient of ['Vasya+spam@Example.RU', 'anna@example.ru', 'a+b+c@mail.ru']) {
+      await client.exec(
+        `INSERT INTO mail_outbox (template, data, recipient) VALUES ('mail-test', '{}', '${recipient}')`,
+      )
+    }
+
+    await applyMigration(client, '0012_outbox_recipient_key')
+
+    const { rows } = await client.query<{ recipient: string; recipient_key: string }>(
+      'SELECT recipient, recipient_key FROM mail_outbox ORDER BY recipient',
+    )
+    expect(rows).toEqual([
+      { recipient: 'Vasya+spam@Example.RU', recipient_key: 'vasya@example.ru' },
+      { recipient: 'a+b+c@mail.ru', recipient_key: 'a@mail.ru' },
+      { recipient: 'anna@example.ru', recipient_key: 'anna@example.ru' },
+    ])
+  })
+})
+
+describe('миграция 0013_lead_data_bytes', () => {
+  it('дозаполняет размер данных у старых заявок', async () => {
+    client = new PGlite()
+    for (const name of [
+      '0000_init',
+      '0001_page_published_title',
+      '0002_page_published_with_title',
+      '0003_auth',
+      '0004_page_revisions',
+      '0005_media',
+      '0006_mail_outbox',
+      '0007_mail_outbox_data_lifetime',
+      '0008_user_invitations',
+      '0009_mail_settings',
+      '0010_leads',
+      '0011_outbox_lead_link',
+      '0012_outbox_recipient_key',
+    ]) {
+      await applyMigration(client, name)
+    }
+    const siteId = '00000000-0000-4000-8000-000000000013'
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO leads (site_id, page_slug, block_id, form_title, data, consent_text, consent_policy_url, consented_at)
+      VALUES ('${siteId}', 'index', 'lead', 'Форма', '[{"name":"name","label":"Имя","type":"name","value":"Анна"}]', 'Согласен', '/privacy', now());
+    `)
+
+    await applyMigration(client, '0013_lead_data_bytes')
+
+    const { rows } = await client.query<{ data_bytes: number; expected: number }>(
+      'SELECT data_bytes, octet_length(data::text) AS expected FROM leads',
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.data_bytes).toBeGreaterThan(40)
+    expect(rows[0]?.data_bytes).toBe(rows[0]?.expected)
+  })
+})

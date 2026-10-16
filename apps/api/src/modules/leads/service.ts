@@ -6,7 +6,7 @@ import {
   MAIN_PAGE_SLUG,
   type MailAddress,
 } from '@averra/schema'
-import { and, eq, gt, isNotNull, max, sql } from 'drizzle-orm'
+import { and, eq, gt, isNotNull, max } from 'drizzle-orm'
 import type { SessionUser } from '../../auth/access'
 import type { Db } from '../../db/client'
 import {
@@ -17,6 +17,7 @@ import {
   sites,
   users,
 } from '../../db/schema'
+import { mailboxKey } from '../../mail/mailbox-key'
 import { type DbOrTx, enqueueMail } from '../../mail/outbox'
 import { toMailLine } from '../../mail/templates/line'
 import { leadsRepo } from './repo'
@@ -24,7 +25,7 @@ import { leadsRepo } from './repo'
 // Приём заявки: поиск формы в опубликованной версии страницы и запись заявки вместе
 // с письмами о ней. HTTP и антиспам — в public-routes.ts
 
-/** Подтверждение посетителю — не чаще раза в сутки на адрес с одного сайта */
+/** Подтверждение посетителю — не чаще раза в сутки в один ящик с одного сайта */
 export const CONFIRMATION_PERIOD_MS = 24 * 60 * 60 * 1000
 
 /** Адрес страницы на сайте: главная открывается по корню */
@@ -38,7 +39,13 @@ export type PublishedForm = NonNullable<Awaited<ReturnType<typeof findPublishedF
  * видит посетитель. Данные из базы снова идут в работу, поэтому блок проверяется нынешней схемой.
  * undefined — страница не опубликована, блока нет, это не форма или он не проходит схему
  */
-export async function findPublishedForm(db: Db, siteId: string, slug: string, blockId: string) {
+export async function findPublishedForm(
+  db: Db,
+  siteId: string,
+  slug: string,
+  blockId: string,
+  log?: (message: string) => void,
+) {
   const [row] = await db
     .select({
       siteName: sites.name,
@@ -55,7 +62,15 @@ export async function findPublishedForm(db: Db, siteId: string, slug: string, bl
   )
   if (!row || !block) return undefined
   const props = form.props.safeParse(block.props)
-  if (!props.success) return undefined
+  if (!props.success) {
+    // Опубликовали до того, как схема стала строже (например, вариант выбора с табуляцией из
+    // Excel): заявки этой формы не принимаются целиком, пока страницу не переопубликуют.
+    // Строка в лог — чтобы студия заметила; данных посетителя в ней нет
+    log?.(
+      `Форма ${siteId}/${slug}/${blockId}: опубликованный блок не проходит схему, заявки не принимаются — переопубликуйте страницу`,
+    )
+    return undefined
+  }
   const [revision] = await db
     .select({ version: max(pageRevisions.version) })
     .from(pageRevisions)
@@ -80,7 +95,7 @@ export function displayValue(field: Pick<StoredLeadField, 'type' | 'value'>) {
 }
 
 /** Снимок заявки: ключ, подпись и тип поля рядом со значением — форму потом переименуют */
-function snapshot(fields: readonly FormField[], values: Record<string, LeadValue>) {
+export function leadSnapshot(fields: readonly FormField[], values: Record<string, LeadValue>) {
   return fields.map(
     (field): StoredLeadField => ({
       name: field.name,
@@ -105,7 +120,11 @@ async function ownerEmails(tx: DbOrTx) {
   return rows.map((row) => row.email)
 }
 
-/** Ставили ли этому адресу подтверждение с этого сайта за последние сутки */
+/**
+ * Ставили ли подтверждение с этого сайта за последние сутки в этот же ящик. Сравниваем ящики
+ * (mailboxKey), а не адреса: иначе vasya+1@…, vasya+2@… и V.asya@gmail.com получали бы каждый
+ * своё письмо, и форму можно было бы превратить в рассылку в один ящик
+ */
 async function confirmedRecently(tx: DbOrTx, siteId: string, email: string, now: Date) {
   const [row] = await tx
     .select({ id: mailOutbox.id })
@@ -114,7 +133,7 @@ async function confirmedRecently(tx: DbOrTx, siteId: string, email: string, now:
       and(
         eq(mailOutbox.siteId, siteId),
         eq(mailOutbox.template, 'lead-received'),
-        sql`lower(${mailOutbox.recipient}) = lower(${email})`,
+        eq(mailOutbox.recipientKey, mailboxKey(email)),
         gt(mailOutbox.createdAt, new Date(now.getTime() - CONFIRMATION_PERIOD_MS)),
       ),
     )
@@ -142,7 +161,7 @@ type AcceptInput = {
 export async function acceptLead(db: Db, input: AcceptInput) {
   const { form: published, values, mailEnabled, adminUrl, now = new Date() } = input
   const { site, page, props } = published
-  const data = snapshot(props.fields, values)
+  const data = leadSnapshot(props.fields, values)
   const email = visitorEmail(data)
 
   return db.transaction(async (tx) => {

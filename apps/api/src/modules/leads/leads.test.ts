@@ -1,11 +1,11 @@
 import { FORM_MAX_FIELDS, form } from '@averra/schema'
 import { and, eq, sql } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
-import { leads, mailOutbox, sites } from '../../db/schema'
+import { leads, mailOutbox, pages, type StoredLeadField, sites } from '../../db/schema'
 import { memoryMailer } from '../../mail/memory-mailer'
 import { createTestApi, sendQueue, type TestApi } from '../../testing'
 import { LEAD_BODY_LIMIT } from './public-routes'
-import { leadsRepo } from './repo'
+import { LEADS_EXPORT_BATCH, leadsRepo } from './repo'
 
 // Заявки с форм: открытый приём по опубликованной версии, антиспам, письма через очередь
 // в той же транзакции и раздел «Заявки» в админке. Всё — настоящими запросами, как их шлёт
@@ -335,6 +335,44 @@ describe('приём заявки', () => {
     expect(await leadsOf(api, siteId)).toEqual([])
   })
 
+  it('согласие — только значение флажка: no, 0, false и пустое — 400, заявки нет', async () => {
+    const siteId = await siteWithForm()
+    for (const consent of ['no', '0', 'false', '', 'on']) {
+      const res = await submit(siteId, validFields({ consent }))
+      expect(res.status, consent).toBe(400)
+      expect(await res.text()).toContain(
+        'Согласие на обработку персональных данных — Нужно согласие на обработку персональных данных',
+      )
+      const json = await submit(siteId, validFields({ consent }), {
+        headers: { accept: 'application/json' },
+      })
+      expect(await json.json()).toMatchObject({
+        error: { code: 'validation', issues: [{ path: 'consent' }] },
+      })
+    }
+    expect(await leadsOf(api, siteId)).toEqual([])
+    expect((await submit(siteId, validFields({ consent: 'yes' }))).status).toBe(303)
+    const [lead] = await leadsOf(api, siteId)
+    expect(lead?.consentText).toBeTruthy()
+  })
+
+  it('флажок формы: yes — «да», без поля — «нет», другое значение — 400', async () => {
+    const siteId = await siteWithForm()
+    expect((await submit(siteId, validFields({ call_me: 'no' }))).status).toBe(400)
+    expect((await submit(siteId, validFields({ call_me: 'true' }))).status).toBe(400)
+    expect(await leadsOf(api, siteId)).toEqual([])
+    expect((await submit(siteId, validFields({ call_me: 'yes', name: 'Да' }))).status).toBe(303)
+    expect((await submit(siteId, validFields({ name: 'Нет' }))).status).toBe(303)
+    const checked = (await leadsOf(api, siteId)).map((lead) => [
+      lead.data[0]?.value,
+      lead.data.find((field) => field.name === 'call_me')?.value,
+    ])
+    expect(checked.sort()).toEqual([
+      ['Да', true],
+      ['Нет', false],
+    ])
+  })
+
   it('неизвестные поля отбрасываются: в заявке только поля формы', async () => {
     const siteId = await siteWithForm()
     const res = await submit(siteId, validFields({ admin: 'true', password: 'secret' }))
@@ -450,6 +488,8 @@ describe('антиспам', () => {
       leadLimits: {
         perIp: { max: 2, windowMs: 60_000 },
         perSite: { max: 2, windowMs: 60_000 },
+        perSiteDailyBytes: 1024 * 1024 * 1024,
+        smallLeadBytes: 8 * 1024,
       },
     })
     try {
@@ -477,6 +517,57 @@ describe('антиспам', () => {
       // Лимит сайта (2 за окно) кончился на сохранённых заявках
       expect((await submit(siteId, validFields(), from('10.0.0.4'))).status).toBe(429)
       expect(await leadsOf(limited, siteId)).toHaveLength(2)
+    } finally {
+      await limited.close()
+    }
+  })
+
+  it('дневной предел объёма: крупные — 429 со страницей, маленькие проходят, другой сайт принимает, через сутки — снова', async () => {
+    const logs: string[] = []
+    const limited = await createTestApi({
+      log: (message) => logs.push(message),
+      leadLimits: {
+        perIp: { max: 1000, windowMs: 60_000 },
+        perSite: { max: 1000, windowMs: 60_000 },
+        // Две заявки с комментарием в 1000 кириллических символов (~2,2 КБ в базе) — и хватит
+        perSiteDailyBytes: 3000,
+        // Обычная заявка без комментария (~0,4 КБ) — маленькая, крупная — нет
+        smallLeadBytes: 1000,
+      },
+    })
+    try {
+      const limitedOwner = await limited.loginAs('owner')
+      const siteId = await siteWithForm(limited, limitedOwner.headers)
+      const other = await siteWithForm(limited, limitedOwner.headers)
+      const big = validFields({ comment: 'ж'.repeat(1000) })
+      expect((await submit(siteId, big, { testApi: limited })).status).toBe(303)
+      expect((await submit(siteId, big, { testApi: limited })).status).toBe(303)
+
+      const full = await submit(siteId, big, { testApi: limited })
+      expect(full.status).toBe(429)
+      expect(full.headers.get('retry-after')).toBe('3600')
+      expect(await full.text()).toContain('Форма сейчас не принимает заявки')
+      expect(await leadsOf(limited, siteId)).toHaveLength(2)
+      expect(logs.some((line) => line.includes('исчерпан дневной предел объёма'))).toBe(true)
+      // Маленькая (честная) заявка проходит и сверх предела: спамер, набивший его крупными
+      // заявками, не закрывает форму для всех. И с ней предел остаётся выбранным
+      for (let index = 0; index < 3; index += 1) {
+        expect((await submit(siteId, validFields(), { testApi: limited })).status).toBe(303)
+      }
+      expect(await leadsOf(limited, siteId)).toHaveLength(5)
+      expect((await submit(siteId, big, { testApi: limited })).status).toBe(429)
+      // В логе нет данных посетителя
+      expect(logs.join('\n')).not.toContain('Анна')
+
+      // Предел — у каждого сайта свой
+      expect((await submit(other, big, { testApi: limited })).status).toBe(303)
+
+      // Сутки прошли — заявки снова принимаются
+      await limited.db
+        .update(leads)
+        .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+        .where(eq(leads.siteId, siteId))
+      expect((await submit(siteId, big, { testApi: limited })).status).toBe(303)
     } finally {
       await limited.close()
     }
@@ -538,11 +629,13 @@ describe('письма о заявке', () => {
 
     expect((await put(owner.headers, ['old@example.ru'])).status).toBe(200)
     expect((await notices()).map((mail) => mail.recipient)).toContain(owner.user.email)
-    const before = (await notices()).length
 
-    // Клиент перенаправляет заявки: узнают владельцы и прежний адрес
+    // Клиент перенаправляет заявки: узнают владельцы и прежний адрес. Письма о второй смене
+    // узнаём по данным, а не по порядку строк: без ORDER BY база его не обещает
     expect((await put(client.headers, ['new@example.ru'])).status).toBe(200)
-    const after = (await notices()).slice(before)
+    const after = (await notices()).filter(
+      (mail) => (mail.data as { recipients?: string[] }).recipients?.[0] === 'new@example.ru',
+    )
     expect(after.map((mail) => mail.recipient)).toEqual(
       expect.arrayContaining([owner.user.email, 'old@example.ru']),
     )
@@ -590,6 +683,44 @@ describe('письма о заявке', () => {
     await submit(siteId, validFields({ email }))
     const again = (await outboxOf(api, siteId)).filter((row) => row.template === 'lead-received')
     expect(again).toHaveLength(2)
+  })
+
+  it('подтверждение — раз в сутки на ящик: адреса с плюсом и gmail с точками не обходят лимит', async () => {
+    const siteId = await siteWithForm()
+    const user = `vasya${++visitorCount}`
+    const sameBox = [
+      `${user}+spam1@example.ru`,
+      `${user}+spam2@example.ru`,
+      `${user.toUpperCase()}@EXAMPLE.RU`,
+      `${user}@example.ru`,
+    ]
+    for (const email of sameBox) {
+      expect((await submit(siteId, validFields({ email }))).status, email).toBe(303)
+    }
+    const gmail = `pe.tya${visitorCount}`
+    for (const email of [
+      `${gmail}+a@gmail.com`,
+      `${gmail.replace('.', '')}@googlemail.com`,
+      `${gmail.replace('.', '')}+b@gmail.com`,
+    ]) {
+      expect((await submit(siteId, validFields({ email }))).status, email).toBe(303)
+    }
+    // Другой ящик того же домена — своё подтверждение
+    await submit(siteId, validFields({ email: `other${visitorCount}@example.ru` }))
+
+    const confirmations = (await outboxOf(api, siteId))
+      .filter((mail) => mail.template === 'lead-received')
+      .map((mail) => mail.recipient)
+    // Письмо уходит на адрес, который ввели первым, а не на сведённый ящик
+    expect(confirmations.sort()).toEqual(
+      [
+        `${user}+spam1@example.ru`,
+        `${gmail}+a@gmail.com`,
+        `other${visitorCount}@example.ru`,
+      ].sort(),
+    )
+    // Заявки при этом все на месте: лимит только на подтверждения
+    expect(await leadsOf(api, siteId)).toHaveLength(8)
   })
 
   it('подтверждения нет без почты, при выключенном подтверждении и тому же адресу с другого сайта — есть', async () => {
@@ -791,6 +922,151 @@ describe('раздел «Заявки» в админке', () => {
     expect(row).toContain('"нет"')
   })
 
+  it('CSV потоком: заявки больше одной порции — все, по одному разу, новые сверху', async () => {
+    const siteId = await siteWithForm()
+    // Больше двух порций, а время повторяется тройками: граница порции попадает внутрь
+    // одинакового created_at, и курсор должен развести строки по id
+    const total = LEADS_EXPORT_BATCH * 2 + 7
+    const base = Date.now()
+    await api.db.insert(leads).values(
+      Array.from({ length: total }, (_, index) => {
+        // У заявки с «Городом» своё, самое старое время: id случайные, и при общем времени
+        // она не всегда была бы последней
+        const group = index === total - 1 ? Math.floor(index / 3) + 1 : Math.floor(index / 3)
+        const at = new Date(base - group * 1000)
+        return {
+          siteId,
+          pageSlug: 'index',
+          blockId: 'lead',
+          formTitle: 'Оставьте заявку',
+          data: [
+            { name: 'name', label: 'Имя', type: 'name' as const, value: `Заявка ${index}` },
+            ...(index === total - 1
+              ? [{ name: 'city', label: 'Город', type: 'text' as const, value: 'Тверь' }]
+              : []),
+          ],
+          consentText: 'Согласен',
+          consentPolicyUrl: '/privacy',
+          consentedAt: at,
+          createdAt: at,
+        }
+      }),
+    )
+    const res = await api.app.request(`${leadsUrl(siteId)}/export`, { headers: owner.headers })
+    expect(res.status).toBe(200)
+    const [header, ...rows] = (await res.text()).split('\r\n')
+    // Подписи всех заявок, свежая форма слева: «Город» есть только у самой старой
+    expect(header).toBe('"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Город"')
+    expect(rows.at(-1)).toBe('')
+    const indexes = rows.slice(0, -1).map((row) => Number(/"Заявка (\d+)"/.exec(row)?.[1]))
+    expect(indexes).toHaveLength(total)
+    expect(new Set(indexes).size).toBe(total)
+    // Новые сверху: время (номер тройки) не растёт
+    const groups = indexes.map((index) =>
+      index === total - 1 ? Math.floor(index / 3) + 1 : Math.floor(index / 3),
+    )
+    expect(groups).toEqual([...groups].sort((a, b) => a - b))
+    expect(rows.at(-2)).toContain('"Тверь"')
+  })
+
+  it('CSV потоком: удалили граничную заявку между порциями — выгрузка не обрывается', async () => {
+    const siteId = await siteWithForm()
+    const base = Date.now()
+    await api.db.insert(leads).values(
+      Array.from({ length: 5 }, (_, index) => ({
+        siteId,
+        pageSlug: 'index',
+        blockId: 'lead',
+        formTitle: 'Оставьте заявку',
+        data: [{ name: 'name', label: 'Имя', type: 'name' as const, value: `Заявка ${index}` }],
+        consentText: 'Согласен',
+        consentPolicyUrl: '/privacy',
+        consentedAt: new Date(base - index * 1000),
+        createdAt: new Date(base - index * 1000),
+      })),
+    )
+    const repo = leadsRepo(api.db)
+    const first = await repo.exportBatch(siteId, undefined, 2)
+    const last = first.at(-1)
+    if (!last) throw new Error('Пустая порция')
+    // Граничную заявку удалили (руками или чисткой по сроку), пока выгрузка шла
+    await repo.remove(siteId, last.id)
+    const rest = await repo.exportBatch(siteId, { at: last.cursorAt, id: last.id }, 10)
+    expect([...first, ...rest].map((lead) => lead.data[0]?.value)).toEqual([
+      'Заявка 0',
+      'Заявка 1',
+      'Заявка 2',
+      'Заявка 3',
+      'Заявка 4',
+    ])
+  })
+
+  it('CSV: переставили поля в форме — колонки идут как в самой свежей заявке', async () => {
+    const siteId = await siteWithForm()
+    const name = (value: string): StoredLeadField => ({
+      name: 'name',
+      label: 'Имя',
+      type: 'name',
+      value,
+    })
+    const phone = (value: string): StoredLeadField => ({
+      name: 'phone',
+      label: 'Телефон',
+      type: 'phone',
+      value,
+    })
+    const base = Date.now()
+    const lead = (data: StoredLeadField[], ageMs: number) => ({
+      siteId,
+      pageSlug: 'index',
+      blockId: 'lead',
+      formTitle: 'Оставьте заявку',
+      data,
+      consentText: 'Согласен',
+      consentPolicyUrl: '/privacy',
+      consentedAt: new Date(base - ageMs),
+      createdAt: new Date(base - ageMs),
+    })
+    await api.db
+      .insert(leads)
+      .values([
+        lead([name('Старая'), phone('+7 900 000-00-01')], 2000),
+        lead([phone('+7 900 000-00-02'), name('Новая')], 1000),
+      ])
+    expect(await leadsRepo(api.db).exportLabels(siteId)).toEqual(['Телефон', 'Имя'])
+  })
+
+  it('опубликованная форма, которая не проходит нынешнюю схему: 404 и строка в лог', async () => {
+    const logs: string[] = []
+    const logged = await createTestApi({ log: (message) => logs.push(message) })
+    try {
+      const loggedOwner = await logged.loginAs('owner')
+      const siteId = await siteWithForm(logged, loggedOwner.headers)
+      // Так выглядит форма, опубликованная до шага 3.5: вариант с табуляцией из Excel
+      const [page] = await logged.db
+        .select({ id: pages.id, published: pages.published })
+        .from(pages)
+        .where(and(eq(pages.siteId, siteId), eq(pages.slug, 'index')))
+      if (!page?.published) throw new Error('Страница не опубликована')
+      const broken = structuredClone(page.published)
+      const block = broken.blocks.find((candidate) => candidate.id === 'lead')
+      const props = block?.props as { fields: Array<{ name: string }> }
+      props.fields = props.fields.map((field) =>
+        field.name === 'service' ? { ...field, options: [{ label: 'Ремонт\tванной' }] } : field,
+      )
+      await logged.db.update(pages).set({ published: broken }).where(eq(pages.id, page.id))
+
+      const res = await submit(siteId, validFields(), { testApi: logged })
+      expect(res.status).toBe(404)
+      expect(logs.some((line) => line.includes('не проходит схему') && line.includes(siteId))).toBe(
+        true,
+      )
+      expect(logs.join('\n')).not.toContain('Анна')
+    } finally {
+      await logged.close()
+    }
+  })
+
   it('настройки заявок: схема, сохранение и чтение', async () => {
     const siteId = await siteWithForm()
     const url = `${leadsUrl(siteId)}/settings`
@@ -894,5 +1170,22 @@ describe('каталог', () => {
   it('пример блока формы проходит схему страницы в API', async () => {
     const siteId = await siteWithForm()
     await saveDraft(api, siteId, [{ id: 'example', type: 'form', props: form.example }])
+  })
+
+  it('вариант выбора с переводом строки не сохранить: сервер такой выбор не принял бы', async () => {
+    const siteId = await siteWithForm()
+    const fields = formProps.fields.map((field) =>
+      field.name === 'service' ? { ...field, options: [{ label: 'Ремонт\nванной' }] } : field,
+    )
+    const res = await api.app.request(`/api/sites/${siteId}/pages/index`, {
+      method: 'PUT',
+      headers: json(owner.headers),
+      body: JSON.stringify({
+        title: 'Главная',
+        content: { blocks: [formBlock({ ...formProps, fields })] },
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect(await res.text()).toContain('Без переводов строки и управляющих символов')
   })
 })

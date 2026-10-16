@@ -59,6 +59,8 @@ export async function createTestApi({
   leadLimits = {
     perIp: { max: 1000, windowMs: 60_000 },
     perSite: { max: 1000, windowMs: 60_000 },
+    perSiteDailyBytes: 1024 * 1024 * 1024,
+    smallLeadBytes: 8 * 1024,
   },
 }: {
   leadLimits?: LeadLimits

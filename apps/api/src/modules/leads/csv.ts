@@ -15,12 +15,15 @@ export function csvCell(value: string) {
   return `"${safe.replaceAll('"', '""')}"`
 }
 
-/**
- * Таблица в CSV: разделитель «;» (так CSV открывает Excel с русской локалью), строки через CRLF,
- * в начале BOM — иначе Excel прочтёт UTF-8 как Windows-1251
- */
+/** Начало файла: BOM — иначе Excel прочтёт UTF-8 как Windows-1251 */
+export const CSV_BOM = '\uFEFF'
+
+/** Строка CSV: разделитель «;» (так CSV открывает Excel с русской локалью), в конце CRLF */
+export const csvLine = (row: readonly string[]) => `${row.map(csvCell).join(';')}\r\n`
+
+/** Таблица в CSV целиком: BOM и строки через CRLF */
 export function toCsv(rows: readonly (readonly string[])[]) {
-  return `\uFEFF${rows.map((row) => row.map(csvCell).join(';')).join('\r\n')}\r\n`
+  return CSV_BOM + rows.map(csvLine).join('')
 }
 
 const dateFormat = new Intl.DateTimeFormat('ru-RU', {
@@ -39,25 +42,36 @@ type CsvLead = {
   data: StoredLeadField[]
 }
 
+/** Заголовок CSV заявок: дата (по Москве), статус, страница, форма и колонка на каждую подпись */
+export const leadsCsvHeader = (labels: readonly string[]) => [
+  'Дата (МСК)',
+  'Статус',
+  'Страница',
+  'Форма',
+  ...labels,
+]
+
+/** Строка заявки под заголовком leadsCsvHeader(labels). У заявки без такого поля ячейка пустая */
+export function leadCsvRow(lead: CsvLead, labels: readonly string[]) {
+  const byLabel = new Map(lead.data.map((field) => [field.label, displayValue(field)]))
+  return [
+    dateFormat.format(lead.createdAt),
+    statusLabels[lead.status],
+    pagePath(lead.pageSlug),
+    lead.formTitle,
+    ...labels.map((label) => byLabel.get(label) ?? ''),
+  ]
+}
+
 /**
- * Заявки в CSV: дата (по Москве), статус, страница, форма и поля всех форм — колонка на каждую
- * подпись, в порядке, в каком подписи встретились. У заявки без такого поля ячейка пустая
+ * Заявки в CSV одной строкой — для небольших наборов. Колонки подписей — в порядке, в каком
+ * подписи встретились. Все заявки сайта выгружаются потоком из тех же строк (leadsCsvHeader,
+ * leadCsvRow) — см. /export в routes.ts
  */
 export function leadsCsv(leads: readonly CsvLead[]) {
   const labels: string[] = []
   for (const lead of leads) {
     for (const field of lead.data) if (!labels.includes(field.label)) labels.push(field.label)
   }
-  const header = ['Дата (МСК)', 'Статус', 'Страница', 'Форма', ...labels]
-  const rows = leads.map((lead) => {
-    const byLabel = new Map(lead.data.map((field) => [field.label, displayValue(field)]))
-    return [
-      dateFormat.format(lead.createdAt),
-      statusLabels[lead.status],
-      pagePath(lead.pageSlug),
-      lead.formTitle,
-      ...labels.map((label) => byLabel.get(label) ?? ''),
-    ]
-  })
-  return toCsv([header, ...rows])
+  return toCsv([leadsCsvHeader(labels), ...leads.map((lead) => leadCsvRow(lead, labels))])
 }
