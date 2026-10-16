@@ -9,7 +9,8 @@ import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { InvitationsSection } from '../invitations/InvitationsSection'
 import { newLeadsLabel } from '../leads/lead-format'
 import { formatDateTime, pagePath, pageState } from '../pages-format'
-import { canInvite, canManagePages, canSeeLeads } from '../permissions'
+import { canInvite, canManagePages, canPublish, canSeeLeads } from '../permissions'
+import { BuildSection } from '../publish/BuildSection'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
@@ -46,6 +47,8 @@ function SitePages({ siteId }: { siteId: string }) {
     onSuccess: async (_, { slug, title }) => {
       queryClient.removeQueries({ queryKey: queryKeys.page(siteId, slug) })
       await queryClient.invalidateQueries({ queryKey: queryKeys.pages(siteId), exact: true })
+      // Опубликованная страница ушла с сайта — сайт на сервере пересобирается
+      await queryClient.invalidateQueries({ queryKey: queryKeys.build(siteId) })
       setNotice({ kind: 'done', text: `Страница «${title}» удалена` })
       // Кнопка «Удалить» пропала вместе со строкой: фокус ушёл бы в никуда, и человеку
       // с клавиатуры пришлось бы идти с начала страницы. Ставим его на заголовок списка
@@ -172,6 +175,8 @@ function SitePages({ siteId }: { siteId: string }) {
           Вы можете править черновики страниц. Публикует их владелец или редактор сайта.
         </p>
       )}
+
+      <BuildSection siteId={siteId} canBuild={canPublish(site.access)} />
 
       {/* Раздавать доступ к сайту может только владелец: остальным API ответит 403 */}
       {canInvite(site.access) && <InvitationsSection siteId={siteId} />}

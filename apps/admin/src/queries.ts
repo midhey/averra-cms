@@ -16,6 +16,7 @@ export const queryKeys = {
   revision: (siteId: string, slug: string, revisionId: string) =>
     ['sites', siteId, 'pages', slug, 'revisions', revisionId] as const,
   media: (siteId: string) => ['sites', siteId, 'media'] as const,
+  build: (siteId: string) => ['sites', siteId, 'build'] as const,
   invitations: (siteId: string) => ['sites', siteId, 'invitations'] as const,
   leads: (siteId: string) => ['sites', siteId, 'leads'] as const,
   leadList: (siteId: string, status: LeadStatus | undefined) =>
@@ -103,6 +104,20 @@ export const mediaQuery = (siteId: string) =>
     queryKey: queryKeys.media(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].media.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Сборка сайта на сервере после публикации: последняя сборка и версия на сайте. Без PUBLISH_DIR
+ * (разработка) — enabled: false, и экран сайта раздел не показывает
+ */
+export const buildQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.build(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].build.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

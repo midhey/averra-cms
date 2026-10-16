@@ -299,3 +299,12 @@
 .intro {
   margin-bottom: 16px;
 }
+
+/* Хвост вывода упавшей сборки сайта: длинные строки переносятся, а не растягивают экран */
+.buildLog {
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}

@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-router'
 import { safeRedirect } from './permissions'
 import {
+  buildQuery,
   invitationsQuery,
   leadQuery,
   leadSettingsQuery,
@@ -142,6 +143,8 @@ const siteRoute = createRoute({
     await Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
       queryClient.ensureQueryData(pagesQuery(siteId)),
+      // Сборка сайта на сервере — тоже второстепенное: её сбой показывает свой раздел
+      Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
       me?.role === 'owner' &&
         Promise.allSettled([
           queryClient.ensureQueryData(invitationsQuery(siteId)),
