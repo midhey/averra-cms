@@ -8,7 +8,15 @@ import { expect } from '@playwright/test'
 
 const mailDir = fileURLToPath(new URL('../.data/mail/', import.meta.url))
 
-export type E2eMail = { to: string; subject: string; text: string; html: string; createdAt: string }
+export type E2eMail = {
+  to: string
+  subject: string
+  text: string
+  html: string
+  createdAt: string
+  /** Куда ответить: у письма о заявке — посетитель */
+  replyTo?: string
+}
 
 async function readMails(): Promise<E2eMail[]> {
   const names = await readdir(mailDir).catch(() => [] as string[])

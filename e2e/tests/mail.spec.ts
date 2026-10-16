@@ -4,11 +4,29 @@ import { expect, test } from './fixtures'
 // Экран «Почта»: владелец видит, что почта работает и через что, очередь и как выглядят письма.
 // API e2e запущен в учебном режиме, поэтому почта — файловый ящик в e2e/.data/mail
 
+// Подвал письма: общий — «отправлено автоматически», у заявки — что «Ответить» напишет посетителю
+const AUTO = 'письмо отправлено автоматически'
+
 const templates = [
-  { title: 'Проверка почты', text: 'Почта работает' },
-  { title: 'Сброс пароля', text: 'Задать новый пароль' },
-  { title: 'Приглашение на сайт', text: 'Принять приглашение' },
-  { title: 'Настройки почты изменены', text: 'Настройки почты в админке Averra CMS изменены' },
+  { title: 'Проверка почты', text: 'Почта работает', footer: AUTO },
+  { title: 'Сброс пароля', text: 'Задать новый пароль', footer: AUTO },
+  { title: 'Приглашение на сайт', text: 'Принять приглашение', footer: AUTO },
+  {
+    title: 'Настройки почты изменены',
+    text: 'Настройки почты в админке Averra CMS изменены',
+    footer: AUTO,
+  },
+  {
+    title: 'Новая заявка',
+    text: 'Открыть заявку в админке',
+    footer: '«Ответить» напишет посетителю',
+  },
+  { title: 'Заявка получена', text: 'Мы получили вашу заявку', footer: AUTO },
+  {
+    title: 'Адреса уведомлений о заявках изменены',
+    text: 'изменили адреса, куда приходят уведомления о новых заявках',
+    footer: AUTO,
+  },
 ] as const
 
 test('владелец открывает «Почту» из шапки: состояние, очередь и предпросмотр шаблонов', async ({
@@ -41,7 +59,7 @@ test('владелец открывает «Почту» из шапки: сос
   await expect(page.getByRole('region', { name: 'Очередь писем' })).toBeVisible()
 
   const section = page.getByRole('region', { name: 'Шаблоны писем' })
-  for (const { title, text } of templates) {
+  for (const { title, text, footer } of templates) {
     const article = section.getByRole('article', { name: title })
     await expect(article).toBeVisible()
     // Письмо в iframe без скриптов: его содержимое — HTML шаблона на примерных данных
@@ -50,7 +68,7 @@ test('владелец открывает «Почту» из шапки: сос
     await expect(frame.locator('body')).toContainText('Averra CMS')
 
     await article.getByText('Текстовая версия').click()
-    await expect(article.locator('pre')).toContainText('письмо отправлено автоматически')
+    await expect(article.locator('pre')).toContainText(footer)
   }
   await expect(section.getByRole('article')).toHaveCount(templates.length)
 })
