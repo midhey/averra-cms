@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { demoPage, demoPageTitle, form, MAIN_PAGE_SLUG } from '@averra/schema'
 import type { Browser } from '@playwright/test'
 import { e2eOwner, urls } from '../urls'
@@ -158,4 +159,45 @@ test('форма на неглавной странице без JavaScript: п�
   } finally {
     await site.context.close()
   }
+})
+
+test('«Выгрузить CSV» в разделе «Заявки» скачивает файл потоком из API: BOM, колонки, заявка', async ({
+  page,
+  browser,
+  demoSite,
+}) => {
+  const param = { siteId: demoSite.id, slug: MAIN_PAGE_SLUG }
+  const pageApi = sites[':siteId'].pages[':slug']
+  const content = {
+    blocks: [...demoPage.blocks, { id: 'csv-form', type: 'form' as const, props: form.example }],
+  }
+  expect((await pageApi.$put({ param, json: { title: demoPageTitle, content } })).status).toBe(200)
+  expect((await pageApi.publish.$post({ param })).status).toBe(200)
+
+  const marker = `Выгрузка ${Date.now()}`
+  const site = await visitor(browser)
+  try {
+    await site.form.getByLabel('Имя').fill(marker)
+    await site.form.getByLabel('Телефон').fill('+7 900 111-22-33')
+    await site.form.getByLabel('Я согласен на обработку персональных данных').check()
+    await site.form.getByRole('button', { name: 'Отправить заявку' }).click()
+    await expect(site.page.getByText(SUCCESS)).toBeVisible()
+  } finally {
+    await site.context.close()
+  }
+
+  await page.goto(`/sites/${demoSite.id}/leads`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Заявки' })).toBeVisible()
+  const downloading = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Выгрузить CSV' }).click()
+  const download = await downloading
+  expect(download.suggestedFilename()).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/)
+  const bytes = await readFile(await download.path())
+  // BOM: иначе Excel прочтёт UTF-8 как Windows-1251
+  expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+  const [header, ...rows] = bytes.toString('utf8').slice(1).split('\r\n')
+  expect(header).toMatch(/^"Дата \(МСК\)";"Статус";"Страница";"Форма";.*"Имя";.*"Телефон"/)
+  const row = rows.find((line) => line.includes(`"${marker}"`))
+  expect(row).toContain(`"'+7 900 111-22-33"`)
+  await expect(page.getByRole('status')).toHaveText('Файл CSV со всеми заявками скачан')
 })
