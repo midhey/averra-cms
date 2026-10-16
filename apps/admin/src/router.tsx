@@ -25,6 +25,7 @@ import {
   passwordResetQuery,
   siteQuery,
   sitesQuery,
+  statusQuery,
 } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
@@ -125,7 +126,15 @@ function checkSlug(slug: string) {
 const sitesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(sitesQuery()),
+  loader: async ({ context: { queryClient } }) => {
+    // Состояние установки — только владельцу и второстепенное: его сбой показывает свой блок,
+    // а не прячет список сайтов за экраном ошибки (allSettled)
+    const me = await queryClient.ensureQueryData(meQuery())
+    await Promise.all([
+      queryClient.ensureQueryData(sitesQuery()),
+      me?.role === 'owner' && Promise.allSettled([queryClient.ensureQueryData(statusQuery())]),
+    ])
+  },
   component: SitesScreen,
 })
 

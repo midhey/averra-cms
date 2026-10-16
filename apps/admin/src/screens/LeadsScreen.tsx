@@ -3,6 +3,7 @@ import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-q
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'
 import { api } from '../api'
+import { saveResponse } from '../download'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
@@ -157,22 +158,11 @@ function SiteLeads({ siteId }: { siteId: string }) {
   )
 }
 
-/**
- * CSV скачивается запросом с cookie сессии, как всё в админке, а не ссылкой: админка и API
- * бывают на разных адресах. Имя файла — из ответа API
- */
+/** CSV — потоком из API, имя файла из ответа (saveResponse) */
 async function downloadCsv(siteId: string) {
   const res = await api.sites[':siteId'].leads.export.$get({ param: { siteId } })
   if (res.status !== 200) throw await apiRequestError(res)
-  const name =
-    /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'leads.csv'
-  const url = URL.createObjectURL(await res.blob())
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  // Ссылку на файл отпускаем после того, как браузер начал скачивание
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  await saveResponse(res, 'leads.csv')
 }
 
 const settingsFieldOrder = ['recipients', 'retentionDays']

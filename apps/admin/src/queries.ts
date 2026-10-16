@@ -29,6 +29,7 @@ export const queryKeys = {
   mailOutbox: ['mail', 'outbox'] as const,
   mailSmtp: ['mail', 'smtp'] as const,
   mailPreview: (template: string) => ['mail', 'templates', template] as const,
+  status: ['status'] as const,
 }
 
 export const sitesQuery = () =>
@@ -219,6 +220,20 @@ export const mailSmtpQuery = () =>
     queryKey: queryKeys.mailSmtp,
     queryFn: async () => {
       const res = await api.mail.smtp.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Состояние установки: версия, бэкапы, обновление, сборки, почта, диск и список проблем.
+ * Только владельцу: остальным API ответит 403
+ */
+export const statusQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.status,
+    queryFn: async () => {
+      const res = await api.status.$get()
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

@@ -36,3 +36,6 @@ export const canSeeLeads = (access: SiteAccess) => access !== 'editor'
 
 /** Приглашать участников и отзывать приглашения может только владелец */
 export const canInvite = (access: SiteAccess) => access === 'owner'
+
+/** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки: владелец и клиент */
+export const canExportData = (access: SiteAccess) => access !== 'editor'

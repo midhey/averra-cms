@@ -1,13 +1,9 @@
-import type { SiteBuildStatus } from '@averra/schema'
+import { SITE_BUILD_STATUS_LABELS, type SiteBuildStatus } from '@averra/schema'
 
 // Сборка сайта на сервере словами. Решает всё API, здесь только слова
 
-export const buildStatusLabels: Record<SiteBuildStatus, string> = {
-  queued: 'Ждёт очереди',
-  running: 'Собирается',
-  succeeded: 'Собран',
-  failed: 'Сборка упала',
-}
+/** Слова — общие со status.js на сервере (схема) */
+export const buildStatusLabels = SITE_BUILD_STATUS_LABELS
 
 /** Пока сборка ждёт или идёт, экран сам спрашивает её состояние */
 export const isBuildActive = (status: SiteBuildStatus | undefined) =>

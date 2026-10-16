@@ -4,12 +4,13 @@ import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
+import { ExportSection } from '../export/ExportSection'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { InvitationsSection } from '../invitations/InvitationsSection'
 import { newLeadsLabel } from '../leads/lead-format'
 import { formatDateTime, pagePath, pageState } from '../pages-format'
-import { canInvite, canManagePages, canPublish, canSeeLeads } from '../permissions'
+import { canExportData, canInvite, canManagePages, canPublish, canSeeLeads } from '../permissions'
 import { BuildSection } from '../publish/BuildSection'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
@@ -177,6 +178,8 @@ function SitePages({ siteId }: { siteId: string }) {
       )}
 
       <BuildSection siteId={siteId} canBuild={canPublish(site.access)} />
+
+      <ExportSection siteId={siteId} canExportData={canExportData(site.access)} />
 
       {/* Раздавать доступ к сайту может только владелец: остальным API ответит 403 */}
       {canInvite(site.access) && <InvitationsSection siteId={siteId} />}

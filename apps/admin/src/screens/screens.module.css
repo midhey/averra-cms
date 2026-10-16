@@ -308,3 +308,36 @@
   overflow-wrap: anywhere;
   font-size: 0.85rem;
 }
+
+/* Состояние установки: подпись слева, значение справа; на узком экране — друг под другом */
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+}
+
+.facts dt {
+  color: #5b6170;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+
+  .facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+.problems {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+  color: #c62828;
+}

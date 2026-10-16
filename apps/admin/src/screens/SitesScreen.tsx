@@ -7,6 +7,7 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { meQuery, queryKeys, sitesQuery } from '../queries'
+import { StatusSection } from '../status/StatusSection'
 import { Breadcrumbs } from '../ui/Breadcrumbs'
 import { TextField } from '../ui/TextField'
 import { usePageTitle } from '../ui/use-page-title'
@@ -51,6 +52,9 @@ export function SitesScreen() {
 
       {/* Сайты создаёт только владелец: участнику API ответил бы 403 */}
       {isOwner && <NewSiteForm />}
+
+      {/* Состояние установки (версия, бэкапы, почта, диск) — только владельцу: остальным API ответит 403 */}
+      {isOwner && <StatusSection />}
     </main>
   )
 }
