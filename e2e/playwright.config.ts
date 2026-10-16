@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoSiteId } from '@averra/schema'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eOwner, ownerStateFile, ports, smtpTest, urls } from './urls'
+import { e2eOwner, ownerStateFile, ports, publishDir, smtpTest, urls } from './urls'
 
 export default defineConfig({
   testDir: './tests',
@@ -67,6 +67,9 @@ export default defineConfig({
         // Тестовый SMTP-сервер слушает свой порт, а не 587: SMTP из админки подключается к нему
         // вместо 465 и 587. API принимает это только в учебном режиме (--dev)
         DEV_SMTP_CONNECT_PORT: String(smtpTest.port),
+        // Публикация собирает сайт на «сервере», как в установке на VPS: настоящий Astro в папку
+        // релиза (tests/server-build.spec.ts). Сборки идут в фоне и по одной, тестам не мешают
+        PUBLISH_DIR: publishDir,
       },
     },
     {

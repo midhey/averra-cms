@@ -34,5 +34,11 @@ export const smtpTest = {
   },
 } as const
 
+/**
+ * Куда API e2e собирает сайты при публикации (PUBLISH_DIR, модуль 9): <id сайта>/releases/… и
+ * ссылка current. Стирается вместе с базой перед каждым прогоном
+ */
+export const publishDir = fileURLToPath(new URL('./.data/sites', import.meta.url))
+
 /** Сессия владельца, которую сохраняет проект setup и берут остальные тесты */
 export const ownerStateFile = new URL('./.data/owner.json', import.meta.url)

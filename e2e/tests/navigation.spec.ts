@@ -239,7 +239,10 @@ test('страница удаляется только после подтвер
   await remove.click()
   await expect(screen.row('Старая акция')).toHaveCount(0)
   expect(dialogs).toHaveLength(2)
-  await expect(page.getByRole('status')).toHaveText('Страница «Старая акция» удалена')
+  // На экране сайта две живые области: у списка страниц и у раздела «Сайт на сервере»
+  await expect(page.getByRole('region', { name: 'Страницы' }).getByRole('status')).toHaveText(
+    'Страница «Старая акция» удалена',
+  )
   // Кнопки «Удалить» больше нет — фокус на заголовке списка, а не в никуда
   await expect(page.getByRole('heading', { level: 2, name: 'Страницы' })).toBeFocused()
 
