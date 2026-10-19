@@ -19,7 +19,7 @@ type AppShellProps = {
 /**
  * Раскладка админки из концепта: боковая панель и содержимое. На узком экране панель уходит
  * в меню под верхней полосой: кнопка «Меню» (aria-expanded), Esc закрывает и возвращает фокус
- * на кнопку, переход по ссылке в меню закрывает его. Не знает ни роутера, ни данных
+ * на кнопку, переход по ссылке в меню закрывает его и переводит фокус на содержимое. Не знает ни роутера, ни данных
  */
 export function AppShell({ brand = <ShellBrand />, sidebar, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -82,7 +82,12 @@ export function AppShell({ brand = <ShellBrand />, sidebar, children }: AppShell
         id={sidebarId}
         className={cx(styles.sidebar, menuOpen && styles.sidebarOpen)}
         onClick={(event) => {
-          if (event.target instanceof Element && event.target.closest('a')) setMenuOpen(false)
+          if (!(event.target instanceof Element && event.target.closest('a'))) return
+          // Ссылка уходит вместе с меню: без этого фокус упал бы на body, и человек
+          // с клавиатуры начинал бы с начала страницы. Блок содержимого не пересоздаётся
+          // при смене экрана, поэтому фокус на нём переживает переход
+          if (menuOpen) content.current?.focus()
+          setMenuOpen(false)
         }}
       >
         <div className={styles.sidebarBrand}>{brand}</div>
@@ -163,14 +168,23 @@ export function NavLinkContent({ icon, label, badge, aside }: NavLinkContentProp
 
 type SidebarUserProps = { name: string; roleName: string; action?: ReactNode }
 
+/**
+ * Инициалы для аватара: первые буквы двух первых слов. Скобки, кавычки и цифры не в счёт:
+ * «Владелец (разработка)» — «ВР», а не «В(»
+ */
+export function initialsOf(name: string) {
+  return name
+    .split(/\s+/u)
+    .map((part) => /\p{L}/u.exec(part)?.[0])
+    .filter((letter): letter is string => letter !== undefined)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+}
+
 /** Кто вошёл: инициалы, имя, роль и действие («Выйти») */
 export function SidebarUser({ name, roleName, action }: SidebarUserProps) {
-  const initials = name
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.slice(0, 1).toUpperCase())
-    .join('')
+  const initials = initialsOf(name)
   return (
     <div className={styles.user}>
       <span className={styles.avatar} aria-hidden="true">

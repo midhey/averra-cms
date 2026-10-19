@@ -1,0 +1,24 @@
+@use "@averra/ui" as ui;
+
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.inviteHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subtitle {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-semibold);
+}
+
+.role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

@@ -11,6 +11,12 @@ export type Column<Row> = {
   /** Приглушённый текст: даты, второстепенное */
   muted?: boolean
   align?: 'start' | 'end'
+  /**
+   * Перенос текста в ячейках. По умолчанию слово не рвётся. anywhere — для длинных строк без
+   * пробелов (заголовок, адрес страницы), чтобы они не растягивали таблицу; nowrap — для почты,
+   * роли, дат и кнопок, которые нельзя разрывать
+   */
+  wrap?: 'anywhere' | 'nowrap'
 }
 
 type DataTableProps<Row> = {
@@ -30,7 +36,7 @@ type DataTableProps<Row> = {
 /**
  * Таблица: колонки описываются данными, первая ячейка строки — её заголовок (th scope="row").
  * На узком экране прокручивается внутри своей рамки, а не всей страницей; область прокрутки
- * в порядке Tab и подписана — её можно листать стрелками с клавиатуры
+ * (группа с подписью) в порядке Tab — её можно листать стрелками с клавиатуры
  */
 export function DataTable<Row>({
   caption,
@@ -43,8 +49,16 @@ export function DataTable<Row>({
 }: DataTableProps<Row>) {
   if (rows.length === 0 && empty) return <div className={styles.frame}>{empty}</div>
   return (
-    // biome-ignore lint/a11y/noNoninteractiveTabindex: прокручиваемая область должна быть доступна с клавиатуры
-    <section className={cx(styles.frame, styles.scroller)} aria-label={caption} tabIndex={0}>
+    // Группа, а не region: таблица стоит в разделе экрана с тем же именем, и два ориентира
+    // «Страницы» подряд диктору только мешали бы. Подпись нужна: область в порядке Tab
+    // biome-ignore lint/a11y/useSemanticElements: fieldset — для полей формы, здесь область прокрутки таблицы
+    <div
+      role="group"
+      className={cx(styles.frame, styles.scroller)}
+      aria-label={caption}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: прокручиваемая область должна быть доступна с клавиатуры
+      tabIndex={0}
+    >
       <table className={styles.table} style={{ minWidth }}>
         <caption className={showCaption ? styles.caption : 'visually-hidden'}>{caption}</caption>
         <thead>
@@ -64,6 +78,8 @@ export function DataTable<Row>({
                   column.mono && styles.mono,
                   column.muted && styles.muted,
                   column.align === 'end' && styles.end,
+                  column.wrap === 'anywhere' && styles.wrapAnywhere,
+                  column.wrap === 'nowrap' && styles.nowrap,
                 )
                 return index === 0 ? (
                   <th key={column.key} scope="row" className={cx(styles.rowHeader, className)}>
@@ -79,6 +95,6 @@ export function DataTable<Row>({
           ))}
         </tbody>
       </table>
-    </section>
+    </div>
   )
 }

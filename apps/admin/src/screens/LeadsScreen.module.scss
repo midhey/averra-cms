@@ -1,0 +1,99 @@
+@use "@averra/ui" as ui;
+
+.layout {
+  min-width: 0;
+}
+
+// Список и карточка рядом с medium; уже — по очереди: без выбранной заявки — список,
+// с выбранной — только карточка (в ней ссылка «Все заявки»)
+.columns {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+
+  @include ui.breakpoint(medium) {
+    grid-template-columns: minmax(ui.rem(280), ui.rem(400)) minmax(0, 1fr);
+  }
+}
+
+.listColumn,
+.cardColumn {
+  min-width: 0;
+}
+
+.cardColumn {
+  @include ui.breakpoint(medium) {
+    position: sticky;
+    inset-block-start: var(--space-4);
+  }
+}
+
+// Уже medium: прятать здесь проще, чем возвращать display каждому элементу на десктопе
+@include ui.breakpoint-down(medium) {
+  .cardOpen .listColumn,
+  .cardOpen [role="tablist"] {
+    display: none;
+  }
+
+  .layout:not(.cardOpen) .cardColumn {
+    display: none;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+// Откуда и когда — одной строкой, как в концепте: длинное «откуда» обрезается, время — нет
+.itemMeta {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+
+  > :first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > :last-child {
+    flex-shrink: 0;
+  }
+}
+
+.itemName {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+// Новая заявка: точка акцентом (смысл — в скрытом «Новая:» для диктора)
+.newDot {
+  flex-shrink: 0;
+  width: ui.rem(8);
+  height: ui.rem(8);
+  background: var(--color-info-indicator);
+  border-radius: var(--radius-pill);
+}
+
+.itemPreview {
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder {
+  justify-content: center;
+  min-height: ui.rem(320);
+}

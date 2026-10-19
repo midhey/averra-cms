@@ -8,9 +8,12 @@ import { firstInvalidField, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { safeRedirect } from '../permissions'
 import { switchUser } from '../queries'
-import { TextField } from '../ui/TextField'
+import { AuthLayout } from '../shell/AuthLayout'
+import { Button } from '../ui/Button'
+import { TextInput } from '../ui/Field'
+import { InlineAlert } from '../ui/InlineAlert'
+import { formClassName } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
 
 const route = getRouteApi('/login')
 
@@ -56,52 +59,44 @@ export function LoginScreen() {
   }
 
   return (
-    <main className={`${styles.screen} ${styles.narrow}`}>
-      <h1 id={headingId}>Вход в админку</h1>
-      <section className={styles.section}>
-        <form
-          ref={formRef}
-          aria-labelledby={headingId}
-          className={styles.form}
-          onSubmit={submit}
-          noValidate
-        >
-          <TextField
-            label="Почта"
-            name="email"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={setEmail}
-            error={form.errors.email}
-          />
-          <TextField
-            label="Пароль"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={setPassword}
-            error={form.errors.password}
-          />
-          {formError && (
-            <p role="alert" className={styles.formError}>
-              {formError}
-            </p>
-          )}
-          <div className={styles.actions}>
-            <button type="submit" className={styles.primary} disabled={login.isPending}>
-              Войти
-            </button>
-          </div>
-        </form>
-      </section>
-      <p>
-        <Link to="/forgot-password">Забыли пароль?</Link>
-      </p>
-      <p className={styles.muted}>
-        Регистрации нет: участников приглашает владелец письмом со ссылкой.
-      </p>
-    </main>
+    <AuthLayout
+      title="Вход в админку"
+      headingId={headingId}
+      footer={<p>Регистрации нет: участников приглашает владелец письмом со ссылкой.</p>}
+    >
+      <form
+        ref={formRef}
+        aria-labelledby={headingId}
+        className={formClassName}
+        onSubmit={submit}
+        noValidate
+      >
+        <TextInput
+          label="Почта"
+          name="email"
+          type="email"
+          autoComplete="username"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          error={form.errors.email}
+        />
+        <TextInput
+          label="Пароль"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          error={form.errors.password}
+        />
+        {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
+        <Button type="submit" variant="primary" loading={login.isPending}>
+          Войти
+        </Button>
+        <p>
+          <Link to="/forgot-password">Забыли пароль?</Link>
+        </p>
+      </form>
+    </AuthLayout>
   )
 }

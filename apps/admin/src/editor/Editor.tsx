@@ -133,7 +133,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       const res = await pageApi.publish.$post({ param })
       if (res.status !== 200) throw new Error(await apiErrorText(res))
     },
-    // Публикация заводит сборку сайта на сервере: её состояние на экране сайта тоже устарело
+    // Публикация заводит сборку сайта на сервере: её состояние на обзоре и в «Настройках сайта» тоже устарело
     onSuccess: () =>
       Promise.all([
         refreshPages(),

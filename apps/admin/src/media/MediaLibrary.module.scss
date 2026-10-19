@@ -1,0 +1,121 @@
+@use "@averra/ui" as ui;
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+}
+
+// Поле файла скрыто (visually-hidden), его фокус и выключенность видны на подписи-кнопке
+.fileInput:focus-visible + .uploadButton {
+  @include ui.focus-ring;
+}
+
+.fileInput:disabled + .uploadButton {
+  cursor: progress;
+}
+
+.uploadButton {
+  cursor: pointer;
+}
+
+.hint {
+  flex: 1 1 ui.rem(260);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.progress {
+  width: 100%;
+  max-width: ui.rem(320);
+  accent-color: var(--color-action);
+}
+
+// Живая область есть всегда: пустая не должна занимать место
+.status:empty {
+  display: none;
+}
+
+.status {
+  font-size: var(--font-size-body);
+  color: var(--color-success-text);
+}
+
+// Ответ API о занятой картинке — список страниц с новой строки
+.error {
+  white-space: pre-line;
+}
+
+.loading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, ui.rem(180)), 1fr));
+  gap: var(--space-4);
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: ui.rem(10);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+// Выбранная в поле картинка: рамка акцентом и толще — видно не только цветом (и «Выбрана» на кнопке)
+.selected {
+  border-color: var(--color-action);
+  box-shadow: 0 0 0 ui.rem(1) var(--color-action);
+
+  @media (forced-colors: active) {
+    border-color: Highlight;
+    box-shadow: 0 0 0 ui.rem(1) Highlight;
+  }
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: ui.rem(120);
+  margin-block-end: var(--space-1);
+  object-fit: cover;
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-inner);
+}
+
+.name {
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-block-start: var(--space-2);
+  margin-block-start: auto;
+}

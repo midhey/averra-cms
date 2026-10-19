@@ -12,9 +12,13 @@ import {
 import { focusField } from '../forms/use-form-errors'
 import { formatDateTime } from '../pages-format'
 import { mailSmtpQuery, meQuery, queryKeys } from '../queries'
-import mailStyles from '../screens/MailScreen.module.css'
-import styles from '../screens/screens.module.css'
-import { TextField } from '../ui/TextField'
+import { Button } from '../ui/Button'
+import { TextInput } from '../ui/Field'
+import { Icon } from '../ui/Icon'
+import { InlineAlert } from '../ui/InlineAlert'
+import { Facts, FormActions, formClassName, mutedClassName, Section } from '../ui/Screen'
+import { SegmentedControl } from '../ui/SegmentedControl'
+import styles from './SmtpSettingsSection.module.scss'
 import {
   checkedFingerprint,
   formOf,
@@ -35,7 +39,6 @@ import {
  * и в форму он не возвращается: после сохранения поле пустое, рядом — «задан»
  */
 export function SmtpSettingsSection() {
-  const headingId = useId()
   const { data: smtp } = useSuspenseQuery(mailSmtpQuery())
   // После сохранения или удаления форма собирается заново (key), а сообщение остаётся здесь
   const [notice, setNotice] = useState<string>()
@@ -47,20 +50,15 @@ export function SmtpSettingsSection() {
   }, [notice])
 
   return (
-    <section aria-labelledby={headingId} className={styles.section}>
-      <h2 id={headingId}>Настройки SMTP</h2>
-      <p className={mailStyles.source}>{sourceLabel(smtp)}</p>
+    <Section title="Настройки SMTP" card>
+      <p className={mutedClassName}>{sourceLabel(smtp)}</p>
       {smtp.settings && <SavedSettings smtp={smtp} />}
-      {smtp.lock && (
-        <p className={mailStyles.lock} data-reason={smtp.lock.reason}>
-          {smtp.lock.message}
-        </p>
-      )}
+      {smtp.lock && <InlineAlert tone="info">{smtp.lock.message}</InlineAlert>}
       {smtp.editable && smtp.key === 'dev' && (
-        <p className={mailStyles.warning}>
+        <InlineAlert tone="warning">
           Ключ шифрования учебный (pnpm dev): он лежит в репозитории, поэтому пароль в базе
           разработки защищён только для вида. Настоящий пароль от почты здесь не вводите.
-        </p>
+        </InlineAlert>
       )}
       {smtp.editable && (
         <SmtpSettingsForm
@@ -75,7 +73,7 @@ export function SmtpSettingsSection() {
           {notice}
         </p>
       )}
-    </section>
+    </Section>
   )
 }
 
@@ -104,16 +102,7 @@ function SavedSettings({ smtp }: { smtp: SmtpView }) {
       ])
     }
   }
-  return (
-    <dl className={mailStyles.details} aria-label="Сохранённые настройки SMTP">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
+  return <Facts label="Сохранённые настройки SMTP" items={rows} />
 }
 
 type CheckResult = {
@@ -351,158 +340,164 @@ function SmtpSettingsForm({
       onSubmit={submit}
       noValidate
     >
-      <h3 id={headingId} className={styles.visuallyHidden}>
+      <h3 id={headingId} className="visually-hidden">
         Изменить настройки SMTP
       </h3>
-      <TextField
-        label="Сервер SMTP"
-        name="host"
-        value={form.host}
-        onChange={(value) => update('host', value)}
-        error={errors.host}
-        hint="Например, smtp.yandex.ru"
-      />
-      <fieldset className={styles.choice}>
-        <legend>Порт и шифрование</legend>
-        {smtpModes.map((mode) => (
-          <label key={mode.port}>
-            <input
-              type="radio"
-              name="port"
-              value={mode.port}
-              checked={form.port === mode.port}
-              onChange={() => update('port', mode.port)}
-            />
-            {mode.label}
-          </label>
-        ))}
-      </fieldset>
-      {errors.security && <p className={styles.formError}>{errors.security}</p>}
-      <TextField
-        label="Логин"
-        name="user"
-        value={form.user}
-        onChange={(value) => update('user', value)}
-        error={errors.user}
-        hint="Обычно адрес ящика"
-      />
-      <TextField
-        label="Пароль SMTP"
-        name="password"
-        type="password"
-        autoComplete="new-password"
-        value={form.password}
-        onChange={(value) => update('password', value)}
-        error={errors.password}
-        hint={passwordHint(smtp.settings)}
-      />
-      <TextField
-        label="Адрес отправителя"
-        name="fromAddress"
-        type="email"
-        value={form.fromAddress}
-        onChange={(value) => update('fromAddress', value)}
-        error={errors.fromAddress}
-        hint="На своём домене с настроенными SPF, DKIM и DMARC"
-      />
-      <TextField
-        label="Имя отправителя"
-        name="fromName"
-        value={form.fromName}
-        onChange={(value) => update('fromName', value)}
-        error={errors.fromName}
-      />
+      <div className={formClassName}>
+        <TextInput
+          label="Сервер SMTP"
+          name="host"
+          mono
+          value={form.host}
+          onChange={(event) => update('host', event.target.value)}
+          error={errors.host}
+          hint="Например, smtp.yandex.ru"
+        />
+        <SegmentedControl
+          legend="Порт и шифрование"
+          name="port"
+          options={smtpModes.map((mode) => ({ value: String(mode.port), label: mode.label }))}
+          value={String(form.port)}
+          onChange={(port) => update('port', Number(port) as SmtpForm['port'])}
+        />
+        {errors.security && <InlineAlert tone="danger">{errors.security}</InlineAlert>}
+        <TextInput
+          label="Логин"
+          name="user"
+          value={form.user}
+          onChange={(event) => update('user', event.target.value)}
+          error={errors.user}
+          hint="Обычно адрес ящика"
+        />
+        <TextInput
+          label="Пароль SMTP"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          value={form.password}
+          onChange={(event) => update('password', event.target.value)}
+          error={errors.password}
+          hint={passwordHint(smtp.settings)}
+        />
+        <TextInput
+          label="Адрес отправителя"
+          name="fromAddress"
+          type="email"
+          value={form.fromAddress}
+          onChange={(event) => update('fromAddress', event.target.value)}
+          error={errors.fromAddress}
+          hint="На своём домене с настроенными SPF, DKIM и DMARC"
+        />
+        <TextInput
+          label="Имя отправителя"
+          name="fromName"
+          value={form.fromName}
+          onChange={(event) => update('fromName', event.target.value)}
+          error={errors.fromName}
+        />
+      </div>
 
-      <fieldset className={mailStyles.group}>
-        <legend>Проверка подключения</legend>
-        <p className={styles.muted}>
+      <fieldset className={styles.group}>
+        <legend className={styles.legend}>Проверка подключения</legend>
+        <p className={mutedClassName}>
           Те же шаги, что у pnpm mail:test: DNS, соединение, TLS, вход и проверочное письмо — по
           настройкам из формы, ещё не сохранённым.
         </p>
-        <TextField
-          label="Куда отправить проверочное письмо"
-          name="to"
-          type="email"
-          value={to}
-          onChange={(value) => {
-            setTo(value)
-            setServerErrors((current) => ({ ...current, to: undefined }))
-          }}
-          error={errors.to}
-          hint={
-            smtp.settings?.password === 'set' && !form.password
-              ? 'С сохранённым паролем SMTP — только на вашу почту и по сохранённым настройкам'
-              : undefined
-          }
-        />
-        <div className={styles.actions}>
-          <button type="button" onClick={runCheck} disabled={busy}>
-            {check.isPending ? 'Проверяю…' : 'Проверить подключение'}
-          </button>
+        <div className={formClassName}>
+          <TextInput
+            label="Куда отправить проверочное письмо"
+            name="to"
+            type="email"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value)
+              setServerErrors((current) => ({ ...current, to: undefined }))
+            }}
+            error={errors.to}
+            hint={
+              smtp.settings?.password === 'set' && !form.password
+                ? 'С сохранённым паролем SMTP — только на вашу почту и по сохранённым настройкам'
+                : undefined
+            }
+          />
         </div>
+        <FormActions>
+          <Button loading={check.isPending} disabled={busy && !check.isPending} onClick={runCheck}>
+            {check.isPending ? 'Проверяю…' : 'Проверить подключение'}
+          </Button>
+        </FormActions>
         {checked && (
           <>
-            <ol className={mailStyles.steps} aria-label="Шаги проверки">
+            <ol className={styles.steps} aria-label="Шаги проверки">
               {checked.steps.map((step) => (
-                <li key={step.step} data-ok={step.ok}>
-                  <span aria-hidden="true">{step.ok ? '✓' : '✗'}</span>
-                  <span className={styles.visuallyHidden}>
-                    {step.ok ? 'Пройден:' : 'Не пройден:'}
-                  </span>{' '}
-                  <strong>{smtpStepTitle(step.step)}</strong>: {step.message}
+                <li key={step.step} className={step.ok ? styles.stepOk : styles.stepFailed}>
+                  <Icon name={step.ok ? 'check' : 'close'} className={styles.stepIcon} />
+                  <span>
+                    <span className="visually-hidden">{step.ok ? 'Пройден:' : 'Не пройден:'}</span>{' '}
+                    <strong>{smtpStepTitle(step.step)}</strong>: {step.message}
+                  </span>
                 </li>
               ))}
             </ol>
             {checked.ok ? (
-              <p role="status" className={styles.notice}>
+              <InlineAlert tone={checkIsFresh ? 'success' : 'warning'} live>
                 {checkIsFresh
                   ? `Подключение работает: проверочное письмо ушло на ${checked.to}. Можно сохранять`
                   : 'Настройки изменились после проверки — проверьте подключение ещё раз'}
-              </p>
+              </InlineAlert>
             ) : (
-              <p role="alert" className={styles.formError}>
+              <InlineAlert tone="danger">
                 Проверка не прошла
                 {failedStep ? ` на шаге «${smtpStepTitle(failedStep.step)}»` : ''}: поправьте
                 настройки и проверьте ещё раз
-              </p>
+              </InlineAlert>
             )}
           </>
         )}
       </fieldset>
 
-      <fieldset className={mailStyles.group}>
-        <legend>Сохранение</legend>
-        <TextField
-          label="Ваш пароль от админки"
-          name="currentPassword"
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChange={(value) => {
-            setCurrentPassword(value)
-            setServerErrors((current) => ({ ...current, currentPassword: undefined }))
-          }}
-          error={errors.currentPassword}
-          hint="Почту меняют только с паролем: через неё уходят ссылки сброса пароля, и украденной сессии для этого мало"
-        />
-        {formError && (
-          <p role="alert" className={styles.formError}>
-            {formError}
-          </p>
-        )}
-        <div className={styles.actions}>
-          <button type="submit" className={styles.primary} disabled={busy}>
-            Сохранить
-          </button>
-          <button type="button" onClick={() => runSave('unchecked')} disabled={busy}>
-            Сохранить без проверки
-          </button>
-          {smtp.source === 'database' && (
-            <button type="button" className={styles.danger} onClick={runRemove} disabled={busy}>
-              Удалить настройки
-            </button>
-          )}
+      <fieldset className={styles.group}>
+        <legend className={styles.legend}>Сохранение</legend>
+        <div className={formClassName}>
+          <TextInput
+            label="Ваш пароль от админки"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => {
+              setCurrentPassword(event.target.value)
+              setServerErrors((current) => ({ ...current, currentPassword: undefined }))
+            }}
+            error={errors.currentPassword}
+            hint="Почту меняют только с паролем: через неё уходят ссылки сброса пароля, и украденной сессии для этого мало"
+          />
         </div>
+        {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
+        <FormActions>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={save.isPending}
+            disabled={busy && !save.isPending}
+          >
+            Сохранить
+          </Button>
+          <Button onClick={() => runSave('unchecked')} disabled={busy}>
+            Сохранить без проверки
+          </Button>
+          {smtp.source === 'database' && (
+            <Button
+              variant="danger"
+              icon="trash"
+              loading={remove.isPending}
+              disabled={busy && !remove.isPending}
+              onClick={runRemove}
+            >
+              Удалить настройки
+            </Button>
+          )}
+        </FormActions>
       </fieldset>
     </form>
   )

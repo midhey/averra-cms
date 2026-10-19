@@ -5,9 +5,3 @@
 @use "@averra/ui/themes/averra";
 @use "fonts";
 
-// Обёртка старых экранов (до шагов 3.9–3.10): высота старой шапки, от неё считает высоту редактор
-.admin {
-  --admin-header-height: 2.75rem;
-
-  min-height: 100dvh;
-}

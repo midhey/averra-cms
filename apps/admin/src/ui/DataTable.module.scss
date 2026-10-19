@@ -8,6 +8,9 @@
 }
 
 .scroller {
+  // Опора для скрытых подписей (.visually-hidden — position: absolute): без неё они вставали бы
+  // по правому краю широкой таблицы снаружи прокрутки и раздвигали страницу на телефоне
+  position: relative;
   overflow-x: auto;
 
   // Кольцо внутрь: снаружи его срезала бы соседняя раскладка
@@ -71,6 +74,16 @@
 
 .muted {
   color: var(--color-text-muted);
+}
+
+// Перенос задаётся колонкой, а не всей таблицей: anywhere у каждой ячейки снижал её
+// минимальную ширину, и автоматическая раскладка ломала почту и короткие слова посреди слова
+.table .wrapAnywhere {
+  overflow-wrap: anywhere;
+}
+
+.table .nowrap {
+  white-space: nowrap;
 }
 
 .table .end {

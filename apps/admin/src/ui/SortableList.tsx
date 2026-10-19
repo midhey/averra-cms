@@ -16,13 +16,14 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { type CSSProperties, type ReactNode, useMemo } from 'react'
+import { Icon } from './Icon'
+import styles from './SortableList.module.scss'
 import {
   dragAnnouncements,
   dragInstructions,
   type SortableEntry,
   type SortableNoun,
 } from './sortable'
-import styles from './ui.module.css'
 
 // Списки в админке вертикальные: сдвиг вбок только сбивал бы, куда встанет пункт
 const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 })
@@ -107,7 +108,7 @@ type DragHandleProps = {
 export function DragHandle({ handle, label }: DragHandleProps) {
   return (
     <button type="button" className={styles.dragHandle} aria-label={label} {...handle}>
-      ⠿
+      <Icon name="drag" />
     </button>
   )
 }

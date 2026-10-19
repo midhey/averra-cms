@@ -9,13 +9,13 @@ type EmptyStateProps = {
   children?: ReactNode
   /** Первое действие: «Создать страницу» */
   action?: ReactNode
-  /** Уровень заголовка по месту на экране */
-  headingLevel?: 2 | 3
+  /** Уровень заголовка по месту на экране: 1 — пустое состояние и есть весь экран («не найдено») */
+  headingLevel?: 1 | 2 | 3
 }
 
 /** Пусто, и это нормально: что здесь будет и что сделать первым */
 export function EmptyState({ title, icon, children, action, headingLevel = 2 }: EmptyStateProps) {
-  const Heading = headingLevel === 2 ? 'h2' : 'h3'
+  const Heading = (['h1', 'h2', 'h3'] as const)[headingLevel - 1] ?? 'h2'
   return (
     <div className={styles.empty}>
       {icon && (

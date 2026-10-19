@@ -1,9 +1,10 @@
 import { useMutation } from '@tanstack/react-query'
-import { useId } from 'react'
 import { api } from '../api'
 import { saveResponse } from '../download'
 import { apiRequestError, messageOf } from '../errors'
-import styles from '../screens/screens.module.css'
+import { Button } from '../ui/Button'
+import { InlineAlert } from '../ui/InlineAlert'
+import { FormActions, mutedClassName, Section } from '../ui/Screen'
 
 /**
  * «Клиент не заложник» (принцип 8): сайт статическим архивом — то, что видят посетители, его
@@ -13,12 +14,12 @@ import styles from '../screens/screens.module.css'
 export function ExportSection({
   siteId,
   canExportData,
+  id,
 }: {
   siteId: string
   canExportData: boolean
+  id?: string
 }) {
-  const headingId = useId()
-
   const site = useMutation({
     mutationFn: async () => {
       const res = await api.sites[':siteId'].export.static.$get({ param: { siteId } })
@@ -35,34 +36,31 @@ export function ExportSection({
   })
 
   return (
-    <section aria-labelledby={headingId} className={styles.section}>
-      <h2 id={headingId}>Выгрузка</h2>
-      <p className={styles.muted}>
+    <Section id={id} title="Выгрузка" card>
+      <p className={mutedClassName}>
         Сайт архивом — готовые страницы и картинки, как их видят посетители: его можно выложить на
         любой хостинг.
         {canExportData &&
           ' Все данные — страницы с черновиками и историей, оригиналы картинок и заявки (в них персональные данные посетителей).'}
       </p>
-      <div className={styles.actions}>
-        <button type="button" disabled={site.isPending} onClick={() => site.mutate()}>
+      <FormActions>
+        <Button icon="download" loading={site.isPending} onClick={() => site.mutate()}>
           {site.isPending ? 'Готовлю архив…' : 'Скачать сайт архивом'}
-        </button>
+        </Button>
         {canExportData && (
-          <button type="button" disabled={data.isPending} onClick={() => data.mutate()}>
+          <Button icon="download" loading={data.isPending} onClick={() => data.mutate()}>
             {data.isPending ? 'Готовлю выгрузку…' : 'Выгрузить все данные'}
-          </button>
+          </Button>
         )}
-      </div>
+      </FormActions>
       {site.error && (
-        <p role="alert" className={styles.formError}>
-          Не удалось скачать сайт: {messageOf(site.error)}
-        </p>
+        <InlineAlert tone="danger">Не удалось скачать сайт: {messageOf(site.error)}</InlineAlert>
       )}
       {data.error && (
-        <p role="alert" className={styles.formError}>
+        <InlineAlert tone="danger">
           Не удалось выгрузить данные: {messageOf(data.error)}
-        </p>
+        </InlineAlert>
       )}
-    </section>
+    </Section>
   )
 }

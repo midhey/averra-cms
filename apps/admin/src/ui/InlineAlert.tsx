@@ -18,15 +18,23 @@ type InlineAlertProps = {
   children?: ReactNode
   /** Кнопка рядом: «Повторить», «Открыть настройки» */
   action?: ReactNode
+  /**
+   * Итог действия, который появился после нажатия («Сохранено»): role="status", диктор прочитает
+   * его, не прерывая. Ошибка — всегда role="alert"
+   */
+  live?: boolean
 }
 
 /**
  * Сообщение внутри экрана. Ошибка — role="alert": диктор прочитает её сразу, как она появилась
- * (общая ошибка формы, CONVENTIONS). Остальные тоны — обычный текст
+ * (общая ошибка формы, CONVENTIONS). Остальные тоны — обычный текст или, с live, role="status"
  */
-export function InlineAlert({ tone, title, children, action }: InlineAlertProps) {
+export function InlineAlert({ tone, title, children, action, live }: InlineAlertProps) {
   return (
-    <div className={cx(styles.alert, styles[tone])} role={tone === 'danger' ? 'alert' : undefined}>
+    <div
+      className={cx(styles.alert, styles[tone])}
+      role={tone === 'danger' ? 'alert' : live ? 'status' : undefined}
+    >
       <Icon name={toneIcons[tone]} className={styles.icon} />
       <div className={styles.body}>
         {title && <p className={styles.title}>{title}</p>}

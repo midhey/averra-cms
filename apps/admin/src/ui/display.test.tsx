@@ -54,7 +54,7 @@ describe('DataTable', () => {
         .getAllByRole('rowheader')
         .map((th) => th.textContent),
     ).toEqual(['Главная', 'Цены'])
-    const region = screen.getByRole('region', { name: 'Страницы сайта' })
+    const region = screen.getByRole('group', { name: 'Страницы сайта' })
     await user.tab()
     expect(document.activeElement).toBe(region)
   })

@@ -1,13 +1,10 @@
 import { Link } from '@tanstack/react-router'
-import styles from './ui.module.css'
+import styles from './Breadcrumbs.module.scss'
 
 type BreadcrumbsProps = {
   /** Открыт сайт или что-то внутри него */
   site?: { id: string; name: string }
-  /**
-   * Открыто что-то внутри сайта (адрес страницы, «Медиатека») или раздел админки без сайта
-   * («Почта») — тогда он идёт сразу после «Сайты»
-   */
+  /** Открыто что-то внутри сайта: адрес страницы в редакторе */
   current?: string
 }
 

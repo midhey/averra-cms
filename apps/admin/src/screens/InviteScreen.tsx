@@ -12,9 +12,13 @@ import { roleHints, roleLabels } from '../invitations/invitation-format'
 import { useLinkToken } from '../link-token'
 import { formatDateTime } from '../pages-format'
 import { invitationQuery, meQuery, queryKeys, switchUser } from '../queries'
-import { TextField } from '../ui/TextField'
+import { AuthLayout } from '../shell/AuthLayout'
+import { Button, Spinner } from '../ui/Button'
+import { TextInput } from '../ui/Field'
+import { InlineAlert } from '../ui/InlineAlert'
+import { formClassName, mutedClassName } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
+import styles from './AuthScreens.module.scss'
 
 /** Приглашение так, как его отдаёт API: поменяется ответ — экран перестанет компилироваться */
 type Invitation = InferResponseType<typeof api.invitations.lookup.$post, 200>
@@ -25,16 +29,15 @@ export function InviteScreen() {
   usePageTitle('Приглашение')
 
   return (
-    <main className={`${styles.screen} ${styles.narrow}`}>
-      <h1>Приглашение на сайт</h1>
+    <AuthLayout title="Приглашение на сайт">
       {token === undefined ? (
-        <p role="alert" className={styles.formError}>
+        <InlineAlert tone="danger">
           Ссылка неполная: в ней нет токена. Откройте ссылку из письма целиком.
-        </p>
+        </InlineAlert>
       ) : (
         <InvitationByToken token={token} />
       )}
-    </main>
+    </AuthLayout>
   )
 }
 
@@ -44,30 +47,29 @@ function InvitationByToken({ token }: { token: string }) {
 
   if (invitation.isPending || me.isPending) {
     return (
-      <p role="status" className={styles.message}>
+      <p role="status" className={styles.loading}>
+        <Spinner />
         Загружаю приглашение…
       </p>
     )
   }
   if (invitation.isError) {
     return (
-      <section className={styles.section}>
-        <p role="alert" className={styles.formError}>
-          {messageOf(invitation.error)}
-        </p>
+      <div className={styles.stack}>
+        <InlineAlert tone="danger">{messageOf(invitation.error)}</InlineAlert>
         <p>
           <Link to="/login" search={{}}>
             Ко входу
           </Link>
         </p>
-      </section>
+      </div>
     )
   }
 
   const data = invitation.data
   return (
-    <>
-      <section className={styles.section} aria-label="О приглашении">
+    <div className={styles.stack}>
+      <section className={styles.about} aria-label="О приглашении">
         <p>
           {data.inviterName ?? 'Владелец'} приглашает вас работать с сайтом «{data.siteName}» в
           Averra CMS.
@@ -75,7 +77,7 @@ function InvitationByToken({ token }: { token: string }) {
         <p>
           Роль — {roleLabels[data.role].toLowerCase()}: {roleHints[data.role]}.
         </p>
-        <p className={styles.muted}>
+        <p className={mutedClassName}>
           Приглашение для {data.email}, действует до{' '}
           <time dateTime={data.expiresAt}>{formatDateTime(data.expiresAt)}</time>.
         </p>
@@ -89,7 +91,7 @@ function InvitationByToken({ token }: { token: string }) {
       ) : (
         <SignInAndAccept token={token} invitation={data} />
       )}
-    </>
+    </div>
   )
 }
 
@@ -100,7 +102,7 @@ async function acceptInvitation(token: string) {
   return res.json()
 }
 
-/** После принятия — на экран сайта: список сайтов и права надо загрузить заново */
+/** После принятия — на обзор сайта: список сайтов и права надо загрузить заново */
 function useOpenSite() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -158,56 +160,52 @@ function NewUserForm({ token, invitation }: { token: string; invitation: Invitat
   }
 
   return (
-    <section className={styles.section}>
-      <h2 id={headingId}>Имя и пароль</h2>
+    <section className={styles.stack}>
+      <h2 id={headingId} className={styles.subtitle}>
+        Имя и пароль
+      </h2>
       <p>
         Задайте имя и пароль: с ними вы будете входить в админку под адресом {invitation.email}.
       </p>
       <form
         ref={formRef}
         aria-labelledby={headingId}
-        className={styles.form}
+        className={formClassName}
         onSubmit={submit}
         noValidate
       >
-        <TextField
+        <TextInput
           label="Имя"
           name="name"
           autoComplete="name"
           value={name}
-          onChange={setName}
+          onChange={(event) => setName(event.target.value)}
           error={form.errors.name}
-          hint="Его видно в шапке админки и в истории публикаций"
+          hint="Его видно в боковой панели админки и в истории публикаций"
         />
-        <TextField
+        <TextInput
           label="Пароль"
           name="password"
           type="password"
           autoComplete="new-password"
           value={password}
-          onChange={setPassword}
+          onChange={(event) => setPassword(event.target.value)}
           error={form.errors.password}
           hint="От 10 символов"
         />
-        <TextField
+        <TextInput
           label="Пароль ещё раз"
           name="repeat"
           type="password"
           autoComplete="new-password"
           value={repeat}
-          onChange={setRepeat}
+          onChange={(event) => setRepeat(event.target.value)}
           error={form.errors.repeat}
         />
-        {formError && (
-          <p role="alert" className={styles.formError}>
-            {formError}
-          </p>
-        )}
-        <div className={styles.actions}>
-          <button type="submit" className={styles.primary} disabled={register.isPending}>
-            Принять приглашение
-          </button>
-        </div>
+        {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
+        <Button type="submit" variant="primary" loading={register.isPending}>
+          Принять приглашение
+        </Button>
       </form>
     </section>
   )
@@ -220,23 +218,14 @@ function AcceptAsMe({ token }: { token: string }) {
     onSuccess: ({ siteId }) => openSite(siteId, false),
   })
   return (
-    <section className={styles.section}>
-      {accept.isError && (
-        <p role="alert" className={styles.formError}>
-          {messageOf(accept.error)}
-        </p>
-      )}
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.primary}
-          disabled={accept.isPending}
-          onClick={() => accept.mutate()}
-        >
+    <div className={styles.stack}>
+      {accept.isError && <InlineAlert tone="danger">{messageOf(accept.error)}</InlineAlert>}
+      <div>
+        <Button variant="primary" loading={accept.isPending} onClick={() => accept.mutate()}>
           Принять приглашение
-        </button>
+        </Button>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -248,22 +237,20 @@ function WrongUser({ current, invitation }: { current: string; invitation: Invit
     onSuccess: () => switchUser(queryClient, false),
   })
   return (
-    <section className={styles.section}>
-      <p role="alert" className={styles.formError}>
+    <div className={styles.stack}>
+      <InlineAlert tone="danger">
         Сейчас вы вошли как {current}, а приглашение — для {invitation.email}. Выйдите и войдите под
         адресом из приглашения.
-      </p>
+      </InlineAlert>
       {logout.isError && (
-        <p role="alert" className={styles.formError}>
-          Не вышло выйти: {messageOf(logout.error)}
-        </p>
+        <InlineAlert tone="danger">Не вышло выйти: {messageOf(logout.error)}</InlineAlert>
       )}
-      <div className={styles.actions}>
-        <button type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>
+      <div>
+        <Button loading={logout.isPending} onClick={() => logout.mutate()}>
           Выйти
-        </button>
+        </Button>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -301,35 +288,31 @@ function SignInAndAccept({ token, invitation }: { token: string; invitation: Inv
   }
 
   return (
-    <section className={styles.section}>
-      <h2 id={headingId}>Войти и принять</h2>
+    <section className={styles.stack}>
+      <h2 id={headingId} className={styles.subtitle}>
+        Войти и принять
+      </h2>
       <p>У адреса {invitation.email} уже есть вход в админку. Введите свой пароль.</p>
       <form
         ref={formRef}
         aria-labelledby={headingId}
-        className={styles.form}
+        className={formClassName}
         onSubmit={submit}
         noValidate
       >
-        <TextField
+        <TextInput
           label="Пароль"
           name="password"
           type="password"
           autoComplete="current-password"
           value={password}
-          onChange={setPassword}
+          onChange={(event) => setPassword(event.target.value)}
           error={passwordError}
         />
-        {formError && (
-          <p role="alert" className={styles.formError}>
-            {formError}
-          </p>
-        )}
-        <div className={styles.actions}>
-          <button type="submit" className={styles.primary} disabled={accept.isPending}>
-            Войти и принять
-          </button>
-        </div>
+        {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
+        <Button type="submit" variant="primary" loading={accept.isPending}>
+          Войти и принять
+        </Button>
       </form>
       <p>
         <Link to="/forgot-password">Забыли пароль?</Link>

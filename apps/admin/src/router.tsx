@@ -1,5 +1,5 @@
 import { ExistingPageSlug, LeadStatus, Uuid } from '@averra/schema'
-import { type QueryClient, useQuery } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
   createRoute,
@@ -8,9 +8,8 @@ import {
   notFound,
   Outlet,
   redirect,
-  useLocation,
 } from '@tanstack/react-router'
-import { safeRedirect } from './permissions'
+import { canInvite, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
   invitationsQuery,
@@ -31,19 +30,22 @@ import {
 } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
+import { InstallationScreen } from './screens/InstallationScreen'
 import { InviteScreen } from './screens/InviteScreen'
-import { LeadScreen } from './screens/LeadScreen'
+import { LeadError, LeadNotFound, LeadScreen, NoLeadSelected } from './screens/LeadScreen'
 import { LeadsScreen } from './screens/LeadsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MailScreen } from './screens/MailScreen'
 import { MediaScreen } from './screens/MediaScreen'
+import { OverviewScreen } from './screens/OverviewScreen'
+import { PagesScreen } from './screens/PagesScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
-import { SiteScreen } from './screens/SiteScreen'
+import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
-import { AppHeader } from './ui/AppHeader'
+import { AdminLayout } from './shell/AdminLayout'
 
-// Маршруты описаны в коде, без генератора: экранов одиннадцать, всё дерево видно здесь.
+// Маршруты описаны в коде, без генератора: всё дерево видно здесь.
 // Данные загружаются в кеш TanStack Query, роутер только ждёт их перед показом экрана
 
 type RouterContext = { queryClient: QueryClient }
@@ -58,7 +60,7 @@ const PUBLIC_PATHS = new Set([LOGIN_PATH, '/forgot-password', '/reset-password',
 
 /**
  * Витрина компонентов — только в разработке (`vite`, e2e): в `vite build` маршрута и кода нет.
- * Данных API она не берёт, поэтому открывается без входа и без шапки старых экранов
+ * Данных API она не берёт, поэтому открывается без входа и со своей оболочкой
  */
 const DEV_UI_PATH = '/dev/ui'
 if (import.meta.env.DEV) PUBLIC_PATHS.add(DEV_UI_PATH)
@@ -71,20 +73,9 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
     const me = await queryClient.ensureQueryData(meQuery())
     if (!me) throw redirect({ to: LOGIN_PATH, search: { redirect: location.href } })
   },
-  component: RootLayout,
+  component: Outlet,
   notFoundComponent: NotFoundScreen,
 })
-
-function RootLayout() {
-  const { data: me } = useQuery(meQuery())
-  const { pathname } = useLocation()
-  return (
-    <div className="admin">
-      {me && !(import.meta.env.DEV && pathname === DEV_UI_PATH) && <AppHeader user={me} />}
-      <Outlet />
-    </div>
-  )
-}
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -133,64 +124,84 @@ function checkSlug(slug: string) {
   if (!ExistingPageSlug.safeParse(slug).success) throw notFound({ data: 'Страница не найдена' })
 }
 
-const sitesRoute = createRoute({
+/**
+ * Оболочка закрытых экранов: боковая панель и экран (AdminLayout). Её загрузчик берёт то, что
+ * панель показывает сразу: кто вошёл и список сайтов (переключатель). Почта и состояние
+ * установки — только владельцу и второстепенные: их сбой не прячет экран (allSettled), панель
+ * просто без них. Редактор в оболочку не входит: у него своя полноэкранная раскладка
+ */
+const appRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  id: '_app',
   loader: async ({ context: { queryClient } }) => {
-    // Состояние установки — только владельцу и второстепенное: его сбой показывает свой блок,
-    // а не прячет список сайтов за экраном ошибки (allSettled)
     const me = await queryClient.ensureQueryData(meQuery())
     await Promise.all([
       queryClient.ensureQueryData(sitesQuery()),
-      me?.role === 'owner' && Promise.allSettled([queryClient.ensureQueryData(statusQuery())]),
-    ])
-  },
-  component: SitesScreen,
-})
-
-const siteRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/sites/$siteId',
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: async ({ context: { queryClient }, params: { siteId } }) => {
-    // Приглашения и состояние почты — только владельцу (остальным API ответит 403). Владелец
-    // админки — владелец на любом сайте, поэтому решаем по тому, кто вошёл, и грузим всё сразу.
-    // Они второстепенные: их сбой не должен прятать страницы сайта за экраном ошибки. Поэтому
-    // allSettled: ошибка остаётся в кеше запроса, и раздел «Участники» показывает её у себя.
-    // 401 и так уводит на вход (обработчик кеша в main.tsx)
-    const me = await queryClient.ensureQueryData(meQuery())
-    await Promise.all([
-      queryClient.ensureQueryData(siteQuery(siteId)),
-      queryClient.ensureQueryData(pagesQuery(siteId)),
-      // Сборка сайта на сервере — тоже второстепенное: её сбой показывает свой раздел
-      Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
       me?.role === 'owner' &&
         Promise.allSettled([
-          queryClient.ensureQueryData(invitationsQuery(siteId)),
           queryClient.ensureQueryData(mailQuery()),
+          queryClient.ensureQueryData(statusQuery()),
         ]),
     ])
   },
-  component: SiteScreen,
+  component: AdminLayout,
+})
+
+const sitesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/',
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(sitesQuery()),
+  component: SitesScreen,
+})
+
+/** Сайт и роль на нём: от роли зависит, что ещё грузить экрану */
+const loadSite = (queryClient: QueryClient, siteId: string) =>
+  queryClient.ensureQueryData(siteQuery(siteId))
+
+// Обзор сайта: состояние публикации и сборки, карточки, страницы и последние заявки.
+// Сборка и заявки — второстепенное: их сбой показывается в своей карточке (allSettled)
+const siteRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/sites/$siteId',
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
+  loader: async ({ context: { queryClient }, params: { siteId } }) => {
+    const [site] = await Promise.all([
+      loadSite(queryClient, siteId),
+      queryClient.ensureQueryData(pagesQuery(siteId)),
+      Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
+    ])
+    if (canSeeLeads(site.access) && site.newLeads !== null) {
+      await Promise.allSettled([queryClient.ensureQueryData(leadsQuery(siteId))])
+    }
+  },
+  component: OverviewScreen,
+})
+
+const pagesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/sites/$siteId/pages',
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
+  loader: ({ context: { queryClient }, params: { siteId } }) =>
+    Promise.all([loadSite(queryClient, siteId), queryClient.ensureQueryData(pagesQuery(siteId))]),
+  component: PagesScreen,
 })
 
 const mediaRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/sites/$siteId/media',
   beforeLoad: ({ params }) => checkSiteId(params.siteId),
   loader: ({ context: { queryClient }, params: { siteId } }) =>
-    Promise.all([
-      queryClient.ensureQueryData(siteQuery(siteId)),
-      queryClient.ensureQueryData(mediaQuery(siteId)),
-    ]),
+    Promise.all([loadSite(queryClient, siteId), queryClient.ensureQueryData(mediaQuery(siteId))]),
   component: MediaScreen,
 })
 
-// Заявки — владельцу и клиенту сайта. Редактору API ответит 403, и экран ошибки скажет почему
+// Заявки — владельцу и клиенту сайта. Редактору API ответит 403, и экран ошибки скажет почему.
+// Список — родитель, карточка заявки — ребёнок: при переходе между заявками и вкладками список
+// не пересоздаётся, и фокус остаётся там, где был
 const leadsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/sites/$siteId/leads',
-  // ?status=new | processed — фильтр списка; остальное — все заявки
+  // ?status=new | processed — вкладка списка; без него — все заявки
   validateSearch: (search: Record<string, unknown>): { status?: LeadStatus } => {
     const status = LeadStatus.safeParse(search.status)
     return status.success ? { status: status.data } : {}
@@ -199,28 +210,80 @@ const leadsRoute = createRoute({
   loaderDeps: ({ search }) => ({ status: search.status }),
   loader: ({ context: { queryClient }, params: { siteId }, deps: { status } }) =>
     Promise.all([
-      queryClient.ensureQueryData(siteQuery(siteId)),
+      loadSite(queryClient, siteId),
       queryClient.ensureQueryData(leadsQuery(siteId, status)),
       queryClient.ensureQueryData(leadSettingsQuery(siteId)),
+      // Заголовки страниц — подписать, откуда заявка («Главная · форма «Замер»»)
+      queryClient.ensureQueryData(pagesQuery(siteId)),
     ]),
   component: LeadsScreen,
 })
 
+const leadsIndexRoute = createRoute({
+  getParentRoute: () => leadsRoute,
+  path: '/',
+  component: NoLeadSelected,
+})
+
 const leadRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/sites/$siteId/leads/$leadId',
+  getParentRoute: () => leadsRoute,
+  path: '$leadId',
   beforeLoad: ({ params }) => {
-    checkSiteId(params.siteId)
     if (!Uuid().safeParse(params.leadId).success) throw notFound({ data: 'Заявка не найдена' })
   },
   loader: ({ context: { queryClient }, params: { siteId, leadId } }) =>
-    Promise.all([
-      queryClient.ensureQueryData(siteQuery(siteId)),
-      queryClient.ensureQueryData(leadQuery(siteId, leadId)),
-    ]),
+    queryClient.ensureQueryData(leadQuery(siteId, leadId)),
   component: LeadScreen,
+  // Ошибка заявки — внутри колонки карточки, список рядом остаётся
+  errorComponent: LeadError,
+  notFoundComponent: LeadNotFound,
 })
 
+// Настройки сайта: заявки (владелец и клиент), участники (владелец), сайт на сервере, выгрузка.
+// Настройки заявок — главное содержимое своего раздела: их сбой — экран ошибки. Остальное —
+// второстепенное (allSettled): сбой показывается внутри своего раздела
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/sites/$siteId/settings',
+  beforeLoad: ({ params }) => checkSiteId(params.siteId),
+  loader: async ({ context: { queryClient }, params: { siteId } }) => {
+    const site = await loadSite(queryClient, siteId)
+    await Promise.all([
+      canSeeLeads(site.access) && queryClient.ensureQueryData(leadSettingsQuery(siteId)),
+      Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
+      canInvite(site.access) &&
+        Promise.allSettled([
+          queryClient.ensureQueryData(invitationsQuery(siteId)),
+          queryClient.ensureQueryData(mailQuery()),
+        ]),
+    ])
+  },
+  component: SiteSettingsScreen,
+})
+
+// Почта — только владельцу: участнику API ответит 403, и экран ошибки скажет почему
+const mailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/mail',
+  loader: ({ context: { queryClient } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(mailQuery()),
+      queryClient.ensureQueryData(mailSmtpQuery()),
+      queryClient.ensureQueryData(mailOutboxQuery()),
+    ]),
+  component: MailScreen,
+})
+
+// Состояние установки — только владельцу. Здесь оно главное содержимое: сбой — экран ошибки.
+// Всегда свежее: в панели оно могло загрузиться давно
+const statusRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/status',
+  loader: ({ context: { queryClient } }) => queryClient.fetchQuery(statusQuery()),
+  component: InstallationScreen,
+})
+
+// Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка (шаг 3.10)
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/pages/$slug',
@@ -243,19 +306,6 @@ const editorRoute = createRoute({
   component: EditorScreen,
 })
 
-// Почта — только владельцу: участнику API ответит 403, и экран ошибки скажет почему
-const mailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/mail',
-  loader: ({ context: { queryClient } }) =>
-    Promise.all([
-      queryClient.ensureQueryData(mailQuery()),
-      queryClient.ensureQueryData(mailSmtpQuery()),
-      queryClient.ensureQueryData(mailOutboxQuery()),
-    ]),
-  component: MailScreen,
-})
-
 const devRoutes = import.meta.env.DEV
   ? [
       createRoute({
@@ -271,13 +321,17 @@ const routeTree = rootRoute.addChildren([
   forgotPasswordRoute,
   resetPasswordRoute,
   inviteRoute,
-  sitesRoute,
-  siteRoute,
-  mediaRoute,
-  leadsRoute,
-  leadRoute,
+  appRoute.addChildren([
+    sitesRoute,
+    siteRoute,
+    pagesRoute,
+    mediaRoute,
+    leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
+    settingsRoute,
+    mailRoute,
+    statusRoute,
+  ]),
   editorRoute,
-  mailRoute,
   ...devRoutes,
 ])
 

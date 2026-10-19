@@ -1,29 +1,38 @@
 import { type ErrorComponentProps, Link } from '@tanstack/react-router'
 import { screenErrorOf } from '../errors'
+import { buttonClassName, Spinner } from '../ui/Button'
+import { EmptyState } from '../ui/EmptyState'
+import { InlineAlert } from '../ui/InlineAlert'
+import { PageHeader } from '../ui/PageHeader'
+import { Screen } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
+import styles from './StatusScreens.module.scss'
 
+/** Пока маршрут грузит данные: спокойная строка со спиннером (без движения при reduced-motion) */
 export function PendingScreen() {
   return (
-    <p className={styles.message} role="status">
+    <p className={styles.pending} role="status">
+      <Spinner />
       Загружаю…
     </p>
   )
 }
 
+const backHome = (
+  <Link to="/" className={buttonClassName()}>
+    К списку сайтов
+  </Link>
+)
+
 /** Не загрузился сайт или страница (или экран сломался): что случилось и куда вернуться */
 export function ErrorScreen({ error }: ErrorComponentProps) {
   usePageTitle('Ошибка')
   return (
-    <main className={styles.screen}>
-      <h1>Не получилось открыть</h1>
-      <p role="alert" className={styles.formError}>
-        {screenErrorOf(error)}
-      </p>
-      <p>
-        <Link to="/">К списку сайтов</Link>
-      </p>
-    </main>
+    <Screen narrow>
+      <PageHeader title="Не получилось открыть" />
+      <InlineAlert tone="danger">{screenErrorOf(error)}</InlineAlert>
+      <div>{backHome}</div>
+    </Screen>
   )
 }
 
@@ -35,11 +44,10 @@ export function NotFoundScreen({ data }: { data?: unknown }) {
   const heading = typeof data === 'string' ? data : 'Такой страницы в админке нет'
   usePageTitle(heading)
   return (
-    <main className={styles.screen}>
-      <h1>{heading}</h1>
-      <p>
-        <Link to="/">К списку сайтов</Link>
-      </p>
+    <main className={styles.notFound}>
+      <EmptyState title={heading} icon="search" headingLevel={1} action={backHome}>
+        Проверьте адрес или вернитесь к списку сайтов.
+      </EmptyState>
     </main>
   )
 }

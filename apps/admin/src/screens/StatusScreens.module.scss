@@ -1,0 +1,16 @@
+@use "@averra/ui" as ui;
+
+.pending {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-page-block) var(--space-page-inline);
+  color: var(--color-text-muted);
+}
+
+.notFound {
+  display: grid;
+  place-items: center;
+  min-height: 60dvh;
+  padding: var(--space-page-block) var(--space-page-inline);
+}

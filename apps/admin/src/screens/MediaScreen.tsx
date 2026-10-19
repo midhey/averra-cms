@@ -1,14 +1,14 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { useId } from 'react'
+import { countRu } from '../format/plural'
 import { MediaLibrary } from '../media/MediaLibrary'
 import { canDeleteMedia } from '../permissions'
-import { siteQuery } from '../queries'
-import { Breadcrumbs } from '../ui/Breadcrumbs'
+import { mediaQuery, siteQuery } from '../queries'
+import { PageHeader } from '../ui/PageHeader'
+import { Screen } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
 
-const route = getRouteApi('/sites/$siteId/media')
+const route = getRouteApi('/_app/sites/$siteId/media')
 
 /** Медиатека сайта: загрузка, превью и удаление картинок, которые нигде не стоят */
 export function MediaScreen() {
@@ -19,18 +19,17 @@ export function MediaScreen() {
 
 function SiteMedia({ siteId }: { siteId: string }) {
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
-  const headingId = useId()
+  const { data: media } = useSuspenseQuery(mediaQuery(siteId))
   usePageTitle('Медиатека', site.name)
 
   return (
-    <main className={styles.screen}>
-      <header className={styles.header}>
-        <Breadcrumbs site={site} current="Медиатека" />
-        <h1 id={headingId}>Медиатека</h1>
-      </header>
-      <section className={styles.section} aria-labelledby={headingId}>
-        <MediaLibrary siteId={siteId} canDelete={canDeleteMedia(site.access)} />
-      </section>
-    </main>
+    <Screen>
+      <PageHeader
+        eyebrow={site.name}
+        title="Медиатека"
+        meta={countRu(media.items.length, ['картинка', 'картинки', 'картинок'])}
+      />
+      <MediaLibrary siteId={siteId} canDelete={canDeleteMedia(site.access)} />
+    </Screen>
   )
 }

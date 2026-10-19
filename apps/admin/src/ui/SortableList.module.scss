@@ -1,0 +1,25 @@
+@use "@averra/ui" as ui;
+
+// Ручка перетаскивания: без touch-action палец на телефоне прокручивал бы страницу, а не тащил
+.dragHandle {
+  display: inline-grid;
+  place-items: center;
+  min-width: ui.rem(24);
+  min-height: ui.rem(32);
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-inner);
+
+  &:hover {
+    color: var(--color-text);
+    background: var(--color-surface-muted);
+  }
+
+  &[aria-pressed="true"] {
+    cursor: grabbing;
+  }
+}

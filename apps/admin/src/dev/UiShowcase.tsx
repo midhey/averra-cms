@@ -407,7 +407,9 @@ export function UiShowcase() {
           <InlineAlert tone="info" title="Сайт собирается">
             Обычно это меньше минуты. Страница обновится сама.
           </InlineAlert>
-          <InlineAlert tone="success">Настройки почты сохранены.</InlineAlert>
+          <InlineAlert tone="success" live>
+            Настройки почты сохранены (итог действия — role="status").
+          </InlineAlert>
           <InlineAlert tone="warning" title="Ссылки в письмах ведут на localhost">
             Задайте ADMIN_URL с адресом админки.
           </InlineAlert>

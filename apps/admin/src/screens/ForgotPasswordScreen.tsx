@@ -7,9 +7,13 @@ import { ApiRequestError, messageOf } from '../errors'
 import { firstInvalidField, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { passwordResetQuery } from '../queries'
-import { TextField } from '../ui/TextField'
+import { AuthLayout } from '../shell/AuthLayout'
+import { Button } from '../ui/Button'
+import { TextInput } from '../ui/Field'
+import { InlineAlert } from '../ui/InlineAlert'
+import { formClassName, monoClassName, mutedClassName } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
+import styles from './AuthScreens.module.scss'
 
 const fieldOrder = ['email']
 
@@ -22,39 +26,41 @@ export function ForgotPasswordScreen() {
   usePageTitle('Сброс пароля')
 
   return (
-    <main className={`${styles.screen} ${styles.narrow}`}>
-      <h1 id={headingId}>Сброс пароля</h1>
+    <AuthLayout
+      title="Сброс пароля"
+      headingId={headingId}
+      footer={
+        <Link to="/login" search={{}}>
+          Ко входу
+        </Link>
+      }
+    >
       {data.available && !mailOff ? (
         <ResetRequestForm headingId={headingId} onMailOff={() => setMailOff(true)} />
       ) : (
         <ResetUnavailable />
       )}
-      <p>
-        <Link to="/login" search={{}}>
-          Ко входу
-        </Link>
-      </p>
-    </main>
+    </AuthLayout>
   )
 }
 
 function ResetUnavailable() {
   return (
-    <section className={styles.section}>
-      <p role="alert" className={styles.formError}>
+    <div className={styles.stack}>
+      <InlineAlert tone="danger">
         Сброс пароля по почте сейчас недоступен: в админке не настроена почта.
-      </p>
+      </InlineAlert>
       <p>Как вернуть доступ:</p>
-      <ul>
+      <ul className={styles.list}>
         <li>попросите владельца админки задать вам новый пароль;</li>
         <li>
           если вы владелец и у вас есть доступ к серверу — остановите API и выполните{' '}
-          <code>pnpm user:password --email ваша@почта</code>: пароль спросят скрыто, все входы
-          завершатся;
+          <code className={monoClassName}>pnpm user:password --email ваша@почта</code>: пароль
+          спросят скрыто, все входы завершатся;
         </li>
         <li>чтобы сброс по почте заработал, настройте SMTP (README, раздел «Почта»).</li>
       </ul>
-    </section>
+    </div>
   )
 }
 
@@ -91,48 +97,44 @@ function ResetRequestForm({ headingId, onMailOff }: { headingId: string; onMailO
   if (request.isSuccess) {
     // Одинаково для любого адреса: API не говорит, есть ли такой, и экран тоже
     return (
-      <section className={styles.section}>
-        <p role="status" className={styles.notice}>
+      <div className={styles.stack}>
+        <InlineAlert tone="success" live>
           Если адрес {request.variables.email} есть в админке, на него придёт письмо со ссылкой.
           Ссылка работает час и только один раз.
-        </p>
-        <p className={styles.muted}>
+        </InlineAlert>
+        <p className={mutedClassName}>
           Письма нет через несколько минут — загляните в «Спам» или запросите ссылку ещё раз.
         </p>
-      </section>
+      </div>
     )
   }
 
   return (
-    <section className={styles.section}>
-      <p>Пришлём на почту ссылку, по которой можно задать новый пароль.</p>
+    <div className={styles.stack}>
+      <p className={mutedClassName}>
+        Пришлём на почту ссылку, по которой можно задать новый пароль.
+      </p>
       <form
         ref={formRef}
         aria-labelledby={headingId}
-        className={styles.form}
+        className={formClassName}
         onSubmit={submit}
         noValidate
       >
-        <TextField
+        <TextInput
           label="Почта"
           name="email"
           type="email"
           autoComplete="username"
           value={email}
-          onChange={setEmail}
+          onChange={(event) => setEmail(event.target.value)}
           error={form.errors.email}
         />
-        {formError && (
-          <p role="alert" className={styles.formError}>
-            {formError}
-          </p>
-        )}
-        <div className={styles.actions}>
-          <button type="submit" className={styles.primary} disabled={request.isPending}>
-            Отправить ссылку
-          </button>
-        </div>
+        {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
+        <Button type="submit" variant="primary" loading={request.isPending}>
+          Отправить ссылку
+        </Button>
       </form>
-    </section>
+    </div>
   )
 }

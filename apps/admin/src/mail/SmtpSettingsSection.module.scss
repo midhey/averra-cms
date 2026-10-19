@@ -1,0 +1,63 @@
+@use "@averra/ui" as ui;
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+// Шаг формы: проверка и сохранение — отдельными группами с подписью
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5) 0 0;
+  margin: 0;
+  border: 0;
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.legend {
+  float: inline-start;
+  width: 100%;
+  margin-block-end: var(--space-1);
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-semibold);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.stepOk,
+.stepFailed {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.stepIcon {
+  flex-shrink: 0;
+  margin-block-start: ui.rem(2);
+}
+
+.stepOk .stepIcon {
+  color: var(--color-success-text);
+}
+
+.stepFailed .stepIcon {
+  color: var(--color-danger-text);
+}
+
+// Итог сохранения: на него переводится фокус, когда форма собралась заново
+.notice {
+  padding: ui.rem(14) var(--space-4);
+  color: var(--color-success-text);
+  background: var(--color-success-surface);
+  border-radius: var(--radius-control);
+}

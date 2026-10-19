@@ -9,23 +9,25 @@ import { NewPasswordForm } from '../forms/password'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { useLinkToken } from '../link-token'
 import { switchUser } from '../queries'
-import { TextField } from '../ui/TextField'
+import { AuthLayout } from '../shell/AuthLayout'
+import { Button } from '../ui/Button'
+import { TextInput } from '../ui/Field'
+import { InlineAlert } from '../ui/InlineAlert'
+import { formClassName } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-import styles from './screens.module.css'
+import styles from './AuthScreens.module.scss'
 
 const fieldOrder = ['password', 'repeat']
 
 /** Ссылка не годится ещё до запроса в API: что сказать и куда идти дальше */
 function BrokenLink({ message }: { message: string }) {
   return (
-    <section className={styles.section}>
-      <p role="alert" className={styles.formError}>
-        {message}
-      </p>
+    <div className={styles.stack}>
+      <InlineAlert tone="danger">{message}</InlineAlert>
       <p>
         <Link to="/forgot-password">Запросить новую ссылку</Link>
       </p>
-    </section>
+    </div>
   )
 }
 
@@ -40,8 +42,7 @@ export function ResetPasswordScreen() {
     token === undefined ? undefined : ResetPasswordToken.safeParse(token).error?.issues[0]?.message
 
   return (
-    <main className={`${styles.screen} ${styles.narrow}`}>
-      <h1 id={headingId}>Новый пароль</h1>
+    <AuthLayout title="Новый пароль" headingId={headingId}>
       {token === undefined ? (
         <BrokenLink message="Ссылка неполная: в ней нет токена. Откройте ссылку из письма целиком или запросите новую." />
       ) : damaged !== undefined ? (
@@ -49,7 +50,7 @@ export function ResetPasswordScreen() {
       ) : (
         <NewPassword token={token} headingId={headingId} />
       )}
-    </main>
+    </AuthLayout>
   )
 }
 
@@ -94,8 +95,8 @@ function NewPassword({ token, headingId }: { token: string; headingId: string })
 
   if (reset.isSuccess) {
     return (
-      <section className={styles.section}>
-        <p ref={doneRef} tabIndex={-1} role="status" className={styles.notice}>
+      <div className={styles.stack}>
+        <p ref={doneRef} tabIndex={-1} role="status" className={styles.done}>
           Пароль изменён. Все входы с этим паролем на других устройствах завершены.
         </p>
         <p>
@@ -103,50 +104,46 @@ function NewPassword({ token, headingId }: { token: string; headingId: string })
             Войти
           </Link>
         </p>
-      </section>
+      </div>
     )
   }
 
   return (
-    <section className={styles.section}>
-      <form
-        ref={formRef}
-        aria-labelledby={headingId}
-        className={styles.form}
-        onSubmit={submit}
-        noValidate
-      >
-        <TextField
-          label="Новый пароль"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={setPassword}
-          error={form.errors.password}
-          hint="От 10 символов"
-        />
-        <TextField
-          label="Новый пароль ещё раз"
-          name="repeat"
-          type="password"
-          autoComplete="new-password"
-          value={repeat}
-          onChange={setRepeat}
-          error={form.errors.repeat}
-        />
-        {formError && (
-          <div role="alert" className={styles.formError}>
-            <p>{formError.text}</p>
-            {formError.deadLink && <Link to="/forgot-password">Запросить новую ссылку</Link>}
-          </div>
-        )}
-        <div className={styles.actions}>
-          <button type="submit" className={styles.primary} disabled={reset.isPending}>
-            Сохранить пароль
-          </button>
-        </div>
-      </form>
-    </section>
+    <form
+      ref={formRef}
+      aria-labelledby={headingId}
+      className={formClassName}
+      onSubmit={submit}
+      noValidate
+    >
+      <TextInput
+        label="Новый пароль"
+        name="password"
+        type="password"
+        autoComplete="new-password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        error={form.errors.password}
+        hint="От 10 символов"
+      />
+      <TextInput
+        label="Новый пароль ещё раз"
+        name="repeat"
+        type="password"
+        autoComplete="new-password"
+        value={repeat}
+        onChange={(event) => setRepeat(event.target.value)}
+        error={form.errors.repeat}
+      />
+      {formError && (
+        <InlineAlert tone="danger">
+          <p>{formError.text}</p>
+          {formError.deadLink && <Link to="/forgot-password">Запросить новую ссылку</Link>}
+        </InlineAlert>
+      )}
+      <Button type="submit" variant="primary" loading={reset.isPending}>
+        Сохранить пароль
+      </Button>
+    </form>
   )
 }

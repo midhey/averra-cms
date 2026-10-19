@@ -2,8 +2,8 @@
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 360px;
   grid-template-rows: auto minmax(0, 1fr);
-  /* Над редактором — шапка админки с пользователем */
-  height: calc(100vh - var(--admin-header-height, 0px));
+  /* Во всю высоту окна: шапки над редактором с шага 3.9 нет, свою он получит в шаге 3.10 */
+  height: 100vh;
 }
 
 .top {

@@ -1,0 +1,87 @@
+@use "@averra/ui" as ui;
+
+.card {
+  gap: ui.rem(22);
+  padding: var(--space-card);
+
+  @include ui.breakpoint(small) {
+    padding: var(--space-5) ui.rem(28);
+  }
+}
+
+// Путь назад к списку — только на узком экране: на десктопе список и так рядом
+.back {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  align-self: flex-start;
+  font-weight: var(--font-weight-medium);
+
+  @include ui.breakpoint(medium) {
+    display: none;
+  }
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(6);
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--font-size-headline);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: ui.rem(14) var(--space-4);
+  font-size: var(--font-size-caption);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+
+.consentTitle {
+  font-weight: var(--font-weight-semibold);
+}
+
+.consentText {
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ui.rem(10);
+  padding-block-start: var(--space-1);
+}
+
+// «Удалить» — в стороне от остальных, как в концепте: не нажать по ошибке
+.remove {
+  @include ui.breakpoint(small) {
+    margin-inline-start: auto;
+  }
+}

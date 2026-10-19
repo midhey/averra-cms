@@ -4,7 +4,12 @@ import { type ChangeEvent, useId, useState } from 'react'
 import { api } from '../api'
 import { apiRequestError, messageOf } from '../errors'
 import { mediaQuery, queryKeys } from '../queries'
-import styles from './MediaLibrary.module.css'
+import { Button, buttonClassName, Spinner } from '../ui/Button'
+import { cx } from '../ui/cx'
+import { EmptyState } from '../ui/EmptyState'
+import { Icon } from '../ui/Icon'
+import { InlineAlert } from '../ui/InlineAlert'
+import styles from './MediaLibrary.module.scss'
 import {
   deleteQuestion,
   type MediaItem,
@@ -101,18 +106,21 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
   return (
     <div className={styles.library}>
       <div className={styles.upload}>
-        <label htmlFor={inputId} className={styles.label}>
-          Загрузить картинку
-        </label>
+        {/* Поле файла — настоящее (с клавиатуры и диктором), а видна его подпись в виде кнопки:
+            кольцо фокуса поля рисуется на ней */}
         <input
           id={inputId}
-          className={styles.fileInput}
+          className={cx(styles.fileInput, 'visually-hidden')}
           type="file"
           accept={accept}
           aria-describedby={hintId}
           disabled={upload.isPending}
           onChange={choose}
         />
+        <label htmlFor={inputId} className={cx(buttonClassName(), styles.uploadButton)}>
+          {upload.isPending ? <Spinner /> : <Icon name="upload" />}
+          Загрузить картинку
+        </label>
         <p id={hintId} className={styles.hint}>
           JPEG, PNG, WebP или AVIF{maxBytes !== undefined && `, не больше ${formatBytes(maxBytes)}`}
           . Метаданные (в том числе место съёмки) удаляются, размеры для сайта нарезаются сами
@@ -128,9 +136,9 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
       </div>
 
       {notice?.kind === 'error' ? (
-        <p role="alert" className={styles.error}>
-          {notice.text}
-        </p>
+        <InlineAlert tone="danger">
+          <span className={styles.error}>{notice.text}</span>
+        </InlineAlert>
       ) : (
         // Живая область есть всегда: диктор прочитает «Загружаю…» и «Загружена»
         <p role="status" className={styles.status}>
@@ -138,20 +146,28 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
         </p>
       )}
 
-      {isPending && <p className={styles.muted}>Загружаю медиатеку…</p>}
-      {error && (
-        <p role="alert" className={styles.error}>
-          Не удалось загрузить медиатеку: {messageOf(error)}
+      {isPending && (
+        <p className={styles.loading}>
+          <Spinner />
+          Загружаю медиатеку…
         </p>
       )}
+      {error && (
+        <InlineAlert tone="danger">Не удалось загрузить медиатеку: {messageOf(error)}</InlineAlert>
+      )}
       {items?.length === 0 && (
-        <p className={styles.muted}>Картинок пока нет. Загрузите первую — она появится здесь.</p>
+        <EmptyState title="Картинок пока нет" icon="media" headingLevel={3}>
+          Загрузите первую — она появится здесь.
+        </EmptyState>
       )}
 
       {items && items.length > 0 && (
         <ul className={styles.grid} aria-label="Картинки сайта">
           {items.map((media) => (
-            <li key={media.id} className={styles.card} data-selected={media.id === selectedId}>
+            <li
+              key={media.id}
+              className={cx(styles.card, media.id === selectedId && styles.selected)}
+            >
               {/* Превью без alt: рядом подписано имя файла, а у кнопки выбора своё имя */}
               <img
                 className={styles.thumb}
@@ -165,26 +181,28 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
               <span className={styles.muted}>{mediaSummary(media)}</span>
               <div className={styles.actions}>
                 {onPick && (
-                  <button
-                    type="button"
-                    className={styles.primary}
+                  <Button
+                    variant={media.id === selectedId ? 'secondary' : 'primary'}
+                    size="small"
+                    icon={media.id === selectedId ? 'check' : undefined}
                     aria-label={`Выбрать ${mediaLabel(media)}`}
                     aria-pressed={media.id === selectedId}
                     onClick={() => onPick(media)}
                   >
                     {media.id === selectedId ? 'Выбрана' : 'Выбрать'}
-                  </button>
+                  </Button>
                 )}
                 {canDelete && (
-                  <button
-                    type="button"
-                    className={styles.danger}
+                  <Button
+                    variant="danger"
+                    size="small"
+                    icon="trash"
                     aria-label={`Удалить ${mediaLabel(media)}`}
                     disabled={remove.isPending}
                     onClick={() => confirmRemove(media)}
                   >
                     Удалить
-                  </button>
+                  </Button>
                 )}
               </div>
             </li>

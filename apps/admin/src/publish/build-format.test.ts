@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildStatusLabels,
+  buildSummary,
   failedBuildOutcome,
   formatMegabytes,
   isBuildActive,
@@ -27,5 +28,32 @@ describe('сборка сайта словами', () => {
   it('упавшая сборка: прежняя версия — только если удачная сборка была', () => {
     expect(failedBuildOutcome(true)).toBe('На сайте осталась прежняя версия.')
     expect(failedBuildOutcome(false)).toBe('Сайт пока не собран.')
+  })
+
+  it('последняя сборка коротко: итог, длительность, тон и когда', () => {
+    const run = {
+      requestedAt: '2026-10-19T09:13:00.000Z',
+      startedAt: '2026-10-19T09:13:30.000Z',
+      finishedAt: '2026-10-19T09:14:11.000Z',
+    }
+    expect(buildSummary({ ...run, status: 'succeeded' })).toEqual({
+      label: 'Успешно, 41 с',
+      tone: 'success',
+      at: run.finishedAt,
+    })
+    expect(buildSummary({ ...run, status: 'failed' })).toMatchObject({
+      label: 'Упала',
+      tone: 'danger',
+    })
+    expect(buildSummary({ ...run, status: 'running', finishedAt: null })).toEqual({
+      label: 'Собирается',
+      tone: 'info',
+      at: run.startedAt,
+    })
+    expect(buildSummary({ ...run, status: 'queued', startedAt: null, finishedAt: null })).toEqual({
+      label: 'Ждёт очереди',
+      tone: 'info',
+      at: run.requestedAt,
+    })
   })
 })

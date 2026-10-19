@@ -1,0 +1,14 @@
+@use "@averra/ui" as ui;
+
+.version {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-inline-start: var(--space-5);
+  list-style: disc;
+}

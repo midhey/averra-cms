@@ -1,0 +1,106 @@
+@use "@averra/ui" as ui;
+
+// Раскладка экрана по концепту: поля 40/32 на десктопе, разделы через 28 px
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(28);
+  width: 100%;
+  max-width: ui.rem(1200);
+  min-width: 0;
+  padding: var(--space-page-block) var(--space-page-inline) var(--space-7);
+}
+
+.narrow {
+  max-width: ui.rem(880);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sectionText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sectionTitle {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.sectionDescription {
+  max-width: 70ch;
+  color: var(--color-text-muted);
+}
+
+.sectionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.cardBody {
+  gap: var(--space-5);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fact {
+  display: grid;
+  gap: var(--space-1) var(--space-4);
+
+  @include ui.breakpoint(small) {
+    grid-template-columns: ui.rem(180) minmax(0, 1fr);
+  }
+}
+
+.term {
+  color: var(--color-text-muted);
+}
+
+.value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: ui.rem(560);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ui.rem(10);
+  align-items: center;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}

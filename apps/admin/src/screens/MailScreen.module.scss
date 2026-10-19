@@ -1,0 +1,71 @@
+@use "@averra/ui" as ui;
+
+.state {
+  font-weight: var(--font-weight-semibold);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  font-size: var(--font-size-caption);
+}
+
+.error {
+  display: block;
+  max-width: ui.rem(320);
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+  overflow-wrap: anywhere;
+}
+
+.loading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.templates {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.templateHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.templateTitle {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-semibold);
+}
+
+// Письмо рассчитано на ширину до 600 px: на узком экране оно само сжимается
+.frame {
+  width: 100%;
+  height: ui.rem(520);
+  background: var(--color-surface-inset);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-inner);
+}
+
+.details summary {
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.text {
+  max-height: ui.rem(320);
+  padding: var(--space-3);
+  margin-block-start: var(--space-2);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  white-space: pre-wrap;
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-inner);
+  overflow-wrap: anywhere;
+}

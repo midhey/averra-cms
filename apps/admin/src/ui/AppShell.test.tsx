@@ -2,7 +2,14 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppShell, NavLinkContent, NavList, navLinkClassName, SidebarUser } from './AppShell'
+import {
+  AppShell,
+  initialsOf,
+  NavLinkContent,
+  NavList,
+  navLinkClassName,
+  SidebarUser,
+} from './AppShell'
 
 /**
  * Ширина окна для matchMedia: тесты начинают с телефона, где есть кнопка меню, и могут
@@ -113,6 +120,25 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Меню' }).getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('выбор раздела в меню с клавиатуры переводит фокус на содержимое, а не на body', async () => {
+    const user = userEvent.setup()
+    render(<Shell />)
+    await user.click(screen.getByRole('button', { name: 'Меню' }))
+    screen.getByRole('link', { name: /Заявки/ }).focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('button', { name: 'Меню' }).getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement?.id).toBe('content')
+  })
+
+  it('на десктопе (меню закрыто) клик по разделу фокус не трогает', async () => {
+    const user = userEvent.setup()
+    render(<Shell />)
+    const link = screen.getByRole('link', { name: /Заявки/ })
+    link.focus()
+    await user.keyboard('{Enter}')
+    expect(document.activeElement).toBe(link)
+  })
+
   it('счётчик читается с подписью, выбранный раздел отмечен', () => {
     render(<Shell />)
     expect(screen.getByRole('link', { name: /^Заявки\s*,\s*новых: 3$/u })).toBeTruthy()
@@ -129,5 +155,14 @@ describe('AppShell', () => {
     await user.keyboard('{Enter}')
     expect(document.activeElement?.id).toBe('content')
     expect(document.activeElement?.contains(screen.getByRole('main'))).toBe(true)
+  })
+})
+
+describe('инициалы', () => {
+  it('первые буквы двух слов, скобки и цифры не в счёт', () => {
+    expect(initialsOf('Алексей Семёнов')).toBe('АС')
+    expect(initialsOf('Владелец (разработка)')).toBe('ВР')
+    expect(initialsOf('мария')).toBe('М')
+    expect(initialsOf('  42 «Анна»  ')).toBe('А')
   })
 })

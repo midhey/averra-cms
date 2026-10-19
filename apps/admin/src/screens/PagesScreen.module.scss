@@ -1,0 +1,11 @@
+@use "@averra/ui" as ui;
+
+.search {
+  width: ui.rem(260);
+  max-width: 100%;
+}
+
+.formTitle {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}

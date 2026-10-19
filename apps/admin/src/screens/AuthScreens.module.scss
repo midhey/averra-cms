@@ -1,0 +1,46 @@
+@use "@averra/ui" as ui;
+
+// Мелочи экранов без входа: столбик текста и список шагов
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-5);
+  list-style: disc;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: ui.rem(14) var(--space-4);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-control);
+}
+
+.subtitle {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+// Итог, на который переводят фокус (форма пропала): плашка «успех»
+.done {
+  padding: ui.rem(14) var(--space-4);
+  color: var(--color-success-text);
+  background: var(--color-success-surface);
+  border-radius: var(--radius-control);
+}
+
+.loading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+}

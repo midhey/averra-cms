@@ -1,0 +1,90 @@
+@use "@averra/ui" as ui;
+
+// Карточки «Коротко»: четыре в ряд на десктопе, по две на планшете и телефоне
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, ui.rem(150)), 1fr));
+  gap: var(--space-4);
+}
+
+.statLabel {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.statFigure {
+  font-size: var(--font-size-figure);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+}
+
+.statValue {
+  padding-block-start: var(--space-2);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.statNote {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.statLink {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  font-size: var(--font-size-caption);
+  color: var(--color-action);
+}
+
+.search {
+  width: ui.rem(240);
+  max-width: 100%;
+}
+
+.sectionLink {
+  font-weight: var(--font-weight-medium);
+}
+
+
+.leads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, ui.rem(260)), 1fr));
+  gap: var(--space-4);
+  list-style: none;
+}
+
+// Откуда и когда — одной строкой: длинное «откуда» обрезается, время — нет
+.leadMeta {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+
+  > :first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > :last-child {
+    flex-shrink: 0;
+  }
+}
+
+.leadName {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.leadPreview {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
