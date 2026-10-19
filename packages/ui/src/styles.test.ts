@@ -1,5 +1,5 @@
 import { relative, resolve } from 'node:path'
-import { compile } from 'sass'
+import { compile, compileString } from 'sass'
 import { describe, expect, it } from 'vitest'
 import { findStyleFiles } from '../tools/check-tokens'
 import { averraUiImporter } from '../tools/sass-importer'
@@ -32,6 +32,15 @@ describe('стили на Sass', () => {
     expect(compileFile(resolve(uiSrc, 'foundation/_index.scss')).trim()).toBe('')
     expect(compileFile(resolve(uiSrc, 'foundation/preset.scss'))).toContain('--color-text:')
     expect(compileFile(resolve(uiSrc, 'themes/_averra.scss'))).toContain('--color-text:')
+  })
+
+  it('breakpoint-down — та же граница, что у breakpoint, но «уже неё»', () => {
+    const css = compileString(
+      '@use "@averra/ui" as ui; @include ui.breakpoint(medium) { a { b: c } } @include ui.breakpoint-down(medium) { a { b: d } }',
+      { importers: [averraUiImporter] },
+    ).css
+    expect(css).toContain('@media (min-width: 64rem)')
+    expect(css).toContain('@media (width < 64rem)')
   })
 
   it('глубокий импорт мимо exports не находится', () => {

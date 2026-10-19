@@ -14,8 +14,9 @@ const uiDir = resolve(repoRoot, 'packages/ui')
 const adminSrc = resolve(repoRoot, 'apps/admin/src')
 
 /**
- * Старые стили экранов админки на сырых цветах. Закрытый список: экраны переходят на токены
- * в шагах 3.9–3.10 и вычёркиваются отсюда. Новый .css в админке проверку не пройдёт
+ * Старые стили редактора страницы на сырых цветах. Закрытый список: остальные экраны перешли
+ * на токены в шаге 3.9, редактор переходит в шаге 3.10 и вычёркивается отсюда. Новый .css
+ * в админке проверку не пройдёт
  */
 const LEGACY_ADMIN_CSS = [
   'editor/BlockList.module.css',
@@ -25,10 +26,6 @@ const LEGACY_ADMIN_CSS = [
   'editor/Preview.module.css',
   'forms/SchemaForm.module.css',
   'media/ImageField.module.css',
-  'media/MediaLibrary.module.css',
-  'screens/MailScreen.module.css',
-  'screens/screens.module.css',
-  'ui/ui.module.css',
 ]
 
 describe('проверка токенов: механизм', () => {

@@ -53,3 +53,23 @@
     @error "Unknown breakpoint `#{$name}`.";
   }
 }
+
+// «Уже, чем»: та же граница, что у breakpoint(), но для правил только узкого экрана.
+// Без перекрытия с breakpoint(): ширина ровно на границе — уже «широкая»
+@mixin breakpoint-down($name) {
+  @if $name == small {
+    @media (width < config.$breakpoint-small) {
+      @content;
+    }
+  } @else if $name == medium {
+    @media (width < config.$breakpoint-medium) {
+      @content;
+    }
+  } @else if meta.type-of($name) == number {
+    @media (width < $name) {
+      @content;
+    }
+  } @else {
+    @error "Unknown breakpoint `#{$name}`.";
+  }
+}

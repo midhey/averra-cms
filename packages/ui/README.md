@@ -1,6 +1,6 @@
 # @averra/ui
 
-Sass-основа админки Averra: foundation из [frontend-kit](https://github.com/midhey/frontend-kit) владельца и тема Averra. Чистый Sass, без React и без знаний о продукте: компоненты живут в `apps/admin/src/ui`.
+Sass-основа админки Averra: foundation из [frontend-kit](https://github.com/midhey/frontend-kit) владельца и тема Averra. Чистый Sass, без React и без знаний о продукте: компоненты живут в uapps/admin/src/uiu.
 
 ## Входы
 
@@ -8,7 +8,7 @@ Sass-основа админки Averra: foundation из [frontend-kit](https://
 
 | Вход | Что | CSS |
 |---|---|---|
-| `@use "@averra/ui" as ui;` | Sass API: `config` (`$root-font-size`, `$content-width`, `$gutter`, `$breakpoint-small`, `$breakpoint-medium`), `ui.rem()`, `ui.em()`, `ui.fluid()`, `ui.focus-ring`, `ui.reduced-motion`, `ui.breakpoint(small \| medium \| <длина>)` | нет |
+| `@use "@averra/ui" as ui;` | Sass API: `config` (`$root-font-size`, `$content-width`, `$gutter`, `$breakpoint-small`, `$breakpoint-medium`), `ui.rem()`, `ui.em()`, `ui.fluid()`, `ui.focus-ring`, `ui.reduced-motion`, `ui.breakpoint(small \| medium \| <длина>)` (от ширины), `ui.breakpoint-down(…)` (уже неё) | нет |
 | `@use "@averra/ui/preset";` | токены (primitives, semantic), сброс, базовые правила, утилиты `.visually-hidden`, `.visually-hidden-focusable`, `.skip-link`, `.container` | да |
 | `@use "@averra/ui/themes/averra";` | тема Averra: свои палитра, шрифты, радиусы, тени, поля страницы | да |
 
