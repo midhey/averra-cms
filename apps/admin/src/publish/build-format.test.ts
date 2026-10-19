@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildStatusLabels, formatMegabytes, isBuildActive } from './build-format'
+import {
+  buildStatusLabels,
+  failedBuildOutcome,
+  formatMegabytes,
+  isBuildActive,
+} from './build-format'
 
 describe('сборка сайта словами', () => {
   it('состояния', () => {
@@ -17,5 +22,10 @@ describe('сборка сайта словами', () => {
 
   it('память — в мегабайтах', () => {
     expect(formatMegabytes(372_342_784)).toBe('355 МБ')
+  })
+
+  it('упавшая сборка: прежняя версия — только если удачная сборка была', () => {
+    expect(failedBuildOutcome(true)).toBe('На сайте осталась прежняя версия.')
+    expect(failedBuildOutcome(false)).toBe('Сайт пока не собран.')
   })
 })

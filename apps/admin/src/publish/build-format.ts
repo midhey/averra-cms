@@ -11,3 +11,10 @@ export const isBuildActive = (status: SiteBuildStatus | undefined) =>
 
 /** Память сборки в мегабайтах — по ней видно, хватает ли VPS */
 export const formatMegabytes = (bytes: number) => `${Math.round(bytes / 2 ** 20)} МБ`
+
+/**
+ * Что на сайте после упавшей сборки: прежняя версия, если удачная сборка была, иначе — ничего.
+ * «Осталась прежняя версия» у сайта, который ни разу не собирался, противоречила бы строке выше
+ */
+export const failedBuildOutcome = (hasLiveVersion: boolean) =>
+  hasLiveVersion ? 'На сайте осталась прежняя версия.' : 'Сайт пока не собран.'

@@ -5,7 +5,12 @@ import { apiRequestError, messageOf } from '../errors'
 import { formatDateTime } from '../pages-format'
 import { buildQuery, queryKeys } from '../queries'
 import styles from '../screens/screens.module.css'
-import { buildStatusLabels, formatMegabytes, isBuildActive } from './build-format'
+import {
+  buildStatusLabels,
+  failedBuildOutcome,
+  formatMegabytes,
+  isBuildActive,
+} from './build-format'
 
 /** Как часто спрашивать состояние, пока сборка ждёт или идёт */
 const POLL_MS = 2000
@@ -80,7 +85,7 @@ export function BuildSection({ siteId, canBuild }: { siteId: string; canBuild: b
                     <time dateTime={latest.finishedAt}>{formatDateTime(latest.finishedAt)}</time>
                   </>
                 )}
-                . На сайте осталась прежняя версия.
+                . {failedBuildOutcome(Boolean(live?.finishedAt))}
               </p>
               <pre className={styles.buildLog}>{latest.error}</pre>
             </div>
