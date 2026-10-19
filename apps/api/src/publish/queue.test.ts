@@ -72,7 +72,9 @@ const journal = (api: TestApi, siteId: string) =>
     .orderBy(asc(siteBuilds.requestedAt))
 
 describe('очередь сборок сайтов', () => {
-  it('удачная сборка пишет в журнал релиз и пик памяти', async () => {
+  // Первый тест файла платит за холодный старт (PGlite, миграции, вход): под нагрузкой полного
+  // pnpm check это бывало дольше общих 30 с, отдельно — около 14 с
+  it('удачная сборка пишет в журнал релиз и пик памяти', { timeout: 90_000 }, async () => {
     const { api, siteId } = await setup()
     const control = controlledBuild()
     const queue = createPublishQueue({ db: api.db, build: control.build, log: () => {} })
