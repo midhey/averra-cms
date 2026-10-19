@@ -1,9 +1,12 @@
 import { z } from 'zod'
 import { BlockInstance, hero } from './blocks'
 
+/** Сколько блоков может быть на странице: редактор пишет «3 из 50» и не даёт добавить больше */
+export const PAGE_MAX_BLOCKS = 50
+
 export const PageContent = z
   .strictObject({
-    blocks: z.array(BlockInstance).max(50),
+    blocks: z.array(BlockInstance).max(PAGE_MAX_BLOCKS),
   })
   .refine((page) => new Set(page.blocks.map((block) => block.id)).size === page.blocks.length, {
     error: 'Id блоков на странице должны быть уникальными',

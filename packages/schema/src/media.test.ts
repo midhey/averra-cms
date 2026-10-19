@@ -75,7 +75,7 @@ describe('hero с картинкой', () => {
       expect(hero.props.safeParse(props({ variant, image })).error?.issues).toEqual([
         expect.objectContaining({
           path: ['image'],
-          message: expect.stringMatching(/только в варианте split/),
+          message: expect.stringMatching(/только в варианте «С картинкой» \(split\)/),
         }),
       ])
     },

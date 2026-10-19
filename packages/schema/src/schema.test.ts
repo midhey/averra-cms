@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { BlockInstance, blocks, hero } from './blocks'
+import { ENUM_SKETCHES } from './define-block'
 import { demoPage } from './demo'
 import { PageContent } from './page'
 
@@ -61,6 +62,25 @@ describe('каталог блоков', () => {
   it('совпадает с союзом, по которому проверяются страницы', () => {
     const inUnion = BlockInstance.options.map((option) => option.shape.type.value)
     expect(inUnion).toEqual(blocks.map((block) => block.type))
+  })
+
+  it('у каждого блока есть описание одной фразой: его видят каталог в редакторе и MCP', () => {
+    for (const block of blocks) {
+      expect(block.description.trim().length, block.type).toBeGreaterThan(10)
+      expect(block.description, block.type).not.toMatch(/\.$/)
+    }
+  })
+
+  it('у вариантов оформления подпись и миниатюра есть для каждого значения', () => {
+    const variant = z.toJSONSchema(hero.props, { io: 'input' }).properties?.variant as {
+      enum: string[]
+      'x-enum-titles': Record<string, string>
+      'x-enum-sketches': Record<string, string>
+    }
+    for (const value of variant.enum) {
+      expect(variant['x-enum-titles'][value], value).toBeTruthy()
+      expect(ENUM_SKETCHES, value).toContain(variant['x-enum-sketches'][value])
+    }
   })
 
   it('отдаёт JSON Schema с подписями полей: из неё возьмут подписи админка и MCP', () => {

@@ -17,7 +17,7 @@ export {
 } from './auth'
 export { BlockInstance, type BlockType, blocks, cta, features, form, hero } from './blocks'
 export { Button, Href } from './common'
-export { BlockId, defineBlock } from './define-block'
+export { BlockId, defineBlock, ENUM_SKETCHES, type EnumSketch } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export {
   CHECKED_VALUE,
@@ -86,6 +86,7 @@ export {
   ExistingPageSlug,
   MAIN_PAGE_SLUG,
   NewPage,
+  PAGE_MAX_BLOCKS,
   PageContent,
   type PageContentInput,
   PageSlug,

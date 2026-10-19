@@ -1,14 +1,29 @@
 import { z } from 'zod'
 import { Button } from '../common'
-import { defineBlock } from '../define-block'
+import { defineBlock, type EnumSketch } from '../define-block'
 import { Image } from '../media'
+
+/** Подписи вариантов первого экрана для людей: их видят карточки вариантов в редакторе */
+const heroVariantTitles = { centered: 'По центру', left: 'Слева', split: 'С картинкой' }
 
 export const hero = defineBlock({
   type: 'hero',
   title: 'Первый экран',
+  description: 'Заголовок, подзаголовок и кнопка — первое, что видит посетитель',
   props: z
     .strictObject({
-      variant: z.enum(['centered', 'left', 'split']).default('centered').meta({ title: 'Вариант' }),
+      variant: z
+        .enum(['centered', 'left', 'split'])
+        .default('centered')
+        .meta({
+          title: 'Вариант',
+          'x-enum-titles': heroVariantTitles,
+          'x-enum-sketches': {
+            centered: 'centered',
+            left: 'left',
+            split: 'split',
+          } satisfies Record<string, EnumSketch>,
+        }),
       title: z
         .string()
         .trim()
@@ -20,7 +35,7 @@ export const hero = defineBlock({
       image: Image.optional().meta({
         title: 'Картинка',
         description:
-          'Только для варианта split (текст слева, картинка справа): там она обязательна, в других вариантах её не должно быть',
+          'Только для варианта «С картинкой» (split): текст слева, картинка справа. Там она обязательна, в других вариантах её не должно быть',
       }),
     })
     // Путь — само поле: в редакторе ошибка встанет прямо у выбора картинки.
@@ -31,14 +46,15 @@ export const hero = defineBlock({
         ctx.addIssue({
           code: 'custom',
           path: ['image'],
-          message: 'В варианте split нужна картинка: выберите её в медиатеке',
+          message: 'В варианте «С картинкой» (split) нужна картинка: выберите её в медиатеке',
         })
       }
       if (props.variant !== 'split' && props.image) {
         ctx.addIssue({
           code: 'custom',
           path: ['image'],
-          message: 'Картинка выводится только в варианте split: уберите её или выберите split',
+          message:
+            'Картинка выводится только в варианте «С картинкой» (split): уберите её или выберите этот вариант',
         })
       }
     }),

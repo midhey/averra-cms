@@ -12,6 +12,8 @@ import { FORM_MAX_FIELDS, FormField } from '../forms'
 export const form = defineBlock({
   type: 'form',
   title: 'Форма заявки',
+  description:
+    'Заявка с сайта без JavaScript: поля, согласие на обработку данных, уведомление на почту',
   props: z
     .strictObject({
       title: z.string().trim().min(1).max(120).meta({ title: 'Заголовок' }),
