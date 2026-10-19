@@ -4,9 +4,11 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   notFound,
   Outlet,
   redirect,
+  useLocation,
 } from '@tanstack/react-router'
 import { safeRedirect } from './permissions'
 import {
@@ -54,6 +56,13 @@ const LOGIN_PATH = '/login'
  */
 const PUBLIC_PATHS = new Set([LOGIN_PATH, '/forgot-password', '/reset-password', '/invite'])
 
+/**
+ * Витрина компонентов — только в разработке (`vite`, e2e): в `vite build` маршрута и кода нет.
+ * Данных API она не берёт, поэтому открывается без входа и без шапки старых экранов
+ */
+const DEV_UI_PATH = '/dev/ui'
+if (import.meta.env.DEV) PUBLIC_PATHS.add(DEV_UI_PATH)
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // Вся админка, кроме входа, — только после входа. Кто вошёл, спрашиваем у API один раз
   // и держим в кеше; любой 401 потом сбрасывает это и ведёт на вход (main.tsx)
@@ -68,9 +77,10 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 
 function RootLayout() {
   const { data: me } = useQuery(meQuery())
+  const { pathname } = useLocation()
   return (
     <div className="admin">
-      {me && <AppHeader user={me} />}
+      {me && !(import.meta.env.DEV && pathname === DEV_UI_PATH) && <AppHeader user={me} />}
       <Outlet />
     </div>
   )
@@ -246,6 +256,16 @@ const mailRoute = createRoute({
   component: MailScreen,
 })
 
+const devRoutes = import.meta.env.DEV
+  ? [
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: DEV_UI_PATH,
+        component: lazyRouteComponent(() => import('./dev/UiShowcase'), 'UiShowcase'),
+      }),
+    ]
+  : []
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   forgotPasswordRoute,
@@ -258,6 +278,7 @@ const routeTree = rootRoute.addChildren([
   leadRoute,
   editorRoute,
   mailRoute,
+  ...devRoutes,
 ])
 
 export function createAdminRouter(queryClient: QueryClient) {

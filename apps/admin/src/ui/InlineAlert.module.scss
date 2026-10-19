@@ -1,0 +1,54 @@
+@use "@averra/ui" as ui;
+
+.alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: flex-start;
+  padding: ui.rem(14) var(--space-4);
+  color: var(--alert-text);
+  background: var(--alert-surface);
+  border-radius: var(--radius-control);
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-block-start: ui.rem(1);
+}
+
+.body {
+  display: flex;
+  flex: 1 1 ui.rem(200);
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.action {
+  flex-shrink: 0;
+}
+
+// Тон задаёт две роли; сами значения — семантические токены темы
+.info {
+  --alert-surface: var(--color-info-surface);
+  --alert-text: var(--color-info-text);
+}
+
+.success {
+  --alert-surface: var(--color-success-surface);
+  --alert-text: var(--color-success-text);
+}
+
+.warning {
+  --alert-surface: var(--color-warning-surface);
+  --alert-text: var(--color-warning-text);
+}
+
+.danger {
+  --alert-surface: var(--color-danger-surface);
+  --alert-text: var(--color-danger-text);
+}

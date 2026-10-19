@@ -1,0 +1,13 @@
+// Глобальный слой админки: токены, сброс и базовые правила frontend-kit, тема Averra и шрифты.
+// main.tsx ставит его отдельным <style data-admin-global>, и предпросмотр его не копирует:
+// сброс и токены :root изменили бы вид лендинга в iframe (styles/global-style.ts)
+@use "@averra/ui/preset";
+@use "@averra/ui/themes/averra";
+@use "fonts";
+
+// Обёртка старых экранов (до шагов 3.9–3.10): высота старой шапки, от неё считает высоту редактор
+.admin {
+  --admin-header-height: 2.75rem;
+
+  min-height: 100dvh;
+}

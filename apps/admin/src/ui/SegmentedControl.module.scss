@@ -1,0 +1,202 @@
+@use "@averra/ui" as ui;
+
+.group {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0 0 var(--space-2);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.options {
+  display: flex;
+  min-width: 0;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+
+// Радиокнопка невидима, но остаётся в фокусе и под пальцем: кольцо рисует подпись
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  cursor: inherit;
+  opacity: 0;
+}
+
+.option:has(.input:focus-visible) {
+  @include ui.focus-ring;
+
+  // У выбранного сегмента цвета свои (forced-color-adjust: none), кольцо — системным текстом
+  @media (forced-colors: active) {
+    outline-color: CanvasText;
+  }
+}
+
+.option:has(.input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Дорожка: ширина предпросмотра, фильтры
+.segments .options {
+  gap: ui.rem(2);
+  width: fit-content;
+  max-width: 100%;
+  padding: ui.rem(3);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-control);
+}
+
+.segments .option {
+  min-height: var(--size-control-small);
+  padding-inline: ui.rem(14);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-item);
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &:has(.input:checked) {
+    color: var(--color-text);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-raised);
+
+    // Контрастная тема Windows: фон и тень браузер сбросил бы в Canvas, и выбор пропал бы.
+    // Закрашиваем системной парой «выделение» сами. Медиазапрос вложен сюда, чтобы правило
+    // было не слабее обычного выбранного состояния (та же специфичность, ниже по тексту)
+    @media (forced-colors: active) {
+      color: HighlightText;
+      background: Highlight;
+      forced-color-adjust: none;
+    }
+  }
+}
+
+// Карточки с миниатюрами: вариант блока
+.cards .options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(ui.rem(120), 1fr));
+  gap: var(--space-2);
+}
+
+.cards .option {
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: stretch;
+  padding: var(--space-2);
+  font-size: var(--font-size-caption);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: ui.rem(2) solid var(--color-border);
+  border-radius: var(--radius-control);
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  &:has(.input:checked) {
+    background: var(--color-surface-accent);
+    border-color: var(--color-action);
+
+    // Контрастная тема: фон и подпись отдаём браузеру (Canvas/CanvasText — читаемая пара
+    // в любой системной палитре), выбор показывают рамка и галочка цвета «выделение».
+    // Заливать карточку Highlight нельзя: миниатюра внутри осталась бы в цветах темы
+    @media (forced-colors: active) {
+      border-color: Highlight;
+    }
+  }
+}
+
+// Миниатюра — рисунок блока в масштабе: её скругления — часть рисунка, а не форма интерфейса,
+// поэтому это свои величины компонента, а не роли темы
+$sketch-line-radius: ui.rem(2);
+$sketch-media-radius: ui.rem(3);
+
+.thumbnail {
+  display: flex;
+}
+
+.sketch {
+  display: flex;
+  gap: ui.rem(6);
+  align-items: center;
+  width: 100%;
+  padding: ui.rem(10);
+  background: var(--color-background);
+  border-radius: var(--radius-inner);
+}
+
+.sketchLines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: ui.rem(3);
+}
+
+.sketchLine {
+  width: 80%;
+  height: ui.rem(4);
+  background: var(--color-border-strong);
+  border-radius: $sketch-line-radius;
+}
+
+.sketchLineShort {
+  width: 60%;
+  background: var(--color-border);
+}
+
+.sketchMedia {
+  width: ui.rem(22);
+  height: ui.rem(22);
+  background: var(--color-border);
+  border-radius: $sketch-media-radius;
+}
+
+// Выбор виден не только цветом: подпись выбранного варианта жирнее, у карточки — галочка.
+// Фон сегмента на дорожке почти не отличается по светлоте (≈1,2:1), полагаться на него нельзя
+.option:has(.input:checked) .label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.cards .option:has(.input:checked)::after {
+  position: absolute;
+  inset-block-start: ui.rem(8);
+  inset-inline-end: ui.rem(11);
+  width: ui.rem(6);
+  height: ui.rem(11);
+  pointer-events: none;
+  content: "";
+  border-right: ui.rem(2) solid var(--color-action);
+  border-bottom: ui.rem(2) solid var(--color-action);
+  transform: rotate(45deg);
+
+  @media (forced-colors: active) {
+    border-color: Highlight;
+  }
+}

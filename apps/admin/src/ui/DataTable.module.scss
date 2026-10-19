@@ -1,0 +1,78 @@
+@use "@averra/ui" as ui;
+
+.frame {
+  min-width: 0;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.scroller {
+  overflow-x: auto;
+
+  // Кольцо внутрь: снаружи его срезала бы соседняя раскладка
+  &:focus-visible {
+    outline-offset: ui.rem(-3);
+  }
+}
+
+.table {
+  width: 100%;
+  font-size: var(--font-size-body);
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: ui.rem(16) ui.rem(20);
+    text-align: start;
+    vertical-align: middle;
+    border-bottom: ui.rem(1) solid var(--color-border-subtle);
+  }
+
+  thead th {
+    padding-block: ui.rem(14);
+    font-size: var(--font-size-caption);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    border-bottom-color: var(--color-surface-muted);
+  }
+
+  tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+}
+
+.caption {
+  padding: ui.rem(14) ui.rem(20) 0;
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+}
+
+.rowHeader {
+  font-weight: var(--font-weight-semibold);
+
+  a {
+    color: var(--color-text);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--color-action);
+      text-decoration: underline;
+    }
+  }
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.table .end {
+  text-align: end;
+}

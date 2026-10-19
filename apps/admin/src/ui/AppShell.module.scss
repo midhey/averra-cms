@@ -1,0 +1,218 @@
+@use "@averra/ui" as ui;
+
+// Телефон и планшет: верхняя полоса, панель — меню в потоке под ней (не поверх содержимого:
+// так Tab из меню не уходит в невидимый экран). С medium — колонка слева на всю высоту
+.shell {
+  min-height: 100dvh;
+
+  @include ui.breakpoint(medium) {
+    display: grid;
+    grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-height: ui.rem(60);
+  padding: var(--space-2) var(--space-page-inline);
+  background: var(--color-surface-sidebar);
+  border-bottom: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint(medium) {
+    display: none;
+  }
+}
+
+.sidebar {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: ui.rem(20) var(--space-4);
+  background: var(--color-surface-sidebar);
+  border-bottom: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint(medium) {
+    position: sticky;
+    inset-block-start: 0;
+    display: flex;
+    height: 100dvh;
+    overflow-y: auto;
+    border-right: ui.rem(1) solid var(--color-border);
+    border-bottom: 0;
+  }
+}
+
+.sidebarOpen {
+  display: flex;
+}
+
+.sidebarBrand {
+  display: none;
+  padding: ui.rem(4) var(--space-2);
+
+  @include ui.breakpoint(medium) {
+    display: block;
+  }
+}
+
+.content {
+  min-width: 0;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.brand {
+  display: inline-flex;
+  gap: ui.rem(10);
+  align-items: center;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: ui.rem(28);
+  height: ui.rem(28);
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-text);
+  background: var(--color-primary);
+  border-radius: var(--radius-item);
+}
+
+.brandName {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+}
+
+.sectionBottom {
+  padding-block-start: var(--space-4);
+  margin-block-start: auto;
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.sectionTitle {
+  padding: 0 ui.rem(12) ui.rem(6);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+  list-style: none;
+}
+
+.navLink {
+  display: flex;
+  gap: ui.rem(10);
+  align-items: center;
+  min-height: var(--size-control);
+  padding: ui.rem(10) ui.rem(12);
+  font-size: var(--font-size-body);
+  color: var(--color-text);
+  text-decoration: none;
+  border-radius: var(--radius-item);
+  transition: background-color var(--duration-fast) ease;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  &:hover {
+    background: var(--color-surface-muted);
+  }
+
+  &[aria-current="page"] {
+    font-weight: var(--font-weight-semibold);
+    background: var(--color-surface-muted);
+
+    svg {
+      color: var(--color-text);
+    }
+  }
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  padding: ui.rem(2) ui.rem(8);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-action-text);
+  background: var(--color-action);
+  border-radius: var(--radius-pill);
+}
+
+.navAside {
+  display: inline-flex;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+.user {
+  display: flex;
+  gap: ui.rem(10);
+  align-items: center;
+  padding: ui.rem(12) ui.rem(12) 0;
+}
+
+.avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: ui.rem(32);
+  height: ui.rem(32);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-info-text);
+  background: var(--color-info-surface);
+  border-radius: var(--radius-pill);
+}
+
+.userText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userName {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userRole {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

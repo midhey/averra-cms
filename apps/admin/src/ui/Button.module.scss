@@ -1,0 +1,108 @@
+@use "@averra/ui" as ui;
+
+.button {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  min-height: var(--size-control);
+  padding-inline: ui.rem(18);
+  border: ui.rem(1) solid transparent;
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+// Идёт действие: кнопка не бледнеет, как выключенная, а показывает спиннер
+.button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 1;
+}
+
+.primary {
+  color: var(--color-primary-text);
+  background: var(--color-primary);
+}
+
+.secondary {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.ghost {
+  color: var(--color-text);
+  background: transparent;
+}
+
+.danger {
+  color: var(--color-danger-text);
+  background: transparent;
+}
+
+.primary:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--color-primary-hover);
+}
+
+.secondary:hover:not(:disabled, [aria-disabled="true"]),
+.ghost:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--color-surface-muted);
+}
+
+.danger:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--color-danger-surface);
+}
+
+.small {
+  min-height: var(--size-control-small);
+  padding-inline: ui.rem(12);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+}
+
+// Квадратная кнопка-иконка: ширина равна высоте
+.iconOnly {
+  min-width: var(--size-control);
+  padding-inline: 0;
+}
+
+.iconOnly.small {
+  min-width: var(--size-control-small);
+}
+
+.spinner {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  border: ui.rem(2) solid currentcolor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@include ui.reduced-motion {
+  .spinner {
+    border-right-color: currentcolor;
+    opacity: 0.5;
+    animation: none;
+  }
+}

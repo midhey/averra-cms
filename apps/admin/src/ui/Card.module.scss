@@ -1,0 +1,39 @@
+@use "@averra/ui" as ui;
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--color-text);
+  text-decoration: none;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.normal {
+  padding: var(--space-card);
+}
+
+.compact {
+  padding: ui.rem(16) ui.rem(18);
+}
+
+.none {
+  padding: 0;
+  overflow: hidden;
+}
+
+.interactive {
+  transition: border-color var(--duration-fast) ease;
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  &[aria-current="true"],
+  &[aria-current="page"] {
+    border-color: var(--color-action);
+  }
+}

@@ -4,6 +4,7 @@ import type { MediaMap, PageContent, Theme } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import { Component, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { previewStyleNodes } from '../styles/global-style'
 import styles from './Preview.module.css'
 
 const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
@@ -57,15 +58,13 @@ export function Preview({ content, theme, media, note }: PreviewProps) {
     return () => observer.disconnect()
   }, [width])
 
-  // Стили в iframe: CSS блоков из админки, базовые стили лендинга и тема сайта.
+  // Стили в iframe: CSS блоков из админки (без её глобального слоя), базовые стили лендинга и тема сайта.
   // Vite подменяет стили при правках, поэтому следим за <head> админки и копируем заново
   useEffect(() => {
     if (!frameDocument) return
     const themeCss = themeToCss(theme)
     const sync = () => {
-      const copied = [...document.querySelectorAll('style, link[rel="stylesheet"]')].map((node) =>
-        node.cloneNode(true),
-      )
+      const copied = previewStyleNodes(document).map((node) => node.cloneNode(true))
       frameDocument.head.replaceChildren(
         ...copied,
         styleElement(frameDocument, baseCss),

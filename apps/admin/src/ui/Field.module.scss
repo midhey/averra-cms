@@ -1,0 +1,163 @@
+@use "@averra/ui" as ui;
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(6);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.control {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--size-control);
+  padding: ui.rem(10) ui.rem(12);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  transition: border-color var(--duration-fast) ease;
+
+  &::placeholder {
+    color: var(--color-text-placeholder);
+    opacity: 1;
+  }
+
+  // Поле с ошибкой при наведении остаётся красным: hover не трогает [aria-invalid]
+  &:hover:not(:disabled, [aria-invalid="true"]) {
+    border-color: var(--color-text-muted);
+  }
+
+  // Кольцо фокуса — от foundation; рамка не спорит с ним
+  &:focus-visible {
+    border-color: var(--color-focus-ring);
+  }
+
+  &[aria-invalid="true"] {
+    border-color: var(--color-danger-text);
+  }
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+
+.textarea {
+  min-height: auto;
+  resize: vertical;
+}
+
+.prefix {
+  display: flex;
+  align-items: center;
+  padding-inline: ui.rem(10);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-right: 0;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.withPrefix {
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+// Своя стрелка у выпадающего списка: родная в разных браузерах разная по высоте
+.selectBox {
+  position: relative;
+
+  &::after {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: ui.rem(14);
+    width: ui.rem(8);
+    height: ui.rem(8);
+    margin-block: auto;
+    pointer-events: none;
+    content: "";
+    border-right: ui.rem(1.5) solid var(--color-text-muted);
+    border-bottom: ui.rem(1.5) solid var(--color-text-muted);
+    transform: translateY(-25%) rotate(45deg);
+  }
+}
+
+.select {
+  padding-inline-end: ui.rem(36);
+  cursor: pointer;
+  appearance: none;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  justify-content: space-between;
+}
+
+.hint,
+.counter {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.counter {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.counterOver {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-danger-text);
+}
+
+.error {
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+}
+
+.checkbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.checkboxRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.checkboxInput {
+  flex-shrink: 0;
+  width: ui.rem(18);
+  height: ui.rem(18);
+  margin: ui.rem(1) 0 0;
+  cursor: pointer;
+  accent-color: var(--color-action);
+}
+
+.checkboxLabel {
+  cursor: pointer;
+}
+
+// Подсказка и ошибка флажка — под подписью, а не под квадратиком
+.checkboxNote {
+  padding-inline-start: calc(#{ui.rem(18)} + var(--space-2));
+}

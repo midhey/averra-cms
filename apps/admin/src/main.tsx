@@ -3,12 +3,14 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './app.css'
 import { ApiRequestError } from './errors'
 import { queryKeys } from './queries'
 import { createAdminRouter } from './router'
+import globalCss from './styles/global.scss?inline'
+import { installGlobalStyle } from './styles/global-style'
 
 setupZodMessages()
+installGlobalStyle(document, globalCss)
 
 /**
  * 401 из любого запроса или мутации — сессия кончилась или её отозвали. Ведём на вход

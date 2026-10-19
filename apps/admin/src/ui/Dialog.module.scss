@@ -1,0 +1,60 @@
+@use "@averra/ui" as ui;
+
+.dialog {
+  width: calc(100% - 2 * var(--space-4));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  overflow: auto;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-overlay);
+
+  &::backdrop {
+    background: var(--color-overlay);
+  }
+}
+
+.small {
+  max-width: ui.rem(400);
+}
+
+.medium {
+  max-width: ui.rem(560);
+}
+
+.header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-card) var(--space-card) 0;
+}
+
+.title {
+  padding-block-start: ui.rem(4);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.description {
+  padding: var(--space-2) var(--space-card) 0;
+  color: var(--color-text-muted);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-card) 0;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ui.rem(10);
+  justify-content: flex-end;
+  padding: var(--space-card);
+}

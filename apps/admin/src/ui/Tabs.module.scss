@@ -1,0 +1,64 @@
+@use "@averra/ui" as ui;
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+// На узком экране вкладки прокручиваются внутри полосы, а не раздвигают страницу
+.list {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  border-bottom: ui.rem(1) solid var(--color-border);
+}
+
+.tab {
+  flex-shrink: 0;
+  min-height: var(--size-control);
+  padding-inline: ui.rem(14);
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border-bottom: ui.rem(2) solid transparent;
+  transition:
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+
+  // Контрастная тема: прозрачную рамку браузер закрасил бы системным цветом у всех вкладок.
+  // Невыбранным — цвет фона, выбранной — «выделение» (ниже)
+  @media (forced-colors: active) {
+    border-bottom-color: Canvas;
+  }
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  // Кольцо внутрь: снаружи его срезала бы прокрутка полосы
+  &:focus-visible {
+    outline-offset: ui.rem(-3);
+  }
+
+  &[aria-selected="true"] {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    border-bottom-color: var(--color-text);
+
+    @media (forced-colors: active) {
+      border-bottom-color: Highlight;
+    }
+  }
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  min-width: 0;
+}

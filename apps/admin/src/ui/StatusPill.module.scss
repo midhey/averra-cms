@@ -1,0 +1,69 @@
+@use "@averra/ui" as ui;
+
+.status {
+  display: inline-flex;
+  gap: ui.rem(6);
+  align-items: center;
+  max-width: 100%;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+}
+
+.indicator {
+  flex-shrink: 0;
+  width: ui.rem(7);
+  height: ui.rem(7);
+  background: var(--status-indicator);
+  border-radius: var(--radius-pill);
+}
+
+.pill {
+  padding: ui.rem(4) ui.rem(10);
+  color: var(--status-text);
+  background: var(--status-surface);
+  border-radius: var(--radius-pill);
+
+  .indicator {
+    width: ui.rem(6);
+    height: ui.rem(6);
+  }
+}
+
+// Точка с текстом стоит на обычном фоне: текст — приглушённый, а не цвета статуса
+.dot {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+// Тон задаёт три роли сразу; сами значения — семантические токены темы
+.success {
+  --status-surface: var(--color-success-surface);
+  --status-text: var(--color-success-text);
+  --status-indicator: var(--color-success-indicator);
+}
+
+.warning {
+  --status-surface: var(--color-warning-surface);
+  --status-text: var(--color-warning-text);
+  --status-indicator: var(--color-warning-indicator);
+}
+
+.danger {
+  --status-surface: var(--color-danger-surface);
+  --status-text: var(--color-danger-text);
+  --status-indicator: var(--color-danger-indicator);
+}
+
+.info {
+  --status-surface: var(--color-info-surface);
+  --status-text: var(--color-info-text);
+  --status-indicator: var(--color-info-indicator);
+}
+
+.neutral {
+  --status-surface: var(--color-neutral-surface);
+  --status-text: var(--color-neutral-text);
+  --status-indicator: var(--color-neutral-indicator);
+}
