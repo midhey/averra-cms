@@ -92,7 +92,7 @@ test('две публикации → две версии → первая в ч
   await page.reload()
   await expect(ed.pageTitle).toHaveValue(version(1).pageTitle)
   await expect(ed.field('Заголовок')).toHaveValue(version(1).hero)
-  await expect(ed.status).toHaveText('Всё сохранено')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
 
   // А на сайте — вторая
   const site = await openSite(page, `/${slug}`)
@@ -120,7 +120,7 @@ test('с несохранёнными правками возврат спраш
   expect(dialogs[0]).toContain('несохранённые правки')
   expect(dialogs[0]).toContain('версией 1')
   await expect(ed.pageTitle).toHaveValue('Несохранённое название')
-  await expect(ed.status).toHaveText('Есть несохранённые изменения')
+  await expect(ed.status).toHaveText('Есть несохранённые правки')
 
   await history.restoreButton.click()
   await expect(ed.status).toHaveText(restored)

@@ -11,13 +11,13 @@ test('сохранённый черновик переживает переза�
   await ed.pageTitle.fill('Черновое название')
   await ed.saveButton.click()
 
-  await expect(ed.status).toHaveText('Черновик сохранён')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
   await expect(ed.saveButton).toBeDisabled()
 
   await page.reload()
   await expect(ed.pageTitle).toHaveValue('Черновое название')
   await expect(ed.field('Заголовок')).toHaveValue('Черновой заголовок')
-  await expect(ed.status).toHaveText('Всё сохранено')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
 
   const site = await openSite(page)
   await expect(site).toHaveTitle(demo.pageTitle)
@@ -31,7 +31,7 @@ test('после публикации сайт показывает новый �
   await ed.field('Заголовок').fill('Ремонт за 30 дней с гарантией')
   await ed.pageTitle.fill('Ремонт за 30 дней')
   await ed.saveButton.click()
-  await expect(ed.status).toHaveText('Черновик сохранён')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
   await ed.publishButton.click()
 
   await expect(ed.status).toHaveText(published)
@@ -63,6 +63,7 @@ test('опубликованный порядок блоков совпадае�
   const ed = editor(page)
   await ed.open()
 
+  await ed.selectBlock('Призыв к действию')
   await ed.block('Призыв к действию').getByRole('button', { name: 'Поднять блок' }).click()
   await ed.publishButton.click()
   await expect(ed.status).toHaveText(published)

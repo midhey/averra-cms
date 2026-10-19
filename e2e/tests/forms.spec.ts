@@ -39,8 +39,7 @@ test('форма без JavaScript: посетитель отправляет �
   // Владелец ставит форму из каталога и публикует: пример блока готов к работе
   const ed = editor(page)
   await ed.open()
-  await ed.newBlockType.selectOption({ label: 'Форма заявки' })
-  await ed.addBlockButton.click()
+  await ed.addBlock('Форма заявки')
   await expect(ed.inspector.getByRole('heading', { name: 'Форма заявки' })).toBeVisible()
   await expect(ed.field('Ссылка на политику конфиденциальности')).toHaveValue('/privacy')
   await ed.publishButton.click()

@@ -26,13 +26,13 @@ test('блок перетаскивается мышью: меняется по�
   const ctaTop = await topOf(ed.preview.getByText(demo.ctaTitle))
   const heroTop = await topOf(ed.preview.getByText(demo.heroTitle))
   expect(ctaTop).toBeLessThan(heroTop)
-  await expect(ed.status).toHaveText('Есть несохранённые изменения')
+  await expect(ed.status).toHaveText('Есть несохранённые правки')
   await expect(ed.blockAnnouncement).toHaveText(
     `Блок «${demo.ctaTitle}» поставлен на позицию 1 из 3.`,
   )
 
   await ed.saveButton.click()
-  await expect(ed.status).toHaveText('Черновик сохранён')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
   await page.reload()
   await expect(ed.blocks.nth(0)).toContainText('Призыв к действию')
   await expect(ed.blocks.nth(1)).toContainText('Первый экран')
@@ -54,7 +54,7 @@ test('щелчок по ручке без движения ничего не п�
   await ed.selectBlock('Преимущества')
   await expect(ed.itemHandles.first()).toHaveCSS('cursor', 'grab')
   await expect(ed.itemHandles.first()).toHaveCSS('border-top-width', '0px')
-  await expect(ed.status).toHaveText('Всё сохранено')
+  await expect(ed.status).toHaveText('Опубликовано')
   await expect(ed.saveButton).toBeDisabled()
 })
 
@@ -92,7 +92,7 @@ test('блок переставляется с клавиатуры, дикто�
   const heroTop = await topOf(ed.preview.getByText(demo.heroTitle))
   const ctaTop = await topOf(ed.preview.getByText(demo.ctaTitle))
   expect(heroTop).toBeGreaterThan(ctaTop)
-  await expect(ed.status).toHaveText('Есть несохранённые изменения')
+  await expect(ed.status).toHaveText('Есть несохранённые правки')
 })
 
 test('Escape отменяет перетаскивание с клавиатуры', async ({ page }) => {
@@ -115,7 +115,7 @@ test('Escape отменяет перетаскивание с клавиатур
   )
   await expect(ed.blocks.nth(0)).toContainText('Первый экран')
   await expect(ed.blocks.nth(1)).toContainText('Преимущества')
-  await expect(ed.status).toHaveText('Всё сохранено')
+  await expect(ed.status).toHaveText('Опубликовано')
 })
 
 test('пункты списка в форме блока переставляются перетаскиванием', async ({ page }) => {
@@ -210,6 +210,7 @@ test('стрелки у края списка не теряют фокус', asy
   await ed.open()
 
   // Блок встал первым: «Поднять» стала недоступна, фокус — на «Опустить» того же блока
+  await ed.selectBlock('Преимущества')
   await ed.block('Преимущества').getByRole('button', { name: 'Поднять блок' }).focus()
   await page.keyboard.press('Enter')
   await expect(ed.blocks.nth(0)).toContainText('Преимущества')

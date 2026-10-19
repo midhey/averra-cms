@@ -49,10 +49,9 @@ test('по экранам: сайты → обзор → редактор и н�
   await expect(ed.pageTitle).toHaveValue(demo.pageTitle)
   await expect(ed.blocks).toHaveCount(3)
 
-  // Крошки: где я сейчас и ссылки назад
-  const crumbs = page.getByRole('navigation', { name: 'Навигация по разделам' })
-  await expect(crumbs.getByRole('link')).toHaveText(['Сайты', demoSite.name])
-  await crumbs.getByRole('link', { name: demoSite.name }).click()
+  // Полоса редактора: какой это сайт и ссылка назад, на его обзор
+  await expect(page.getByRole('region', { name: 'Страница' })).toContainText(demoSite.name)
+  await ed.backToSite.click()
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(screen.heading).toHaveText(demoSite.name)
 
@@ -100,12 +99,7 @@ test('новый сайт → страница с первым экраном �
   await ed.publishButton.click()
   await expect(ed.status).toHaveText(published)
 
-  await page
-    .getByRole('navigation', { name: 'Навигация по разделам' })
-    .getByRole('link', {
-      name: name,
-    })
-    .click()
+  await ed.backToSite.click()
   await expect(screen.row('/uslugi')).toContainText('Услуги')
   await expect(screen.row('/uslugi')).toContainText('Опубликована')
   // Когда опубликована — в подсказке плашки и скрытым текстом (колонки «Опубликована» нет)
@@ -148,7 +142,7 @@ test('новая страница после публикации открыва
   await expect(ed.pageTitle).toHaveValue('Акция октября')
   await ed.field('Заголовок').fill('Скидка 20% на ремонт ванной')
   await ed.saveButton.click()
-  await expect(ed.status).toHaveText('Черновик сохранён')
+  await expect(ed.status).toHaveText('Черновик сохранён · не опубликован')
 
   // Черновик на сайт не попадает: страницы там ещё нет
   const before = await page.request.get(`${urls.renderer}/akciya`)
@@ -282,9 +276,7 @@ test('уход из редактора с несохранёнными прав�
   demoSite,
 }) => {
   const ed = editor(page)
-  const backToSite = page
-    .getByRole('navigation', { name: 'Навигация по разделам' })
-    .getByRole('link', { name: demoSite.name })
+  const { backToSite } = ed
   const dialogs = answerDialogs(page, [false, true, false, true])
 
   // Без правок уходим без вопросов
@@ -326,7 +318,7 @@ test('уход из редактора с несохранёнными прав�
   await ed.open()
   await ed.field('Заголовок').fill('Сохранённая правка')
   await ed.saveButton.click()
-  await expect(ed.status).toHaveText('Черновик сохранён')
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
   await backToSite.click()
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   expect(dialogs).toHaveLength(4)

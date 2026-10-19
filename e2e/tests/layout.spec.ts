@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, sidebar, test } from './fixtures'
+import { demo, editor, expect, sidebar, test } from './fixtures'
 
 // Оболочка и экраны на ширине телефона: нет горизонтальной прокрутки страницы, меню открывается
 // кнопкой и закрывается Esc. И что панель прячет от роли (подмена роли в ответах API, как
@@ -8,10 +8,7 @@ import { expect, sidebar, test } from './fixtures'
 const overflowOf = (page: Page) =>
   page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
 
-test('на 375 px ни один экран, кроме редактора, не прокручивается вбок', async ({
-  page,
-  demoSite,
-}) => {
+test('на 375 px ни один экран не прокручивается вбок', async ({ page, demoSite }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   const screens = [
     '/',
@@ -22,10 +19,12 @@ test('на 375 px ни один экран, кроме редактора, не 
     `/sites/${demoSite.id}/settings`,
     '/mail',
     '/status',
+    `/sites/${demoSite.id}/pages/index`,
   ]
   for (const path of screens) {
     await page.goto(path)
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    // У редактора h1 только для диктора: на виду поле заголовка страницы
+    await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
     expect(Number(await overflowOf(page)), path).toBeLessThanOrEqual(0)
   }
 })
@@ -114,4 +113,48 @@ test('редактору сайта панель не показывает за�
   await expect(page.getByRole('region', { name: 'Участники' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Скачать сайт архивом' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Выгрузить все данные' })).toHaveCount(0)
+})
+
+test('редактор на 375 px: вкладки «Блоки / Предпросмотр / Поля», всё работает', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  const ed = editor(page)
+  await ed.open()
+  const tabs = page.getByRole('tablist', { name: 'Части редактора' })
+  await expect(tabs.getByRole('tab')).toHaveText(['Блоки', 'Предпросмотр', 'Поля'])
+  await expect(tabs.getByRole('tab', { name: 'Блоки' })).toHaveAttribute('aria-selected', 'true')
+  await expect(ed.blockList).toBeVisible()
+  await expect(ed.inspector).toBeHidden()
+  await expect(ed.previewFrame).toBeHidden()
+
+  // Стрелки переключают вкладки
+  await tabs.getByRole('tab', { name: 'Блоки' }).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(tabs.getByRole('tab', { name: 'Предпросмотр' })).toBeFocused()
+  await expect(ed.previewFrame).toBeVisible()
+  await expect(ed.blockList).toBeHidden()
+  // На телефоне предпросмотр сразу шириной телефона, переключатель — над ним
+  await expect(ed.device('Телефон')).toBeChecked()
+  await expect(ed.preview.getByRole('heading', { level: 1 })).toHaveText(demo.heroTitle)
+
+  // Выбор блока в списке открывает его поля
+  await tabs.getByRole('tab', { name: 'Блоки' }).click()
+  await ed.selectBlock('Призыв к действию')
+  await expect(tabs.getByRole('tab', { name: 'Поля' })).toHaveAttribute('aria-selected', 'true')
+  await expect(tabs.getByRole('tab', { name: 'Поля' })).toBeFocused()
+  await expect(ed.inspector.getByRole('heading', { name: 'Призыв к действию' })).toBeVisible()
+
+  // Правка поля видна во вкладке «Предпросмотр»
+  await ed.field('Заголовок').fill('Звоните сегодня')
+  await expect(ed.status).toHaveText('Есть несохранённые правки')
+  await tabs.getByRole('tab', { name: 'Предпросмотр' }).click()
+  await expect(ed.preview.getByRole('heading', { name: 'Звоните сегодня' })).toBeVisible()
+  expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
+
+  // История — в третьей вкладке, она так и называется
+  await page.getByRole('button', { name: 'История', exact: true }).click()
+  await expect(tabs.getByRole('tab', { name: 'История' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('complementary', { name: 'История публикаций' })).toBeVisible()
+  expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
 })

@@ -91,7 +91,7 @@ export function editor(page: Page) {
     pageTitle: page.getByLabel('Заголовок страницы'),
     // Только статус редактора: у каждого списка с перетаскиванием своя живая область role=status
     status: page.getByRole('region', { name: 'Страница' }).getByRole('status'),
-    saveButton: page.getByRole('button', { name: 'Сохранить черновик' }),
+    saveButton: page.getByRole('button', { name: 'Сохранить', exact: true }),
     publishButton: page.getByRole('button', { name: 'Опубликовать' }),
     blockList,
     blocks: blockList.getByRole('listitem'),
@@ -110,8 +110,21 @@ export function editor(page: Page) {
     itemHandles: items.getByRole('button', { name: 'Перетащить пункт' }),
     itemTitles: items.getByLabel('Заголовок', { exact: true }),
     itemAnnouncement: items.getByRole('status'),
-    newBlockType: blockList.getByLabel('Тип нового блока'),
-    addBlockButton: blockList.getByRole('button', { name: 'Добавить' }),
+    addBlockButton: blockList.getByRole('button', { name: 'Добавить блок' }),
+    addBlockDialog: page.getByRole('dialog', { name: 'Добавить блок' }),
+    /** Добавить блок из каталога: окно «Добавить блок», карточка блока по названию */
+    addBlock: async (title: string) => {
+      await blockList.getByRole('button', { name: 'Добавить блок' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Добавить блок' })
+      await dialog.getByRole('button', { name: new RegExp(`^${title}`) }).click()
+      await expect(dialog).toBeHidden()
+    },
+    /** Ссылка из полосы редактора на обзор сайта */
+    backToSite: page.getByRole('link', { name: 'Назад к сайту' }),
+    /** Переключатель ширины предпросмотра */
+    device: (name: 'Телефон' | 'Планшет' | 'Десктоп') =>
+      page.getByRole('group', { name: 'Ширина предпросмотра' }).getByRole('radio', { name }),
+    previewFrame: page.getByTitle('Предпросмотр страницы'),
     inspector,
     field: (label: string) => inspector.getByLabel(label, { exact: true }),
     preview: page.getByTitle('Предпросмотр страницы').contentFrame(),
@@ -171,8 +184,6 @@ export function siteScreen(page: Page) {
   const newPageForm = page.getByRole('form', { name: 'Новая страница' })
   return {
     heading: page.getByRole('heading', { level: 1 }),
-    /** Хлебные крошки — только у редактора (до шага 3.10) */
-    breadcrumbs: page.getByRole('navigation', { name: 'Навигация по разделам' }),
     pages: page.getByRole('table', { name: 'Страницы' }),
     row: (text: string) =>
       page.getByRole('table', { name: 'Страницы' }).getByRole('row').filter({ hasText: text }),

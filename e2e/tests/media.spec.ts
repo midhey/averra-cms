@@ -42,8 +42,8 @@ test('картинка из медиатеки в первом экране spli
   await ed.open('kuhni')
 
   // Вариант split без картинки — ошибка прямо у поля, сохранить нельзя
-  await ed.field('Вариант').selectOption('split')
-  await expect(ed.inspector).toContainText('В варианте split нужна картинка')
+  await ed.inspector.getByRole('radio', { name: 'С картинкой' }).check()
+  await expect(ed.inspector).toContainText('В варианте «С картинкой» (split) нужна картинка')
   await expect(ed.saveButton).toBeDisabled()
   // Подпись поля не спорит с ошибкой: «необязательно» у картинки не пишем
   await expect(ed.inspector.getByRole('group', { name: 'Картинка' })).not.toContainText(
