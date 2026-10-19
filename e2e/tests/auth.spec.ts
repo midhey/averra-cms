@@ -41,14 +41,14 @@ test('без входа ведёт на вход и возвращает туд�
 
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
-  const banner = page.getByRole('banner')
-  await expect(banner).toContainText(e2eOwner.name)
+  // Кто вошёл — внизу боковой панели
+  await expect(page.getByText(e2eOwner.name)).toBeVisible()
 
   // Сессия переживает перезагрузку: она в cookie, а не в памяти вкладки
   await page.reload()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
 
-  await banner.getByRole('button', { name: 'Выйти' }).click()
+  await page.getByRole('button', { name: 'Выйти' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('button', { name: 'Выйти' })).toHaveCount(0)
 
@@ -117,7 +117,10 @@ test('сессия кончилась посреди работы — вход �
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   // Сессию отозвали (или она истекла): cookie больше нет, а админка ещё открыта
   await page.context().clearCookies()
-  await page.getByRole('link', { name: 'Ремонт квартир под ключ' }).click()
+  await page
+    .getByRole('table', { name: 'Страницы' })
+    .getByRole('link', { name: 'Ремонт квартир под ключ', exact: true })
+    .click()
 
   await expect(page).toHaveURL(/\/login\?redirect=/)
   await login.email.fill(e2eOwner.email)

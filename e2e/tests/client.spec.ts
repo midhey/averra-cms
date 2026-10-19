@@ -1,5 +1,6 @@
+import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@averra/schema'
 import type { Page } from '@playwright/test'
-import { editor, expect, siteScreen, sites, test } from './fixtures'
+import { editor, expect, sidebar, siteScreen, sites, test } from './fixtures'
 
 // Что админка прячет от клиента сайта. Роль подменяется в браузере — в ответах API о пользователе
 // и о сайте: так один тест проверяет все экраны на демо-сайте с его страницами. Настоящего клиента
@@ -28,13 +29,43 @@ test('клиенту не видны «Новый сайт», «Новая ст�
     json: { slug: 'o-nas', title: 'О нас' },
   })
   expect(created.status).toBe(201)
+  // Неопубликованная правка главной: без неё кнопки «Опубликовать правки» нет ни у кого,
+  // и проверка «клиенту не видна» прошла бы и без проверки роли
+  const saved = await sites[':siteId'].pages[':slug'].$put({
+    param: { siteId: demoSite.id, slug: MAIN_PAGE_SLUG },
+    json: {
+      title: demoPageTitle,
+      content: {
+        blocks: demoPage.blocks.map((block) =>
+          block.type === 'hero'
+            ? { ...block, props: { ...block.props, title: `Правка ${Date.now()}` } }
+            : block,
+        ),
+      },
+    },
+  })
+  expect(saved.status).toBe(200)
+  // Владелец кнопку видит: значит, клиенту её прячет именно роль
+  await page.goto(`/sites/${demoSite.id}`)
+  await expect(page.getByRole('button', { name: 'Опубликовать правки' })).toBeVisible()
+
   await actAsClient(page)
 
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
   await expect(page.getByRole('form', { name: 'Новый сайт' })).toHaveCount(0)
 
+  // Обзор: ни «Новой страницы», ни «Опубликовать правки», хотя правки есть
   await page.goto(`/sites/${demoSite.id}`)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
+  await expect(page.getByRole('link', { name: 'Новая страница' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Опубликовать правки' })).toHaveCount(0)
+  // Клиенту видны заявки (это его заявки), а почта и состояние установки — нет
+  await expect(sidebar(page).section('Заявки')).toBeVisible()
+  await expect(sidebar(page).installation).toHaveCount(0)
+  await expect(page.getByText('Клиент', { exact: true })).toBeVisible()
+
+  await sidebar(page).section('Страницы').click()
   const screen = siteScreen(page)
   await expect(screen.row('О нас')).toBeVisible()
   await expect(screen.pages.getByRole('button')).toHaveCount(0)

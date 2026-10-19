@@ -29,14 +29,14 @@ const templates = [
   },
 ] as const
 
-test('владелец открывает «Почту» из шапки: состояние, очередь и предпросмотр шаблонов', async ({
+test('владелец открывает «Почту» из панели: состояние, очередь и предпросмотр шаблонов', async ({
   page,
 }) => {
   await page.goto('/')
-  await page
-    .getByRole('navigation', { name: 'Разделы админки' })
-    .getByRole('link', { name: 'Почта' })
-    .click()
+  const installation = page.getByRole('navigation', { name: 'Установка' })
+  // В панели видно, работает ли почта, ещё до перехода
+  await expect(installation.getByRole('link', { name: /^Почта/ })).toContainText('работает')
+  await installation.getByRole('link', { name: /^Почта/ }).click()
 
   await expect(page).toHaveURL(/\/mail$/)
   await expect(page).toHaveTitle('Почта — Averra CMS')
@@ -159,7 +159,8 @@ test('участнику ссылки на почту нет, а по прямо
   await actAsMember(page)
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
-  await expect(page.getByRole('navigation', { name: 'Разделы админки' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Установка' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /^Почта/ })).toHaveCount(0)
 
   await page.goto('/mail')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Не получилось открыть')

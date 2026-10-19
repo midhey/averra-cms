@@ -76,7 +76,7 @@ test('забыл пароль → письмо → новый пароль → �
   await login.getByLabel('Пароль').fill('new-e2e-password')
   await login.getByRole('button', { name: 'Войти' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
-  await expect(page.getByRole('banner')).toContainText('Редактор Сброса')
+  await expect(page.getByText('Редактор Сброса')).toBeVisible()
 
   // Та же ссылка второй раз не работает
   await page.goto(link)

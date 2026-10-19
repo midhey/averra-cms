@@ -163,11 +163,15 @@ export async function openSite(page: Page, path = '/') {
   return site
 }
 
-/** Экран страниц сайта так, как его видит человек */
+/**
+ * Обзор сайта (/sites/:id) и экран страниц (/sites/:id/pages) так, как их видит человек:
+ * на обоих таблица «Страницы», форма «Новая страница» — только на экране страниц
+ */
 export function siteScreen(page: Page) {
   const newPageForm = page.getByRole('form', { name: 'Новая страница' })
   return {
     heading: page.getByRole('heading', { level: 1 }),
+    /** Хлебные крошки — только у редактора (до шага 3.10) */
     breadcrumbs: page.getByRole('navigation', { name: 'Навигация по разделам' }),
     pages: page.getByRole('table', { name: 'Страницы' }),
     row: (text: string) =>
@@ -179,6 +183,29 @@ export function siteScreen(page: Page) {
       template: (label: 'С первым экраном' | 'Пустая') =>
         newPageForm.getByRole('radio', { name: label }),
       submit: newPageForm.getByRole('button', { name: 'Создать страницу' }),
+    },
+  }
+}
+
+/**
+ * Боковая панель оболочки: переключатель сайта, разделы сайта, установка и кто вошёл.
+ * На десктопе она видна всегда (e2e — окно 1280 px)
+ */
+export function sidebar(page: Page) {
+  const sections = page.getByRole('navigation', { name: 'Разделы сайта' })
+  return {
+    sections,
+    section: (name: string) => sections.getByRole('link', { name: new RegExp(`^${name}`) }),
+    installation: page.getByRole('navigation', { name: 'Установка' }),
+    switcher: page.getByRole('button', { name: /выбрать другой сайт/ }),
+    sitesList: page.getByRole('list', { name: 'Сайты' }),
+    logout: page.getByRole('button', { name: 'Выйти' }),
+    /** К списку сайтов: из сайта — через переключатель, вне сайта — пунктом «Все сайты» */
+    toAllSites: async () => {
+      const all = page.getByRole('link', { name: 'Все сайты' })
+      if (!(await all.isVisible()))
+        await page.getByRole('button', { name: /выбрать другой сайт/ }).click()
+      await all.click()
     },
   }
 }
@@ -223,4 +250,16 @@ export function mediaScreen(page: Page) {
     item: (name: string) => grid.getByRole('listitem').filter({ hasText: name }),
     deleteButton: (name: string) => page.getByRole('button', { name: `Удалить «${name}»` }),
   }
+}
+
+/**
+ * Сколько строк занимает текст элемента: у каждой строки свой прямоугольник с другим верхом.
+ * Так ловится перенос посреди слова в ячейке таблицы («owner@manual.te / st»)
+ */
+export function lineCount(locator: Locator) {
+  return locator.evaluate((element) => {
+    const range = element.ownerDocument.createRange()
+    range.selectNodeContents(element)
+    return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+  })
 }

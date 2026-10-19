@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto'
 import type { Browser } from '@playwright/test'
 import { urls } from '../urls'
-import { expect, sites, test } from './fixtures'
+import { answerDialogs, expect, lineCount, sites, test } from './fixtures'
 import { linkFrom, waitForMail } from './mailbox'
 
 // Приглашение по-настоящему: владелец приглашает клиента с экрана сайта, письмо ложится
@@ -32,7 +32,7 @@ test('владелец приглашает клиента → клиент по
   const site = await newSite('Сайт для клиента')
   const email = `client-${Date.now()}-${randomInt(1000)}@e2e.test`
 
-  await page.goto(`/sites/${site.id}`)
+  await page.goto(`/sites/${site.id}/settings`)
   const members = page.getByRole('region', { name: 'Участники' })
   const form = members.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
@@ -45,6 +45,11 @@ test('владелец приглашает клиента → клиент по
     .filter({ hasText: email })
   await expect(row).toContainText('Клиент')
   await expect(row).toContainText('Ждёт ответа')
+  // На широком экране почта и роль не рвутся посреди слова: раньше узкая колонка давала
+  // «client@…tes / t» и «Клиен / т»
+  await page.setViewportSize({ width: 1440, height: 900 })
+  expect(await lineCount(row.getByRole('rowheader'))).toBe(1)
+  expect(await lineCount(row.getByRole('cell', { name: 'Клиент', exact: true }))).toBe(1)
 
   const mail = await waitForMail(email, `Приглашение на сайт «${site.name}» в Averra CMS`)
   const link = linkFrom(mail, 'invite')
@@ -70,13 +75,18 @@ test('владелец приглашает клиента → клиент по
 
     await expect(guest).toHaveURL(`${urls.admin}/sites/${site.id}`)
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText(site.name)
-    await expect(guest.getByRole('banner')).toContainText('Мария Клиентова')
-    // Клиент правит черновики, но доступ к сайту не раздаёт
+    await expect(guest.getByText('Мария Клиентова')).toBeVisible()
+    await expect(guest.getByText('Клиент', { exact: true })).toBeVisible()
+    // Клиент правит черновики, но доступ к сайту не раздаёт: в настройках нет «Участников»
+    await guest.getByRole('link', { name: /^Настройки сайта/ }).click()
+    await expect(guest.getByRole('heading', { level: 1 })).toHaveText('Настройки сайта')
+    await expect(guest.getByRole('region', { name: 'Заявки' })).toBeVisible()
     await expect(guest.getByRole('region', { name: 'Участники' })).toHaveCount(0)
 
     await guest.goto('/')
     const list = guest.getByRole('region', { name: 'Список сайтов' })
-    await expect(list.getByRole('link')).toHaveText([site.name])
+    await expect(list.getByRole('link')).toHaveCount(1)
+    await expect(list.getByRole('link')).toContainText(site.name)
 
     // Ссылка одноразовая: второй раз — понятный отказ, а не форма
     await guest.goto(link)
@@ -90,13 +100,23 @@ test('владелец приглашает клиента → клиент по
   await page.reload()
   await expect(row).toContainText('Принято')
   await expect(row.getByRole('button')).toHaveCount(0)
+
+  // В очереди писем адрес получателя тоже в одну строку
+  await page.goto('/mail')
+  const queued = page
+    .getByRole('table', { name: 'Очередь писем' })
+    .getByRole('row')
+    .filter({ hasText: email })
+    .first()
+  await expect(queued).toBeVisible()
+  expect(await lineCount(queued.getByRole('rowheader'))).toBe(1)
 })
 
 test('отозванное приглашение больше не открывается', async ({ page, browser }) => {
   const site = await newSite('Сайт для отзыва')
   const email = `revoked-${Date.now()}-${randomInt(1000)}@e2e.test`
 
-  await page.goto(`/sites/${site.id}`)
+  await page.goto(`/sites/${site.id}/settings`)
   const members = page.getByRole('region', { name: 'Участники' })
   const form = members.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
@@ -107,7 +127,17 @@ test('отозванное приглашение больше не открыв
     'invite',
   )
 
-  await members.getByRole('button', { name: `Отозвать приглашение для ${email}` }).click()
+  // Отзыв — после подтверждения: «Отмена» оставляет приглашение в силе
+  const dialogs = answerDialogs(page, [false, true])
+  const revoke = members.getByRole('button', { name: `Отозвать приглашение для ${email}` })
+  await revoke.click()
+  await expect.poll(() => dialogs.length).toBe(1)
+  expect(dialogs[0]).toBe(
+    `Отозвать приглашение для ${email}? Ссылка из письма перестанет работать.`,
+  )
+  await expect(revoke).toBeVisible()
+  await revoke.click()
+  await expect.poll(() => dialogs.length).toBe(2)
   await expect(members.getByRole('status')).toHaveText(
     `Приглашение для ${email} отозвано: ссылка больше не работает`,
   )
@@ -143,8 +173,8 @@ test('сбой приглашений и почты не прячет сайт: 
   await fail(/\/api\/sites\/[^/]+\/invitations$/)
   await fail(/\/api\/mail$/)
 
-  await page.goto(`/sites/${site.id}`)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(site.name)
+  await page.goto(`/sites/${site.id}/settings`)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Настройки сайта')
   const members = page.getByRole('region', { name: 'Участники' })
   await expect(members.getByRole('alert')).toContainText(
     'Не удалось загрузить приглашения: Внутренняя ошибка сервера',
@@ -155,7 +185,7 @@ test('сбой приглашений и почты не прячет сайт: 
 
   await page.unrouteAll()
   await members.getByRole('button', { name: 'Повторить' }).click()
-  await expect(members.getByText('Приглашений пока нет.')).toBeVisible()
+  await expect(members.getByText('Приглашений пока нет')).toBeVisible()
   await expect(members.getByRole('alert')).toHaveCount(0)
   await expect(members).not.toContainText('Не удалось узнать')
 })

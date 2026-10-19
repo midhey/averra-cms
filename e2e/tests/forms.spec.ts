@@ -73,18 +73,28 @@ test('форма без JavaScript: посетитель отправляет �
   const confirmation = await waitForMail(email, `Заявка получена — ${DEMO_SITE_NAME}`)
   expect(confirmation.text).not.toContain('Анна')
 
-  // Заявка в админке: счётчик новых в навигации сайта, список, карточка, «обработана»
+  // Заявка в админке: счётчик новых в панели, список, карточка рядом, «обработана»
   await page.goto(`/sites/${demoSite.id}`)
   const leadsLink = page
     .getByRole('navigation', { name: 'Разделы сайта' })
     .getByRole('link', { name: /^Заявки/ })
-  await expect(leadsLink).toContainText(/\d+ нов/)
+  await expect(leadsLink).toContainText(/новых: \d+/)
   await leadsLink.click()
   await expect(page.getByRole('heading', { level: 1, name: 'Заявки' })).toBeVisible()
-  await page.getByRole('link', { name: 'Анна Тестова · +7 900 123-45-67' }).first().click()
-  await expect(page.getByRole('heading', { level: 1, name: /^Заявка от / })).toBeVisible()
-  await expect(page.getByText(email)).toBeVisible()
-  await expect(page.getByText('Я согласен на обработку персональных данных')).toBeVisible()
+  await page
+    .getByRole('list', { name: 'Список заявок' })
+    .getByRole('link')
+    .filter({ hasText: 'Анна Тестова' })
+    .first()
+    .click()
+  const card = page.getByRole('article', { name: 'Анна Тестова' })
+  await expect(card).toBeVisible()
+  await expect(card.getByText(email)).toBeVisible()
+  await expect(card.getByText(/Я согласен на обработку персональных данных/)).toBeVisible()
+  await expect(card.getByRole('link', { name: 'Ответить письмом' })).toHaveAttribute(
+    'href',
+    new RegExp(`^mailto:${email.replace(/[.]/g, '\\.')}\\?subject=`),
+  )
   await page.getByRole('button', { name: 'Отметить обработанной' }).click()
   await expect(page.getByRole('status')).toHaveText('Заявка обработана')
   await expect(page.getByRole('button', { name: 'Вернуть в новые' })).toBeVisible()
@@ -161,7 +171,7 @@ test('форма на неглавной странице без JavaScript: п�
   }
 })
 
-test('«Выгрузить CSV» в разделе «Заявки» скачивает файл потоком из API: BOM, колонки, заявка', async ({
+test('«Скачать CSV» в разделе «Заявки» скачивает файл потоком из API: BOM, колонки, заявка', async ({
   page,
   browser,
   demoSite,
@@ -189,7 +199,7 @@ test('«Выгрузить CSV» в разделе «Заявки» скачив
   await page.goto(`/sites/${demoSite.id}/leads`)
   await expect(page.getByRole('heading', { level: 1, name: 'Заявки' })).toBeVisible()
   const downloading = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Выгрузить CSV' }).click()
+  await page.getByRole('button', { name: 'Скачать CSV' }).click()
   const download = await downloading
   expect(download.suggestedFilename()).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/)
   const bytes = await readFile(await download.path())

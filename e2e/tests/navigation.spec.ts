@@ -1,6 +1,16 @@
 import { hero } from '@averra/schema'
 import { urls } from '../urls'
-import { answerDialogs, demo, editor, expect, openSite, siteScreen, sites, test } from './fixtures'
+import {
+  answerDialogs,
+  demo,
+  editor,
+  expect,
+  openSite,
+  sidebar,
+  siteScreen,
+  sites,
+  test,
+} from './fixtures'
 
 const uuid = '[0-9a-f-]{36}'
 const published = 'Опубликовано. Обнови сайт, чтобы увидеть'
@@ -8,7 +18,7 @@ const published = 'Опубликовано. Обнови сайт, чтобы �
 /** Своё название на каждый тест: сайты в базе e2e копятся, а искать надо именно свой */
 const uniqueName = (prefix: string) => `${prefix} ${Date.now().toString(36)}`
 
-test('по экранам: сайты → сайт → редактор и назад по хлебным крошкам, F5 не теряет место', async ({
+test('по экранам: сайты → обзор → редактор и назад по крошкам и панели, F5 не теряет место', async ({
   page,
   demoSite,
 }) => {
@@ -21,7 +31,7 @@ test('по экранам: сайты → сайт → редактор и на�
   const screen = siteScreen(page)
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(screen.heading).toHaveText(demoSite.name)
-  await expect(page).toHaveTitle(`${demoSite.name} — страницы — Averra CMS`)
+  await expect(page).toHaveTitle(`${demoSite.name} — обзор — Averra CMS`)
   await expect(screen.pages.getByRole('row')).toHaveCount(2) // заголовки и главная
   await expect(screen.row(demo.pageTitle)).toContainText('/')
   await expect(screen.row(demo.pageTitle)).toContainText('Опубликована')
@@ -46,7 +56,8 @@ test('по экранам: сайты → сайт → редактор и на�
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   await expect(screen.heading).toHaveText(demoSite.name)
 
-  await screen.breadcrumbs.getByRole('link', { name: 'Сайты' }).click()
+  // Из сайта — к списку сайтов через переключатель в панели
+  await sidebar(page).toAllSites()
   await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
 })
@@ -65,7 +76,12 @@ test('новый сайт → страница с первым экраном �
   const siteId = page.url().split('/').at(-1) ?? ''
   await expect(screen.pages.getByRole('row')).toHaveCount(2)
   await expect(screen.row('/')).toContainText(name)
-  await expect(screen.row('/')).toContainText('Не опубликована')
+  await expect(screen.row('/')).toContainText('Черновик')
+
+  // Страницы создают и удаляют на экране «Страницы»: туда ведёт и панель, и кнопка обзора
+  await page.getByRole('link', { name: 'Новая страница' }).click()
+  await expect(page).toHaveURL(`/sites/${siteId}/pages#new-page`)
+  await expect(screen.newPage.title).toBeFocused()
   await expect(screen.row('/').getByRole('button', { name: /Удалить/ })).toHaveCount(0)
 
   await screen.newPage.title.fill('Услуги')
@@ -92,10 +108,14 @@ test('новый сайт → страница с первым экраном �
     .click()
   await expect(screen.row('/uslugi')).toContainText('Услуги')
   await expect(screen.row('/uslugi')).toContainText('Опубликована')
-  await expect(screen.row('/uslugi').locator('time')).toHaveAttribute('datetime', /^2\d{3}-/)
-  await expect(screen.row('/uslugi')).not.toContainText('неопубликованные')
+  // Когда опубликована — в подсказке плашки и скрытым текстом (колонки «Опубликована» нет)
+  const state = screen.row('/uslugi').getByRole('cell').filter({ hasText: 'Опубликована' })
+  await expect(state.locator('[title^="Опубликована "]')).toBeVisible()
+  await expect(state.locator('time')).toHaveAttribute('datetime', /^2\d{3}-/)
+  await expect(state).toContainText(/, опубликована \d/)
+  await expect(screen.row('/uslugi')).not.toContainText('Есть правки')
   // Главную не трогали — она по-прежнему черновик
-  await expect(screen.row(name)).toContainText('Не опубликована')
+  await expect(screen.row(name)).toContainText('Черновик')
 
   // Рендерер собирает один сайт (первый), поэтому новый сайт проверяем по снимку в API —
   // это ровно то, из чего рендерер собирает страницы
@@ -108,20 +128,17 @@ test('новый сайт → страница с первым экраном �
   expect(pages[0]?.content.blocks[0]).toMatchObject({ props: { title: 'Йога для начинающих' } })
 
   // Новый сайт виден в списке сайтов
-  await page
-    .getByRole('navigation', { name: 'Навигация по разделам' })
-    .getByRole('link', {
-      name: 'Сайты',
-    })
-    .click()
-  await expect(page.getByRole('link', { name })).toBeVisible()
+  await sidebar(page).toAllSites()
+  await expect(
+    page.getByRole('region', { name: 'Список сайтов' }).getByRole('link', { name }),
+  ).toBeVisible()
 })
 
 test('новая страница после публикации открывается в рендерере по своему адресу', async ({
   page,
   demoSite,
 }) => {
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
   const screen = siteScreen(page)
   await screen.newPage.title.fill('Акция октября')
   await screen.newPage.slug.fill('akciya')
@@ -149,7 +166,7 @@ test('новая страница после публикации открыва
 })
 
 test('пустая страница создаётся без блоков', async ({ page, demoSite }) => {
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
   const screen = siteScreen(page)
   await screen.newPage.title.fill('Контакты')
   await screen.newPage.slug.fill('kontakty')
@@ -162,7 +179,7 @@ test('пустая страница создаётся без блоков', asy
 })
 
 test('форма новой страницы объясняет, что не так с адресом', async ({ page, demoSite }) => {
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
   const screen = siteScreen(page)
   const { title, slug, submit } = screen.newPage
 
@@ -171,7 +188,7 @@ test('форма новой страницы объясняет, что не т�
   await expect(title).toHaveAccessibleDescription(/Поле не может быть пустым/)
   await expect(slug).toHaveAccessibleDescription(/Поле не может быть пустым/)
   await expect(title).toBeFocused()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  await expect(page).toHaveURL(`/sites/${demoSite.id}/pages`)
 
   await title.fill('О нас')
   await expect(title).not.toHaveAttribute('aria-invalid')
@@ -188,7 +205,7 @@ test('форма новой страницы объясняет, что не т�
   await submit.click()
   await expect(slug).toHaveAccessibleDescription(/Такой адрес уже есть/)
   await expect(slug).toBeFocused()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  await expect(page).toHaveURL(`/sites/${demoSite.id}/pages`)
 
   // Поправил адрес — ошибка от API ушла, страница создаётся
   await slug.fill('o-nas')
@@ -222,7 +239,7 @@ test('страница удаляется только после подтвер
   expect((await sites[':siteId'].pages[':slug'].publish.$post({ param })).status).toBe(200)
   expect((await page.request.get(`${urls.renderer}/staraya-akciya`)).status()).toBe(200)
 
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
   const screen = siteScreen(page)
   await expect(screen.row(demo.pageTitle).getByRole('button')).toHaveCount(0)
   const remove = screen.row('Старая акция').getByRole('button', {
@@ -239,12 +256,11 @@ test('страница удаляется только после подтвер
   await remove.click()
   await expect(screen.row('Старая акция')).toHaveCount(0)
   expect(dialogs).toHaveLength(2)
-  // На экране сайта две живые области: у списка страниц и у раздела «Сайт на сервере»
-  await expect(page.getByRole('region', { name: 'Страницы' }).getByRole('status')).toHaveText(
+  await expect(page.getByRole('region', { name: 'Все страницы' }).getByRole('status')).toHaveText(
     'Страница «Старая акция» удалена',
   )
   // Кнопки «Удалить» больше нет — фокус на заголовке списка, а не в никуда
-  await expect(page.getByRole('heading', { level: 2, name: 'Страницы' })).toBeFocused()
+  await expect(page.getByRole('heading', { level: 2, name: 'Все страницы' })).toBeFocused()
 
   await page.reload()
   await expect(screen.row(demo.pageTitle)).toBeVisible()
@@ -291,7 +307,7 @@ test('уход из редактора с несохранёнными прав�
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   expect(dialogs).toHaveLength(2)
   await expect(siteScreen(page).row(demo.pageTitle)).toContainText('Опубликована')
-  await expect(siteScreen(page).row(demo.pageTitle)).not.toContainText('неопубликованные')
+  await expect(siteScreen(page).row(demo.pageTitle)).not.toContainText('Есть правки')
 
   // Кнопка «Назад» браузера тоже спрашивает
   await siteScreen(page).row(demo.pageTitle).getByRole('link').click()
@@ -314,9 +330,7 @@ test('уход из редактора с несохранёнными прав�
   await backToSite.click()
   await expect(page).toHaveURL(`/sites/${demoSite.id}`)
   expect(dialogs).toHaveLength(4)
-  await expect(siteScreen(page).row(demo.pageTitle)).toContainText(
-    'Есть неопубликованные изменения',
-  )
+  await expect(siteScreen(page).row(demo.pageTitle)).toContainText('Есть правки')
 })
 
 test('несуществующий сайт, страница или адрес админки — понятный экран и путь назад', async ({
@@ -354,12 +368,16 @@ test('форма и сообщения одного сайта не переез
   const { id: otherId } = await other.json()
   const screen = siteScreen(page)
 
-  await page.goto(`/sites/${demoSite.id}`)
-  await page.goto(`/sites/${otherId}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
+  await page.goto(`/sites/${otherId}/pages`)
   await screen.newPage.title.fill('Набрано на втором сайте')
   await page.goBack()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
-  await expect(screen.heading).toHaveText(demoSite.name)
+  await expect(page).toHaveURL(`/sites/${demoSite.id}/pages`)
+  // Экран — того сайта: подпись над заголовком в main, а не имя где угодно (в переключателе)
+  const header = page.getByRole('main').locator('header').first()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Страницы')
+  await expect(header).toContainText(demoSite.name)
+  await expect(header).not.toContainText('Второй сайт')
   await expect(screen.newPage.title).toHaveValue('')
 })
 
@@ -371,7 +389,7 @@ test('длинный заголовок и адрес без пробелов н
   })
   expect(created.status).toBe(201)
   await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto(`/sites/${demoSite.id}/pages`)
   const screen = siteScreen(page)
   await expect(screen.row(slug)).toBeVisible()
 
