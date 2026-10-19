@@ -24,6 +24,11 @@
   max-width: ui.rem(560);
 }
 
+// Сетка внутри окна: медиатека при выборе картинки
+.large {
+  max-width: ui.rem(880);
+}
+
 .header {
   display: flex;
   gap: var(--space-3);

@@ -77,7 +77,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 export function UiShowcase() {
   usePageTitle('Витрина компонентов')
   const [device, setDevice] = useState<'phone' | 'tablet' | 'desktop'>('desktop')
-  const [variant, setVariant] = useState<'center' | 'split'>('split')
+  const [variant, setVariant] = useState<'center' | 'left' | 'split'>('split')
   const [tab, setTab] = useState<'new' | 'done' | 'all'>('new')
   const [title, setTitle] = useState('Ремонт квартир под ключ — с фиксированной сметой')
   const [slug, setSlug] = useState('ceny')
@@ -289,8 +289,16 @@ export function UiShowcase() {
               legend="Вариант"
               appearance="cards"
               options={[
-                { value: 'center', label: 'По центру', thumbnail: <LayoutThumbnail /> },
-                { value: 'split', label: 'С картинкой', thumbnail: <LayoutThumbnail media /> },
+                {
+                  value: 'center',
+                  label: 'По центру',
+                  thumbnail: <LayoutThumbnail sketch="centered" />,
+                },
+                {
+                  value: 'split',
+                  label: 'С картинкой',
+                  thumbnail: <LayoutThumbnail sketch="split" />,
+                },
               ]}
               value={variant}
               onChange={setVariant}

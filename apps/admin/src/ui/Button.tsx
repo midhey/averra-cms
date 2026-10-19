@@ -62,6 +62,17 @@ export function Spinner() {
   return <span className={styles.spinner} aria-hidden="true" />
 }
 
+/** Вид кнопки-иконки для ссылки (Link роутера): «Назад к сайту». Подпись — aria-label у ссылки */
+export function iconButtonClassName({
+  variant = 'ghost',
+  size = 'medium',
+}: {
+  variant?: 'secondary' | 'ghost' | undefined
+  size?: ButtonSize | undefined
+} = {}) {
+  return cx(buttonClassName({ variant, size }), styles.iconOnly)
+}
+
 type IconButtonProps = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & {
   /** Что делает кнопка: становится aria-label и подсказкой при наведении. Без неё кнопки нет */
   label: string
@@ -85,7 +96,7 @@ export function IconButton({
       type={type}
       aria-label={label}
       title={label}
-      className={cx(buttonClassName({ variant, size }), styles.iconOnly, className)}
+      className={cx(iconButtonClassName({ variant, size }), className)}
       {...rest}
     >
       <Icon name={icon} />

@@ -49,6 +49,8 @@ const icons = {
   'chevron-left': <path d="M11 4L6 9l5 5" />,
   'chevron-right': <path d="M7 4l5 5-5 5" />,
   'arrow-right': <path d="M3.5 9h11M10 4.5L14.5 9 10 13.5" />,
+  'arrow-up': <path d="M9 14.5v-11M4.5 8L9 3.5 13.5 8" />,
+  'arrow-down': <path d="M9 3.5v11M4.5 10L9 14.5 13.5 10" />,
   search: (
     <>
       <circle cx="8" cy="8" r="5" />

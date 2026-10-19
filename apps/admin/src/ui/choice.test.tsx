@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LayoutThumbnail, SegmentedControl } from './SegmentedControl'
-import { Tabs } from './Tabs'
+import { TabList, Tabs } from './Tabs'
 
 afterEach(cleanup)
 
@@ -133,5 +133,54 @@ describe('Tabs', () => {
     expect(screen.getByRole('tabpanel').textContent).toBe('Панель all')
     await user.keyboard('{Home}')
     expect(screen.getByRole('tabpanel', { name: 'Новые · 3' }).textContent).toBe('Панель new')
+  })
+})
+
+function Columns() {
+  const [value, setValue] = useState<'blocks' | 'fields'>('blocks')
+  return (
+    <>
+      <TabList
+        label="Части редактора"
+        items={[
+          { id: 'blocks', label: 'Блоки' },
+          { id: 'fields', label: 'Поля' },
+        ]}
+        value={value}
+        onChange={setValue}
+        tabId={(id) => `tab-${id}`}
+        panelId={(id) => `panel-${id}`}
+      />
+      <div
+        role="tabpanel"
+        id="panel-blocks"
+        aria-labelledby="tab-blocks"
+        hidden={value !== 'blocks'}
+      >
+        Блоки
+      </div>
+      <div
+        role="tabpanel"
+        id="panel-fields"
+        aria-labelledby="tab-fields"
+        hidden={value !== 'fields'}
+      >
+        Поля
+      </div>
+    </>
+  )
+}
+
+describe('TabList', () => {
+  it('у каждой вкладки своя панель: aria-controls ведёт на неё, стрелка переключает', async () => {
+    const user = userEvent.setup()
+    render(<Columns />)
+    const fields = screen.getByRole('tab', { name: 'Поля' })
+    expect(fields.getAttribute('aria-controls')).toBe('panel-fields')
+    expect(screen.getByRole('tabpanel').textContent).toBe('Блоки')
+    await user.click(screen.getByRole('tab', { name: 'Блоки' }))
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(fields)
+    expect(screen.getByRole('tabpanel', { name: 'Поля' }).textContent).toBe('Поля')
   })
 })

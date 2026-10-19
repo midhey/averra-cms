@@ -8,38 +8,32 @@ export type TabItem<T extends string> = {
   count?: number | undefined
 }
 
-type TabsProps<T extends string> = {
+type TabListProps<T extends string> = {
   /** Что переключают вкладки — подпись для диктора («Фильтр заявок») */
   label: string
   items: ReadonlyArray<TabItem<T>>
   value: T
   onChange: (value: T) => void
-  /** Содержимое выбранной вкладки */
-  children: ReactNode
-  /**
-   * Панель сама в порядке Tab (по умолчанию да). По WAI-ARIA это нужно, только когда в панели
-   * нет фокусируемого: экран с кнопками, полями или ссылками в панели передаёт false, чтобы
-   * не было лишней пустой остановки между вкладкой и первым элементом
-   */
-  panelFocusable?: boolean
+  /** id вкладки: на него ссылается панель через aria-labelledby */
+  tabId: (id: T) => string
+  /** id панели, которой управляет вкладка */
+  panelId: (id: T) => string
 }
 
 /**
- * Вкладки по шаблону WAI-ARIA: в порядке Tab только выбранная вкладка, стрелки и Home/End
- * переходят и сразу выбирают (содержимое уже загружено, ждать нечего). Панель подписана вкладкой
+ * Полоса вкладок по шаблону WAI-ARIA: в порядке Tab только выбранная вкладка, стрелки и
+ * Home/End переходят и сразу выбирают (содержимое уже загружено, ждать нечего). Панели рисует
+ * тот, кто знает, что в них: одна общая (`Tabs`) или у каждой вкладки своя (колонки редактора)
  */
-export function Tabs<T extends string>({
+export function TabList<T extends string>({
   label,
   items,
   value,
   onChange,
-  children,
-  panelFocusable = true,
-}: TabsProps<T>) {
-  const base = useId()
+  tabId,
+  panelId,
+}: TabListProps<T>) {
   const refs = useRef(new Map<T, HTMLButtonElement>())
-  const tabId = (id: T) => `${base}-tab-${id}`
-  const panelId = `${base}-panel`
 
   const onKeyDown = (event: KeyboardEvent) => {
     const index = items.findIndex((item) => item.id === value)
@@ -58,32 +52,73 @@ export function Tabs<T extends string>({
   }
 
   return (
+    <div role="tablist" aria-label={label} className={styles.list} onKeyDown={onKeyDown}>
+      {items.map((item) => {
+        const selected = item.id === value
+        return (
+          <button
+            key={item.id}
+            ref={(node) => {
+              if (node) refs.current.set(item.id, node)
+              else refs.current.delete(item.id)
+            }}
+            type="button"
+            role="tab"
+            id={tabId(item.id)}
+            aria-selected={selected}
+            aria-controls={panelId(item.id)}
+            tabIndex={selected ? 0 : -1}
+            className={styles.tab}
+            onClick={() => onChange(item.id)}
+          >
+            {item.label}
+            {item.count !== undefined && <span className={styles.count}> · {item.count}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+type TabsProps<T extends string> = {
+  /** Что переключают вкладки — подпись для диктора («Фильтр заявок») */
+  label: string
+  items: ReadonlyArray<TabItem<T>>
+  value: T
+  onChange: (value: T) => void
+  /** Содержимое выбранной вкладки */
+  children: ReactNode
+  /**
+   * Панель сама в порядке Tab (по умолчанию да). По WAI-ARIA это нужно, только когда в панели
+   * нет фокусируемого: экран с кнопками, полями или ссылками в панели передаёт false, чтобы
+   * не было лишней пустой остановки между вкладкой и первым элементом
+   */
+  panelFocusable?: boolean
+}
+
+/** Вкладки с одной панелью: в ней содержимое выбранной вкладки. Панель подписана вкладкой */
+export function Tabs<T extends string>({
+  label,
+  items,
+  value,
+  onChange,
+  children,
+  panelFocusable = true,
+}: TabsProps<T>) {
+  const base = useId()
+  const tabId = (id: T) => `${base}-tab-${id}`
+  const panelId = `${base}-panel`
+
+  return (
     <div className={styles.tabs}>
-      <div role="tablist" aria-label={label} className={styles.list} onKeyDown={onKeyDown}>
-        {items.map((item) => {
-          const selected = item.id === value
-          return (
-            <button
-              key={item.id}
-              ref={(node) => {
-                if (node) refs.current.set(item.id, node)
-                else refs.current.delete(item.id)
-              }}
-              type="button"
-              role="tab"
-              id={tabId(item.id)}
-              aria-selected={selected}
-              aria-controls={panelId}
-              tabIndex={selected ? 0 : -1}
-              className={styles.tab}
-              onClick={() => onChange(item.id)}
-            >
-              {item.label}
-              {item.count !== undefined && <span className={styles.count}> · {item.count}</span>}
-            </button>
-          )
-        })}
-      </div>
+      <TabList
+        label={label}
+        items={items}
+        value={value}
+        onChange={onChange}
+        tabId={tabId}
+        panelId={() => panelId}
+      />
       <div
         role="tabpanel"
         id={panelId}

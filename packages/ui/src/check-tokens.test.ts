@@ -13,21 +13,6 @@ const repoRoot = resolve(import.meta.dirname, '../../..')
 const uiDir = resolve(repoRoot, 'packages/ui')
 const adminSrc = resolve(repoRoot, 'apps/admin/src')
 
-/**
- * Старые стили редактора страницы на сырых цветах. Закрытый список: остальные экраны перешли
- * на токены в шаге 3.9, редактор переходит в шаге 3.10 и вычёркивается отсюда. Новый .css
- * в админке проверку не пройдёт
- */
-const LEGACY_ADMIN_CSS = [
-  'editor/BlockList.module.css',
-  'editor/Editor.module.css',
-  'editor/History.module.css',
-  'editor/Inspector.module.css',
-  'editor/Preview.module.css',
-  'forms/SchemaForm.module.css',
-  'media/ImageField.module.css',
-]
-
 describe('проверка токенов: механизм', () => {
   let root: string
   afterEach(async () => {
@@ -143,15 +128,16 @@ describe('проверка токенов: репозиторий', () => {
     const violations = await findTokenViolations({
       includeDirs: [resolve(uiDir, 'src'), adminSrc],
       allowedDirs: [resolve(uiDir, 'src/foundation/tokens'), resolve(uiDir, 'src/themes')],
-      skipFiles: LEGACY_ADMIN_CSS.map((file) => resolve(adminSrc, file)),
     })
     expect(violations.map((violation) => formatViolation(violation, repoRoot))).toEqual([])
   })
 
-  it('старые .css в админке — ровно закрытый список: новых нет, удалённые вычеркнуты', async () => {
+  // Старые .module.css ушли в шагах 3.9–3.10 вместе с прежними экранами и редактором.
+  // Новые стили админки — только .module.scss на токенах
+  it('в админке нет ни одного .css: все стили — .scss на токенах, без исключений', async () => {
     const cssFiles = (await findStyleFiles(adminSrc))
       .filter((file) => file.endsWith('.css'))
       .map((file) => relative(adminSrc, file).replaceAll('\\', '/'))
-    expect(cssFiles).toEqual(LEGACY_ADMIN_CSS)
+    expect(cssFiles).toEqual([])
   })
 })

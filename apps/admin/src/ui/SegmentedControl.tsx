@@ -1,3 +1,4 @@
+import type { EnumSketch } from '@averra/schema'
 import { type ReactNode, useId } from 'react'
 import { cx } from './cx'
 import styles from './SegmentedControl.module.scss'
@@ -66,15 +67,18 @@ export function SegmentedControl<T extends string>({
   )
 }
 
-/** Схематичная миниатюра блока для вида «карточки»: строки текста и, если нужно, картинка */
-export function LayoutThumbnail({ media = false }: { media?: boolean }) {
+/**
+ * Схематичная миниатюра варианта блока для вида «карточки»: строки текста по центру или слева
+ * и, у варианта с картинкой, картинка справа. Имена рисунков — из пометки x-enum-sketches схемы
+ */
+export function LayoutThumbnail({ sketch = 'left' }: { sketch?: EnumSketch }) {
   return (
     <span className={styles.sketch}>
-      <span className={styles.sketchLines}>
+      <span className={cx(styles.sketchLines, sketch === 'centered' && styles.sketchCentered)}>
         <span className={styles.sketchLine} />
         <span className={cx(styles.sketchLine, styles.sketchLineShort)} />
       </span>
-      {media && <span className={styles.sketchMedia} />}
+      {sketch === 'split' && <span className={styles.sketchMedia} />}
     </span>
   )
 }

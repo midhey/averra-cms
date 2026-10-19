@@ -101,7 +101,7 @@
 // Карточки с миниатюрами: вариант блока
 .cards .options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(ui.rem(120), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(ui.rem(96), 1fr));
   gap: var(--space-2);
 }
 
@@ -147,6 +147,9 @@ $sketch-media-radius: ui.rem(3);
   gap: ui.rem(6);
   align-items: center;
   width: 100%;
+
+  // Высота — как у варианта с картинкой: подписи карточек стоят на одной линии
+  min-height: ui.rem(42);
   padding: ui.rem(10);
   background: var(--color-background);
   border-radius: var(--radius-inner);
@@ -199,4 +202,9 @@ $sketch-media-radius: ui.rem(3);
   @media (forced-colors: active) {
     border-color: Highlight;
   }
+}
+
+// Вариант «по центру»: строки текста посередине миниатюры
+.sketchCentered {
+  align-items: center;
 }
