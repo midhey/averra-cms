@@ -49,6 +49,9 @@ test('публикация собирает сайт в новую версию 
   const assets = await readdir(join(publishDir, demoSite.id, 'current', '_astro'))
   expect(assets.some((name) => name.endsWith('.css'))).toBe(true)
   expect(assets.filter((name) => name.endsWith('.js'))).toEqual([])
+  // Кеш Vite сборщика — в PUBLISH_DIR/.cache, а не в node_modules рендерера: в образе код
+  // рендерера только для чтения (deploy/Dockerfile)
+  expect(existsSync(join(publishDir, '.cache', 'vite'))).toBe(true)
 
   // «Собрать заново» — ещё одна сборка, экран показывает её и затем новую версию
   await page.reload()
@@ -99,6 +102,38 @@ test('упавшая сборка видна на экране сайта с п�
   await expect(alert).toContainText('На сайте осталась прежняя версия')
   await expect(alert).toContainText('[ERROR] блок «hero» без заголовка')
   await expect(section).toContainText('сборка заняла 360 МБ памяти')
+})
+
+test('первая сборка сайта упала — экран не обещает «прежнюю версию», которой нет', async ({
+  page,
+  demoSite,
+}) => {
+  await page.route(/\/api\/sites\/[^/]+\/build$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    await route.fulfill({
+      json: {
+        enabled: true,
+        live: null,
+        latest: {
+          id: 'b1',
+          status: 'failed',
+          release: null,
+          error: 'Сборка упала (код выхода 1)',
+          peakRssBytes: null,
+          requestedAt: '2026-10-16T08:00:00.000Z',
+          startedAt: '2026-10-16T08:00:00.000Z',
+          finishedAt: '2026-10-16T08:00:02.000Z',
+        },
+      },
+    })
+  })
+  await page.goto(`/sites/${demoSite.id}`)
+  const section = page.getByRole('region', { name: 'Сайт на сервере' })
+  await expect(section).toContainText('Сайт ещё не собран')
+  const alert = section.getByRole('alert')
+  await expect(alert).toContainText('Последняя сборка упала')
+  await expect(alert).toContainText('Сайт пока не собран.')
+  await expect(alert).not.toContainText('прежняя версия')
 })
 
 test('сайт выгружается статическим архивом, а все данные — архивом с site.json', async ({
