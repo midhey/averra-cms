@@ -42,7 +42,7 @@ pnpm dev
 | `pnpm build` | собирает API (JavaScript в `apps/api/dist/server`, для сервера), админку и рендерер |
 | `pnpm typecheck` | проверяет типы во всех пакетах |
 | `pnpm test` | запускает тесты во всех пакетах |
-| `pnpm lint` | проверяет линтером и форматтером |
+| `pnpm lint` | проверяет линтером и форматтером: Biome для кода, stylelint для `*.scss` |
 | `pnpm format` | то же, но сразу исправляет |
 | `pnpm db:generate` | создаёт миграцию по изменениям в `apps/api/src/db/schema.ts` |
 | `pnpm user:create --email … --name … [--role owner\|member] [--if-missing]` | создаёт пользователя админки (по умолчанию владельца); пароль — скрытым вводом или из `CMS_USER_PASSWORD`. `--if-missing` — пользователь с этой почтой уже есть: ничего не делать, выйти без ошибки и не спрашивать пароль |
@@ -300,6 +300,17 @@ pnpm mail:test --to anna@example.ru
 
 Маршруты — TanStack Router (`apps/admin/src/router.tsx`), загрузка и кеш данных — TanStack Query (`apps/admin/src/queries.ts`).
 
+### Стили админки
+
+Админка переходит на дизайн из концепта (обзор сайта, редактор, заявки): основа — шаг 3.8, экраны — шаги 3.9 и 3.10. Стили на Sass по правилам [frontend-kit](https://github.com/midhey/frontend-kit) владельца:
+
+- **`packages/ui` (`@averra/ui`)** — foundation кита (коммит `f904954`) без React: токены в слоях primitives → semantic, сброс, базовые правила (видимое кольцо `:focus-visible`, `disabled`, `prefers-reduced-motion`), утилиты (`.visually-hidden`, `.skip-link`, `.container`) и тема Averra. Входы: `@use "@averra/ui" as ui;` — Sass API (`ui.rem()`, `ui.fluid()`, `ui.focus-ring`, `ui.breakpoint(medium)`, `ui.reduced-motion`), `@averra/ui/preset` и `@averra/ui/themes/averra` — CSS. Откуда что и как синхронизировать с китом — [README пакета](packages/ui/README.md).
+- **Глобальный слой** — `apps/admin/src/styles/global.scss`: preset, тема, шрифты. `main.tsx` ставит его отдельным `<style data-admin-global>` первым в `<head>`, а предпросмотр редактора его не копирует: сброс и токены админки не меняют вид лендинга в iframe.
+- **Шрифты** — Golos Text (400–700) и JetBrains Mono (400) из `@fontsource/*`, свои `@font-face` в `styles/_fonts.scss`: только WOFF2, кириллица и латиница. Файлы раздаёт сама админка, Google Fonts нет.
+- **Компоненты** — `apps/admin/src/ui`: `Button`, `IconButton`, `Icon`, `Field` (`TextInput`, `TextArea`, `Select`), `Checkbox`, `SegmentedControl`, `Tabs`, `StatusPill`, `Card`, `DataTable`, `EmptyState`, `InlineAlert`, `Dialog`, `AppShell`, `PageHeader`. Стили — CSS-модули `.module.scss` только на семантических токенах (`var(--color-text)`, `var(--radius-control)`).
+- **Витрина** — `/dev/ui`, только в разработке (`pnpm dev`, e2e): все компоненты во всех состояниях. В `vite build` её нет — это проверяет тест `apps/admin/src/dev/production-build.test.ts` в `pnpm check`.
+- **Проверки** в `pnpm check`: stylelint по `*.scss` (конфиг кита, `stylelint.config.mjs`), граница токенов (сырой цвет — HEX, функция цвета, именованный цвет, — `--palette-*` или примитив радиуса, тени, шкалы текста вне `packages/ui/src/foundation/tokens` и `packages/ui/src/themes` — ошибка; старые `.module.css` экранов — закрытый список до 3.9–3.10), компиляция всех `.scss`, объявлена ли каждая `var(--…)`, контраст темы (текст 4,5:1, границы полей и кольцо фокуса 3:1).
+
 ## Установка на сервер
 
 У каждого клиента своя установка на его VPS (PLAN, решение 6): PostgreSQL, API и Caddy в Docker Compose. Caddy выпускает сертификаты сам, а «Опубликовать» собирает сайт прямо на сервере. Подробно, с решениями и чек-листом живой проверки, — [шаг 3.6](docs/steps/3.6-vps-install.md).
@@ -532,6 +543,7 @@ e2e/          # сквозные тесты на Playwright
 deploy/       # установка на VPS: Dockerfile, compose.yaml, Caddyfile, install.sh, averra.sh (бэкапы, обновления), pnpm fleet и их тесты
 packages/
   schema/     # Zod-схемы: блоки, страница, тема, поля форм
-  tokens/     # тема → CSS-переменные
+  tokens/     # тема сайта → CSS-переменные
+  ui/         # Sass-основа админки: foundation frontend-kit и тема Averra
   blocks/     # React-компоненты блоков
 ```
