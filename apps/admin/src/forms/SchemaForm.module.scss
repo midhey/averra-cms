@@ -1,0 +1,133 @@
+@use "@averra/ui" as ui;
+
+// Поля блока сверху вниз, как в концепте: между полями — заметный шаг
+.form,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(20);
+  min-width: 0;
+}
+
+// Два однострочных поля (текст кнопки и ссылка) — в ряд, на узкой колонке — друг под другом
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(ui.rem(140), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+// Группа полей (кнопка, список пунктов) — без рамки: её видно по подписи и по карточкам внутри
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0 0 var(--space-2);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+
+  // Пункт, который тащат, — поверх соседей
+  &[data-dragging="true"] {
+    position: relative;
+    z-index: 1;
+    box-shadow: var(--shadow-overlay);
+  }
+}
+
+.itemBar {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  padding: ui.rem(4) ui.rem(4) ui.rem(4) ui.rem(6);
+  background: var(--color-surface-muted);
+  border-bottom: ui.rem(1) solid var(--color-border-subtle);
+  border-start-start-radius: var(--radius-control);
+  border-start-end-radius: var(--radius-control);
+}
+
+.itemName {
+  display: flex;
+  flex: 1;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  font-size: var(--font-size-caption);
+}
+
+.itemNumber {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.itemTitle {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: ui.rem(2);
+}
+
+.itemFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3);
+}
+
+.add {
+  align-self: flex-start;
+}

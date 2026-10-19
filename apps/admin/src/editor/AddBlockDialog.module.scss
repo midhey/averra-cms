@@ -1,0 +1,49 @@
+@use "@averra/ui" as ui;
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(ui.rem(220), 1fr));
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(4);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3);
+  color: var(--color-text);
+  text-align: start;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+
+  &:hover {
+    background: var(--color-surface-accent);
+    border-color: var(--color-action);
+  }
+}
+
+.title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.example {
+  margin-block-start: auto;
+  padding-block-start: var(--space-1);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

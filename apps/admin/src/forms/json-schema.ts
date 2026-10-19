@@ -1,3 +1,5 @@
+import type { EnumSketch } from '@averra/schema'
+
 /** Та часть JSON Schema, которую понимает конструктор форм. Её же отдаёт Zod через z.toJSONSchema */
 export type JsonSchema = {
   type?: string
@@ -16,6 +18,8 @@ export type JsonSchema = {
   'x-widget'?: string
   /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
   'x-enum-titles'?: Readonly<Record<string, string>>
+  /** Миниатюры вариантов оформления: значение → рисунок на карточке варианта (вариант первого экрана) */
+  'x-enum-sketches'?: Readonly<Record<string, EnumSketch>>
 }
 
 export type FieldKind =
@@ -69,3 +73,28 @@ export function emptyValue(schema: JsonSchema): unknown {
       return undefined
   }
 }
+
+/** Подпись варианта выбора для людей: из x-enum-titles, иначе само значение */
+export const enumLabel = (schema: JsonSchema, option: string | number) =>
+  schema['x-enum-titles']?.[String(option)] ?? String(option)
+
+/** Короткий выбор помещается дорожкой сегментов: не больше стольких вариантов… */
+const SEGMENTS_MAX_OPTIONS = 4
+/** …и подписи не длиннее (иначе на узкой колонке полей дорожка вылезла бы за край) */
+const SEGMENTS_MAX_LABEL = 14
+
+/**
+ * Каким элементом выбирать из вариантов: варианты оформления с миниатюрами — карточками,
+ * короткий выбор («Колонок»: 2, 3, 4) — сегментами, длинный (тип поля формы) — списком
+ */
+export function enumAppearance(schema: JsonSchema): 'cards' | 'segments' | 'select' {
+  const options = schema.enum ?? []
+  const sketches = schema['x-enum-sketches']
+  if (sketches && options.every((option) => sketches[String(option)] !== undefined)) return 'cards'
+  const short = options.every((option) => enumLabel(schema, option).length <= SEGMENTS_MAX_LABEL)
+  return options.length <= SEGMENTS_MAX_OPTIONS && short ? 'segments' : 'select'
+}
+
+/** Строка по шаблону (ссылка, адрес) — моноширинным: в адресе важен каждый знак */
+export const isMonospace = (schema: JsonSchema) =>
+  schema.type === 'string' && schema.pattern !== undefined

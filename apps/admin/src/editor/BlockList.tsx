@@ -1,9 +1,12 @@
-import type { BlockType } from '@averra/schema'
-import { useMemo, useState } from 'react'
+import { PAGE_MAX_BLOCKS } from '@averra/schema'
+import { useId, useMemo } from 'react'
+import { Button, IconButton } from '../ui/Button'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
+import { StatusPill } from '../ui/StatusPill'
 import { useMoveButtons } from '../ui/use-move-buttons'
-import styles from './BlockList.module.css'
-import { catalog, catalogEntry } from './catalog'
+import styles from './BlockList.module.scss'
+import { blockHint, blockName } from './block-hint'
+import { catalogEntry } from './catalog'
 import type { EditorBlock } from './draft'
 
 type BlockListProps = {
@@ -14,21 +17,39 @@ type BlockListProps = {
   /** Перестановка и стрелками, и перетаскиванием: блок с места from встаёт на место to */
   onMove: (from: number, to: number) => void
   onRemove: (id: string) => void
-  onAdd: (type: BlockType) => void
+  /** «Добавить блок»: окно с каталогом открывает редактор */
+  onAdd: () => void
 }
 
+/**
+ * Блоки страницы по порядку: ручка, тип и подсказка содержимого. Выбранный блок — в рамке,
+ * со стрелками и удалением, его поля справа
+ */
 export function BlockList(props: BlockListProps) {
   const { blocks, selectedId, invalidIds, onSelect, onMove, onRemove, onAdd } = props
-  const [newType, setNewType] = useState<BlockType>(catalog[0]?.type ?? 'hero')
+  const headingId = useId()
+  const limitId = useId()
+  const full = blocks.length >= PAGE_MAX_BLOCKS
   const entries = useMemo(
-    () => blocks.map((block) => ({ id: block.id, label: summaryOf(block) })),
+    () => blocks.map((block) => ({ id: block.id, label: blockName(block) })),
     [blocks],
   )
 
   return (
     <nav className={styles.panel} aria-label="Блоки страницы">
+      <div className={styles.header}>
+        <h2 id={headingId} className={styles.heading}>
+          Блоки
+        </h2>
+        <span className={styles.count}>
+          {blocks.length} из {PAGE_MAX_BLOCKS}
+        </span>
+      </div>
+      {blocks.length === 0 && (
+        <p className={styles.empty}>На странице пока нет блоков. Начните с первого экрана.</p>
+      )}
       <SortableList entries={entries} noun="блок" onMove={onMove}>
-        <ol className={styles.list}>
+        <ol className={styles.list} aria-labelledby={headingId}>
           {blocks.map((block, index) => (
             <BlockItem
               key={block.id}
@@ -44,25 +65,20 @@ export function BlockList(props: BlockListProps) {
           ))}
         </ol>
       </SortableList>
-      <div className={styles.add}>
-        <select
-          aria-label="Тип нового блока"
-          value={newType}
-          onChange={(event) => {
-            const picked = catalog.find((entry) => entry.type === event.target.value)
-            if (picked) setNewType(picked.type)
-          }}
-        >
-          {catalog.map((entry) => (
-            <option key={entry.type} value={entry.type}>
-              {entry.title}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={() => onAdd(newType)}>
-          + Добавить
-        </button>
-      </div>
+      <Button
+        icon="plus"
+        className={styles.add}
+        disabled={full}
+        aria-describedby={full ? limitId : undefined}
+        onClick={onAdd}
+      >
+        Добавить блок
+      </Button>
+      {full && (
+        <p id={limitId} className={styles.empty}>
+          На странице уже {PAGE_MAX_BLOCKS} блоков — больше не поместится.
+        </p>
+      )}
     </nav>
   )
 }
@@ -81,9 +97,10 @@ type BlockItemProps = {
 function BlockItem({ block, index, count, selected, invalid, ...actions }: BlockItemProps) {
   const sortable = useSortableItem(block.id)
   const arrows = useMoveButtons(index, count, actions.onMove)
+  const name = blockName(block)
 
   const remove = () => {
-    if (window.confirm(`Удалить блок «${summaryOf(block)}»?`)) actions.onRemove(block.id)
+    if (window.confirm(`Удалить блок «${name}»?`)) actions.onRemove(block.id)
   }
 
   return (
@@ -94,31 +111,28 @@ function BlockItem({ block, index, count, selected, invalid, ...actions }: Block
       data-selected={selected}
       data-dragging={sortable.dragging}
     >
-      <DragHandle handle={sortable.handle} label={`Перетащить блок «${summaryOf(block)}»`} />
-      <button type="button" className={styles.select} onClick={() => actions.onSelect(block.id)}>
+      <DragHandle handle={sortable.handle} label={`Перетащить блок «${name}»`} />
+      <button
+        type="button"
+        className={styles.select}
+        aria-current={selected ? 'true' : undefined}
+        onClick={() => actions.onSelect(block.id)}
+      >
         <span className={styles.type}>
           {catalogEntry(block.type).title}
-          {invalid && <span className={styles.badge}>ошибка</span>}
+          {invalid && <StatusPill tone="danger">Ошибка</StatusPill>}
         </span>
-        <span className={styles.summary}>{summaryOf(block)}</span>
+        <span className={styles.hint}>{blockHint(block)}</span>
       </button>
-      <div className={styles.actions}>
-        <button type="button" aria-label="Поднять блок" {...arrows.up}>
-          ↑
-        </button>
-        <button type="button" aria-label="Опустить блок" {...arrows.down}>
-          ↓
-        </button>
-        <button type="button" aria-label="Удалить блок" onClick={remove}>
-          ✕
-        </button>
-      </div>
+      {/* Стрелки и удаление — у выбранного блока: список остаётся чистым, как в концепте,
+          а лишних остановок Tab у каждого блока нет. Переставить любой блок можно и ручкой */}
+      {selected && (
+        <span className={styles.actions}>
+          <IconButton label="Поднять блок" icon="arrow-up" size="small" {...arrows.up} />
+          <IconButton label="Опустить блок" icon="arrow-down" size="small" {...arrows.down} />
+          <IconButton label="Удалить блок" icon="trash" size="small" onClick={remove} />
+        </span>
+      )}
     </li>
   )
-}
-
-/** Подпись блока в списке: его заголовок, если он есть, иначе id */
-function summaryOf(block: EditorBlock) {
-  const title = block.props.title
-  return typeof title === 'string' && title !== '' ? title : `#${block.id}`
 }

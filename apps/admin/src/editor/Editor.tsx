@@ -1,7 +1,7 @@
 import { type BlockType, type PageContent, PageTitle, type Theme } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBlocker } from '@tanstack/react-router'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { Link, useBlocker } from '@tanstack/react-router'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, apiRequestError, messageOf } from '../errors'
 import type { FieldProps, Widgets } from '../forms/SchemaForm'
@@ -10,25 +10,52 @@ import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
 import { mediaQuery, queryKeys, revisionQuery } from '../queries'
-import { Breadcrumbs } from '../ui/Breadcrumbs'
+import { Button, iconButtonClassName } from '../ui/Button'
+import { Icon } from '../ui/Icon'
+import { InlineAlert } from '../ui/InlineAlert'
+import { StatusPill, type StatusTone } from '../ui/StatusPill'
 import { moveItem } from '../ui/sortable'
+import { TabList } from '../ui/Tabs'
+import { NARROW_SCREEN, useMediaQuery } from '../ui/use-media-query'
 import { usePageTitle } from '../ui/use-page-title'
+import { AddBlockDialog } from './AddBlockDialog'
 import { BlockList } from './BlockList'
+import { blockName } from './block-hint'
 import { createBlock, type EditorBlock, insertBlock, removeBlock, updateBlockProps } from './draft'
-import styles from './Editor.module.css'
+import { draftState, type ServerPage } from './draft-state'
+import styles from './Editor.module.scss'
 import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
-import { Preview } from './Preview'
+import { type Device, DeviceSwitch, Preview } from './Preview'
 import { validateBlocks } from './validation'
 
 export type EditorSite = { id: string; name: string; theme: Theme; access: SiteAccess }
-export type EditorPage = { slug: string; title: string; draft: PageContent }
+export type EditorPage = {
+  slug: string
+  title: string
+  draft: PageContent
+  publishedTitle: string | null
+  published: unknown
+  publishedAt: string | null
+}
 
 type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 
+/** Колонка редактора; на узком экране — вкладка */
+type Column = 'blocks' | 'preview' | 'fields'
+
 const snapshotOf = (title: string, blocks: readonly EditorBlock[]) =>
   JSON.stringify({ title, blocks })
+
+/** Что из ответа API нужно плашке состояния: черновик и опубликованная версия */
+const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
+  title: page.title,
+  draft: page.draft,
+  publishedTitle: page.publishedTitle,
+  published: page.published,
+  publishedAt: page.publishedAt,
+})
 
 export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [title, setTitle] = useState(page.title)
@@ -37,12 +64,43 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
     snapshotOf(page.title, page.draft.blocks),
   )
+  // Страница, какой её последний раз отдал API: по ней плашка говорит, опубликовано ли
+  const [server, setServer] = useState<ServerPage>(() => serverPageOf(page))
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  // Какая кнопка запустила идущее действие: она крутит спиннер и остаётся в фокусе
+  const [pending, setPending] = useState<'save' | 'publish' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [adding, setAdding] = useState(false)
+  // На телефоне «десктоп» в масштабе не прочитать: там предпросмотр начинается с телефона
+  const [device, setDevice] = useState<Device>(() =>
+    window.matchMedia?.(NARROW_SCREEN).matches ? 'phone' : 'desktop',
+  )
   // Версия из истории в предпросмотре. Черновик в редакторе она не трогает
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
-  const historyId = useId()
+  const ids = useId()
+  const historyId = `${ids}-history`
+  const titleErrorId = `${ids}-title-error`
   usePageTitle(title.trim() || pagePath(page.slug), 'редактор')
+
+  // Узкий экран: колонки — вкладки. Роли вкладок нужны только там, где вкладки есть
+  const narrow = useMediaQuery(NARROW_SCREEN)
+  const [tab, setTab] = useState<Column>('blocks')
+  const tabId = (column: Column) => `${ids}-tab-${column}`
+  const panelId = (column: Column) => `${ids}-panel-${column}`
+  // Выбор блока на узком экране открывает «Поля», а кнопка выбора прячется вместе со списком:
+  // фокус переводим на вкладку «Поля», а не теряем
+  const focusFieldsTab = useRef(false)
+  useEffect(() => {
+    if (!focusFieldsTab.current) return
+    focusFieldsTab.current = false
+    document.getElementById(tabId('fields'))?.focus()
+  })
+
+  // Поля другого блока (или история) начинаются сверху, а не там, где прокрутили прошлые
+  const fieldsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    fieldsRef.current?.scrollTo?.({ top: 0 })
+  }, [selectedId, historyOpen])
 
   // Медиатека сайта: из неё поле «картинка» выбирает, а предпросмотр берёт адреса вариантов
   const library = useQuery(mediaQuery(site.id))
@@ -66,9 +124,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Сообщение совпадёт с ответом сервера, пока и тут и там включён setupZodMessages
   const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
   const titleValid = titleError === undefined
-  const titleErrorId = useId()
   const canSave = validation.content !== null && titleValid
   const busy = status.kind === 'busy'
+  const canSaveNow = dirty && canSave && !busy
+  const canPublishNow = canSave && !busy
 
   // Новая правка после «Сохранено» снова делает статус «есть изменения»
   useEffect(() => {
@@ -83,8 +142,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  // И уйти по ссылке внутри админки или кнопкой «Назад» браузера. Закрытие вкладки ловит
-  // beforeunload выше, а свой у блокировщика по умолчанию включён всегда, даже без правок
+  // И уйти по ссылке внутри админки («Назад к сайту») или кнопкой «Назад» браузера. Закрытие
+  // вкладки ловит beforeunload выше, а свой у блокировщика по умолчанию включён всегда, даже без правок
   useBlocker({
     shouldBlockFn: () =>
       !window.confirm('На странице есть несохранённые изменения. Уйти без сохранения?'),
@@ -103,6 +162,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     mutationFn: async (body: { title: string; content: PageContent }) => {
       const res = await pageApi.$put({ param, json: body })
       if (res.status !== 200) throw new Error(await apiErrorText(res))
+      return res.json()
     },
     onSuccess: refreshPages,
   })
@@ -132,6 +192,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     mutationFn: async () => {
       const res = await pageApi.publish.$post({ param })
       if (res.status !== 200) throw new Error(await apiErrorText(res))
+      return res.json()
     },
     // Публикация заводит сборку сайта на сервере: её состояние на обзоре и в «Настройках сайта» тоже устарело
     onSuccess: () =>
@@ -145,9 +206,11 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     if (!validation.content || !titleValid) return false
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
-      await saveDraft.mutateAsync({ title, content: validation.content })
+      const saved = await saveDraft.mutateAsync({ title, content: validation.content })
       setSavedSnapshot(snapshotOf(title, blocks))
-      setStatus({ kind: 'done', message: 'Черновик сохранён' })
+      setServer(serverPageOf(saved))
+      // Итог сохранения — сама плашка: «Сохранено · правки не опубликованы» и подобное
+      setStatus({ kind: 'idle' })
       return true
     } catch (error) {
       setStatus({ kind: 'error', message: messageOf(error) })
@@ -155,14 +218,23 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     }
   }
 
+  async function saveNow() {
+    setPending('save')
+    await save()
+    setPending(null)
+  }
+
   async function publish() {
-    if (dirty && !(await save())) return
-    setStatus({ kind: 'busy', message: 'Публикую…' })
+    setPending('publish')
     try {
-      await publishDraft.mutateAsync()
+      if (dirty && !(await save())) return
+      setStatus({ kind: 'busy', message: 'Публикую…' })
+      setServer(serverPageOf(await publishDraft.mutateAsync()))
       setStatus({ kind: 'done', message: 'Опубликовано. Обнови сайт, чтобы увидеть' })
     } catch (error) {
       setStatus({ kind: 'error', message: messageOf(error) })
+    } finally {
+      setPending(null)
     }
   }
 
@@ -175,6 +247,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       setTitle(restored.title)
       setBlocks(restored.draft.blocks)
       setSavedSnapshot(snapshotOf(restored.title, restored.draft.blocks))
+      setServer(serverPageOf(restored))
       setSelectedId(restored.draft.blocks[0]?.id ?? null)
       setPreviewContent(restored.draft)
       setShownRevision(null)
@@ -187,14 +260,24 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   function toggleHistory() {
     setHistoryOpen(!historyOpen)
     setShownRevision(null)
+    // На узком экране история — во вкладке полей: открыли — показываем её
+    if (!historyOpen) setTab('fields')
   }
 
-  // Правят всё равно черновик: выбор блока возвращает к его полям и к его предпросмотру
-  function selectBlock(id: string) {
-    setSelectedId(id)
-    setHistoryOpen(false)
-    setShownRevision(null)
-  }
+  // Правят всё равно черновик: выбор блока возвращает к его полям и к его предпросмотру.
+  // reveal — выбор из списка или после добавления: на узком экране открываются «Поля»
+  const selectBlock = useCallback(
+    (id: string, reveal = false) => {
+      setSelectedId(id)
+      setHistoryOpen(false)
+      setShownRevision(null)
+      if (reveal && narrow) {
+        setTab('fields')
+        focusFieldsTab.current = true
+      }
+    },
+    [narrow],
+  )
 
   // Правка блоков меняет черновик: предпросмотр возвращается к нему, иначе показанная версия
   // осталась бы с подписью «Черновик не изменился», хотя он уже изменился
@@ -206,7 +289,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const addBlock = (type: BlockType) => {
     const block = createBlock(type, blocks)
     editBlocks(insertBlock(blocks, block, selectedId ?? undefined))
-    selectBlock(block.id)
+    setAdding(false)
+    selectBlock(block.id, true)
   }
 
   const deleteBlock = (id: string) => {
@@ -215,95 +299,202 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   }
 
   const selected = blocks.find((block) => block.id === selectedId)
+  const state = draftState(dirty, server)
+  const pill: { label: string; tone: StatusTone } =
+    status.kind === 'busy' && status.message
+      ? { label: status.message, tone: 'info' }
+      : status.kind === 'done' && status.message
+        ? { label: status.message, tone: 'success' }
+        : state
+
+  const showingRevision = shownRevision !== null
+  const previewSelect = useCallback((id: string) => selectBlock(id), [selectBlock])
+  const deviceSwitch = <DeviceSwitch value={device} onChange={setDevice} />
+
+  // Колонка: на широком экране — просто колонка, на узком — панель своей вкладки
+  const columnProps = (column: Column) =>
+    narrow
+      ? {
+          role: 'tabpanel',
+          id: panelId(column),
+          'aria-labelledby': tabId(column),
+          hidden: tab !== column,
+        }
+      : {}
 
   return (
-    <main className={styles.editor}>
-      {/* Именованная область: ориентир для диктора и место, где e2e ищет статус редактора.
-          Живые области role="status" есть ещё у каждого списка с перетаскиванием */}
-      <section className={styles.top} aria-label="Страница">
-        <header className={styles.topbar}>
-          <Breadcrumbs site={site} current={pagePath(page.slug)} />
-          <label className={styles.title}>
-            <span className={styles.titleLabel}>Заголовок страницы</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              aria-invalid={titleValid ? undefined : true}
-              aria-describedby={titleValid ? undefined : titleErrorId}
-            />
-          </label>
-          <span className={styles.status} data-kind={status.kind} role="status">
-            {status.message ?? (dirty ? 'Есть несохранённые изменения' : 'Всё сохранено')}
-          </span>
-          <button type="button" onClick={save} disabled={!dirty || !canSave || busy}>
-            Сохранить черновик
-          </button>
-          <button
-            type="button"
+    <div className={styles.editor}>
+      <header className={styles.topbar}>
+        {/* Именованная область: ориентир для диктора и место, где e2e ищет статус редактора.
+            Живые области role="status" есть ещё у каждого списка с перетаскиванием */}
+        <section className={styles.page} aria-label="Страница">
+          <Link
+            to="/sites/$siteId"
+            params={{ siteId: site.id }}
+            className={iconButtonClassName({ variant: 'secondary' })}
+            aria-label="Назад к сайту"
+            title="Назад к сайту"
+          >
+            <Icon name="chevron-left" />
+          </Link>
+          <div className={styles.titles}>
+            <h1 className="visually-hidden">Редактор страницы {pagePath(page.slug)}</h1>
+            <span className={styles.siteName}>{site.name}</span>
+            <div className={styles.titleRow}>
+              <label className="visually-hidden" htmlFor={`${ids}-title`}>
+                Заголовок страницы
+              </label>
+              <input
+                id={`${ids}-title`}
+                className={styles.titleInput}
+                value={title}
+                autoComplete="off"
+                onChange={(event) => setTitle(event.target.value)}
+                aria-invalid={titleValid ? undefined : true}
+                aria-describedby={titleValid ? undefined : titleErrorId}
+              />
+              <span role="status" className={styles.status}>
+                <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {!narrow && <div className={styles.devices}>{deviceSwitch}</div>}
+
+        <div className={styles.actions}>
+          <Button
+            icon="history"
+            size={narrow ? 'small' : 'medium'}
             aria-expanded={historyOpen}
             aria-controls={historyOpen ? historyId : undefined}
             onClick={toggleHistory}
           >
             История
-          </button>
+          </Button>
+          {/* Недоступность — aria-disabled, а не disabled: после сохранения кнопка остаётся
+              в фокусе, и следующий Tab идёт дальше по полосе, а не с начала страницы */}
+          <Button
+            size={narrow ? 'small' : 'medium'}
+            loading={pending === 'save'}
+            aria-disabled={canSaveNow || pending === 'save' ? undefined : true}
+            onClick={() => {
+              if (canSaveNow) void saveNow()
+            }}
+          >
+            Сохранить
+          </Button>
           {/* Клиент публиковать не может: API ответит 403, кнопка только сбивала бы с толку */}
           {canPublish(site.access) && (
-            <button
-              type="button"
-              className={styles.primary}
-              onClick={publish}
-              disabled={!canSave || busy}
+            <Button
+              variant="primary"
+              size={narrow ? 'small' : 'medium'}
+              loading={pending === 'publish'}
+              aria-disabled={canPublishNow || pending === 'publish' ? undefined : true}
+              onClick={() => {
+                if (canPublishNow) void publish()
+              }}
             >
               Опубликовать
-            </button>
+            </Button>
           )}
-        </header>
-        {titleError !== undefined && (
-          <p id={titleErrorId} className={styles.pageErrors}>
-            Заголовок страницы: {titleError}
-          </p>
-        )}
-        {validation.pageErrors.length > 0 && (
-          <p className={styles.pageErrors}>{validation.pageErrors.join('. ')}</p>
-        )}
-      </section>
+        </div>
+      </header>
 
-      <BlockList
-        blocks={blocks}
-        selectedId={selectedId}
-        invalidIds={invalidIds}
-        onSelect={selectBlock}
-        onMove={(from, to) => editBlocks(moveItem(blocks, from, to))}
-        onRemove={deleteBlock}
-        onAdd={addBlock}
-      />
-      <Preview
-        content={shownPreview?.content ?? previewContent}
-        theme={site.theme}
-        media={media}
-        note={previewNote(shownRevision, shown, shownPreview?.error)}
-      />
-      {historyOpen ? (
-        <History
-          id={historyId}
-          siteId={site.id}
-          slug={page.slug}
-          selectedId={shownRevision?.id ?? null}
-          restoring={busy}
-          onSelect={setShownRevision}
-          onRestore={restore}
-        />
-      ) : (
-        <Inspector
-          block={selected}
-          errors={selected ? (validation.blockErrors[selected.id] ?? {}) : {}}
-          onChange={(props) => {
-            if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
-          }}
-          widgets={widgets}
-        />
+      {(titleError !== undefined ||
+        validation.pageErrors.length > 0 ||
+        status.kind === 'error') && (
+        <div className={styles.alerts}>
+          {titleError !== undefined && (
+            <p id={titleErrorId} className={styles.pageError}>
+              Заголовок страницы: {titleError}
+            </p>
+          )}
+          {validation.pageErrors.length > 0 && (
+            <p className={styles.pageError}>{validation.pageErrors.join('. ')}</p>
+          )}
+          {status.kind === 'error' && (
+            <InlineAlert tone="danger" title="Не получилось">
+              {status.message}
+            </InlineAlert>
+          )}
+        </div>
       )}
-    </main>
+
+      <main className={styles.workspace}>
+        {narrow && (
+          <div className={styles.tabs}>
+            <TabList
+              label="Части редактора"
+              items={[
+                { id: 'blocks', label: 'Блоки' },
+                { id: 'preview', label: 'Предпросмотр' },
+                { id: 'fields', label: historyOpen ? 'История' : 'Поля' },
+              ]}
+              value={tab}
+              onChange={setTab}
+              tabId={tabId}
+              panelId={panelId}
+            />
+          </div>
+        )}
+
+        <div className={styles.blocks} {...columnProps('blocks')}>
+          <BlockList
+            blocks={blocks}
+            selectedId={selectedId}
+            invalidIds={invalidIds}
+            onSelect={(id) => selectBlock(id, true)}
+            onMove={(from, to) => editBlocks(moveItem(blocks, from, to))}
+            onRemove={deleteBlock}
+            onAdd={() => setAdding(true)}
+          />
+        </div>
+
+        <section className={styles.preview} aria-label="Предпросмотр" {...columnProps('preview')}>
+          <Preview
+            content={shownPreview?.content ?? previewContent}
+            theme={site.theme}
+            media={media}
+            device={device}
+            note={previewNote(shownRevision, shown, shownPreview?.error)}
+            selectedId={showingRevision ? null : selectedId}
+            onSelectBlock={showingRevision ? undefined : previewSelect}
+            toolbar={narrow ? deviceSwitch : undefined}
+          />
+        </section>
+
+        <div ref={fieldsRef} className={styles.fields} {...columnProps('fields')}>
+          {historyOpen ? (
+            <History
+              id={historyId}
+              siteId={site.id}
+              slug={page.slug}
+              selectedId={shownRevision?.id ?? null}
+              restoring={busy}
+              onSelect={setShownRevision}
+              onRestore={restore}
+            />
+          ) : (
+            <Inspector
+              block={selected}
+              errors={selected ? (validation.blockErrors[selected.id] ?? {}) : {}}
+              onChange={(props) => {
+                if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
+              }}
+              widgets={widgets}
+            />
+          )}
+        </div>
+      </main>
+
+      <AddBlockDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        onPick={addBlock}
+        after={selected ? blockName(selected) : null}
+      />
+    </div>
   )
 }
 

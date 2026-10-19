@@ -1,0 +1,102 @@
+@use "@averra/ui" as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 100%;
+}
+
+.heading {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+// Версия — карточка-кнопка, выбранная — в рамке акцента, как выбранный блок
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(4);
+  width: 100%;
+  padding: ui.rem(10) ui.rem(12);
+  color: var(--color-text);
+  text-align: start;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+  transition: border-color var(--duration-fast) ease;
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  &[aria-pressed="true"] {
+    background: var(--color-surface-accent);
+    border-color: var(--color-action);
+    box-shadow: inset 0 0 0 ui.rem(1) var(--color-action);
+
+    @media (forced-colors: active) {
+      border-color: Highlight;
+    }
+  }
+}
+
+.version {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: var(--font-weight-semibold);
+}
+
+.meta {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.title {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Возврат всегда под рукой: полоса прилипает к низу колонки
+.footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-3) 0;
+  background: var(--color-surface);
+  border-top: ui.rem(1) solid var(--color-border-subtle);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

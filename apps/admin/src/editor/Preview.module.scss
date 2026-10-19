@@ -1,0 +1,47 @@
+@use "@averra/ui" as ui;
+
+// Колонка предпросмотра: серая подложка, по центру — рамка выбранной ширины
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: ui.rem(28);
+  background: var(--color-surface-inset);
+
+  @include ui.breakpoint-down(medium) {
+    padding: var(--space-3);
+  }
+}
+
+.toolbar {
+  display: flex;
+  justify-content: center;
+}
+
+.note:empty {
+  display: none;
+}
+
+.stage {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+}
+
+.frameBox {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised);
+}
+
+.frame {
+  display: block;
+  border: 0;
+  transform-origin: top left;
+}

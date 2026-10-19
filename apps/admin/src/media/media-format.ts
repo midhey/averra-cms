@@ -18,6 +18,17 @@ type Variant = Pick<MediaItem['variants'][number], 'format' | 'width' | 'url'>
 export const mediaSummary = (media: Pick<MediaItem, 'width' | 'height' | 'size'>) =>
   `${media.width} × ${media.height} · ${formatBytes(media.size)}`
 
+/** Порядок форматов в подписи: сначала современные, их браузер и возьмёт */
+const FORMAT_ORDER = ['avif', 'webp', 'jpeg', 'png'] as const
+
+/** Форматы вариантов для подписи под превью: «AVIF, WebP» — без повторов, по порядку выше */
+export function mediaFormats(variants: readonly Pick<Variant, 'format'>[]) {
+  const present = new Set(variants.map((variant) => variant.format))
+  return FORMAT_ORDER.filter((format) => present.has(format))
+    .map((format) => (format === 'webp' ? 'WebP' : format.toUpperCase()))
+    .join(', ')
+}
+
 /** Превью для сетки — самый маленький WebP: его понимает любой браузер админки и он лёгкий */
 export function thumbnailUrl(variants: readonly Variant[]) {
   const webp = variants.filter((variant) => variant.format === 'webp')

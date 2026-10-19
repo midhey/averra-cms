@@ -1,0 +1,36 @@
+@use "@averra/ui" as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(20);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(4);
+}
+
+.kicker {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.heading {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.anchor {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+
+  code {
+    font-family: var(--font-mono);
+    color: var(--color-text);
+  }
+}

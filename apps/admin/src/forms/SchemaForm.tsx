@@ -1,11 +1,21 @@
-import { type ComponentType, type ReactNode, useId, useMemo } from 'react'
+import { type ComponentType, type ReactNode, useMemo } from 'react'
+import { Button, IconButton } from '../ui/Button'
+import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
+import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import { useItemKeys } from './item-keys'
-import { emptyValue, fieldKind, type JsonSchema } from './json-schema'
+import {
+  emptyValue,
+  enumAppearance,
+  enumLabel,
+  fieldKind,
+  isMonospace,
+  type JsonSchema,
+} from './json-schema'
 import { getIn, type Path, pathKey, setIn } from './path'
-import styles from './SchemaForm.module.css'
+import styles from './SchemaForm.module.scss'
 
 type Errors = Readonly<Record<string, string>>
 
@@ -36,19 +46,24 @@ type SchemaFormProps = {
   widgets?: Widgets
 }
 
+/** Счётчик символов полезен для коротких текстов, у длинных и у ссылок он только мешает */
+const COUNTER_MAX_LENGTH = 300
+
 /** Форма по JSON Schema: поля, подписи и ограничения берутся из той же схемы, что проверяет API */
 export function SchemaForm({ schema, value, errors, onChange, widgets = {} }: SchemaFormProps) {
   const change = (path: Path, next: unknown) =>
     onChange(setIn(value, path, next) as Record<string, unknown>)
   return (
-    <Fields
-      schema={schema}
-      value={value}
-      path={[]}
-      errors={errors}
-      onChange={change}
-      widgets={widgets}
-    />
+    <div className={styles.form}>
+      <Fields
+        schema={schema}
+        value={value}
+        path={[]}
+        errors={errors}
+        onChange={change}
+        widgets={widgets}
+      />
+    </div>
   )
 }
 
@@ -56,7 +71,7 @@ function Fields(props: Omit<FieldProps, 'label' | 'required'>) {
   const { schema, value, path, errors, onChange, widgets } = props
   const required = new Set(schema.required ?? [])
   return Object.entries(schema.properties ?? {}).map(([key, child]) => (
-    <Field
+    <SchemaField
       key={key}
       schema={child}
       value={getIn(value, [key])}
@@ -70,14 +85,14 @@ function Fields(props: Omit<FieldProps, 'label' | 'required'>) {
   ))
 }
 
-function Field(props: FieldProps) {
+function SchemaField(props: FieldProps) {
   switch (fieldKind(props.schema)) {
     case 'text':
       return <TextField {...props} />
     case 'textarea':
       return <TextField {...props} multiline />
     case 'select':
-      return <SelectField {...props} />
+      return <EnumField {...props} />
     case 'checkbox':
       return <CheckboxField {...props} />
     case 'object':
@@ -87,113 +102,126 @@ function Field(props: FieldProps) {
     case 'image': {
       const Image = props.widgets.image
       if (Image) return <Image {...props} />
-      return <p className={styles.hint}>Поле «{props.label}» пока не редактируется в админке</p>
+      return <Unsupported label={props.label} />
     }
     default:
-      return <p className={styles.hint}>Поле «{props.label}» пока не редактируется в админке</p>
+      return <Unsupported label={props.label} />
   }
+}
+
+function Unsupported({ label }: { label: string }) {
+  return <p className={styles.note}>Поле «{label}» пока не редактируется в админке</p>
+}
+
+/** Подпись поля: у необязательного — пометка, чтобы не гадать, можно ли оставить пустым */
+function FieldLabel({ label, required }: { label: string; required: boolean }) {
+  return (
+    <>
+      {label}
+      {!required && <span className={styles.optional}> · необязательно</span>}
+    </>
+  )
 }
 
 function TextField(props: FieldProps & { multiline?: boolean }) {
   const { schema, value, path, label, required, errors, onChange, multiline = false } = props
-  const id = useId()
   const text = typeof value === 'string' ? value : ''
-  const error = errors[pathKey(path)]
   // Пустое необязательное поле убираем совсем, а не храним пустую строку
   const update = (next: string) => onChange(path, next === '' && !required ? undefined : next)
+  const mono = isMonospace(schema)
   const common = {
-    id,
+    label: <FieldLabel label={label} required={required} />,
+    hint: schema.description,
+    error: errors[pathKey(path)],
     value: text,
-    className: styles.input,
-    'aria-invalid': error ? true : undefined,
-    'aria-describedby': `${id}-hint`,
+    maxChars:
+      !mono && schema.maxLength !== undefined && schema.maxLength <= COUNTER_MAX_LENGTH
+        ? schema.maxLength
+        : undefined,
+    mono,
   }
-  // Счётчик символов полезен для коротких текстов, у ссылок он только мешает
-  const counter = schema.maxLength !== undefined && schema.maxLength <= 300
-
-  return (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>
-        {label}
-        {!required && <span className={styles.optional}> · необязательно</span>}
-      </label>
-      {multiline ? (
-        <textarea {...common} rows={3} onChange={(event) => update(event.target.value)} />
-      ) : (
-        <input {...common} type="text" onChange={(event) => update(event.target.value)} />
-      )}
-      <div id={`${id}-hint`} className={styles.hint}>
-        <span className={error ? styles.error : undefined}>{error ?? schema.description}</span>
-        {counter && (
-          <span>
-            {text.length}/{schema.maxLength}
-          </span>
-        )}
-      </div>
-    </div>
+  return multiline ? (
+    <TextArea {...common} rows={3} onChange={(event) => update(event.target.value)} />
+  ) : (
+    <TextInput {...common} type="text" onChange={(event) => update(event.target.value)} />
   )
 }
 
-function SelectField({ schema, value, path, label, onChange }: FieldProps) {
-  const id = useId()
+/** Выбор из вариантов: карточки с миниатюрами, сегменты или список — по схеме (enumAppearance) */
+function EnumField({ schema, value, path, label, errors, onChange }: FieldProps) {
   const options = schema.enum ?? []
-  const titles = schema['x-enum-titles'] ?? {}
   const current = value ?? schema.default ?? options[0]
   const pick = (raw: string) =>
     onChange(
       path,
       options.find((option) => String(option) === raw),
     )
+  const error = errors[pathKey(path)]
+  const appearance = enumAppearance(schema)
 
-  return (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>
-        {label}
-      </label>
-      <select
-        id={id}
-        className={styles.input}
+  if (appearance === 'select') {
+    return (
+      <Select
+        label={label}
+        hint={schema.description}
+        error={error}
         value={String(current)}
         onChange={(event) => pick(event.target.value)}
       >
         {options.map((option) => (
           <option key={String(option)} value={String(option)}>
-            {titles[String(option)] ?? String(option)}
+            {enumLabel(schema, option)}
           </option>
         ))}
-      </select>
+      </Select>
+    )
+  }
+
+  const sketches = schema['x-enum-sketches']
+  return (
+    <div className={styles.choice}>
+      <SegmentedControl
+        legend={label}
+        appearance={appearance}
+        name={pathKey(path)}
+        options={options.map((option) => {
+          const sketch = sketches?.[String(option)]
+          return {
+            value: String(option),
+            label: enumLabel(schema, option),
+            ...(appearance === 'cards' &&
+              sketch && { thumbnail: <LayoutThumbnail sketch={sketch} /> }),
+          }
+        })}
+        value={String(current)}
+        onChange={pick}
+      />
+      {error && <p className={styles.error}>{error}</p>}
     </div>
   )
 }
 
 /** Да или нет: флажок с подписью. Значение по умолчанию — из схемы */
 function CheckboxField({ schema, value, path, label, onChange }: FieldProps) {
-  const id = useId()
   const checked = typeof value === 'boolean' ? value : schema.default === true
   return (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.toggle}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          aria-describedby={schema.description ? `${id}-hint` : undefined}
-          onChange={(event) => onChange(path, event.target.checked)}
-        />
-        {label}
-      </label>
-      {schema.description && (
-        <div id={`${id}-hint`} className={styles.hint}>
-          {schema.description}
-        </div>
-      )}
-    </div>
+    <Checkbox
+      label={label}
+      hint={schema.description}
+      checked={checked}
+      onChange={(event) => onChange(path, event.target.checked)}
+    />
   )
+}
+
+/** Все поля объекта однострочные (текст кнопки и ссылка) — их можно поставить в ряд */
+const fitsInRow = (schema: JsonSchema) => {
+  const children = Object.values(schema.properties ?? {})
+  return children.length === 2 && children.every((child) => fieldKind(child) === 'text')
 }
 
 function ObjectField(props: FieldProps) {
   const { schema, value, path, label, required, onChange } = props
-  const id = useId()
   const present = value !== undefined
   const toggle = (on: boolean) => onChange(path, on ? emptyValue(schema) : undefined)
 
@@ -201,17 +229,17 @@ function ObjectField(props: FieldProps) {
     <fieldset className={styles.group}>
       <legend className={styles.legend}>{label}</legend>
       {!required && (
-        <label htmlFor={id} className={styles.toggle}>
-          <input
-            id={id}
-            type="checkbox"
-            checked={present}
-            onChange={(event) => toggle(event.target.checked)}
-          />
-          Показывать
-        </label>
+        <Checkbox
+          label="Показывать"
+          checked={present}
+          onChange={(event) => toggle(event.target.checked)}
+        />
       )}
-      {present && <Fields {...props} />}
+      {present && (
+        <div className={fitsInRow(schema) ? styles.row : styles.stack}>
+          <Fields {...props} />
+        </div>
+      )}
     </fieldset>
   )
 }
@@ -242,37 +270,40 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
     <fieldset className={styles.group}>
       <legend className={styles.legend}>{label}</legend>
       <SortableList entries={entries} noun="пункт" onMove={move}>
-        {items.map((item, index) => (
-          <ListItem
-            key={keys[index]}
-            id={keys[index] ?? String(index)}
-            name={entries[index]?.label ?? `№ ${index + 1}`}
-            index={index}
-            count={items.length}
-            canRemove={canRemove}
-            onMove={move}
-            onRemove={remove}
-          >
-            <Fields
-              schema={itemSchema}
-              value={item}
-              path={[...path, index]}
-              errors={errors}
-              onChange={onChange}
-              widgets={widgets}
-            />
-          </ListItem>
-        ))}
+        <ol className={styles.items}>
+          {items.map((item, index) => (
+            <ListItem
+              key={keys[index]}
+              id={keys[index] ?? String(index)}
+              name={entries[index]?.label ?? `№ ${index + 1}`}
+              index={index}
+              count={items.length}
+              canRemove={canRemove}
+              onMove={move}
+              onRemove={remove}
+            >
+              <Fields
+                schema={itemSchema}
+                value={item}
+                path={[...path, index]}
+                errors={errors}
+                onChange={onChange}
+                widgets={widgets}
+              />
+            </ListItem>
+          ))}
+        </ol>
       </SortableList>
       {error && <p className={styles.error}>{error}</p>}
-      <button
-        type="button"
+      <Button
+        size="small"
+        icon="plus"
         className={styles.add}
         disabled={!canAdd}
         onClick={() => onChange(path, [...items, emptyValue(itemSchema)])}
       >
-        + Добавить пункт
-      </button>
+        Добавить пункт
+      </Button>
     </fieldset>
   )
 }
@@ -289,12 +320,13 @@ type ListItemProps = {
   children: ReactNode
 }
 
+/** Пункт списка — карточка: шапка с ручкой, номером и именем, стрелками и удалением, ниже поля */
 function ListItem(props: ListItemProps) {
   const { id, name, index, count, canRemove, onMove, onRemove, children } = props
   const sortable = useSortableItem(id)
   const arrows = useMoveButtons(index, count, onMove)
   return (
-    <div
+    <li
       ref={sortable.ref}
       style={sortable.style}
       className={styles.item}
@@ -302,35 +334,24 @@ function ListItem(props: ListItemProps) {
     >
       <div className={styles.itemBar}>
         <DragHandle handle={sortable.handle} label={`Перетащить пункт «${name}»`} />
-        <span>№ {index + 1}</span>
-        <button
-          type="button"
-          className={styles.itemAction}
-          aria-label="Поднять пункт"
-          {...arrows.up}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          className={styles.itemAction}
-          aria-label="Опустить пункт"
-          {...arrows.down}
-        >
-          ↓
-        </button>
-        <button
-          type="button"
-          className={styles.itemAction}
-          aria-label="Удалить пункт"
-          disabled={!canRemove}
-          onClick={() => onRemove(index)}
-        >
-          ✕
-        </button>
+        <span className={styles.itemName}>
+          <span className={styles.itemNumber}>№ {index + 1}</span>
+          {name !== `№ ${index + 1}` && <span className={styles.itemTitle}>{name}</span>}
+        </span>
+        <span className={styles.itemActions}>
+          <IconButton label="Поднять пункт" icon="arrow-up" size="small" {...arrows.up} />
+          <IconButton label="Опустить пункт" icon="arrow-down" size="small" {...arrows.down} />
+          <IconButton
+            label="Удалить пункт"
+            icon="trash"
+            size="small"
+            disabled={!canRemove}
+            onClick={() => onRemove(index)}
+          />
+        </span>
       </div>
-      {children}
-    </div>
+      <div className={styles.itemFields}>{children}</div>
+    </li>
   )
 }
 

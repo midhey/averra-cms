@@ -1,0 +1,134 @@
+@use "@averra/ui" as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(6);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: ui.rem(4) ui.rem(6) var(--space-2);
+}
+
+.heading {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.count {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: 0;
+  padding-inline: ui.rem(6);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(6);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+// Пункт: ручка и кнопка выбора, у выбранного ниже — стрелки и удаление
+.item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: ui.rem(4);
+  align-items: center;
+  padding: 0 ui.rem(6) 0 ui.rem(4);
+  background: transparent;
+  border: ui.rem(1) solid transparent;
+  border-radius: var(--radius-control);
+
+  &:hover {
+    background: var(--color-surface-muted);
+  }
+
+  // Выбранный — белая карточка в рамке акцента. Не только цвет: ещё подложка и тень,
+  // а у кнопки выбора aria-current
+  &[data-selected="true"] {
+    background: var(--color-surface);
+    border-color: var(--color-action);
+    box-shadow: var(--shadow-raised);
+
+    @media (forced-colors: active) {
+      border-color: Highlight;
+    }
+  }
+
+  // Блок, который тащат, — поверх соседей
+  &[data-dragging="true"] {
+    position: relative;
+    z-index: 1;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-overlay);
+  }
+}
+
+.select {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
+  min-height: var(--size-control);
+  padding: var(--space-2) 0;
+  color: var(--color-text);
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-inner);
+}
+
+.type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint {
+  overflow: hidden;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Стрелки и удаление выбранного блока — отдельной строкой под подсказкой, справа
+.actions {
+  display: flex;
+  grid-column: 2;
+  gap: ui.rem(2);
+  justify-content: flex-end;
+  padding-block-end: ui.rem(6);
+}
+
+// Пунктирная «Добавить блок», как в концепте. Через .panel — чтобы перебить вид кнопки
+// из другого модуля независимо от порядка стилей
+.panel .add {
+  justify-content: center;
+  width: 100%;
+  margin-block-start: var(--space-2);
+  color: var(--color-text);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+}

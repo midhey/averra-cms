@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { catalogEntry } from '../editor/catalog'
-import { emptyValue, fieldKind, type JsonSchema } from './json-schema'
+import {
+  emptyValue,
+  enumAppearance,
+  enumLabel,
+  fieldKind,
+  isMonospace,
+  type JsonSchema,
+} from './json-schema'
 
 const field = (schema: JsonSchema, key: string): JsonSchema => {
   const child = schema.properties?.[key]
@@ -38,5 +45,43 @@ describe('emptyValue', () => {
     const hero = catalogEntry('hero').schema
     expect(emptyValue(field(hero, 'button'))).toEqual({ label: '', href: '' })
     expect(emptyValue(field(hero, 'variant'))).toBe('centered')
+  })
+})
+
+describe('enumAppearance и isMonospace', () => {
+  it('вариант оформления — карточки, короткий выбор — сегменты, длинный — список', () => {
+    const hero = catalogEntry('hero').schema
+    expect(enumAppearance(field(hero, 'variant'))).toBe('cards')
+    expect(enumAppearance(field(catalogEntry('features').schema, 'columns'))).toBe('segments')
+    const item = field(catalogEntry('form').schema, 'fields').items ?? {}
+    expect(enumAppearance(field(item, 'type'))).toBe('select')
+  })
+
+  it('без миниатюры у одного из значений — не карточки', () => {
+    const schema: JsonSchema = {
+      enum: ['a', 'b'],
+      'x-enum-sketches': { a: 'centered' },
+    }
+    expect(enumAppearance(schema)).toBe('segments')
+  })
+
+  it('длинные подписи не лезут в сегменты, даже если вариантов мало', () => {
+    const schema: JsonSchema = {
+      enum: ['a', 'b'],
+      'x-enum-titles': { a: 'Очень длинная подпись', b: 'Б' },
+    }
+    expect(enumAppearance(schema)).toBe('select')
+  })
+
+  it('подпись варианта — из x-enum-titles, иначе значение', () => {
+    const variant = field(catalogEntry('hero').schema, 'variant')
+    expect(enumLabel(variant, 'split')).toBe('С картинкой')
+    expect(enumLabel({ enum: [2, 3] }, 3)).toBe('3')
+  })
+
+  it('ссылка — моноширинным, обычный текст — нет', () => {
+    const hero = catalogEntry('hero').schema
+    expect(isMonospace(field(field(hero, 'button'), 'href'))).toBe(true)
+    expect(isMonospace(field(hero, 'title'))).toBe(false)
   })
 })

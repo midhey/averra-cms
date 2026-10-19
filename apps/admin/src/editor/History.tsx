@@ -3,7 +3,10 @@ import { useEffect, useId, useRef } from 'react'
 import { messageOf } from '../errors'
 import { formatDateTime } from '../pages-format'
 import { revisionsQuery } from '../queries'
-import styles from './History.module.css'
+import { Button } from '../ui/Button'
+import { InlineAlert } from '../ui/InlineAlert'
+import { StatusPill } from '../ui/StatusPill'
+import styles from './History.module.scss'
 import { authorLabel, type HistoryRevision } from './history-format'
 
 export type { HistoryRevision }
@@ -51,9 +54,7 @@ export function History(props: HistoryProps) {
 
       {isPending && <p className={styles.empty}>Загружаю историю…</p>}
       {error && (
-        <p className={styles.error} role="alert">
-          Не удалось загрузить историю: {messageOf(error)}
-        </p>
+        <InlineAlert tone="danger">Не удалось загрузить историю: {messageOf(error)}</InlineAlert>
       )}
       {revisions?.length === 0 && (
         <p className={styles.empty}>
@@ -74,7 +75,7 @@ export function History(props: HistoryProps) {
               >
                 <span className={styles.version}>
                   Версия {revision.version}
-                  {index === 0 && <span className={styles.badge}>сейчас на сайте</span>}
+                  {index === 0 && <StatusPill tone="success">сейчас на сайте</StatusPill>}
                 </span>
                 <span className={styles.meta}>
                   {formatDateTime(revision.publishedAt)} · {authorLabel(revision.author)}
@@ -93,17 +94,10 @@ export function History(props: HistoryProps) {
             опубликуют.
           </p>
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.primary}
-              disabled={restoring}
-              onClick={() => onRestore(selected)}
-            >
+            <Button variant="primary" disabled={restoring} onClick={() => onRestore(selected)}>
               Вернуть в черновик
-            </button>
-            <button type="button" onClick={() => onSelect(null)}>
-              Показать черновик
-            </button>
+            </Button>
+            <Button onClick={() => onSelect(null)}>Показать черновик</Button>
           </div>
         </div>
       )}

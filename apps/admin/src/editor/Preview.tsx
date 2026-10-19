@@ -2,47 +2,102 @@ import { Page } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
 import type { MediaMap, PageContent, Theme } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
-import { Component, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  Component,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { previewStyleNodes } from '../styles/global-style'
-import styles from './Preview.module.css'
+import { InlineAlert } from '../ui/InlineAlert'
+import { SegmentedControl } from '../ui/SegmentedControl'
+import styles from './Preview.module.scss'
+import { blockIdAt, previewSelectionCss, type SelectionColors } from './preview-selection'
 
-const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
-type Device = keyof typeof devices
+export const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
+export type Device = keyof typeof devices
 const deviceLabels: Record<Device, string> = {
   phone: 'Телефон',
   tablet: 'Планшет',
   desktop: 'Десктоп',
 }
 
+/** Переключатель ширины предпросмотра: в полосе редактора, на узком экране — над предпросмотром */
+export function DeviceSwitch({
+  value,
+  onChange,
+}: {
+  value: Device
+  onChange: (device: Device) => void
+}) {
+  return (
+    <SegmentedControl
+      legend="Ширина предпросмотра"
+      hideLegend
+      options={(Object.keys(devices) as Device[]).map((name) => ({
+        value: name,
+        label: deviceLabels[name],
+      }))}
+      value={value}
+      onChange={onChange}
+    />
+  )
+}
+
 const EMPTY_DOCUMENT = '<!doctype html><html lang="ru"><head></head><body></body></html>'
 
-/**
- * Предпросмотр — те же компоненты блоков, что собирают сайт, только внутри iframe.
- * Так стили лендинга не смешиваются со стилями админки, а медиазапросы срабатывают
- * по ширине выбранного устройства
- */
 type PreviewProps = {
   content: PageContent
   theme: Theme
   /** Картинки сайта: блоки берут из справочника адреса вариантов, как на опубликованном сайте */
   media: MediaMap
+  device: Device
   /** Что показано, если не черновик: например, версия из истории */
-  note?: string
+  note?: string | undefined
+  /** Выбранный блок черновика: он подсвечен рамкой */
+  selectedId: string | null
+  /** Щелчок по блоку в предпросмотре. Без него (версия из истории) выбирать нечего */
+  onSelectBlock?: ((id: string) => void) | undefined
+  /** Над предпросмотром: переключатель ширины на узком экране */
+  toolbar?: ReactNode
 }
 
-export function Preview({ content, theme, media, note }: PreviewProps) {
-  const [device, setDevice] = useState<Device>('desktop')
+/** Роли темы админки для подсветки: их значения читаем из её документа */
+function readSelectionColors(): SelectionColors {
+  const style = getComputedStyle(document.documentElement)
+  return {
+    selection: style.getPropertyValue('--color-action') || 'currentcolor',
+    hover: style.getPropertyValue('--color-border-strong') || 'currentcolor',
+  }
+}
+
+/**
+ * Предпросмотр — те же компоненты блоков, что собирают сайт, только внутри iframe.
+ * Так стили лендинга не смешиваются со стилями админки, а медиазапросы срабатывают
+ * по ширине выбранного устройства. Подсветка выбранного блока и выбор щелчком — свой стиль
+ * и обработчик в iframe: в блоках и на опубликованном сайте их нет
+ */
+export function Preview(props: PreviewProps) {
+  const { content, theme, media, device, note, selectedId, onSelectBlock, toolbar } = props
   const [frameDocument, setFrameDocument] = useState<Document | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const width = devices[device]
+  const selectionStyle = useMemo(() => frameDocument?.createElement('style'), [frameDocument])
+  const blockIds = useMemo(() => new Set(content.blocks.map((block) => block.id)), [content])
 
   // Широкий «десктоп» ужимаем под ширину колонки, чтобы видеть страницу целиком
   useLayoutEffect(() => {
     const stage = stageRef.current
     if (!stage) return
-    const fit = (available: number) => setScale(Math.min(1, available / width))
+    // Скрытая вкладка (узкий экран) шириной 0: масштаб не трогаем, пока её не покажут
+    const fit = (available: number) => {
+      if (available > 0) setScale(Math.min(1, available / width))
+    }
     // Первый замер делаем сами: ResizeObserver присылает размеры только на кадре отрисовки,
     // а в фоновой вкладке кадров нет
     const style = getComputedStyle(stage)
@@ -58,10 +113,11 @@ export function Preview({ content, theme, media, note }: PreviewProps) {
     return () => observer.disconnect()
   }, [width])
 
-  // Стили в iframe: CSS блоков из админки (без её глобального слоя), базовые стили лендинга и тема сайта.
-  // Vite подменяет стили при правках, поэтому следим за <head> админки и копируем заново
+  // Стили в iframe: CSS блоков из админки (без её глобального слоя), базовые стили лендинга,
+  // тема сайта и подсветка выбранного блока. Vite подменяет стили при правках, поэтому следим
+  // за <head> админки и копируем заново
   useEffect(() => {
-    if (!frameDocument) return
+    if (!frameDocument || !selectionStyle) return
     const themeCss = themeToCss(theme)
     const sync = () => {
       const copied = previewStyleNodes(document).map((node) => node.cloneNode(true))
@@ -69,44 +125,60 @@ export function Preview({ content, theme, media, note }: PreviewProps) {
         ...copied,
         styleElement(frameDocument, baseCss),
         styleElement(frameDocument, themeCss),
+        selectionStyle,
       )
     }
     sync()
     const observer = new MutationObserver(sync)
     observer.observe(document.head, { childList: true, subtree: true, characterData: true })
     return () => observer.disconnect()
-  }, [frameDocument, theme])
+  }, [frameDocument, theme, selectionStyle])
 
-  // Ссылки в предпросмотре никуда не уводят, кроме якорей внутри страницы
+  const interactive = onSelectBlock !== undefined
+  useEffect(() => {
+    if (!selectionStyle) return
+    selectionStyle.textContent = previewSelectionCss({
+      selectedId,
+      scale,
+      colors: readSelectionColors(),
+      interactive,
+    })
+  }, [selectionStyle, selectedId, scale, interactive])
+
+  // Выбранный в списке блок, которого не видно, — прокручиваем к нему
+  useEffect(() => {
+    const view = frameDocument?.defaultView
+    if (!view || selectedId === null || !interactive) return
+    const block = frameDocument.getElementById(selectedId)
+    if (!block) return
+    const { top, bottom } = block.getBoundingClientRect()
+    if (bottom > 0 && top < view.innerHeight) return
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    view.scrollTo({ top: view.scrollY + top, behavior: calm ? 'auto' : 'smooth' })
+  }, [frameDocument, selectedId, interactive])
+
+  // Ссылки в предпросмотре никуда не уводят, кроме якорей внутри страницы. Щелчок по блоку
+  // выбирает его. Элементы iframe — из другого окна, поэтому не instanceof Element, а closest
   useEffect(() => {
     if (!frameDocument) return
-    const stay = (event: MouseEvent) => {
-      const link = event.target instanceof Element ? event.target.closest('a') : null
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as { closest?: (selector: string) => Element | null } | null
+      const link = typeof target?.closest === 'function' ? target.closest('a') : null
       if (link && !link.getAttribute('href')?.startsWith('#')) event.preventDefault()
+      const id = onSelectBlock ? blockIdAt(event.target, blockIds) : null
+      if (id !== null) onSelectBlock?.(id)
     }
-    frameDocument.addEventListener('click', stay)
-    return () => frameDocument.removeEventListener('click', stay)
-  }, [frameDocument])
+    frameDocument.addEventListener('click', onClick)
+    return () => frameDocument.removeEventListener('click', onClick)
+  }, [frameDocument, onSelectBlock, blockIds])
 
   return (
-    <section className={styles.preview} aria-label="Предпросмотр">
-      <fieldset className={styles.toolbar}>
-        <legend className={styles.hidden}>Ширина экрана</legend>
-        {(Object.keys(devices) as Device[]).map((name) => (
-          <button
-            key={name}
-            type="button"
-            aria-pressed={name === device}
-            onClick={() => setDevice(name)}
-          >
-            {deviceLabels[name]} · {devices[name]}
-          </button>
-        ))}
-      </fieldset>
+    <div className={styles.preview}>
+      {toolbar && <div className={styles.toolbar}>{toolbar}</div>}
       {/* Живая область есть всегда, даже пустая: так экранный диктор прочитает смену версии */}
-      <p className={styles.note} aria-live="polite">
-        {note}
-      </p>
+      <div className={styles.note} aria-live="polite">
+        {note && <InlineAlert tone="info">{note}</InlineAlert>}
+      </div>
       <div ref={stageRef} className={styles.stage}>
         <div className={styles.frameBox} style={{ width: width * scale }}>
           <iframe
@@ -126,7 +198,7 @@ export function Preview({ content, theme, media, note }: PreviewProps) {
           </PreviewBoundary>,
           frameDocument.body,
         )}
-    </section>
+    </div>
   )
 }
 

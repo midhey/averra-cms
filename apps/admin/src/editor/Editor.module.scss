@@ -1,0 +1,215 @@
+@use "@averra/ui" as ui;
+
+// Во всю высоту окна: полоса сверху, под ней колонки, каждая прокручивается сама.
+// dvh — чтобы на телефоне панель браузера не съедала низ
+.editor {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+// Верхняя полоса: назад, сайт и страница, ширина предпросмотра, действия
+// Строки сетки заданы явно: строки ошибок может не быть, а колонки всё равно берут остаток высоты
+.topbar {
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-3) ui.rem(20);
+  background: var(--color-surface-sidebar);
+  border-bottom: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint-down(medium) {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
+.page {
+  display: flex;
+  flex: 1 1 ui.rem(320);
+  gap: ui.rem(14);
+  align-items: center;
+  min-width: 0;
+
+  @include ui.breakpoint-down(medium) {
+    gap: var(--space-2);
+  }
+}
+
+.titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
+}
+
+.siteName {
+  overflow: hidden;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ui.rem(4) ui.rem(10);
+  align-items: center;
+  min-width: 0;
+}
+
+// Заголовок страницы — поле, которое выглядит как текст: рамка видна при наведении и фокусе
+.titleInput {
+  flex: 0 1 auto;
+
+  // Поле по ширине текста, как заголовок в концепте: плашка состояния встаёт сразу за ним.
+  // Где field-sizing не поддерживается, поле просто шире
+  field-sizing: content;
+  min-width: ui.rem(160);
+  max-width: 100%;
+  min-height: var(--size-control-small);
+  padding: ui.rem(2) ui.rem(8);
+  margin-inline-start: ui.rem(-9);
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  background: transparent;
+  border: ui.rem(1) solid transparent;
+  border-radius: var(--radius-item);
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  &:focus-visible {
+    background: var(--color-surface);
+    border-color: var(--color-focus-ring);
+  }
+
+  &[aria-invalid="true"] {
+    background: var(--color-surface);
+    border-color: var(--color-danger-text);
+  }
+
+  // Контрастная тема: прозрачную рамку браузер закрасил бы — поле всё равно должно быть видно полем
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+  }
+}
+
+.status {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.devices {
+  display: flex;
+  justify-content: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+// Ошибки страницы и действия — строкой под полосой
+.alerts {
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) ui.rem(20);
+  background: var(--color-surface-sidebar);
+  border-bottom: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint-down(medium) {
+    padding-inline: var(--space-3);
+  }
+}
+
+.pageError {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+}
+
+// Рабочая область: блоки, предпросмотр, поля
+.workspace {
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: minmax(ui.rem(240), ui.rem(300)) minmax(0, 1fr) minmax(ui.rem(300), ui.rem(380));
+  min-width: 0;
+  min-height: 0;
+
+  // Узкий экран: вкладки сверху, под ними одна колонка во всю ширину
+  @include ui.breakpoint-down(medium) {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tabs {
+  padding-inline: var(--space-3);
+  background: var(--color-surface-sidebar);
+}
+
+.blocks,
+.preview,
+.fields {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+
+  // Невыбранная вкладка — hidden: display из правил ниже не должен её показать
+  &[hidden] {
+    display: none;
+  }
+}
+
+.blocks {
+  padding: var(--space-4);
+  background: var(--color-surface-sidebar);
+  border-inline-end: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint-down(medium) {
+    border-inline-end: 0;
+  }
+}
+
+// Предпросмотр прокручивается внутри iframe, колонке прокрутка не нужна
+.preview {
+  overflow: hidden;
+}
+
+.fields {
+  padding: ui.rem(20);
+  background: var(--color-surface);
+  border-inline-start: ui.rem(1) solid var(--color-border);
+
+  @include ui.breakpoint-down(medium) {
+    padding: var(--space-4);
+    border-inline-start: 0;
+  }
+}
+
+// Кольцо фокуса у панели вкладки (на неё ставит фокус TabList) — внутрь, иначе его срежет прокрутка
+.blocks:focus-visible,
+.preview:focus-visible,
+.fields:focus-visible {
+  outline-offset: ui.rem(-3);
+}

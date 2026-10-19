@@ -2,6 +2,7 @@ import { formatBytes } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
   deleteQuestion,
+  mediaFormats,
   mediaLabel,
   mediaMapOf,
   mediaSummary,
@@ -92,5 +93,21 @@ describe('размер до отправки', () => {
   it('файл в пределах лимита или лимит ещё неизвестен — решает API', () => {
     expect(tooLargeMessage({ size: limit }, limit)).toBeUndefined()
     expect(tooLargeMessage({ size: 50 * 1024 * 1024 }, undefined)).toBeUndefined()
+  })
+})
+
+describe('форматы под превью', () => {
+  it('без повторов, современные первыми', () => {
+    const variants = [
+      { format: 'webp' as const },
+      { format: 'avif' as const },
+      { format: 'webp' as const },
+      { format: 'jpeg' as const },
+    ]
+    expect(mediaFormats(variants)).toBe('AVIF, WebP, JPEG')
+  })
+
+  it('нет вариантов — пустая строка', () => {
+    expect(mediaFormats([])).toBe('')
   })
 })

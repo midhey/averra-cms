@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { type Path, pathKey } from '../forms/path'
 import type { FieldProps } from '../forms/SchemaForm'
 import { mediaQuery } from '../queries'
-import styles from './ImageField.module.css'
+import { Button } from '../ui/Button'
+import { Dialog } from '../ui/Dialog'
+import { TextInput } from '../ui/Field'
+import { Icon } from '../ui/Icon'
+import styles from './ImageField.module.scss'
 import { MediaLibrary } from './MediaLibrary'
-import type { MediaItem } from './media-format'
-import { thumbnailUrl } from './media-format'
+import { type MediaItem, mediaFormats, thumbnailUrl } from './media-format'
 
 type ImageValue = { mediaId?: unknown; alt?: unknown }
 
@@ -16,9 +19,10 @@ const asImage = (value: unknown): ImageValue | undefined =>
     : undefined
 
 /**
- * Поле «картинка»: выбор из медиатеки сайта и описание (alt). Значение — { mediaId, alt },
- * как в схеме Image. Медиатека открывается модальным <dialog>: фокус остаётся в нём,
- * Esc закрывает, а загрузить новую картинку можно прямо оттуда
+ * Поле «картинка»: карточка выбранной картинки (превью, имя, размеры и форматы) с «Заменить»
+ * и описание (alt) — оно обязательно. Значение — { mediaId, alt }, как в схеме Image.
+ * Медиатека открывается окном (Dialog): фокус остаётся в нём, Esc закрывает, а загрузить
+ * новую картинку можно прямо оттуда
  */
 export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }) {
   const { schema, value, path, label, errors, onChange } = props
@@ -27,68 +31,71 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
   const alt = typeof image?.alt === 'string' ? image.alt : ''
   const { data: library } = useQuery(mediaQuery(siteId))
   const chosen = library?.items.find((media) => media.id === mediaId)
-
   const [picking, setPicking] = useState(false)
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const dialogHeadingId = useId()
   const errorId = useId()
-  const altId = useId()
-  const altHintId = useId()
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (picking && dialog && !dialog.open) dialog.showModal()
-  }, [picking])
+  const hintId = useId()
 
   const at = (...rest: Path) => errors[pathKey([...path, ...rest])]
   const error = at() ?? at('mediaId')
-  const altError = at('alt')
   const altSchema = schema.properties?.alt
-  const altMax = altSchema?.maxLength
 
   function pick(media: MediaItem) {
     // Alt остаётся прежним: заменили фото на похожее — описание обычно то же
     onChange(path, { mediaId: media.id, alt })
-    dialogRef.current?.close()
+    setPicking(false)
   }
+
+  const describedBy = [schema.description && hintId, error && errorId].filter(Boolean).join(' ')
 
   return (
     <fieldset
       className={styles.field}
-      aria-describedby={error ? errorId : undefined}
+      aria-describedby={describedBy || undefined}
       // aria-invalid у группы полей не предусмотрен: ошибку читает aria-describedby, рамка — по data
       data-invalid={error ? true : undefined}
     >
       {/* Без пометки «необязательно»: обязательна ли картинка, решает не сама схема поля,
-          а соседние поля (у первого экрана — вариант split). Правило — в описании поля */}
+          а соседние поля (у первого экрана — вариант «С картинкой»). Правило — в описании поля */}
       <legend className={styles.legend}>{label}</legend>
-      {schema.description && <p className={styles.hint}>{schema.description}</p>}
-
-      {mediaId && (
-        <div className={styles.chosen}>
-          {chosen ? (
-            <>
-              <img className={styles.thumb} src={thumbnailUrl(chosen.variants)} alt="" />
-              <span className={styles.name}>{chosen.originalName}</span>
-            </>
-          ) : (
-            <span className={styles.hint}>
-              {library ? 'Этой картинки нет в медиатеке сайта' : 'Загружаю…'}
-            </span>
-          )}
-        </div>
+      {schema.description && (
+        <p id={hintId} className={styles.hint}>
+          {schema.description}
+        </p>
       )}
 
-      <div className={styles.actions}>
-        <button type="button" onClick={() => setPicking(true)}>
-          {mediaId ? 'Заменить картинку' : 'Выбрать картинку'}
-        </button>
-        {image && (
-          <button type="button" onClick={() => onChange(path, undefined)}>
-            Убрать картинку
-          </button>
+      <div className={styles.card}>
+        {mediaId && chosen ? (
+          <>
+            <img className={styles.thumb} src={thumbnailUrl(chosen.variants)} alt="" />
+            <span className={styles.about}>
+              <span className={styles.name}>{chosen.originalName}</span>
+              <span className={styles.meta}>
+                {chosen.width} × {chosen.height}
+                {chosen.variants.length > 0 && ` · ${mediaFormats(chosen.variants)}`}
+              </span>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className={styles.placeholder} aria-hidden="true">
+              <Icon name="media" />
+            </span>
+            <span className={styles.about}>
+              <span className={styles.meta}>
+                {!mediaId
+                  ? 'Картинка не выбрана'
+                  : library
+                    ? 'Этой картинки нет в медиатеке сайта'
+                    : 'Загружаю…'}
+              </span>
+            </span>
+          </>
         )}
+        <Button size="small" onClick={() => setPicking(true)}>
+          {mediaId ? 'Заменить' : 'Выбрать картинку'}
+        </Button>
       </div>
+
       {error && (
         <p id={errorId} className={styles.error}>
           {error}
@@ -96,52 +103,38 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
       )}
 
       {image && (
-        <div className={styles.alt}>
-          <label htmlFor={altId} className={styles.label}>
-            {altSchema?.title ?? 'Описание картинки (alt)'}
-          </label>
-          <input
-            id={altId}
-            className={styles.input}
-            type="text"
+        <>
+          <TextInput
+            label={altSchema?.title ?? 'Описание картинки (alt)'}
+            hint="Что на картинке — коротко, как сказали бы вслух"
+            error={at('alt')}
             value={alt}
-            maxLength={altMax}
-            aria-invalid={altError ? true : undefined}
-            aria-describedby={altHintId}
+            maxChars={altSchema?.maxLength}
             // Пустой alt храним пустой строкой: схема ответит «опишите картинку», а не «нет поля»
             onChange={(event) => onChange([...path, 'alt'], event.target.value)}
           />
-          <div id={altHintId} className={styles.hint}>
-            <span className={altError ? styles.error : undefined}>
-              {altError ?? 'Что на картинке — коротко, как сказали бы вслух'}
-            </span>
-            {altMax !== undefined && (
-              <span>
-                {alt.length}/{altMax}
-              </span>
-            )}
-          </div>
-        </div>
+          <Button
+            variant="ghost"
+            size="small"
+            icon="trash"
+            className={styles.remove}
+            onClick={() => onChange(path, undefined)}
+          >
+            Убрать картинку
+          </Button>
+        </>
       )}
 
-      <dialog
-        ref={dialogRef}
-        className={styles.dialog}
-        aria-labelledby={dialogHeadingId}
+      <Dialog
+        open={picking}
         onClose={() => setPicking(false)}
+        title="Медиатека: выберите картинку"
+        size="large"
       >
-        <div className={styles.dialogBar}>
-          <h2 id={dialogHeadingId} className={styles.dialogHeading}>
-            Медиатека: выберите картинку
-          </h2>
-          <button type="button" onClick={() => dialogRef.current?.close()}>
-            Закрыть
-          </button>
-        </div>
         {picking && (
           <MediaLibrary siteId={siteId} canDelete={false} onPick={pick} selectedId={mediaId} />
         )}
-      </dialog>
+      </Dialog>
     </fieldset>
   )
 }

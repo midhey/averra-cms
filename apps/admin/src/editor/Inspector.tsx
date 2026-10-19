@@ -1,7 +1,9 @@
 import { SchemaForm, type Widgets } from '../forms/SchemaForm'
+import { EmptyState } from '../ui/EmptyState'
+import { InlineAlert } from '../ui/InlineAlert'
 import { catalogEntry } from './catalog'
 import type { EditorBlock } from './draft'
-import styles from './Inspector.module.css'
+import styles from './Inspector.module.scss'
 
 type InspectorProps = {
   block: EditorBlock | undefined
@@ -15,8 +17,10 @@ type InspectorProps = {
 export function Inspector({ block, errors, onChange, widgets }: InspectorProps) {
   if (!block) {
     return (
-      <aside className={styles.panel}>
-        <p className={styles.empty}>Выбери блок слева или добавь новый</p>
+      <aside className={styles.panel} aria-label="Поля блока">
+        <EmptyState title="Блок не выбран" icon="pages">
+          Выберите блок в списке или в предпросмотре — здесь появятся его поля.
+        </EmptyState>
       </aside>
     )
   }
@@ -24,11 +28,14 @@ export function Inspector({ block, errors, onChange, widgets }: InspectorProps) 
   const entry = catalogEntry(block.type)
   return (
     <aside className={styles.panel} aria-label="Поля блока">
-      <h2 className={styles.heading}>{entry.title}</h2>
-      <p className={styles.anchor}>
-        Якорь для ссылок: <code>#{block.id}</code>
-      </p>
-      {errors[''] && <p className={styles.error}>{errors['']}</p>}
+      <div className={styles.header}>
+        <span className={styles.kicker}>Блок</span>
+        <h2 className={styles.heading}>{entry.title}</h2>
+        <p className={styles.anchor}>
+          Якорь для ссылок: <code>#{block.id}</code>
+        </p>
+      </div>
+      {errors[''] && <InlineAlert tone="danger">{errors['']}</InlineAlert>}
       <SchemaForm
         key={block.id}
         schema={entry.schema}

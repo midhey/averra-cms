@@ -2,10 +2,11 @@ import { type BlockType, blocks } from '@averra/schema'
 import { z } from 'zod'
 import type { JsonSchema } from '../forms/json-schema'
 
-/** Каталог для редактора: название, пример и JSON Schema полей каждого блока */
+/** Каталог для редактора: название, описание, пример и JSON Schema полей каждого блока */
 export const catalog = blocks.map((block) => ({
   type: block.type,
   title: block.title,
+  description: block.description,
   example: block.example,
   schema: z.toJSONSchema(block.props, { io: 'input' }) as JsonSchema,
 }))
