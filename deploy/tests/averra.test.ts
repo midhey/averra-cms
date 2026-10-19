@@ -59,6 +59,10 @@ type Fakes = {
   lockHeld?: boolean
   /** Скрипт sh из контейнера API с этой подстрокой выполняется, но кончается сбоем */
   shFailsOn?: string
+  /** Перенос этой записи тома медиатеки в .averra-before-restore падает (кончилось место) */
+  mvFailsOn?: string
+  /** Возврат этой записи из .averra-before-restore в корень тома падает */
+  mvBackFailsOn?: string
 }
 
 /**
@@ -76,6 +80,32 @@ while [[ $# -gt 0 && "$1" == -* ]]; do
   shift
 done
 "$@" </dev/null >>"$log" 2>&1 &
+`
+
+/**
+ * mv: перенос записи с именем FAKE_MV_FAILS_ON в .averra-before-restore падает (кончилось место),
+ * возврат записи FAKE_MV_BACK_FAILS_ON из неё в корень тома — тоже; остальные записи той же
+ * команды переносятся. Всё прочее — настоящий mv
+ */
+const FAKE_MV = `#!/usr/bin/env bash
+broken=''
+[[ "$1 $2" != "-t .averra-before-restore" ]] || broken="\${FAKE_MV_FAILS_ON:-}"
+[[ "$1 $2" != "-t ." ]] || broken="\${FAKE_MV_BACK_FAILS_ON:-}"
+if [[ -n "$broken" ]]; then
+  dir="$2"
+  shift 2
+  code=0
+  for source in "$@"; do
+    if [[ "\${source##*/}" == "$broken" ]]; then
+      echo "mv: cannot move '$source': No space left on device" >&2
+      code=1
+    else
+      /usr/bin/mv -t "$dir" "$source" || code=$?
+    fi
+  done
+  exit $code
+fi
+exec /usr/bin/mv "$@"
 `
 
 const FAKE_DOCKER = readFileSync(
@@ -117,6 +147,7 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
   // setsid есть на любом Linux, в Git Bash его нет: здесь процесс просто уходит в фон
   write('setsid', '#!/usr/bin/env bash\nexec "$@"\n')
   write('systemd-run', FAKE_SYSTEMD_RUN)
+  write('mv', FAKE_MV)
 
   function run(args: string[], fakes: Fakes = {}) {
     const inBash = fakes.headLines
@@ -145,6 +176,8 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
     if (fakes.detach) env.AVERRA_DETACH = fakes.detach
     if (fakes.lockHeld) env.FAKE_LOCKED = '1'
     if (fakes.shFailsOn) env.FAKE_SH_FAILS_ON = fakes.shFailsOn
+    if (fakes.mvFailsOn) env.FAKE_MV_FAILS_ON = fakes.mvFailsOn
+    if (fakes.mvBackFailsOn) env.FAKE_MV_BACK_FAILS_ON = fakes.mvBackFailsOn
     // Запуск не от терминала: скрипт ничего не спрашивает
     const result = spawnSync(bash, ['-c', inBash, 'bash', posix(join(dir, 'averra.sh')), ...args], {
       encoding: 'utf8',
@@ -254,7 +287,8 @@ describe('бэкап', () => {
       'docker compose exec -T postgres psql -d averra_verify -tAc select count(*) from drizzle.__drizzle_migrations',
       "docker compose exec -T postgres psql -d averra_verify -tAc select count(*) from information_schema.tables where table_schema = 'public'",
       'docker compose exec -T postgres dropdb --if-exists averra_verify',
-      // Срок хранения: базы, отложенные при откате обновления
+      // Срок хранения: базы, отложенные при откате обновления, — только когда рабочая на месте
+      "docker compose exec -T postgres psql -d postgres -tAc select count(*) from pg_database where datname = 'averra'",
       "docker compose exec -T postgres psql -d postgres -tAc select datname from pg_database where datname ~ '^averra_(rolled_back|failed_restore)_'",
     ])
     // Временной базы после проверки нет
@@ -342,6 +376,29 @@ describe('бэкап', () => {
     expect(existsSync(join(srv.fake, 'db-averra_before_restore'))).toBe(true)
     expect(run.stdout).toContain(`Удалена база ${stale}: срок хранения (7 дн.) вышел`)
     expect(run.stdout).toContain(`Удалена база ${staleFailed}: срок хранения (7 дн.) вышел`)
+  })
+
+  it('базы averra нет (откат кончился rollback-failed) — служебные базы по сроку не удаляются', () => {
+    const srv = server({ env: ['BACKUP_KEEP=1'] })
+    // Откат оборвался между переименованиями, повтор не вернул имя: рабочие данные — только
+    // в отложенной базе, отметки .update-run уже нет. Ночной бэкап падает: базы averra нет
+    const kept = `averra_rolled_back_${stampAgo(3).replace('-', '_')}`
+    const failed = `averra_failed_restore_${stampAgo(5).replace('-', '_')}`
+    rmSync(join(srv.fake, 'db-averra'))
+    writeFileSync(join(srv.fake, `db-${kept}`), '16\n')
+    writeFileSync(join(srv.fake, `db-${failed}`), '15\n')
+    const run = srv.run(['backup'], { dumpFails: true })
+    expect(run.status).toBe(1)
+    expect(existsSync(join(srv.fake, `db-${kept}`))).toBe(true)
+    expect(existsSync(join(srv.fake, `db-${failed}`))).toBe(true)
+    expect(run.output).not.toContain('Удалена база')
+    expect(run.stdout).toContain('Базы averra нет: служебные базы')
+
+    // Рабочую базу вернули — срок хранения снова действует
+    writeFileSync(join(srv.fake, 'db-averra'), '16\n')
+    const ok = srv.run(['backup'])
+    expect(ok.status, ok.output).toBe(0)
+    expect(existsSync(join(srv.fake, `db-${kept}`))).toBe(false)
   })
 
   it('бэкапы падают — старые копии всё равно уходят по сроку', () => {
@@ -1133,7 +1190,7 @@ describe('восстановление', () => {
     expect(srv.builds().at(-1)).toBe('build 0.6.0: site/after-backup.jpg ')
     // Медиатека и сайты возвращаются, пока API остановлен
     const steps = srv.calls()
-    const unswap = steps.findIndex((line) => line.includes('mv -t . {} + && rmdir'))
+    const unswap = steps.findIndex((line) => line.includes('rm -rf "./$name"'))
     expect(unswap).toBeGreaterThan(steps.findLastIndex((line) => line.endsWith('stop api')))
     expect(unswap).toBeLessThan(steps.findLastIndex((line) => line.endsWith('up -d')))
   })
@@ -1158,6 +1215,47 @@ describe('восстановление', () => {
     expect(srv.running()).toBe('0.6.0')
     // API ни разу не запускался на восстановленной базе
     expect(srv.calls().filter((line) => line.endsWith('up -d'))).toHaveLength(1)
+  })
+
+  it('прежняя медиатека переехала не целиком — возвращается на место, ничего не удалено', () => {
+    const srv = server()
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-averra'), '17\n')
+    // После бэкапа — картинки ещё одного сайта; их папка в .averra-before-restore не переедет
+    mkdirSync(join(srv.fake, 'data', 'media', 'other'))
+    writeFileSync(join(srv.fake, 'data', 'media', 'other', 'after.jpg'), 'новая')
+    writeFileSync(join(srv.fake, 'data', 'media', 'site', 'after-backup.jpg'), 'новая')
+    const run = srv.run(['restore', name ?? '', '--yes'], { mvFailsOn: 'other' })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('медиатека не подменилась — прежние база и медиатека на месте')
+    // Прежняя медиатека целиком, служебных папок нет
+    expect(srv.media()).toEqual(['other/after.jpg', 'site/after-backup.jpg', 'site/original.jpg'])
+    expect(srv.migrations()).toBe('17')
+    expect(srv.running()).toBe('0.6.0')
+  })
+
+  it('прежняя медиатека не переехала и не вернулась — ничего не удалено, сообщение говорит где она', () => {
+    const srv = server()
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    mkdirSync(join(srv.fake, 'data', 'media', 'other'))
+    writeFileSync(join(srv.fake, 'data', 'media', 'other', 'after.jpg'), 'новая')
+    // Папка other не переезжает в .averra-before-restore, а уже переехавшая site не возвращается
+    const run = srv.run(['restore', name ?? '', '--yes'], {
+      mvFailsOn: 'other',
+      mvBackFailsOn: 'site',
+    })
+    expect(run.status).toBe(1)
+    expect(run.output).not.toContain('на месте —')
+    expect(run.output).not.toContain('Готово')
+    expect(run.stderr).toContain(
+      'часть в папке /data/media/.averra-before-restore. Ничего не удалено',
+    )
+    // Ни одна прежняя картинка не удалена: одна на месте, другая в соседней папке
+    expect(srv.media()).toEqual(['.averra-before-restore/site/original.jpg', 'other/after.jpg'])
+    // API на этой половине медиатеки не запускался
+    expect(srv.running()).toBe('stopped')
   })
 
   it('в томе осталась прежняя медиатека от прошлого восстановления — отказ до изменений, она не удаляется', () => {

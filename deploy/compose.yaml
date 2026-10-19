@@ -63,7 +63,7 @@ services:
     # пожинает осиротевших после таймаута сборки, зомби не копятся
     init: true
     # Не root (USER node в образе), ни одной capability и без повышения прав через setuid:
-    # API нужны только тома и папка рендерера
+    # API нужны только тома: код, и рендерер тоже, в образе только для чтения
     security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
     networks: [internal]

@@ -305,6 +305,14 @@ rotate_backups() {
     rm -rf "${BACKUP_DIR:?}/$name"
   done < <(expired_names "$all" "$total" "$keep" "$cutoff")
   find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '.tmp-*' -exec rm -rf {} + 2>/dev/null || true
+  # Базы averra нет — рабочие данные, возможно, лежат под служебным именем: откат обновления
+  # оборвался между переименованиями и кончился rollback-failed, отметки .update-run уже нет.
+  # Тогда служебные базы по сроку не удаляются, пока человек не вернёт рабочую на место: удалить
+  # единственную копию рабочих данных хуже, чем подержать копию дольше срока
+  if [[ "$(db_exists averra 2>/dev/null || true)" == 0 ]]; then
+    say 'Базы averra нет: служебные базы (averra_rolled_back_*, averra_failed_restore_*) по сроку не удаляются — в одной из них могут быть рабочие данные. Верните рабочую базу на место (averra.sh status, update-last.json)'
+    return 0
+  fi
   # Служебные базы с копиями данных (откат обновления, неудачное восстановление): имя несёт время.
   # База не ответила — в следующий раз
   while read -r db; do
@@ -567,24 +575,50 @@ drop_media_stage() {
     >/dev/null 2>&1 || true
 }
 
-# Прежнее содержимое тома — в .averra-before-restore, распакованное — на его место. mv по find
-# с «+»: сбой любого переноса — ненулевой код (с «\;» find его бы проглотил)
+# Что в корне тома пришло из бэкапа: имена записываются до подмены. Возврат прежней медиатеки
+# удаляет в корне только их — прежнее, что не успело переехать, не тронет
+MEDIA_RESTORED_NAMES='/data/media/.averra-restore-names'
+
+# Подмена в две фазы, mv по find с «+»: сбой любого переноса — ненулевой код (с «\;» find его бы
+# проглотил).
+# 1. Прежнее содержимое тома — в .averra-before-restore. Не переехало целиком (кончилось место,
+#    сбой) — уже перенесённое сразу возвращается в корень, в корне ничего не удаляется: код 4.
+#    Вернуть не вышло — код 5, прежние картинки частью в корне, частью в .averra-before-restore.
+# 2. Распакованное — на место прежнего. Сбой — код 1: прежняя медиатека целиком в
+#    .averra-before-restore, вернёт её unswap_media
+SWAP_MEDIA_SCRIPT='cd /data/media || exit 1
+if [ -d .averra-restore/media ]; then ls -A .averra-restore/media; fi >.averra-restore-names || exit 1
+mkdir .averra-before-restore || exit 1
+if ! find . -mindepth 1 -maxdepth 1 ! -name .averra-restore ! -name .averra-before-restore ! -name .averra-restore-names -exec mv -t .averra-before-restore {} +; then
+  rm -rf .averra-restore .averra-restore-names
+  find .averra-before-restore -mindepth 1 -maxdepth 1 -exec mv -t . {} + && rmdir .averra-before-restore || exit 5
+  exit 4
+fi
+if [ -d .averra-restore/media ]; then find .averra-restore/media -mindepth 1 -maxdepth 1 -exec mv -t . {} + || exit 1; fi
+rm -rf .averra-restore'
+
 swap_media() {
-  compose run --rm --no-deps -T --entrypoint sh api -c \
-    "cd /data/media && mkdir .averra-before-restore && find . -mindepth 1 -maxdepth 1 ! -name .averra-restore ! -name .averra-before-restore -exec mv -t .averra-before-restore {} + && if [ -d .averra-restore/media ]; then find .averra-restore/media -mindepth 1 -maxdepth 1 -exec mv -t . {} + ; fi && rm -rf .averra-restore" \
-    </dev/null
+  compose run --rm --no-deps -T --entrypoint sh api -c "$SWAP_MEDIA_SCRIPT" </dev/null
 }
 
-# Вернуть прежнюю медиатеку на место (подмена не прошла или API не поднялся): то, что сейчас в
-# томе, — из бэкапа, оно и так есть в архиве
+# Вернуть прежнюю медиатеку на место (подмена не прошла или API не поднялся). В корне удаляется
+# только пришедшее из бэкапа (оно и так есть в архиве) — по списку имён; списка нет — не удаляется
+# ничего, и прежнее, не уместившись рядом, останется в .averra-before-restore (ненулевой код)
+UNSWAP_MEDIA_SCRIPT='cd /data/media || exit 1
+if [ -d .averra-before-restore ]; then
+  if [ -f .averra-restore-names ]; then
+    while IFS= read -r name; do [ -z "$name" ] || rm -rf "./$name" || exit 1; done <.averra-restore-names
+  fi
+  find .averra-before-restore -mindepth 1 -maxdepth 1 -exec mv -t . {} + && rmdir .averra-before-restore || exit 1
+fi
+rm -rf .averra-restore .averra-restore-names'
+
 unswap_media() {
-  compose run --rm --no-deps -T --entrypoint sh api -c \
-    "cd /data/media && if [ -d .averra-before-restore ]; then find . -mindepth 1 -maxdepth 1 ! -name .averra-before-restore -exec rm -rf {} + && find .averra-before-restore -mindepth 1 -maxdepth 1 -exec mv -t . {} + && rmdir .averra-before-restore; fi && rm -rf .averra-restore" \
-    </dev/null
+  compose run --rm --no-deps -T --entrypoint sh api -c "$UNSWAP_MEDIA_SCRIPT" </dev/null
 }
 
 drop_media_before() {
-  compose run --rm --no-deps -T --entrypoint sh api -c "rm -rf $MEDIA_BEFORE" </dev/null
+  compose run --rm --no-deps -T --entrypoint sh api -c "rm -rf $MEDIA_BEFORE $MEDIA_RESTORED_NAMES" </dev/null
 }
 
 # Собранные сайты — производные данные: API при старте соберёт опубликованные сайты без версии на
@@ -651,9 +685,17 @@ cmd_restore() {
   # API остановлен (restore_database): до запуска ничего не собирается, медиатека и сайты меняются
   # без него
   step 'Подменяю медиатеку восстановленной (прежняя — рядом, пока API не поднимется)'
-  if ! swap_media; then
-    if ! unswap_media; then
-      fail "медиатека не подменилась и прежнюю вернуть не вышло: прежние картинки — в томе медиатеки, папка $MEDIA_BEFORE. База восстановлена, прежняя — averra_before_restore, API остановлен: разберитесь руками"
+  code=0
+  swap_media || code=$?
+  if [[ $code -ne 0 ]]; then
+    # 5 — прежняя медиатека не переехала целиком и не вернулась: ничего не удалено, но она
+    # разделена. Базу не трогаем: API без медиатеки не запустить, пусть разбирается человек
+    [[ $code -ne 5 ]] ||
+      fail "медиатека не подменилась: прежние картинки не перенеслись целиком и не вернулись — часть в томе медиатеки на месте, часть в папке $MEDIA_BEFORE. Ничего не удалено: верните содержимое $MEDIA_BEFORE в /data/media. База восстановлена, прежняя — averra_before_restore, API остановлен: разберитесь руками"
+    # 4 — прежняя медиатека не переехала целиком, но уже вернулась на место: возвращать нечего.
+    # Иначе (сбой второй фазы или сама команда) — вернуть по списку из бэкапа
+    if [[ $code -ne 4 ]] && ! unswap_media; then
+      fail "медиатека не подменилась и прежнюю вернуть не вышло: прежние картинки — в томе медиатеки, папка $MEDIA_BEFORE (что не переехало — на месте). База восстановлена, прежняя — averra_before_restore, API остановлен: разберитесь руками"
     fi
     undo_restore_database averra_before_restore "$failed" ||
       fail "медиатека не подменилась (прежняя на месте), и прежнюю базу вернуть не вышло: на сервере базы $failed (или averra) и averra_before_restore, разберитесь руками"
@@ -775,7 +817,7 @@ rollback_update() {
       say "Прошлый откат оборвался между переименованиями баз: возвращаю рабочую базу $kept на место"
       if ! psql_value postgres "ALTER DATABASE $kept RENAME TO averra" >/dev/null; then
         update_finish rollback-failed "$db_restored" 'база не восстановилась из бэкапа, рабочая база не на своём месте' "$kept"
-        printf "Ошибка: откат не удался — базы averra нет, рабочая лежит под именем %s. Верните её: docker compose --project-directory %s exec postgres psql -U averra -d postgres -c 'ALTER DATABASE %s RENAME TO averra'. Бэкап: %s\n" "$kept" "$AVERRA_DIR" "$kept" "$BACKUP_DIR/$backup" >&2
+        printf "Ошибка: откат не удался — базы averra нет, рабочая лежит под именем %s. Верните её: docker compose --project-directory %s exec postgres psql -U averra -d postgres -c 'ALTER DATABASE %s RENAME TO averra'. Пока базы averra нет, срок хранения бэкапов её не удалит. Бэкап: %s\n" "$kept" "$AVERRA_DIR" "$kept" "$BACKUP_DIR/$backup" >&2
         exit 2
       fi
     else
@@ -796,7 +838,7 @@ rollback_update() {
       rm -rf "$AVERRA_DIR/.next"
       if [[ $code -eq 2 ]]; then
         update_finish rollback-failed "$db_restored" 'база не восстановилась из бэкапа, рабочая база не на своём месте' "$kept"
-        printf 'Ошибка: откат не удался — рабочая база под именем %s, верните её (команда выше). Бэкап: %s\n' "$kept" "$BACKUP_DIR/$backup" >&2
+        printf 'Ошибка: откат не удался — рабочая база под именем %s, верните её (команда выше); пока базы averra нет, срок хранения бэкапов её не удалит. Бэкап: %s\n' "$kept" "$BACKUP_DIR/$backup" >&2
       else
         update_finish rollback-failed "$db_restored" 'база не восстановилась из бэкапа перед обновлением'
         printf 'Ошибка: откат не удался — база не восстановилась. Бэкап: %s. Восстановите руками: averra.sh restore %s\n' "$BACKUP_DIR/$backup" "$backup" >&2

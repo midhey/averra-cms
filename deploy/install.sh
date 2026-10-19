@@ -35,7 +35,8 @@ usage() {
   --dir <папка>           папка установки, по умолчанию /opt/averra
   --api-image <образ>     образ API без тега, по умолчанию ghcr.io/midhey/averra-api
   --web-image <образ>     образ Caddy с админкой, по умолчанию ghcr.io/midhey/averra-web
-  --public-ip <IP>        публичный адрес сервера, если его нет на сетевых интерфейсах (NAT)
+  --public-ip <IP>        публичный адрес сервера, если его нет на сетевых интерфейсах (NAT);
+                          у сервера с IPv4 и IPv6 — флаг на каждый адрес
   --ghcr-user <логин>     вход в ghcr.io для приватных образов: токен спросят скрыто
   --skip-dns-check        не проверять, что домены указывают на сервер
   --skip-port-check       не проверять, что порты 80 и 443 свободны
@@ -96,7 +97,7 @@ while [[ $# -gt 0 ]]; do
     --dir) need_value "$@"; INSTALL_DIR="$2"; shift 2 ;;
     --api-image) need_value "$@"; API_IMAGE_ARG="$2"; shift 2 ;;
     --web-image) need_value "$@"; WEB_IMAGE_ARG="$2"; shift 2 ;;
-    --public-ip) need_value "$@"; PUBLIC_IP="$2"; shift 2 ;;
+    --public-ip) need_value "$@"; PUBLIC_IP+="$2"$'\n'; shift 2 ;;
     --ghcr-user) need_value "$@"; GHCR_USER="$2"; shift 2 ;;
     --skip-dns-check) SKIP_DNS=1; shift ;;
     --skip-port-check) SKIP_PORTS=1; shift ;;
@@ -260,31 +261,65 @@ check_ports() {
 
 server_ips() {
   if [[ -n "$PUBLIC_IP" ]]; then
-    printf '%s\n' "$PUBLIC_IP"
+    printf '%s' "$PUBLIC_IP"
   else
     hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || true
   fi
 }
 
+# Адреса домена: A и AAAA, по строке. getent ahosts спрашивает AAAA, только если у самого сервера
+# есть IPv6 (AI_ADDRCONFIG), а чужая AAAA-запись опасна как раз у сервера без IPv6. Поэтому
+# записи спрашиваются ещё и напрямую: dig (bind9-dnsutils, есть в образах Ubuntu Server), а без
+# него — getaddrinfo из python3 без AI_ADDRCONFIG. Имена из CNAME и адреса ::ffff: отбрасываются
+dns_addresses() {
+  local domain="$1"
+  {
+    getent ahosts "$domain" 2>/dev/null | awk '{print $1}'
+    if command -v dig >/dev/null 2>&1; then
+      dig +short A "$domain" 2>/dev/null
+      dig +short AAAA "$domain" 2>/dev/null
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 -c '
+import socket, sys
+for family in (socket.AF_INET, socket.AF_INET6):
+    try:
+        for info in socket.getaddrinfo(sys.argv[1], None, family, socket.SOCK_STREAM):
+            print(info[4][0])
+    except OSError:
+        pass
+' "$domain" 2>/dev/null
+    fi
+  } | tr -d '\r' | grep -E '^([0-9]+\.){3}[0-9]+$|^[0-9a-fA-F]*:[0-9a-fA-F:.]*$' |
+    grep -v '^::ffff:' | sort -u || true
+}
+
+# На этот сервер должны вести все A- и AAAA-записи домена, а не хотя бы одна: Let's Encrypt
+# проверяет домен по любому из адресов, а по IPv6 — в первую очередь. Лишняя AAAA-запись на чужой
+# адрес (её часто ставит панель регистратора) — и сертификат не выпустится, хотя A-запись верна
 check_dns() {
-  local ips domain resolved ok
+  local ips domain resolved address foreign hint
   ips="$(server_ips)"
   if [[ -z "$ips" ]]; then
     problem 'не удалось узнать адрес сервера: задайте --public-ip'
     return 1
   fi
   for domain in "$SITE_DOMAIN" "$ADMIN_DOMAIN"; do
-    resolved="$(getent ahosts "$domain" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+    resolved="$(dns_addresses "$domain")"
     if [[ -z "$resolved" ]]; then
       problem "домен $domain не находится в DNS. Добавьте A-запись на адрес сервера и подождите, пока она разойдётся (или --skip-dns-check)" || true
       continue
     fi
-    ok=0
+    foreign=''
     while read -r address; do
-      if grep -qxF "$address" <<<"$ips"; then ok=1; fi
+      grep -qxF "$address" <<<"$ips" || foreign+="$address "
     done <<<"$resolved"
-    [[ $ok -eq 1 ]] ||
-      problem "домен $domain указывает на $(tr '\n' ' ' <<<"$resolved")— а у сервера адреса: $(tr '\n' ' ' <<<"$ips"). Без верного DNS Caddy не получит сертификат. За NAT задайте --public-ip, проверить позже — --skip-dns-check" ||
+    [[ -n "$foreign" ]] || continue
+    if [[ "$foreign" == *:* ]]; then
+      hint="Let's Encrypt проверяет каждый адрес домена, IPv6 — первым: AAAA-запись направьте на IPv6 этого сервера или удалите её"
+    else
+      hint='A-запись направьте на адрес сервера, лишние A-записи удалите'
+    fi
+    problem "домен $domain указывает на $(tr '\n' ' ' <<<"$resolved")— не этого сервера: $foreign(у сервера адреса: $(tr '\n' ' ' <<<"$ips")). Без верного DNS Caddy не получит сертификат. $hint. За NAT задайте --public-ip (флаг на каждый адрес), проверить позже — --skip-dns-check" ||
       true
   done
 }
@@ -350,11 +385,22 @@ fi
 
 # ── Папка установки и .env ─────────────────────────────────────────────────────────────────
 
+# Временный .env, пока он пишется: прервался прогон (сбой, Ctrl+C) — файл с секретами не остаётся
+# лежать в папке установки рядом с настоящим .env
+ENV_TMP=''
+remove_env_tmp() {
+  [[ -z "$ENV_TMP" ]] || rm -f "$ENV_TMP"
+}
+
 write_env() {
   local tmp key value
   mkdir -p "$INSTALL_DIR"
+  trap remove_env_tmp EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM HUP
   # Файл с секретами не бывает доступен другим ни на миг: umask до создания, chmod после
   tmp="$(umask 077 && mktemp "$INSTALL_DIR/.env.XXXXXX")"
+  ENV_TMP="$tmp"
   {
     printf '# Установка Averra. Ведёт deploy/install.sh: секреты здесь не меняются при повторном запуске.\n'
     printf '# Права 600: в файле пароли. Не копируйте его в чаты и не кладите в git\n'
@@ -379,6 +425,8 @@ write_env() {
   } >"$tmp"
   chmod 600 "$tmp"
   mv -f "$tmp" "$ENV_FILE"
+  ENV_TMP=''
+  trap - EXIT INT TERM HUP
 }
 
 step "Пишу $INSTALL_DIR"

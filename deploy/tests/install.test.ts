@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -24,6 +32,8 @@ type Fakes = {
   dockerDenied?: boolean
   /** Наш Caddy уже запущен (повторная установка) */
   caddyRunning?: boolean
+  /** mv временного .env на место падает: прогон обрывается посреди записи .env */
+  failEnvMove?: boolean
 }
 
 const SITE_ID = 'c6026fd5-5af8-4af9-a36e-1e08b05210a8'
@@ -39,14 +49,37 @@ function fakeBin(root: string, fakes: Fakes) {
     writeFileSync(file, `#!/usr/bin/env bash\n${body}\n`)
     chmodSync(file, 0o755)
   }
-  const dns = Object.entries(fakes.dns ?? {})
-    .map(([domain, ip]) => `  ${domain}) echo "${ip}      STREAM ${domain}" ;;`)
-    .join('\n')
-  write('getent', `case "$2" in\n${dns}\n  *) exit 2 ;;\nesac`)
+  // getent ahosts — как на сервере без своего IPv6 (AI_ADDRCONFIG): только A-записи. AAAA видит
+  // dig: так тест ловит чужую AAAA-запись, которую одним getent не увидеть
+  const records = Object.entries(fakes.dns ?? {}).map(([domain, ips]) => ({
+    domain,
+    ips: ips.split(' ').filter(Boolean),
+  }))
+  const v4 = (ips: string[]) => ips.filter((ip) => !ip.includes(':'))
+  const v6 = (ips: string[]) => ips.filter((ip) => ip.includes(':'))
+  const getent = records
+    .filter(({ ips }) => v4(ips).length > 0)
+    .map(
+      ({ domain, ips }) =>
+        `  ${domain}) printf '%s      STREAM ${domain}\\n' ${v4(ips).join(' ')} ;;`,
+    )
+  write('getent', `case "$2" in\n${getent.join('\n')}\n  *) exit 2 ;;\nesac`)
+  const dig = records.flatMap(({ domain, ips }) => [
+    `  "+short A ${domain}") printf '%s\\n' ${v4(ips).join(' ')} ;;`,
+    `  "+short AAAA ${domain}") printf '%s\\n' ${v6(ips).join(' ')} ;;`,
+  ])
+  // Подделка печатает и имя из CNAME: установщик берёт из ответа только адреса
+  write('dig', `echo "cname.example.net."\ncase "$*" in\n${dig.join('\n')}\n  *) ;;\nesac`)
   // chmod — настоящий, но вызов записан: права .env видны и на Windows, где NTFS их не держит
   write('chmod', `printf '%s\\n' "$*" >> "${posix(chmodLog)}"\nexec /usr/bin/chmod "$@"`)
   // systemctl — подделка: таймер бэкапов ставится в свою папку теста, а не в /etc/systemd
   write('systemctl', `printf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`)
+  if (fakes.failEnvMove) {
+    write(
+      'mv',
+      'case "$*" in *"/.env."*) echo "mv: No space left on device" >&2; exit 1 ;; esac\nexec /usr/bin/mv "$@"',
+    )
+  }
   write('hostname', `echo "${fakes.serverIps ?? '203.0.113.5 10.0.0.2'}"`)
   const busy = (fakes.busyPorts ?? []).map(
     (port) => `*":${port}"*) echo "LISTEN 0 4096 *:${port} *:*" ;;`,
@@ -267,6 +300,15 @@ describe('.env установки', () => {
     expect(run.output).not.toContain(env.POSTGRES_PASSWORD)
   })
 
+  it('прогон оборвался посреди записи .env — временного файла с секретами не остаётся', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...required, '--dir', posix(dir), '--env-only'], {
+      fakes: { failEnvMove: true },
+    })
+    expect(run.status).not.toBe(0)
+    expect(readdirSync(dir).filter((name) => name.startsWith('.env'))).toEqual([])
+  })
+
   it('повторный запуск не меняет секреты, а новые домены и версию записывает; свои строки остаются', () => {
     const dir = join(tempDir(), 'inst')
     expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
@@ -446,6 +488,54 @@ describe('полная установка (подделки docker и сети)'
     expect(skipped.status, skipped.output).toBe(0)
   })
 
+  it('DNS: все A и AAAA домена должны вести на сервер — чужая AAAA при верной A тоже отказ', () => {
+    const dir = posix(join(tempDir(), 'inst'))
+    const owner = { AVERRA_OWNER_PASSWORD: 'пароль-владельца' }
+    // Сервер без IPv6, у домена верная A и чужая AAAA (ставит панель регистратора):
+    // Let's Encrypt пойдёт по IPv6 первым, и сертификат не выпустится
+    const strayAaaa = { 'remont.ru': '203.0.113.5 2001:db8::99', 'admin.remont.ru': '203.0.113.5' }
+    const run = install([...required, '--dir', dir, '--yes'], {
+      fakes: { dns: strayAaaa },
+      env: owner,
+    })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('домен remont.ru указывает на 2001:db8::99 203.0.113.5')
+    expect(run.stderr).toContain('не этого сервера: 2001:db8::99')
+    expect(run.stderr).toContain('AAAA-запись направьте на IPv6 этого сервера или удалите её')
+    expect(run.stderr).not.toContain('admin.remont.ru указывает')
+    expect(run.calls()).not.toContain('compose pull')
+
+    // Лишняя A-запись на чужой адрес — тоже отказ, со своей подсказкой
+    const extraA = install([...required, '--dir', dir, '--dry-run'], {
+      fakes: { dns: { 'remont.ru': '203.0.113.5 198.51.100.7', 'admin.remont.ru': '203.0.113.5' } },
+    })
+    expect(extraA.status).toBe(1)
+    expect(extraA.stdout).toContain('не этого сервера: 198.51.100.7')
+    expect(extraA.stdout).toContain('лишние A-записи удалите')
+
+    // AAAA на IPv6 самого сервера — всё верно. За NAT оба адреса — флагом на каждый
+    const ownAaaa = { 'remont.ru': '203.0.113.5 2001:db8::5', 'admin.remont.ru': '203.0.113.5' }
+    const v6 = install([...required, '--dir', dir, '--yes'], {
+      fakes: { dns: ownAaaa, serverIps: '203.0.113.5 10.0.0.2 2001:db8::5' },
+      env: owner,
+    })
+    expect(v6.status, v6.output).toBe(0)
+    const nat = install(
+      [
+        ...required,
+        '--dir',
+        dir,
+        '--yes',
+        '--public-ip',
+        '203.0.113.5',
+        '--public-ip',
+        '2001:db8::5',
+      ],
+      { fakes: { dns: ownAaaa, serverIps: '10.0.0.2' }, env: owner },
+    )
+    expect(nat.status, nat.output).toBe(0)
+  })
+
   it('занятые чужим сервером порты 80 и 443 — отказ до запуска', () => {
     const dir = posix(join(tempDir(), 'inst'))
     const run = install([...required, '--dir', dir, '--yes'], {
@@ -520,6 +610,44 @@ describe('контейнеры не от root и без лишних прав', 
     expect(lastUser(stage('web'))).toBe('caddy')
     // Тома Caddy (сертификаты, настройки) принадлежат его пользователю
     expect(stage('web')).toMatch(/chown -R caddy:caddy \/data \/config/)
+  })
+
+  it('api: код рендерера не за node — кеши сборщика в томе сайтов, .astro — ссылка туда', () => {
+    const api = stage('api')
+    // node владеет только томами данных; ни /app, ни папка рендерера ему не отдаются
+    const chowns = [...api.matchAll(/chown\s+(?:-R\s+)?node:node\s+([^\n&\\]+)/g)].map((m) =>
+      m[1]?.trim(),
+    )
+    expect(chowns).toEqual(['/data'])
+    expect(api).not.toMatch(/chown[^\n]*\/app/)
+    expect(api).toContain('ln -s /data/sites/.cache/dot-astro /app/apps/renderer/.astro')
+    expect(api).toMatch(/PUBLISH_DIR=\/data\/sites/)
+    // Ссылка ведёт в PUBLISH_DIR/.cache/<DOT_ASTRO_CACHE> — ту папку, что API создаёт перед сборкой
+    const renderer = readFileSync(
+      fileURLToPath(new URL('../../apps/api/src/publish/renderer.ts', import.meta.url)),
+      'utf8',
+    )
+    expect(renderer).toContain("export const DOT_ASTRO_CACHE = 'dot-astro'")
+    const index = readFileSync(
+      fileURLToPath(new URL('../../apps/api/src/index.ts', import.meta.url)),
+      'utf8',
+    )
+    expect(index).toContain("cacheDir: join(config.PUBLISH_DIR, '.cache')")
+  })
+
+  it('на сервер копируются только файлы, которые берёт установщик, а не папка deploy', () => {
+    const installer = readFileSync(script, 'utf8')
+    const needed = [
+      'install.sh',
+      ...new Set([...installer.matchAll(/"\$SCRIPT_DIR\/([\w.]+)"/g)].map((m) => m[1])),
+    ].sort()
+    expect(needed).toEqual(['averra.sh', 'compose.yaml', 'install.sh'])
+    const readme = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8')
+    const scp = readme.split('\n').filter((line) => /^scp /.test(line))
+    expect(scp).toHaveLength(1)
+    const copied = [...(scp[0] ?? '').matchAll(/deploy\/([\w.]+)/g)].map((m) => m[1]).sort()
+    expect(copied).toEqual(needed)
+    expect(readme).not.toMatch(/scp -r deploy/)
   })
 
   it('TRUST_PROXY включает compose рядом с Caddy, а не образ: docker run без прокси ему не верит', () => {

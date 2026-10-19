@@ -96,10 +96,15 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=runtime-tree /app /app
 # Тома монтируются поверх этих папок и при первом подключении берут их владельца — node.
-# Рендерер пишет при сборке служебные файлы (.astro, кеш Vite) — его папка тоже за node.
-# Остальной код только для чтения: API работает не от root и свой код поменять не может
+# Весь код, и рендерер тоже, остаётся за root, только для чтения: API работает не от root и не
+# может поменять ни свой код, ни код сборщика, который запускает при каждой публикации.
+# Сборщик пишет кеши Astro и Vite в PUBLISH_DIR/.cache (scripts/build-release.mjs), а папку .astro
+# Astro берёт всегда из корня проекта — она ссылка в тот же кеш. Папку, куда ведёт ссылка, API
+# создаёт перед каждой сборкой (DOT_ASTRO_CACHE в apps/api/src/publish/renderer.ts)
 RUN mkdir -p /data/sites /data/media \
-  && chown -R node:node /data /app/apps/renderer
+  && chown -R node:node /data \
+  && rm -rf /app/apps/renderer/.astro \
+  && ln -s /data/sites/.cache/dot-astro /app/apps/renderer/.astro
 USER node
 WORKDIR /app/apps/api
 EXPOSE 4000
