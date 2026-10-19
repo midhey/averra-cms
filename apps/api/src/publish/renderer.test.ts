@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BuildFailure } from './queue'
-import { RENDER_SCRIPT, rendererProcess } from './renderer'
+import { DOT_ASTRO_CACHE, RENDER_SCRIPT, rendererProcess } from './renderer'
 
 // Процесс сборщика без настоящего Astro: в папке «рендерера» лежит свой scripts/build-release.mjs.
 // Настоящую сборку демо-сайта проходит e2e (e2e/tests/publish.spec.ts)
@@ -68,6 +68,18 @@ describe('процесс сборщика', () => {
     // Секреты API сборщику не передаются: в его вывод (а значит, в журнал и админку) им не попасть
     expect(env.AUTH_SECRET).toBeUndefined()
     expect(Object.keys(env).filter((key) => /SECRET|DATABASE|SMTP|MAIL_ENC/.test(key))).toEqual([])
+  })
+
+  it('кеш сборки — в cacheDir: папка для .astro образа есть до старта сборщика', async () => {
+    const dir = await fakeRenderer(`
+      import { existsSync, writeFileSync } from 'node:fs'
+      import { join } from 'node:path'
+      const ready = existsSync(join(process.env.AVERRA_CACHE_DIR, '${DOT_ASTRO_CACHE}'))
+      writeFileSync(join(process.env.AVERRA_OUT_DIR, 'cache.json'), JSON.stringify({ ready }))
+    `)
+    const out = await outDir()
+    await rendererProcess(options(dir))({ siteId: 's', outDir: out })
+    expect(JSON.parse(await readFile(join(out, 'cache.json'), 'utf8'))).toEqual({ ready: true })
   })
 
   it('ненулевой код — BuildFailure с хвостом вывода без цветов терминала', async () => {

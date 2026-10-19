@@ -1,6 +1,6 @@
 import { FORM_MAX_FIELDS, form } from '@averra/schema'
 import { and, eq, sql } from 'drizzle-orm'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { leads, mailOutbox, pages, type StoredLeadField, sites } from '../../db/schema'
 import { memoryMailer } from '../../mail/memory-mailer'
 import { createTestApi, sendQueue, type TestApi } from '../../testing'
@@ -967,6 +967,47 @@ describe('раздел «Заявки» в админке', () => {
     )
     expect(groups).toEqual([...groups].sort((a, b) => a - b))
     expect(rows.at(-2)).toContain('"Тверь"')
+  })
+
+  it('CSV потоком: сбой посреди выгрузки рвёт ответ, а не отдаёт обрезанный файл', async () => {
+    const siteId = await siteWithForm()
+    const base = Date.now()
+    // Первая порция целая, а самая старая заявка во второй порции не читается: так выглядит
+    // сбой базы посреди выгрузки, когда заголовки и статус 200 уже ушли
+    await api.db.insert(leads).values(
+      Array.from({ length: LEADS_EXPORT_BATCH + 1 }, (_, index) => ({
+        siteId,
+        pageSlug: 'index',
+        blockId: 'lead',
+        formTitle: 'Оставьте заявку',
+        data: [
+          {
+            name: 'name',
+            label: 'Имя',
+            type: 'name' as const,
+            value: (index === LEADS_EXPORT_BATCH ? {} : `Заявка ${index}`) as string,
+          },
+        ],
+        consentText: 'Согласен',
+        consentPolicyUrl: '/privacy',
+        consentedAt: new Date(base - index * 1000),
+        createdAt: new Date(base - index * 1000),
+      })),
+    )
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await api.app.request(`${leadsUrl(siteId)}/export`, { headers: owner.headers })
+      expect(res.status).toBe(200)
+      // Тело не дочитывается: браузер (fetch и blob в админке) видит сбой, а не «скачан»
+      await expect(res.text()).rejects.toThrow()
+      expect(errors).toHaveBeenCalledWith(
+        `Выгрузка CSV заявок сайта ${siteId} оборвалась`,
+        expect.anything(),
+      )
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('Заявка 1')
+    } finally {
+      errors.mockRestore()
+    }
   })
 
   it('CSV потоком: удалили граничную заявку между порциями — выгрузка не обрывается', async () => {

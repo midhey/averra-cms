@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CSV_BOM, csvCell, csvLine, leadCsvRow, leadsCsv, leadsCsvHeader, toCsv } from './csv'
+import { CSV_BOM, csvCell, csvLine, leadCsvRow, leadsCsvHeader } from './csv'
 
 describe('CSV заявок', () => {
   it.each([
@@ -20,17 +20,15 @@ describe('CSV заявок', () => {
     expect(csvCell('строка 1\nстрока 2')).toBe('"строка 1\nстрока 2"')
   })
 
-  it('BOM, разделитель «;» и CRLF', () => {
-    expect(
-      toCsv([
-        ['a', 'b'],
-        ['c', 'd'],
-      ]),
-    ).toBe('\uFEFF"a";"b"\r\n"c";"d"\r\n')
+  it('разделитель «;» и CRLF в конце строки', () => {
+    expect(csvLine(['a', 'b'])).toBe('"a";"b"\r\n')
   })
 
-  it('колонки — подписи полей всех форм, флажок — «да»/«нет», дата по Москве', () => {
-    const csv = leadsCsv([
+  // Порядок колонок выбирает выгрузка (exportLabels в repo.ts, проверен в leads.test.ts),
+  // здесь — как строка заявки ложится под заданные подписи
+  it('строка под заголовком: флажок — «да»/«нет», дата по Москве, нет поля — пустая ячейка', () => {
+    const labels = ['Имя', 'Перезвонить', 'Город']
+    const first = leadCsvRow(
       {
         createdAt: new Date('2026-10-15T09:30:00.000Z'),
         status: 'processed',
@@ -41,6 +39,9 @@ describe('CSV заявок', () => {
           { name: 'agree', label: 'Перезвонить', type: 'checkbox', value: true },
         ],
       },
+      labels,
+    )
+    const second = leadCsvRow(
       {
         createdAt: new Date('2026-10-14T09:30:00.000Z'),
         status: 'new',
@@ -48,27 +49,12 @@ describe('CSV заявок', () => {
         formTitle: 'Другая',
         data: [{ name: 'city', label: 'Город', type: 'text', value: 'Тверь' }],
       },
-    ])
-    const [header, first, second] = csv.slice(1).split('\r\n')
-    expect(header).toBe('"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город"')
-    expect(first).toBe('"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";""')
-    expect(second).toBe('"14.10.2026, 12:30";"новая";"/";"Другая";"";"";"Тверь"')
-  })
-
-  it('поток из заголовка и строк по одной даёт тот же файл, что и целиком', () => {
-    const lead = {
-      createdAt: new Date('2026-10-15T09:30:00.000Z'),
-      status: 'new' as const,
-      pageSlug: 'index',
-      formTitle: 'Заявка',
-      data: [{ name: 'name', label: 'Имя', type: 'name' as const, value: '=1+1' }],
-    }
-    const labels = ['Имя']
-    const streamed =
-      CSV_BOM +
-      csvLine(leadsCsvHeader(labels)) +
-      csvLine(leadCsvRow(lead, labels)) +
-      csvLine(leadCsvRow(lead, labels))
-    expect(streamed).toBe(leadsCsv([lead, lead]))
+      labels,
+    )
+    expect(CSV_BOM + csvLine(leadsCsvHeader(labels)) + csvLine(first) + csvLine(second)).toBe(
+      '\uFEFF"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город"\r\n' +
+        '"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";""\r\n' +
+        '"14.10.2026, 12:30";"новая";"/";"Другая";"";"";"Тверь"\r\n',
+    )
   })
 })

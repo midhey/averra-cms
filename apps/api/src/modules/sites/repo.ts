@@ -1,4 +1,4 @@
-import { MAIN_PAGE_SLUG, type PageContent, type Theme } from '@averra/schema'
+import { collectMediaRefs, MAIN_PAGE_SLUG, type PageContent, type Theme } from '@averra/schema'
 import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
@@ -184,6 +184,22 @@ export function sitesRepo(db: Db) {
       // Сравниваем с null, а не на истинность: пустой заголовок — тоже заголовок
       return rows.flatMap(({ slug, title, content }) =>
         content !== null && title !== null ? [{ slug, title, content }] : [],
+      )
+    },
+
+    /**
+     * Картинки опубликованных страниц сайта — id из полей-картинок блоков (collectMediaRefs),
+     * как в снимке для рендерера. По ним сборка решает, какие файлы картинок класть в релиз
+     */
+    async publishedMediaIds(siteId: string) {
+      const rows = await db
+        .select({ content: pages.published })
+        .from(pages)
+        .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
+      return new Set(
+        rows.flatMap(({ content }) =>
+          content ? collectMediaRefs(content).map((ref) => ref.mediaId) : [],
+        ),
       )
     },
   }

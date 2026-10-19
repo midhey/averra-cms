@@ -21,11 +21,6 @@ export const CSV_BOM = '\uFEFF'
 /** Строка CSV: разделитель «;» (так CSV открывает Excel с русской локалью), в конце CRLF */
 export const csvLine = (row: readonly string[]) => `${row.map(csvCell).join(';')}\r\n`
 
-/** Таблица в CSV целиком: BOM и строки через CRLF */
-export function toCsv(rows: readonly (readonly string[])[]) {
-  return CSV_BOM + rows.map(csvLine).join('')
-}
-
 const dateFormat = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'short',
   timeStyle: 'short',
@@ -61,17 +56,4 @@ export function leadCsvRow(lead: CsvLead, labels: readonly string[]) {
     lead.formTitle,
     ...labels.map((label) => byLabel.get(label) ?? ''),
   ]
-}
-
-/**
- * Заявки в CSV одной строкой — для небольших наборов. Колонки подписей — в порядке, в каком
- * подписи встретились. Все заявки сайта выгружаются потоком из тех же строк (leadsCsvHeader,
- * leadCsvRow) — см. /export в routes.ts
- */
-export function leadsCsv(leads: readonly CsvLead[]) {
-  const labels: string[] = []
-  for (const lead of leads) {
-    for (const field of lead.data) if (!labels.includes(field.label)) labels.push(field.label)
-  }
-  return toCsv([leadsCsvHeader(labels), ...leads.map((lead) => leadCsvRow(lead, labels))])
 }

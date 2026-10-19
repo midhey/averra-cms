@@ -11,6 +11,8 @@ export type StaticSiteBuilderOptions = {
   /** Сколько версий сайта хранить (текущая не удаляется) */
   keepReleases: number
   storage: MediaStorage
+  /** Картинки опубликованных страниц сайта (sitesRepo.publishedMediaIds) */
+  publishedMedia: (siteId: string) => Promise<ReadonlySet<string>>
   render: Render
   log?: (message: string) => void
   now?: () => Date
@@ -18,8 +20,8 @@ export type StaticSiteBuilderOptions = {
 
 /**
  * Сборка сайта в новую папку релиза и атомарная подмена текущей (src/publish/releases.ts).
- * Шаги: Astro собирает статику во временную папку → в неё ложатся файлы картинок, на которые
- * ссылаются страницы → убирается то, на что страницы не ссылаются → папка становится релизом,
+ * Шаги: Astro собирает статику во временную папку → в неё ложатся файлы картинок опубликованных
+ * страниц, на которые ссылается HTML → убирается то, на что страницы не ссылаются → папка становится релизом,
  * ссылка current — на него → старые релизы чистятся. Сбой на любом шаге до подмены удаляет
  * временную папку: сайт остаётся на прежней версии
  */
@@ -27,6 +29,7 @@ export function staticSiteBuilder({
   publishDir,
   keepReleases,
   storage,
+  publishedMedia,
   render,
   log = () => {},
   now = () => new Date(),
@@ -43,6 +46,9 @@ export function staticSiteBuilder({
         outDir: tmpDir,
         siteId,
         storage,
+        // Читаются после сборки: страницу переопубликовали во время неё — по новой версии
+        // уже стоит в очереди следующая сборка
+        mediaIds: await publishedMedia(siteId),
         previousDir: previous ? releases.pathOf(previous) : undefined,
       })
       await pruneUnusedAssets(tmpDir)

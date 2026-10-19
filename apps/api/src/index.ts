@@ -157,6 +157,7 @@ const publishQueue = config.PUBLISH_DIR
         publishDir: config.PUBLISH_DIR,
         keepReleases: config.PUBLISH_KEEP_RELEASES,
         storage,
+        publishedMedia: (siteId) => sitesRepo(db).publishedMediaIds(siteId),
         log: console.log,
         render: rendererProcess({
           rendererDir: config.RENDERER_DIR ?? defaultRendererDir(),

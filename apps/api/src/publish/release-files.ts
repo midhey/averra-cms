@@ -36,26 +36,32 @@ export function referencedMedia(html: string) {
 }
 
 /**
- * Кладёт в релиз файлы картинок, на которые ссылаются его страницы, — и только их: медиатека
- * целиком наружу не видна. Файл под своим адресом не меняется никогда (новая картинка — новый id),
- * поэтому файл, который уже есть в прежнем релизе, связывается жёсткой ссылкой, а не копируется:
- * пять хранимых версий сайта не занимают пятикратно места под картинки. Файла нет в медиатеке —
+ * Кладёт в релиз файлы картинок, на которые ссылаются его страницы, — и только картинок
+ * опубликованных страниц (mediaIds — из полей-картинок блоков, а не из текста): медиатека целиком
+ * наружу не видна. Какие варианты картинки (ширина, формат) нужны, видно по HTML. Путь /media/…
+ * в тексте или ссылке страницы — просто текст: картинка не из mediaIds (чужая, удалённая,
+ * неопубликованная) в релиз не кладётся и сборку не роняет. Файл под своим адресом не меняется
+ * никогда (новая картинка — новый id), поэтому файл, который уже есть в прежнем релизе,
+ * связывается жёсткой ссылкой, а не копируется: пять хранимых версий сайта не занимают
+ * пятикратно места под картинки. Файла картинки опубликованной страницы нет в медиатеке —
  * ошибка сборки, а не сайт с дырой вместо картинки
  */
 export async function copyReferencedMedia({
   outDir,
   siteId,
   storage,
+  mediaIds,
   previousDir,
 }: {
   outDir: string
   siteId: string
   storage: MediaStorage
+  mediaIds: ReadonlySet<string>
   previousDir?: string
 }) {
   const pages = (await filesOf(outDir)).filter(isPage)
   const html = (await Promise.all(pages.map((page) => readFile(page, 'utf8')))).join('\n')
-  const refs = referencedMedia(html)
+  const refs = referencedMedia(html).filter((ref) => mediaIds.has(ref.mediaId))
   for (const { mediaId, file } of refs) {
     const target = join(outDir, 'media', mediaId, file)
     await mkdir(dirname(target), { recursive: true })

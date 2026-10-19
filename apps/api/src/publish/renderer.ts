@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BuildFailure } from './queue'
@@ -12,6 +13,13 @@ export const defaultRendererDir = () => fileURLToPath(new URL('../../../renderer
 
 /** Скрипт сборки релиза в пакете рендерера */
 export const RENDER_SCRIPT = join('scripts', 'build-release.mjs')
+
+/**
+ * Папка в cacheDir, куда в образе ведёт ссылка apps/renderer/.astro (deploy/Dockerfile): .astro
+ * Astro пишет всегда в корень проекта, а код рендерера в образе только для чтения. Папку создаёт
+ * API перед каждой сборкой — ссылка из образа не должна вести в пустоту
+ */
+export const DOT_ASTRO_CACHE = 'dot-astro'
 
 /** Сколько вывода сборщика держать в памяти: на причину сбоя хватает хвоста */
 const OUTPUT_TAIL = 64 * 1024
@@ -27,7 +35,10 @@ export type RenderOptions = {
   rendererDir: string
   /** Адрес API, откуда сборщик берёт снимок сайта: этот же процесс на loopback */
   apiUrl: string
-  /** Кеш сборщика (Vite, Astro): вне папки рендерера, которая в образе только для чтения */
+  /**
+   * Кеш сборщика: кеши Astro и Vite (scripts/build-release.mjs) и .astro (DOT_ASTRO_CACHE) —
+   * вне папки рендерера, которая в образе только для чтения
+   */
   cacheDir: string
   timeoutMs: number
   /** --max-old-space-size процесса сборки, МБ */
@@ -64,8 +75,13 @@ function peakFrom(stdout: string) {
  * сборщика не ронял API. Ненулевой код, сигнал или таймаут — BuildFailure с хвостом вывода
  */
 export function rendererProcess(options: RenderOptions): Render {
-  return ({ siteId, outDir, signal }) =>
-    new Promise((resolve, reject) => {
+  return async ({ siteId, outDir, signal }) => {
+    try {
+      await mkdir(join(options.cacheDir, DOT_ASTRO_CACHE), { recursive: true })
+    } catch (error) {
+      throw new BuildFailure(`Не удалось подготовить кеш сборки: ${(error as Error).message}`)
+    }
+    return new Promise((resolve, reject) => {
       const env: Record<string, string> = {}
       for (const key of PASSED_ENV) {
         const value = process.env[key]
@@ -137,4 +153,5 @@ export function rendererProcess(options: RenderOptions): Render {
         }
       })
     })
+  }
 }

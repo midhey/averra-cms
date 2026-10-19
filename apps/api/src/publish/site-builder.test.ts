@@ -45,6 +45,10 @@ const fakeRender =
     return { peakRssBytes: 300 * 2 ** 20 }
   }
 
+/** Картинки опубликованных страниц: та, что стоит в блоке страницы */
+const published: ReadonlySet<string> = new Set([mediaId])
+const publishedMedia = async () => published
+
 async function storageWithImage() {
   const storage = diskStorage(await tempDir('media'))
   for (const file of ['480.avif', '960.avif', '960.jpg', 'original.jpg']) {
@@ -67,7 +71,7 @@ describe('файлы релиза', () => {
     const storage = await storageWithImage()
     const previous = await tempDir('prev')
     await writeFile(join(previous, 'index.html'), pageHtml('старая'))
-    await copyReferencedMedia({ outDir: previous, siteId, storage })
+    await copyReferencedMedia({ outDir: previous, siteId, storage, mediaIds: published })
     expect((await readdir(join(previous, 'media', mediaId))).sort()).toEqual([
       '480.avif',
       '960.avif',
@@ -76,7 +80,13 @@ describe('файлы релиза', () => {
 
     const next = await tempDir('next')
     await writeFile(join(next, 'index.html'), pageHtml('новая'))
-    await copyReferencedMedia({ outDir: next, siteId, storage, previousDir: previous })
+    await copyReferencedMedia({
+      outDir: next,
+      siteId,
+      storage,
+      mediaIds: published,
+      previousDir: previous,
+    })
     const file = join(next, 'media', mediaId, '960.jpg')
     expect(await readFile(file, 'utf8')).toBe('960.jpg')
     // Тот же файл на диске, а не копия: одна запись, две ссылки
@@ -87,8 +97,35 @@ describe('файлы релиза', () => {
     const outDir = await tempDir('out')
     await writeFile(join(outDir, 'index.html'), pageHtml('x'))
     await expect(
-      copyReferencedMedia({ outDir, siteId, storage: diskStorage(await tempDir('empty')) }),
+      copyReferencedMedia({
+        outDir,
+        siteId,
+        storage: diskStorage(await tempDir('empty')),
+        mediaIds: published,
+      }),
     ).rejects.toThrow(`нет файла картинки ${mediaId}/480.avif`)
+  })
+
+  it('путь к картинке в тексте страницы — не картинка страницы: сборку не роняет и наружу не выкладывает', async () => {
+    const storage = await storageWithImage()
+    // Своя картинка, но не на опубликованной странице: файл в медиатеке есть
+    const unpublished = 'b2222222-2222-4222-8222-222222222222'
+    await storage.put(
+      mediaKey(siteId, unpublished, '960.jpg'),
+      new TextEncoder().encode('черновик'),
+    )
+    // Чужая или удалённая: файла нет нигде
+    const unknown = 'c3333333-3333-4333-8333-333333333333'
+    const outDir = await tempDir('text')
+    await writeFile(
+      join(outDir, 'index.html'),
+      `${pageHtml('x')}<p>Скопировал адрес /media/${unknown}/960.jpg из админки</p>` +
+        `<a href="/media/${unpublished}/960.jpg">ссылка</a>`,
+    )
+    await expect(
+      copyReferencedMedia({ outDir, siteId, storage, mediaIds: published }),
+    ).resolves.toBe(3)
+    expect(await readdir(join(outDir, 'media'))).toEqual([mediaId])
   })
 
   it('убирает из _astro то, на что не ссылается ни страница, ни её CSS', async () => {
@@ -107,6 +144,7 @@ describe('сборка сайта в релиз', () => {
     const publishDir = await tempDir('publish')
     const build = staticSiteBuilder({
       publishDir,
+      publishedMedia,
       keepReleases: 5,
       storage: await storageWithImage(),
       render: fakeRender('Версия 1'),
@@ -124,7 +162,7 @@ describe('сборка сайта в релиз', () => {
   it('сбой сборки не трогает текущую версию и не оставляет мусора', async () => {
     const publishDir = await tempDir('publish')
     const storage = await storageWithImage()
-    const options = { publishDir, keepReleases: 5, storage }
+    const options = { publishDir, keepReleases: 5, storage, publishedMedia }
     const signal = new AbortController().signal
     const first = await staticSiteBuilder({ ...options, render: fakeRender('Версия 1') })(
       siteId,
@@ -148,7 +186,7 @@ describe('сборка сайта в релиз', () => {
   it('сбой после сборки (нет картинки) — тоже прежняя версия, а пик памяти в ошибке', async () => {
     const publishDir = await tempDir('publish')
     const signal = new AbortController().signal
-    const options = { publishDir, keepReleases: 5 }
+    const options = { publishDir, keepReleases: 5, publishedMedia }
     // Прежняя версия — без картинки: файла нет ни в ней, ни в медиатеке
     const textOnly: Render = async ({ outDir }) => {
       await writeFile(join(outDir, 'index.html'), '<h1>Версия 1</h1>')
@@ -174,6 +212,7 @@ describe('сборка сайта в релиз', () => {
     let tick = 0
     const build = staticSiteBuilder({
       publishDir,
+      publishedMedia,
       keepReleases: 2,
       storage: await storageWithImage(),
       render: fakeRender(),

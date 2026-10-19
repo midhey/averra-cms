@@ -1,6 +1,5 @@
 import { LeadSettings, LeadStatus, UpdateLead, Uuid } from '@averra/schema'
 import { Hono } from 'hono'
-import { stream } from 'hono/streaming'
 import { z } from 'zod'
 import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
@@ -58,33 +57,18 @@ export function leadsRoutes({ db, mail }: { db: Db; mail: MailDeps }) {
       )
 
       // CSV всех заявок сайта потоком: подписи колонок — одним запросом, заявки — порциями
-      // по LEADS_EXPORT_BATCH, и каждая порция сразу уходит в ответ. В памяти API — одна
-      // порция, а не все заявки за срок хранения. Значения-формулы обезврежены (csv.ts)
+      // по LEADS_EXPORT_BATCH, и каждая порция уходит в ответ, когда её готов принять клиент.
+      // В памяти API — одна порция, а не все заявки за срок хранения. Значения-формулы
+      // обезврежены (csv.ts)
       .get('/export', validate('param', SiteParams), site('leads.read'), async (c) => {
         const { siteId } = c.req.valid('param')
         const labels = await repo.exportLabels(siteId)
         const date = new Date().toISOString().slice(0, 10)
-        c.header('Content-Type', 'text/csv; charset=utf-8')
-        c.header('Content-Disposition', `attachment; filename="leads-${date}.csv"`)
-        c.header('Cache-Control', 'no-store')
-        return stream(
-          c,
-          async (out) => {
-            await out.write(CSV_BOM + csvLine(leadsCsvHeader(labels)))
-            let after: ExportCursor | undefined
-            while (!out.aborted) {
-              const batch = await repo.exportBatch(siteId, after)
-              const last = batch.at(-1)
-              if (!last) break
-              await out.write(batch.map((lead) => csvLine(leadCsvRow(lead, labels))).join(''))
-              after = { at: last.cursorAt, id: last.id }
-            }
-          },
-          // Заголовки уже ушли: статус не сменить, файл оборвётся. В лог — без данных заявок
-          async (error) => {
-            console.error(`Выгрузка CSV заявок сайта ${siteId} оборвалась`, errorForLog(error))
-          },
-        )
+        return c.body(exportStream(repo, siteId, labels), 200, {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="leads-${date}.csv"`,
+          'Cache-Control': 'no-store',
+        })
       })
 
       .get('/settings', validate('param', SiteParams), site('leads.read'), async (c) => {
@@ -144,4 +128,44 @@ export function leadsRoutes({ db, mail }: { db: Db; mail: MailDeps }) {
         return c.body(null, 204)
       })
   )
+}
+
+/**
+ * Тело выгрузки CSV. Заголовки и статус 200 уходят раньше заявок, поэтому сбой посреди
+ * выгрузки (упала база) нельзя сообщить кодом ответа. Поток тогда завершается ошибкой,
+ * а не закрывается: сервер рвёт соединение без конца chunked-ответа, и браузер (fetch в админке)
+ * видит сбой вместо обрезанного файла, похожего на целый. В лог — без данных заявок
+ */
+function exportStream(
+  repo: ReturnType<typeof leadsRepo>,
+  siteId: string,
+  labels: readonly string[],
+) {
+  const encoder = new TextEncoder()
+  let after: ExportCursor | undefined
+  let started = false
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        if (!started) {
+          started = true
+          controller.enqueue(encoder.encode(CSV_BOM + csvLine(leadsCsvHeader(labels))))
+          return
+        }
+        const batch = await repo.exportBatch(siteId, after)
+        const last = batch.at(-1)
+        if (!last) {
+          controller.close()
+          return
+        }
+        controller.enqueue(
+          encoder.encode(batch.map((lead) => csvLine(leadCsvRow(lead, labels))).join('')),
+        )
+        after = { at: last.cursorAt, id: last.id }
+      } catch (error) {
+        console.error(`Выгрузка CSV заявок сайта ${siteId} оборвалась`, errorForLog(error))
+        controller.error(new Error('Выгрузка CSV оборвалась'))
+      }
+    },
+  })
 }

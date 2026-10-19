@@ -2,6 +2,7 @@ import { demoSiteId, type PageContentInput } from '@averra/schema'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../../testing'
+import { sitesRepo } from '../sites/repo'
 
 // Страница ссылается на картинку по id. API следит, чтобы ссылка вела в медиатеку того же
 // сайта: при сохранении черновика, при возврате версии и в снимке для рендерера
@@ -121,6 +122,8 @@ describe('снимок сайта', () => {
 
     const media = await snapshotMedia(siteId)
     expect(Object.keys(media)).toEqual([published.id])
+    // Тот же список берёт сборка сайта: файлы каких картинок класть в релиз (release-files.ts)
+    expect(await sitesRepo(api.db).publishedMediaIds(siteId)).toEqual(new Set([published.id]))
     expect(media[published.id]).toMatchObject({
       width: 640,
       height: 480,
