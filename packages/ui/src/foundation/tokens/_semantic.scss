@@ -1,0 +1,88 @@
+// Роли: что это за цвет или размер, а не как он выглядит. Стили компонентов берут только их.
+// Тема (src/themes) переопределяет значения ролей, имена не меняются
+:root {
+  color-scheme: light;
+
+  /* Фон и поверхности */
+  --color-background: var(--palette-neutral-50);
+  --color-surface: var(--palette-neutral-0);
+  --color-surface-muted: var(--palette-neutral-100);
+  --color-surface-sidebar: var(--palette-neutral-50);
+  --color-surface-inset: var(--palette-neutral-100);
+  --color-surface-accent: var(--palette-accent-50);
+
+  /* Текст */
+  --color-text: var(--palette-neutral-800);
+  --color-text-strong: var(--palette-neutral-950);
+  --color-text-muted: var(--palette-neutral-600);
+  --color-text-placeholder: var(--palette-neutral-500);
+
+  /* Границы: обычная — у карточек, strong — у полей ввода (3:1 к фону), subtle — разделители */
+  --color-border: var(--palette-neutral-300);
+  --color-border-strong: var(--palette-neutral-500);
+  --color-border-subtle: var(--palette-neutral-200);
+
+  /* Акцент: ссылки, выбранное, счётчики */
+  --color-action: var(--palette-accent-500);
+  --color-action-hover: var(--palette-accent-700);
+  --color-action-text: var(--palette-neutral-0);
+
+  /* Главное действие экрана (основная кнопка) */
+  --color-primary: var(--palette-accent-500);
+  --color-primary-hover: var(--palette-accent-700);
+  --color-primary-text: var(--palette-neutral-0);
+
+  /* Кольцо фокуса и затемнение под окном */
+  --color-focus-ring: var(--palette-accent-700);
+  --color-overlay: color-mix(in srgb, var(--palette-neutral-950) 68%, transparent);
+
+  /* Состояния: поверхность плашки, текст на ней, точка-индикатор */
+  --color-success-surface: var(--palette-green-100);
+  --color-success-text: var(--palette-green-700);
+  --color-success-indicator: var(--palette-green-500);
+  --color-warning-surface: var(--palette-amber-100);
+  --color-warning-text: var(--palette-amber-800);
+  --color-warning-indicator: var(--palette-amber-500);
+  --color-danger-surface: var(--palette-red-100);
+  --color-danger-text: var(--palette-red-700);
+  --color-danger-indicator: var(--palette-red-500);
+  --color-info-surface: var(--palette-accent-100);
+  --color-info-text: var(--palette-accent-700);
+  --color-info-indicator: var(--palette-accent-700);
+  --color-neutral-surface: var(--palette-neutral-100);
+  --color-neutral-text: var(--palette-neutral-600);
+  --color-neutral-indicator: var(--palette-neutral-300);
+
+  /* Текст: размеры по роли */
+  --font-size-small: var(--type-1);
+  --font-size-caption: var(--type-2);
+  --font-size-body: var(--type-4);
+  --font-size-lead: var(--type-4);
+  --font-size-title: var(--type-5);
+  --font-size-headline: var(--type-6);
+  --font-size-display: var(--type-7);
+  --font-size-figure: var(--type-8);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-body: 1.6;
+  --line-height-tight: 1.2;
+
+  /* Форма: радиусы и тени по роли */
+  --radius-inner: var(--radius-small);
+  --radius-control: var(--radius-small);
+  --radius-item: var(--radius-small);
+  --radius-card: var(--radius-medium);
+  --radius-pill: var(--radius-round);
+  --shadow-raised: var(--shadow-small);
+  --shadow-overlay: var(--shadow-surface);
+
+  /* Раскладка */
+  --size-control: 2.75rem;
+  --size-control-small: 2.25rem;
+  --size-sidebar: 16.5rem;
+  --space-page-inline: var(--space-4);
+  --space-page-block: var(--space-5);
+  --space-card: var(--space-5);
+}

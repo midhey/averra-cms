@@ -1,0 +1,113 @@
+@use "../foundation" as ui;
+
+// Тема Averra (концепт админки): тёплый светлый фон, белые поверхности, почти чёрный текст,
+// один синий акцент. Своя палитра объявлена здесь же, роли ссылаются на неё.
+// Тёмная тема — ещё один такой же блок под [data-theme="dark"] с теми же ролями
+:root {
+  /* Палитра темы */
+  --palette-sand-0: #fff;
+  --palette-sand-50: #fbfaf8;
+  --palette-sand-100: #f6f5f1;
+  --palette-sand-150: #f4f3ef;
+  --palette-sand-200: #eceae4;
+  --palette-sand-250: #e9e7e1;
+  --palette-sand-300: #e2e0da;
+  --palette-sand-350: #f0eee9;
+  --palette-sand-600: #8c8a83;
+  --palette-sand-400: #c9c6bd;
+  --palette-ink-600: #6b6c72;
+  --palette-ink-700: #5f6066;
+  --palette-ink-800: #3a3b40;
+  --palette-ink-950: #1a1b1e;
+  --palette-ink-1000: #000;
+  --palette-blue-50: #f3f5fd;
+  --palette-blue-100: #e8ecfa;
+  --palette-blue-600: #2b44c7;
+  --palette-blue-800: #1e3399;
+  --palette-green-50: #e6f2ea;
+  --palette-green-400: #3a9a5b;
+  --palette-green-800: #1f6b3a;
+  --palette-amber-50: #fbf1e2;
+  --palette-amber-400: #e09a2b;
+  --palette-amber-900: #8a5208;
+  --palette-red-50: #fbe9e7;
+  --palette-red-400: #c8372d;
+  --palette-red-800: #a3271f;
+  --palette-stone-100: #eeedea;
+  --palette-stone-800: #4a4b50;
+
+  /* Фон и поверхности */
+  --color-background: var(--palette-sand-150);
+  --color-surface: var(--palette-sand-0);
+  --color-surface-muted: var(--palette-sand-200);
+  --color-surface-sidebar: var(--palette-sand-50);
+  --color-surface-inset: var(--palette-sand-250);
+  --color-surface-accent: var(--palette-blue-50);
+
+  /* Текст */
+  --color-text: var(--palette-ink-950);
+  --color-text-strong: var(--palette-ink-1000);
+  --color-text-muted: var(--palette-ink-700);
+  --color-text-placeholder: var(--palette-ink-600);
+
+  /* Границы */
+  --color-border: var(--palette-sand-300);
+  --color-border-strong: var(--palette-sand-600);
+  --color-border-subtle: var(--palette-sand-350);
+
+  /* Акцент и главное действие */
+  --color-action: var(--palette-blue-600);
+  --color-action-hover: var(--palette-blue-800);
+  --color-action-text: var(--palette-sand-0);
+  --color-primary: var(--palette-ink-950);
+  --color-primary-hover: var(--palette-ink-800);
+  --color-primary-text: var(--palette-sand-0);
+  --color-focus-ring: var(--palette-blue-600);
+  --color-overlay: color-mix(in srgb, var(--palette-ink-950) 48%, transparent);
+
+  /* Состояния */
+  --color-success-surface: var(--palette-green-50);
+  --color-success-text: var(--palette-green-800);
+  --color-success-indicator: var(--palette-green-400);
+  --color-warning-surface: var(--palette-amber-50);
+  --color-warning-text: var(--palette-amber-900);
+  --color-warning-indicator: var(--palette-amber-400);
+  --color-danger-surface: var(--palette-red-50);
+  --color-danger-text: var(--palette-red-800);
+  --color-danger-indicator: var(--palette-red-400);
+  --color-info-surface: var(--palette-blue-100);
+  --color-info-text: var(--palette-blue-800);
+  --color-info-indicator: var(--palette-blue-600);
+  --color-neutral-surface: var(--palette-stone-100);
+  --color-neutral-text: var(--palette-stone-800);
+  --color-neutral-indicator: var(--palette-sand-400);
+
+  /* Шрифты: файлы раздаёт сама админка (@font-face в её стилях) */
+  --font-sans: "Golos Text", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Cascadia Mono", "Consolas", monospace;
+
+  /* Текст: интерфейс плотнее сайта — основной 14 px */
+  --font-size-body: var(--type-3);
+  --font-size-lead: var(--type-4);
+  --line-height-body: 1.45;
+
+  /* Форма */
+  --radius-inner: 0.375rem;
+  --radius-control: 0.625rem;
+  --radius-item: 0.5rem;
+  --radius-card: 0.875rem;
+  --shadow-raised: 0 0.0625rem 0.125rem rgb(26 27 30 / 12%);
+  --shadow-overlay: 0 0.0625rem 0.1875rem rgb(26 27 30 / 8%), 0 0.5rem 1.5rem rgb(26 27 30 / 10%);
+
+  /* Раскладка: на телефоне поля страницы уже */
+  --space-page-inline: 1rem;
+  --space-page-block: 1.25rem;
+  --space-card: 1.25rem;
+}
+
+@include ui.breakpoint(medium) {
+  :root {
+    --space-page-inline: 2.5rem;
+    --space-page-block: 2rem;
+  }
+}

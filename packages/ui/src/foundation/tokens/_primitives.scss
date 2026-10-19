@@ -1,0 +1,57 @@
+// Сырые значения: палитра, шкалы отступов и размеров текста, радиусы, тени, время.
+// Стили компонентов палитру напрямую не берут — только семантические роли (_semantic.scss)
+:root {
+  --palette-neutral-0: #fff;
+  --palette-neutral-50: #f7f8fa;
+  --palette-neutral-100: #eceef2;
+  --palette-neutral-200: #dfe2e8;
+  --palette-neutral-300: #b5bac5;
+  --palette-neutral-500: #6a7180;
+  --palette-neutral-600: #515866;
+  --palette-neutral-800: #252a34;
+  --palette-neutral-950: #101217;
+  --palette-accent-50: #f3f4ff;
+  --palette-accent-100: #e8ebff;
+  --palette-accent-500: #5965e8;
+  --palette-accent-700: #3f49bd;
+  --palette-green-100: #dff7e8;
+  --palette-green-500: #2f9a5a;
+  --palette-green-700: #217a48;
+  --palette-amber-100: #fff0ce;
+  --palette-amber-500: #e3a12f;
+  --palette-amber-800: #7a4a00;
+  --palette-red-100: #ffe4e2;
+  --palette-red-500: #d0453c;
+  --palette-red-700: #a83232;
+
+  /* Шкала отступов */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  /* Шкала размеров текста (12, 13, 14, 16, 18, 22, 30, 32 px) */
+  --type-1: 0.75rem;
+  --type-2: 0.8125rem;
+  --type-3: 0.875rem;
+  --type-4: 1rem;
+  --type-5: 1.125rem;
+  --type-6: 1.375rem;
+  --type-7: 1.875rem;
+  --type-8: 2rem;
+
+  /* Размеры, радиусы, тени, шрифты, время */
+  --size-content: 72rem;
+  --radius-small: 0.5rem;
+  --radius-medium: 0.875rem;
+  --radius-round: 999rem;
+  --shadow-surface: 0 1rem 3rem rgb(16 18 23 / 10%);
+  --shadow-small: 0 0.0625rem 0.125rem rgb(16 18 23 / 12%);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "BlinkMacSystemFont", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Consolas", monospace;
+  --duration-fast: 160ms;
+}

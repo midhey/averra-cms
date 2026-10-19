@@ -15,8 +15,9 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "lint": "biome check .",
-    "format": "biome check --write .",
+    "lint": "biome check . && pnpm lint:styles",
+    "lint:styles": "stylelint \"**/*.scss\"",
+    "format": "biome check --write . && stylelint \"**/*.scss\" --fix",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "e2e": "pnpm --filter @averra/e2e e2e",
     "db:generate": "pnpm --filter @averra/api db:generate",
@@ -33,6 +34,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
-    "pnpm": "12.9.1"
+    "pnpm": "12.9.1",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard-scss": "^17.0.0"
   }
 }

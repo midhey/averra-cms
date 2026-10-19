@@ -1,0 +1,55 @@
+@use "sass:math";
+@use "sass:meta";
+@use "../config" as config;
+
+@mixin fluid($property, $min, $max, $min-viewport: 320, $max-viewport: 1200) {
+  @if not math.is-unitless($min) or not math.is-unitless($max) {
+    @error "fluid() min and max values must be unitless pixels.";
+  }
+
+  @if not math.is-unitless($min-viewport) or not math.is-unitless($max-viewport) {
+    @error "fluid() viewport values must be unitless pixels.";
+  }
+
+  @if $max-viewport <= $min-viewport {
+    @error "fluid() max viewport must be greater than min viewport.";
+  }
+
+  $slope: math.div($max - $min, $max-viewport - $min-viewport);
+  $intersection: $min - $slope * $min-viewport;
+
+  #{$property}: clamp(
+    #{math.div($min, config.$root-font-size)}rem,
+    calc(#{math.div($intersection, config.$root-font-size)}rem + #{$slope * 100}vw),
+    #{math.div($max, config.$root-font-size)}rem
+  );
+}
+
+@mixin focus-ring {
+  outline: 0.1875rem solid var(--color-focus-ring);
+  outline-offset: 0.1875rem;
+}
+
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}
+
+@mixin breakpoint($name) {
+  @if $name == small {
+    @media (min-width: config.$breakpoint-small) {
+      @content;
+    }
+  } @else if $name == medium {
+    @media (min-width: config.$breakpoint-medium) {
+      @content;
+    }
+  } @else if meta.type-of($name) == number {
+    @media (min-width: $name) {
+      @content;
+    }
+  } @else {
+    @error "Unknown breakpoint `#{$name}`.";
+  }
+}

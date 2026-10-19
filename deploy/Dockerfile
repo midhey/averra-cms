@@ -39,6 +39,7 @@ COPY apps/mcp/package.json apps/mcp/
 COPY packages/schema/package.json packages/schema/
 COPY packages/blocks/package.json packages/blocks/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/ui/package.json packages/ui/
 COPY e2e/package.json e2e/
 COPY deploy/package.json deploy/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
@@ -57,11 +58,15 @@ COPY apps/mcp/package.json apps/mcp/
 COPY packages/schema/package.json packages/schema/
 COPY packages/blocks/package.json packages/blocks/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/ui/package.json packages/ui/
 COPY e2e/package.json e2e/
 COPY deploy/package.json deploy/
 # Только то, что нужно API и рендереру: без dev-зависимостей (vitest, drizzle-kit, typescript,
 # Biome). esbuild (зависимость astro) и tsx (необязательный peer vite) приезжают транзитивно для
-# сборщика сайта — API ими не пользуется и запускается собранным JavaScript
+# сборщика сайта — API ими не пользуется и запускается собранным JavaScript. Так же приезжает sass
+# (с immutable и готовыми бинарниками @parcel/watcher): это необязательный peer vite, и раз он есть
+# в рабочей области (Sass админки), pnpm подставляет его во все варианты vite, в том числе у astro.
+# Скрипты установки @parcel/watcher выключены в allowBuilds, сайт Sass не использует
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --prod --frozen-lockfile --filter "@averra/api..." --filter "@averra/renderer..."
 # Исходники пакетов рабочей области: рендерер собирает блоки из них при каждой публикации

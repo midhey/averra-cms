@@ -1,0 +1,6 @@
+@use "../config" as config;
+
+.container {
+  width: min(100% - (config.$gutter * 2), config.$content-width);
+  margin-inline: auto;
+}

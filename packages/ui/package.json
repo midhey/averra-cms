@@ -1,0 +1,35 @@
+{
+  "name": "@averra/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "sass": "./src/foundation/_index.scss"
+    },
+    "./preset": {
+      "sass": "./src/foundation/preset.scss"
+    },
+    "./themes/averra": {
+      "sass": "./src/themes/_averra.scss"
+    }
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.21.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "postcss": "^8.5.30",
+    "postcss-scss": "^4.0.9",
+    "sass": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
