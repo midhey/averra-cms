@@ -16,6 +16,7 @@ import { usePageTitle } from '../ui/use-page-title'
 import styles from './AuthScreens.module.scss'
 
 const fieldOrder = ['email']
+const MAIL_DOCS_URL = 'https://midhey.github.io/averra-cms/install/mail/'
 
 /** «Забыли пароль?»: письмо со ссылкой, а без почты — честно, как вернуть доступ иначе */
 export function ForgotPasswordScreen() {
@@ -54,11 +55,18 @@ function ResetUnavailable() {
       <ul className={styles.list}>
         <li>попросите владельца админки задать вам новый пароль;</li>
         <li>
-          если вы владелец и у вас есть доступ к серверу — остановите API и выполните{' '}
-          <code className={monoClassName}>pnpm user:password --email ваша@почта</code>: пароль
-          спросят скрыто, все входы завершатся;
+          если вы владелец и у вас есть доступ к серверу — в папке установки выполните{' '}
+          <code className={monoClassName}>
+            docker compose exec api node dist/server/user-password.js --email ваша@почта
+          </code>
+          : пароль спросят скрыто, все входы завершатся. В разработке —{' '}
+          <code className={monoClassName}>pnpm user:password --email ваша@почта</code> при
+          остановленном API;
         </li>
-        <li>чтобы сброс по почте заработал, настройте SMTP (README, раздел «Почта»).</li>
+        <li>
+          чтобы сброс по почте заработал, владелец настраивает SMTP на странице «Почта» —{' '}
+          <a href={MAIL_DOCS_URL}>как настроить почту</a>.
+        </li>
       </ul>
     </div>
   )
