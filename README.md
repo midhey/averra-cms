@@ -36,10 +36,12 @@ pnpm dev
 
 | Команда | Что делает |
 |---|---|
-| `pnpm dev` | поднимает API, админку и рендерер |
-| `pnpm check` | линтер, типы и тесты — всё, что нужно перед коммитом |
+| `pnpm dev` | поднимает API, админку и рендерер (сайт документации — отдельно, `pnpm docs:dev`) |
+| `pnpm check` | линтер, типы, тесты и сборка документации с проверкой ссылок — всё, что нужно перед коммитом |
 | `pnpm e2e` | сквозные тесты в браузере (Playwright), см. ниже |
-| `pnpm build` | собирает API (JavaScript в `apps/api/dist/server`, для сервера), админку и рендерер |
+| `pnpm docs:dev` | сайт документации (`apps/docs`) на http://localhost:4330/averra-cms/ |
+| `pnpm docs:build` | собирает сайт документации в `apps/docs/dist` и проверяет ссылки |
+| `pnpm build` | собирает API (JavaScript в `apps/api/dist/server`, для сервера), админку, рендерер и сайт документации |
 | `pnpm typecheck` | проверяет типы во всех пакетах |
 | `pnpm test` | запускает тесты во всех пакетах |
 | `pnpm lint` | проверяет линтером и форматтером: Biome для кода, stylelint для `*.scss` |
@@ -379,7 +381,7 @@ sudo bash install.sh --site-domain remont.ru --email studio@averra.ru --version 
 
 ### Образы и версии
 
-Образы собирает GitHub Actions (`.github/workflows/release.yml`, сторонние actions закреплены по SHA) по тегу `vX.Y.Z`: сначала `pnpm check`, потом `ghcr.io/midhey/averra-api:X.Y.Z` и `ghcr.io/midhey/averra-web:X.Y.Z` под amd64 и arm64. Репозиторий приватный, поэтому на сервере нужен токен GitHub только с `read:packages`. Docker хранит его в `/root/.docker/config.json` (base64, это не шифр), поэтому токен — только на чтение пакетов. Почему GHCR, а не сборка на месте, — в шаге 3.6. Собрать образы руками:
+Образы собирает GitHub Actions (`.github/workflows/release.yml`, сторонние actions закреплены по SHA) для версии `vX.Y.Z`: сначала `pnpm check`, потом `ghcr.io/midhey/averra-api:X.Y.Z` и `ghcr.io/midhey/averra-web:X.Y.Z` под amd64 и arm64. Пакет GHCR по умолчанию закрыт, даже у открытого репозитория, поэтому на сервере нужен токен GitHub только с `read:packages`. Docker хранит его в `/root/.docker/config.json` (base64, это не шифр), поэтому токен — только на чтение пакетов. Почему GHCR, а не сборка на месте, — в шаге 3.6. Собрать образы руками:
 
 ```bash
 docker build -f deploy/Dockerfile --target api -t ghcr.io/midhey/averra-api:0.6.0 .
@@ -388,11 +390,19 @@ docker build -f deploy/Dockerfile --target web -t ghcr.io/midhey/averra-web:0.6.
 
 `pnpm check` на Linux идёт и на каждый push в master и pull request (`.github/workflows/ci.yml`).
 
+**Как выходит версия.** Версию и `CHANGELOG.md` ведёт release-please (`.github/workflows/release-please.yml`) по сообщениям коммитов: после каждого пуша в master он открывает или обновляет pull request «chore: release X.Y.Z» со списком изменений. Пока версия ниже 1.0: `fix` — патч, `feat` и ломающие изменения (`feat!`, `BREAKING CHANGE`) — минорная. `docs`, `test`, `chore` и `refactor` версию не поднимают и в список не попадают. Влили этот pull request — release-please ставит тег `vX.Y.Z`, делает релиз на GitHub и в том же запуске вызывает `release.yml`: проверки и образы. Первая версия — 0.1.0; другую задаёт строка `Release-As: X.Y.Z` в теле коммита. Теги руками не ставим. Пересобрать образы уже выпущенной версии (например, если сборка упала) — Actions → release → Run workflow с её тегом.
+
+Release-please работает со встроенным `GITHUB_TOKEN`, поэтому:
+
+- один раз в настройках репозитория: Settings → Actions → General → «Allow GitHub Actions to create and approve pull requests»;
+- на pull request релиза `ci.yml` сам не запускается (GitHub не запускает workflow на события от `GITHUB_TOKEN`). Проверки всё равно идут: `pnpm check` — в `release.yml` перед образами, и `ci.yml` — после вливания в master;
+- `release.yml` не ждёт пуша тега: тег от `GITHUB_TOKEN` его бы и не запустил. Его вызывает `release-please.yml` напрямую (`workflow_call`), личный токен (PAT) не нужен.
+
 Кеш в Caddy: страницы сайта и `index.html` админки (вместе с её экранами `/sites/…`) — `no-cache`. Файлы с хешем в имени (`/_astro/*` сайта, `/assets/*` админки) и картинки `/media/<uuid>/…` кешируются на год (`immutable`). Нет файла `/assets/…` админки — 404, а не `index.html`.
 
 Прод-сборка API без Docker: `pnpm --filter @averra/api build`, запуск — `node --enable-source-maps apps/api/dist/server/index.js` (или `pnpm --filter @averra/api start:prod`).
 
-Версия установки — в образе API (`AVERRA_VERSION`, её передаёт `release.yml` из тега). Её видно владельцу в боковой панели и на экране «Состояние установки» и в `averra.sh status`. В открытых маршрутах (`/api/health*`) версии нет.
+Версия установки — в образе API (`AVERRA_VERSION`, её передаёт `release.yml` из тега версии). Её видно владельцу в боковой панели и на экране «Состояние установки» и в `averra.sh status`. В открытых маршрутах (`/api/health*`) версии нет.
 
 ### Управление установкой: `averra.sh`
 
@@ -537,6 +547,14 @@ API e2e запущен с `PUBLISH_DIR=e2e/.data/sites`, как на серве�
 
 Astro по умолчанию отправляет анонимную телеметрию. Отключить её: `pnpm --filter @averra/renderer exec astro telemetry disable`.
 
+## Документация
+
+Сайт документации — `apps/docs` на Astro Starlight, выкладывается на https://midhey.github.io/averra-cms/. Страницы — Markdown в `apps/docs/src/content/docs`, язык по умолчанию русский. Поиск работает только в собранном сайте: `pnpm docs:build`, потом `pnpm --filter @averra/docs preview`.
+
+- Ссылки между страницами пишем от корня сайта вместе с `/averra-cms/` (`[Установка](/averra-cms/install/)`). Битая ссылка или якорь роняет сборку. Сборка входит в `pnpm check`: битую документацию не пускает в master локальный `pnpm check` перед коммитом (пушим прямо в master, CI проверяет уже после пуша).
+- Выкладка — `.github/workflows/docs.yml`: при пуше в master с изменениями в `apps/docs` и вручную (Actions → docs → Run workflow). Workflow собирает сайт сам, с той же проверкой ссылок, поэтому битый сайт на Pages не уедет, даже если попал в master. Один раз в настройках репозитория: Settings → Pages → Source — GitHub Actions.
+- Английский добавится папкой `src/content/docs/en` и строкой в `locales` в `astro.config.mjs`: русские страницы и их адреса не меняются.
+
 ## Структура
 
 ```
@@ -545,6 +563,7 @@ apps/
   admin/      # React + Vite: сайты, страницы и редактор с живым предпросмотром
   renderer/   # Astro: JSON сайта → статический HTML
   mcp/        # MCP-сервер для нейронок поверх API
+  docs/       # сайт документации: Astro Starlight → GitHub Pages
 e2e/          # сквозные тесты на Playwright
 deploy/       # установка на VPS: Dockerfile, compose.yaml, Caddyfile, install.sh, averra.sh (бэкапы, обновления), pnpm fleet и их тесты
 packages/
