@@ -1,4 +1,4 @@
-# Caddy установки Averra (модуль 9). Значения — из окружения контейнера (deploy/.env через
+# Caddy установки Averra. Значения — из окружения контейнера (deploy/.env через
 # compose.yaml): SITE_DOMAIN, ADMIN_DOMAIN, ACME_EMAIL, SITE_ID.
 #
 # Сертификаты Let's Encrypt Caddy выпускает и продлевает сам (тома caddy_data и caddy_config).

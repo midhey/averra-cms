@@ -15,8 +15,8 @@ import { bash, pathEntry, posix, tempDir } from './bash'
 
 // Установщик deploy/install.sh без Docker и без настоящего VPS: сухой прогон, разбор флагов,
 // .env (секреты, права, повторный запуск) и полный прогон с подделками docker, ss, getent и
-// hostname в PATH — они пишут, с чем их позвали. Настоящий Docker и VPS — чек-лист в
-// docs/steps/3.6-vps-install.md
+// hostname в PATH — они пишут, с чем их позвали. Настоящий Docker и VPS — чек-лист живой проверки
+// (документация: Установка и сопровождение → Чек-лист живой проверки)
 
 const script = fileURLToPath(new URL('../install.sh', import.meta.url))
 const composeFile = fileURLToPath(new URL('../compose.yaml', import.meta.url))
@@ -134,7 +134,14 @@ function install(args: string[], options: { fakes?: Fakes; env?: Record<string, 
   return { ...run, calls, chmods, systemd, systemctl }
 }
 
-const required = ['--site-domain', 'remont.ru', '--email', 'studio@averra.ru', '--version', '0.6.0']
+const required = [
+  '--site-domain',
+  'example.ru',
+  '--email',
+  'studio@example.com',
+  '--version',
+  '0.6.0',
+]
 
 function readEnv(dir: string) {
   const env: Record<string, string> = {}
@@ -163,7 +170,7 @@ describe('флаги', () => {
   })
 
   it('без обязательного — понятная ошибка, ничего не спрашивая', () => {
-    const run = install(['--email', 'studio@averra.ru', '--version', '1', '--yes', '--dry-run'])
+    const run = install(['--email', 'studio@example.com', '--version', '1', '--yes', '--dry-run'])
     expect(run.status).toBe(1)
     expect(run.stderr).toContain('не задан домен сайта: --site-domain')
   })
@@ -172,8 +179,8 @@ describe('флаги', () => {
     const dir = posix(join(tempDir(), 'inst'))
     const cases: [string[], string][] = [
       [['--site-domain', 'Remont.RU'], 'SITE_DOMAIN «Remont.RU» — не домен'],
-      [['--site-domain', 'remont.ru {'], 'не домен'],
-      [['--admin-domain', 'remont.ru'], 'домен сайта и админки должны различаться'],
+      [['--site-domain', 'example.ru {'], 'не домен'],
+      [['--admin-domain', 'example.ru'], 'домен сайта и админки должны различаться'],
       [['--email', 'нет-почты'], 'не адрес почты'],
       [['--version', '1.0 ; rm -rf /'], 'не тег образа'],
       [['--api-image', 'Registry/IMG'], 'не имя образа'],
@@ -205,7 +212,7 @@ describe('флаги', () => {
   })
 })
 
-const dnsOk = { 'remont.ru': '203.0.113.5', 'admin.remont.ru': '203.0.113.5' }
+const dnsOk = { 'example.ru': '203.0.113.5', 'admin.example.ru': '203.0.113.5' }
 
 describe('сухой прогон', () => {
   it('показывает план, проходит проверки и ничего не пишет и не запускает', () => {
@@ -227,7 +234,7 @@ describe('сухой прогон', () => {
     const dir = join(tempDir(), 'inst')
     const run = install([...required, '--dir', posix(dir), '--dry-run'], {
       fakes: {
-        dns: { 'remont.ru': '198.51.100.7' },
+        dns: { 'example.ru': '198.51.100.7' },
         busyPorts: [443],
         dockerDenied: true,
       },
@@ -235,8 +242,8 @@ describe('сухой прогон', () => {
     expect(run.status).toBe(1)
     expect(run.stdout).toContain('не пройдёт: Docker не отвечает или нет прав')
     expect(run.stdout).toContain('не пройдёт: порты заняты: 443')
-    expect(run.stdout).toContain('не пройдёт: домен remont.ru указывает на 198.51.100.7')
-    expect(run.stdout).toContain('не пройдёт: домен admin.remont.ru не находится в DNS')
+    expect(run.stdout).toContain('не пройдёт: домен example.ru указывает на 198.51.100.7')
+    expect(run.stdout).toContain('не пройдёт: домен admin.example.ru не находится в DNS')
     expect(run.stdout).toContain('Проблем: 4')
     expect(existsSync(dir)).toBe(false)
     expect(run.calls()).not.toMatch(/pull|up -d|exec/)
@@ -271,9 +278,9 @@ describe('.env установки', () => {
     const env = readEnv(dir)
     expect(env).toMatchObject({
       AVERRA_VERSION: '0.6.0',
-      SITE_DOMAIN: 'remont.ru',
-      ADMIN_DOMAIN: 'admin.remont.ru',
-      ACME_EMAIL: 'studio@averra.ru',
+      SITE_DOMAIN: 'example.ru',
+      ADMIN_DOMAIN: 'admin.example.ru',
+      ACME_EMAIL: 'studio@example.com',
       OWNER_EMAIL: '',
       SITE_ID: '',
     })
@@ -341,9 +348,9 @@ describe('.env установки', () => {
     }
     expect(after).toMatchObject({
       SITE_DOMAIN: 'new.ru',
-      ADMIN_DOMAIN: 'admin.remont.ru',
+      ADMIN_DOMAIN: 'admin.example.ru',
       AVERRA_VERSION: '0.7.0',
-      ACME_EMAIL: 'studio@averra.ru',
+      ACME_EMAIL: 'studio@example.com',
       SMTP_HOST: 'smtp.yandex.ru',
     })
     // Свои строки не задваиваются, заголовок — один
@@ -360,7 +367,7 @@ describe('.env установки', () => {
     expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
     const run = install(['--dir', posix(dir), '--dry-run', '--yes'], { fakes: { dns: dnsOk } })
     expect(run.status, run.output).toBe(0)
-    expect(run.stdout).toContain('https://remont.ru')
+    expect(run.stdout).toContain('https://example.ru')
     expect(run.stdout).toContain('Новые секреты:     нет (берутся из .env)')
   })
 })
@@ -389,8 +396,8 @@ describe('полная установка (подделки docker и сети)'
       'docker compose pull',
       'docker compose up -d postgres api',
       expect.stringMatching(/^docker compose exec -T api node -e fetch/),
-      'docker compose exec -T -e CMS_USER_PASSWORD api node dist/server/user-create.js --email studio@averra.ru --name Владелец --if-missing',
-      'docker compose exec -T api node dist/server/site-create.js --name remont.ru --print-id',
+      'docker compose exec -T -e CMS_USER_PASSWORD api node dist/server/user-create.js --email studio@example.com --name Владелец --if-missing',
+      'docker compose exec -T api node dist/server/site-create.js --name example.ru --print-id',
       'docker compose up -d',
     ])
     // Пароль владельца и токен GHCR — не в аргументах команд: пароль приходит переменной окружения
@@ -399,8 +406,8 @@ describe('полная установка (подделки docker и сети)'
     expect(calls.find((line) => line.includes('user-create'))).toContain(
       'CMS_USER_PASSWORD=очень-секретный-пароль',
     )
-    expect(readEnv(dir)).toMatchObject({ OWNER_EMAIL: 'studio@averra.ru', SITE_ID })
-    expect(run.stdout).toContain('Админка: https://admin.remont.ru')
+    expect(readEnv(dir)).toMatchObject({ OWNER_EMAIL: 'studio@example.com', SITE_ID })
+    expect(run.stdout).toContain('Админка: https://admin.example.ru')
     // Скрипт управления и папки бэкапов и состояния — в папке установки, таймер бэкапов — в systemd
     expect(readFileSync(join(dir, 'averra.sh'), 'utf8')).toBe(
       readFileSync(fileURLToPath(new URL('../averra.sh', import.meta.url)), 'utf8'),
@@ -464,20 +471,20 @@ describe('полная установка (подделки docker и сети)'
 
   it('DNS домена не на этот сервер — отказ с адресами; --public-ip за NAT и --skip-dns-check', () => {
     const dir = posix(join(tempDir(), 'inst'))
-    const elsewhere = { 'remont.ru': '198.51.100.7', 'admin.remont.ru': '198.51.100.7' }
+    const elsewhere = { 'example.ru': '198.51.100.7', 'admin.example.ru': '198.51.100.7' }
     const wrong = install([...required, '--dir', dir, '--env-only'], { fakes: { dns: elsewhere } })
     // --env-only Docker и сеть не проверяет
     expect(wrong.status).toBe(0)
     const run = install([...required, '--dir', dir, '--yes'], { fakes: { dns: elsewhere } })
     expect(run.status).toBe(1)
-    expect(run.stderr).toContain('домен remont.ru указывает на 198.51.100.7')
+    expect(run.stderr).toContain('домен example.ru указывает на 198.51.100.7')
     expect(run.stderr).toContain('203.0.113.5')
     expect(run.calls()).not.toContain('compose pull')
 
     const missing = install([...required, '--dir', dir, '--yes'], {
-      fakes: { dns: { 'remont.ru': '203.0.113.5' } },
+      fakes: { dns: { 'example.ru': '203.0.113.5' } },
     })
-    expect(missing.stderr).toContain('домен admin.remont.ru не находится в DNS')
+    expect(missing.stderr).toContain('домен admin.example.ru не находится в DNS')
 
     const nat = install([...required, '--dir', dir, '--yes', '--public-ip', '198.51.100.7'], {
       fakes: { dns: elsewhere },
@@ -493,28 +500,33 @@ describe('полная установка (подделки docker и сети)'
     const owner = { AVERRA_OWNER_PASSWORD: 'пароль-владельца' }
     // Сервер без IPv6, у домена верная A и чужая AAAA (ставит панель регистратора):
     // Let's Encrypt пойдёт по IPv6 первым, и сертификат не выпустится
-    const strayAaaa = { 'remont.ru': '203.0.113.5 2001:db8::99', 'admin.remont.ru': '203.0.113.5' }
+    const strayAaaa = {
+      'example.ru': '203.0.113.5 2001:db8::99',
+      'admin.example.ru': '203.0.113.5',
+    }
     const run = install([...required, '--dir', dir, '--yes'], {
       fakes: { dns: strayAaaa },
       env: owner,
     })
     expect(run.status).toBe(1)
-    expect(run.stderr).toContain('домен remont.ru указывает на 2001:db8::99 203.0.113.5')
+    expect(run.stderr).toContain('домен example.ru указывает на 2001:db8::99 203.0.113.5')
     expect(run.stderr).toContain('не этого сервера: 2001:db8::99')
     expect(run.stderr).toContain('AAAA-запись направьте на IPv6 этого сервера или удалите её')
-    expect(run.stderr).not.toContain('admin.remont.ru указывает')
+    expect(run.stderr).not.toContain('admin.example.ru указывает')
     expect(run.calls()).not.toContain('compose pull')
 
     // Лишняя A-запись на чужой адрес — тоже отказ, со своей подсказкой
     const extraA = install([...required, '--dir', dir, '--dry-run'], {
-      fakes: { dns: { 'remont.ru': '203.0.113.5 198.51.100.7', 'admin.remont.ru': '203.0.113.5' } },
+      fakes: {
+        dns: { 'example.ru': '203.0.113.5 198.51.100.7', 'admin.example.ru': '203.0.113.5' },
+      },
     })
     expect(extraA.status).toBe(1)
     expect(extraA.stdout).toContain('не этого сервера: 198.51.100.7')
     expect(extraA.stdout).toContain('лишние A-записи удалите')
 
     // AAAA на IPv6 самого сервера — всё верно. За NAT оба адреса — флагом на каждый
-    const ownAaaa = { 'remont.ru': '203.0.113.5 2001:db8::5', 'admin.remont.ru': '203.0.113.5' }
+    const ownAaaa = { 'example.ru': '203.0.113.5 2001:db8::5', 'admin.example.ru': '203.0.113.5' }
     const v6 = install([...required, '--dir', dir, '--yes'], {
       fakes: { dns: ownAaaa, serverIps: '203.0.113.5 10.0.0.2 2001:db8::5' },
       env: owner,
@@ -642,12 +654,16 @@ describe('контейнеры не от root и без лишних прав', 
       ...new Set([...installer.matchAll(/"\$SCRIPT_DIR\/([\w.]+)"/g)].map((m) => m[1])),
     ].sort()
     expect(needed).toEqual(['averra.sh', 'compose.yaml', 'install.sh'])
-    const readme = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8')
-    const scp = readme.split('\n').filter((line) => /^scp /.test(line))
+    // Команду копирования студия берёт со страницы установки в документации
+    const docsPage = fileURLToPath(
+      new URL('../../apps/docs/src/content/docs/install/server.md', import.meta.url),
+    )
+    const instructions = readFileSync(docsPage, 'utf8')
+    const scp = instructions.split('\n').filter((line) => /^scp /.test(line))
     expect(scp).toHaveLength(1)
     const copied = [...(scp[0] ?? '').matchAll(/deploy\/([\w.]+)/g)].map((m) => m[1]).sort()
     expect(copied).toEqual(needed)
-    expect(readme).not.toMatch(/scp -r deploy/)
+    expect(instructions).not.toMatch(/scp -r deploy/)
   })
 
   it('TRUST_PROXY включает compose рядом с Caddy, а не образ: docker run без прокси ему не верит', () => {

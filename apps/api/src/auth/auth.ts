@@ -75,7 +75,8 @@ export function createAuth({
       disableSignUp: true,
       minPasswordLength: PASSWORD_LENGTH.min,
       maxPasswordLength: PASSWORD_LENGTH.max,
-      // Сброс пароля по ссылке из письма (см. auth/password-reset.ts и README, «Вход и права»).
+      // Сброс пароля по ссылке из письма (см. auth/password-reset.ts; документация: Работа в
+      // админке → Вход и восстановление пароля, Разработчику → Доступ и секреты).
       // Письмо — через очередь, ссылка ведёт в админку, а не в API. Better Auth ловит ошибку
       // этой функции и пишет её в лог, ответ на запрос от этого не меняется
       sendResetPassword: async ({ user, token }) => {

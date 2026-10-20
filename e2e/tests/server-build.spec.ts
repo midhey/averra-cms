@@ -5,7 +5,7 @@ import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@averra/schema'
 import { publishDir } from '../urls'
 import { demo, expect, sites, test } from './fixtures'
 
-// Публикация на сервере (модуль 9): API e2e запущен с PUBLISH_DIR, как на VPS, и после публикации
+// Публикация на сервере: API e2e запущен с PUBLISH_DIR, как на VPS, и после публикации
 // собирает сайт настоящим Astro в новую папку релиза и переключает на неё ссылку current — её
 // отдаёт Caddy. Сам Caddy и Docker здесь не участвуют: их проверяет чек-лист живого VPS
 

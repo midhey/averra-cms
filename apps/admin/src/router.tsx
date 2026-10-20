@@ -284,7 +284,7 @@ const statusRoute = createRoute({
   component: InstallationScreen,
 })
 
-// Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка (шаг 3.10)
+// Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sites/$siteId/pages/$slug',

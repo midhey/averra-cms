@@ -27,7 +27,7 @@ type InlineAlertProps = {
 
 /**
  * Сообщение внутри экрана. Ошибка — role="alert": диктор прочитает её сразу, как она появилась
- * (общая ошибка формы, CONVENTIONS). Остальные тоны — обычный текст или, с live, role="status"
+ * (общая ошибка формы, соглашения). Остальные тоны — обычный текст или, с live, role="status"
  */
 export function InlineAlert({ tone, title, children, action, live }: InlineAlertProps) {
   return (

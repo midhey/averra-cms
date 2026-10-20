@@ -18,7 +18,8 @@ import { bash, pathEntry, posix, tempDir } from './bash'
 // Скрипт управления установкой deploy/averra.sh без Docker: настоящий bash, а docker, flock,
 // sleep — подделки первыми в PATH. Подделка docker ведёт маленький «сервер»: базы — файлы с числом
 // применённых миграций, запущенная версия API, здоровье по версии. Так проверяются решения скрипта
-// по итогам шагов (бэкап, проверка, откат), а не сам Docker — он в чек-листе шага 3.7
+// по итогам шагов (бэкап, проверка, откат), а не сам Docker — он в чек-листе живой проверки
+// (документация: Установка и сопровождение → Чек-лист живой проверки)
 
 const script = fileURLToPath(new URL('../averra.sh', import.meta.url))
 
@@ -116,7 +117,7 @@ const FAKE_DOCKER = readFileSync(
 const BASE_ENV = [
   'AVERRA_VERSION=0.6.0',
   'AVERRA_API_IMAGE=ghcr.io/midhey/averra-api',
-  'SITE_DOMAIN=remont.ru',
+  'SITE_DOMAIN=example.ru',
   'BACKUP_PASSPHRASE=парольшифрованиябэкапов',
 ]
 
@@ -507,7 +508,7 @@ describe('внешнее хранилище', () => {
     expect(copy).toContain('-e RCLONE_CONFIG_AVERRAS3_SECRET_ACCESS_KEY ')
     expect(copy).toContain('-e RCLONE_CONFIG_AVERRA_TYPE=crypt')
     expect(copy).toContain(
-      '-e RCLONE_CONFIG_AVERRA_REMOTE=averras3:studio-backups/averra/remont.ru',
+      '-e RCLONE_CONFIG_AVERRA_REMOTE=averras3:studio-backups/averra/example.ru',
     )
     expect(copy).toContain(`copy /backup averra:${name}`)
     // В хранилище было 3 + новый, хранится 2: удалены два самых старых

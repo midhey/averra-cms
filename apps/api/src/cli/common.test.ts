@@ -49,8 +49,8 @@ describe('команды терминала', () => {
 
 describe('ссылка из письма команды', () => {
   it('всегда говорит, куда ведёт ссылка, а про localhost предупреждает', () => {
-    expect(inviteLinkNotice('https://admin.averra.ru', 'smtp')).toEqual([
-      'Ссылка в письме ведёт в админку https://admin.averra.ru.',
+    expect(inviteLinkNotice('https://admin.example.ru', 'smtp')).toEqual([
+      'Ссылка в письме ведёт в админку https://admin.example.ru.',
     ])
     const local = inviteLinkNotice('http://localhost:5173', 'file')
     expect(local[0]).toBe('Ссылка в письме ведёт в админку http://localhost:5173.')

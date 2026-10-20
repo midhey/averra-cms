@@ -1,4 +1,4 @@
-// Прод-сборка API (модуль 9): TypeScript → JavaScript в dist/server, чтобы на сервере API
+// Прод-сборка API: TypeScript → JavaScript в dist/server, чтобы на сервере API
 // и команды запускались обычной Node, без tsx и dev-зависимостей.
 //
 // В бандл входит наш код и пакеты рабочей области (@averra/schema, @averra/tokens): они

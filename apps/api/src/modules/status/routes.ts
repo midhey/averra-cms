@@ -16,7 +16,8 @@ export type StatusDeps = {
 /**
  * Состояние установки — только владельцу админки: версия, бэкапы, обновление, сборки, почта
  * и место на диске. Участнику и токену API (MCP) — 403: это про сервер, а не про сайт.
- * Студия получает то же самое по SSH (cli/status.ts), а не токеном по HTTPS — см. шаг 3.7
+ * Студия получает то же самое по SSH (cli/status.ts), а не токеном по HTTPS — документация:
+ * Решения → Состояние для студии — по SSH
  */
 export function statusRoutes({ db, mail, version, host, publishEnabled }: StatusDeps) {
   return new Hono<AuthEnv>().get(

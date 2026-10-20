@@ -26,7 +26,7 @@ export const mailTestTemplate = defineMailTemplate({
     sentAt: z.iso.datetime({ offset: true }),
     // Провайдер без секретов: «SMTP smtp.yandex.ru:465 (TLS)…»
     provider: MailLine(300),
-    // По умолчанию — команда: так письмо ставилось до шага 3.3
+    // По умолчанию — команда: так письмо ставилось до настроек SMTP в админке
     via: z.enum(['command', 'admin']).default('command'),
   }),
   example: {
@@ -40,7 +40,7 @@ export const mailTestTemplate = defineMailTemplate({
       'чтобы убедиться, что письма из Averra CMS доходят.'
     const spam =
       'Если письмо попало в спам, проверьте SPF, DKIM и DMARC домена отправителя — ' +
-      'инструкция в README, раздел «Почта».'
+      'инструкция — https://midhey.github.io/averra-cms/install/mail/'
     return {
       subject: 'Проверка почты Averra CMS',
       preheader: 'Почта работает: письма из Averra CMS доходят',

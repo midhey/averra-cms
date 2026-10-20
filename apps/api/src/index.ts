@@ -146,7 +146,7 @@ if (config.devSeed) {
   }
 }
 
-// Публикация на сервере (модуль 9): после «Опубликовать» API собирает сайт отдельным процессом
+// Публикация на сервере: после «Опубликовать» API собирает сайт отдельным процессом
 // Astro в новую папку релиза в PUBLISH_DIR и подменяет ею текущую. Без PUBLISH_DIR — выключена
 const storage = diskStorage(config.MEDIA_DIR)
 const publishQueue = config.PUBLISH_DIR

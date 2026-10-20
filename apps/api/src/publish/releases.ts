@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readdir, readlink, rename, rm, symlink, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
-// Папки версий сайта на диске (модуль 9):
+// Папки версий сайта на диске:
 //
 //   <PUBLISH_DIR>/<id сайта>/releases/<имя релиза>/   — собранные версии, по папке на сборку
 //   <PUBLISH_DIR>/<id сайта>/current → releases/<имя> — ссылка на текущую, её отдаёт Caddy

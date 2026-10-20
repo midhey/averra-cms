@@ -97,6 +97,7 @@ test('почта не настроена — экран честно говор�
   await expect(page.getByRole('alert')).toHaveText(
     'Сброс пароля по почте сейчас недоступен: в админке не настроена почта.',
   )
+  await expect(page.getByRole('main')).toContainText('dist/server/user-password.js --email')
   await expect(page.getByRole('main')).toContainText('pnpm user:password --email')
   await expect(page.getByRole('form')).toHaveCount(0)
 })

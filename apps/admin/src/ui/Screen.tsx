@@ -3,7 +3,10 @@ import { cardClassName } from './Card'
 import { cx } from './cx'
 import styles from './Screen.module.scss'
 
-/** Экран внутри оболочки: свой <main> (CONVENTIONS) с полями и вертикальным ритмом концепта */
+/**
+ * Экран внутри оболочки: свой <main> с полями и вертикальным ритмом концепта
+ * (документация: Разработчику → Соглашения, «Админка»)
+ */
 export function Screen({ children, narrow }: { children: ReactNode; narrow?: boolean }) {
   return <main className={cx(styles.screen, narrow && styles.narrow)}>{children}</main>
 }

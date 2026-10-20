@@ -22,7 +22,10 @@ import { messagePage, PAGE_HEADERS } from './pages'
 import { leadsRepo, storedLeadBytes } from './repo'
 import { acceptLead, findPublishedForm, leadSnapshot, pagePath } from './service'
 
-/** Лимиты приёма заявок. По IP считается первым: ключ сайта выбирает клиент (CONVENTIONS) */
+/**
+ * Лимиты приёма заявок. По IP считается первым: ключ сайта выбирает клиент
+ * (документация: Разработчику → Доступ и секреты, «Лимиты»)
+ */
 export type LeadLimits = {
   perIp: { max: number; windowMs: number }
   perSite: { max: number; windowMs: number }

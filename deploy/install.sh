@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Установка Averra на чистый Ubuntu VPS одной командой (модуль 9).
+# Установка Averra на чистый Ubuntu VPS одной командой.
 #
-#   sudo ./install.sh --site-domain remont.ru --email studio@averra.ru --version 0.6.0
+#   sudo ./install.sh --site-domain example.ru --email studio@example.com --version 0.6.0
 #
 # Что делает: проверяет окружение (Docker, свободные порты 80 и 443, DNS доменов указывает на этот
 # сервер), пишет папку установки (compose.yaml и .env с секретами, права 600), поднимает
@@ -11,7 +11,8 @@
 # второй раз, а новые домены, почта или версия из флагов записываются в .env и применяются.
 # Учебного режима на сервере нет: API в образе запускается без --dev и с NODE_ENV=production.
 #
-# Полный список флагов: ./install.sh --help. Подробно — README, «Установка на сервер».
+# Полный список флагов: ./install.sh --help.
+# Подробно — https://midhey.github.io/averra-cms/install/server/
 
 set -euo pipefail
 
@@ -24,7 +25,7 @@ usage() {
   ./install.sh --site-domain <домен> --email <почта> --version <версия> [флаги]
 
 Обязательные при первой установке (дальше берутся из .env):
-  --site-domain <домен>   домен сайта, например remont.ru
+  --site-domain <домен>   домен сайта, например example.ru
   --email <почта>         почта для Let's Encrypt и вход владельца админки
   --version <версия>      версия образов Averra (тег в GHCR), например 0.6.0
 
@@ -148,7 +149,7 @@ pick() {
   if [[ -n "$prompt" ]]; then ask "$prompt" || true; fi
 }
 
-SITE_DOMAIN="$(pick "$SITE_DOMAIN_ARG" SITE_DOMAIN 'Домен сайта (например, remont.ru)')"
+SITE_DOMAIN="$(pick "$SITE_DOMAIN_ARG" SITE_DOMAIN 'Домен сайта (например, example.ru)')"
 [[ -n "$SITE_DOMAIN" ]] || fail 'не задан домен сайта: --site-domain'
 ADMIN_DOMAIN="$(pick "$ADMIN_DOMAIN_ARG" ADMIN_DOMAIN '')"
 [[ -n "$ADMIN_DOMAIN" ]] || ADMIN_DOMAIN="admin.$SITE_DOMAIN"
@@ -170,7 +171,7 @@ for pair in "SITE_DOMAIN:$SITE_DOMAIN" "ADMIN_DOMAIN:$ADMIN_DOMAIN"; do
   name="${pair%%:*}"
   value="${pair#*:}"
   [[ "$value" =~ $DOMAIN_RE ]] ||
-    fail "$name «$value» — не домен. Нужен вид remont.ru, латиницей или в punycode (xn--…), строчными"
+    fail "$name «$value» — не домен. Нужен вид example.ru, латиницей или в punycode (xn--…), строчными"
 done
 [[ "$SITE_DOMAIN" != "$ADMIN_DOMAIN" ]] || fail 'домен сайта и админки должны различаться'
 [[ "$ACME_EMAIL" =~ ^[^[:space:]@\"\']+@[^[:space:]@\"\']+\.[^[:space:]@\"\']+$ ]] ||

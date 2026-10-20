@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { prepareRequest } from '../../client-ip'
 import { createTestApi } from '../../testing'
 
-// Приём заявок за Caddy (установка на сервере, модуль 9): форма сайта шлёт заявку на свой же домен
+// Приём заявок за Caddy (установка на сервере): форма сайта шлёт заявку на свой же домен
 // (/api/forms/… от корня сайта, CMS_LINKS=relative), Caddy домена сайта передаёт этот путь в API
 // с настоящим Host, Origin и Referer браузера и ставит X-Forwarded-For. API здесь видит запрос так
 // же: адрес — домен сайта, сокет — loopback (Caddy на том же сервере), TRUST_PROXY=true

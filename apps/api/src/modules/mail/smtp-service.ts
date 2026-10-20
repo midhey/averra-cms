@@ -357,7 +357,7 @@ export async function removeSmtp({ db, runtime, log, wake }: ChangeDeps, user: S
   const repo = mailSettingsRepo(db)
   const after = runtime.fallbackStatus()
   const now = new Date()
-  // Без почты письмо не отправить, а в очередь при выключенной почте не ставим (шаг 3.2)
+  // Без почты письмо не отправить, а в очередь при выключенной почте не ставим
   const owners = after.enabled ? await ownersOf(db) : []
   const removed = await runtime.exclusive(() =>
     db.transaction(async (tx) => {

@@ -208,7 +208,8 @@ function mailConfig(env: MailEnv, options: ConfigOptions) {
       env.MAIL_TRANSPORT === 'off'
         ? `Почта выключена (MAIL_TRANSPORT=off). ${MAIL_OFF_EFFECT}`
         : 'Почта не настроена: задайте SMTP на странице «Почта» в админке или переменными ' +
-          `SMTP_HOST, SMTP_USER, SMTP_PASSWORD и MAIL_FROM (см. README, «Почта»). ${MAIL_OFF_EFFECT}`,
+          'SMTP_HOST, SMTP_USER, SMTP_PASSWORD и MAIL_FROM ' +
+          `(см. https://midhey.github.io/averra-cms/install/mail/). ${MAIL_OFF_EFFECT}`,
   }
 }
 
@@ -257,7 +258,7 @@ const envSchema = (options: ConfigOptions) =>
         .optional(),
       // Папка встроенного Postgres (PGlite) для разработки, когда DATABASE_URL не задан
       PGLITE_DIR: z.string().min(1).default('.data/pglite'),
-      // Публикация на сервере (модуль 9): папка, где лежат собранные сайты — <id сайта>/releases/…
+      // Публикация на сервере: папка, где лежат собранные сайты — <id сайта>/releases/…
       // и ссылка current на текущую версию, которую отдаёт Caddy. Не задана — публикация только
       // меняет базу, а сайт собирают отдельно (pnpm dev, рендерер руками)
       PUBLISH_DIR: z.string().min(1).optional(),
@@ -266,7 +267,7 @@ const envSchema = (options: ConfigOptions) =>
       // Сколько секунд ждать сборку сайта, прежде чем остановить её и считать упавшей
       PUBLISH_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(3600).default(300),
       // Предел кучи JavaScript процесса сборки, МБ (--max-old-space-size): сборка не съест память VPS.
-      // Замер демо-сайта — 288–355 МБ RSS всего процесса (docs/steps/3.6-vps-install.md)
+      // Замер демо-сайта — 288–355 МБ RSS всего процесса (машина разработки)
       PUBLISH_MAX_MEMORY_MB: z.coerce.number().int().min(128).max(8192).default(768),
       // Папка пакета рендерера (apps/renderer). По умолчанию — рядом с API в репозитории или образе
       RENDERER_DIR: z.string().min(1).optional(),
@@ -290,7 +291,7 @@ const envSchema = (options: ConfigOptions) =>
       // Владелец, которого API создаёт в пустой базе в учебном режиме. Без --dev не используется
       DEV_OWNER_EMAIL: z.email().optional(),
       DEV_OWNER_PASSWORD: z.string().min(10).max(128).optional(),
-      // Почта (см. README, «Почта»). smtp — настоящая отправка, file — письма в папку
+      // Почта (документация: Установка и сопровождение → Почта). smtp — настоящая отправка, file — письма в папку
       // (разработка), off — выключена. Не задано: SMTP_HOST → smtp, учебный режим → file, иначе off
       MAIL_TRANSPORT: z.enum(['smtp', 'file', 'off']).optional(),
       SMTP_HOST: z.string().trim().min(1).optional(),

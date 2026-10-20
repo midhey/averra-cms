@@ -24,12 +24,12 @@ describe('ссылки из писем на этот компьютер', () => 
     ]) {
       expect(isLocalAdminUrl(url), url).toBe(true)
     }
-    expect(isLocalAdminUrl('https://admin.averra.ru')).toBe(false)
+    expect(isLocalAdminUrl('https://admin.example.ru')).toBe(false)
   })
 
   it('предупреждает только когда письма уходят по SMTP наружу, а ссылка — на localhost', () => {
     expect(localLinkWarning('http://localhost:5173', smtp)).toContain('ADMIN_URL')
-    expect(localLinkWarning('https://admin.averra.ru', smtp)).toBeNull()
+    expect(localLinkWarning('https://admin.example.ru', smtp)).toBeNull()
     // Файловый ящик и почта в памяти — разработка: там localhost и нужен
     expect(
       localLinkWarning('http://localhost:5173', {

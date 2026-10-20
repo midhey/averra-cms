@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util'
 import { BackupRun, InstallationStatus, setupZodMessages } from '@averra/schema'
 import { z } from 'zod'
 
-// Несколько установок студии (модуль 9, шаг 3.7): состояние всех и «обновить все» по очереди.
+// Несколько установок студии: состояние всех и «обновить все» по очереди.
 // Список серверов — файл на машине студии вне репозитория (~/.config/averra/servers.txt): в папке
 // deploy/ он уехал бы на сервер клиента вместе с установщиком. Доступ — SSH по ключам. На каждом
 // сервере команды выполняет deploy/averra.sh (его ставит install.sh), сама команда здесь только

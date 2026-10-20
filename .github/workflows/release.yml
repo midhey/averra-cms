@@ -1,4 +1,4 @@
-# Выпуск версии (модуль 9): тег vX.Y.Z → проверки → образы api и web в GHCR с этой версией.
+# Выпуск версии: тег vX.Y.Z → проверки → образы api и web в GHCR с этой версией.
 # Тег ставит release-please и сразу вызывает этот workflow (release-please.yml, workflow_call):
 # пуш тега от GITHUB_TOKEN workflow не запускает, поэтому на теги он и не подписан. Вручную —
 # пересобрать образы уже выпущенной версии (Actions → release → Run workflow).

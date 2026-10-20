@@ -1111,7 +1111,8 @@ describe('раздел «Заявки» в админке', () => {
     try {
       const loggedOwner = await logged.loginAs('owner')
       const siteId = await siteWithForm(logged, loggedOwner.headers)
-      // Так выглядит форма, опубликованная до шага 3.5: вариант с табуляцией из Excel
+      // Так выглядит форма, опубликованная до запрета переносов в вариантах: вариант с табуляцией
+      // из Excel
       const [page] = await logged.db
         .select({ id: pages.id, published: pages.published })
         .from(pages)

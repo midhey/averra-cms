@@ -15,7 +15,7 @@ export const publishDisabled = () => ({
     code: 'publish_disabled',
     message:
       'Сборка сайта на сервере выключена: не задан PUBLISH_DIR. Опубликованное лежит в базе, ' +
-      'а сайт собирают отдельно (см. README, «Установка на сервер»)',
+      'а сайт собирают отдельно (см. https://midhey.github.io/averra-cms/install/)',
   },
 })
 

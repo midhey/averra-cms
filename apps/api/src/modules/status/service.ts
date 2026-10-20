@@ -11,7 +11,7 @@ import {
 import { sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 
-// Состояние установки (модуль 9): одно для владельца в админке (GET /api/status) и для студии
+// Состояние установки: одно для владельца в админке (GET /api/status) и для студии
 // (команда status.js, её зовёт deploy/averra.sh status по SSH). Без Node API: файлы состояния
 // и место на диске приходят интерфейсом HostStatus (реализация — src/status/host.ts)
 

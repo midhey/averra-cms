@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Управление установкой Averra на сервере (модуль 9): бэкапы, восстановление, обновление, состояние.
+# Управление установкой Averra на сервере: бэкапы, восстановление, обновление, состояние.
 # Ставит его install.sh в папку установки (/opt/averra/averra.sh), запускается от root:
 #
 #   sudo /opt/averra/averra.sh backup               бэкап базы и медиа с проверкой восстановлением
@@ -10,7 +10,7 @@
 #   sudo /opt/averra/averra.sh status [--json]      состояние установки (так его берёт pnpm fleet)
 #
 # Бэкап по расписанию запускает таймер systemd averra-backup.timer (ставит install.sh).
-# Подробно — README («Обновление», «Бэкапы и восстановление») и docs/steps/3.7-updates-backups.md
+# Подробно — документация: https://midhey.github.io/averra-cms/install/
 
 set -euo pipefail
 

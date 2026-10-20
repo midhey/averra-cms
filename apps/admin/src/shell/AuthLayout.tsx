@@ -15,7 +15,8 @@ type AuthLayoutProps = {
 
 /**
  * Экраны без входа (вход, «Забыли пароль?», новый пароль, приглашение): знак и карточка
- * с формой по центру. Свой <main> — у каждого экрана свой (CONVENTIONS)
+ * с формой по центру. Свой <main> — у каждого экрана свой
+ * (документация: Разработчику → Соглашения, «Админка»)
  */
 export function AuthLayout({ title, headingId, intro, children, footer }: AuthLayoutProps) {
   return (

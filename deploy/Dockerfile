@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# Образы установки Averra на VPS клиента (модуль 9). Контекст сборки — корень репозитория:
+# Образы установки Averra на VPS клиента. Контекст сборки — корень репозитория:
 #   docker build -f deploy/Dockerfile --target api -t averra-api .
 #   docker build -f deploy/Dockerfile --target web -t averra-web .
 #

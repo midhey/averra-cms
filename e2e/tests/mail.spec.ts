@@ -88,7 +88,8 @@ test('почта выключена — экран говорит это и по
   // Так API отвечает без SMTP вне учебного режима (config.ts): почта выключена с причиной
   const reason =
     'Почта не настроена: задайте SMTP на странице «Почта» в админке или переменными SMTP_HOST, ' +
-    'SMTP_USER, SMTP_PASSWORD и MAIL_FROM (см. README, «Почта»). Не работают сброс пароля, ' +
+    'SMTP_USER, SMTP_PASSWORD и MAIL_FROM (см. https://midhey.github.io/averra-cms/install/mail/). ' +
+    'Не работают сброс пароля, ' +
     'приглашения участников и уведомления о заявках'
   await patchMailState(page, { status: { enabled: false, reason } })
   await page.goto('/mail')

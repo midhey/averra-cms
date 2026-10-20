@@ -53,7 +53,7 @@ export type AppDeps = {
   /** Лимиты приёма заявок с форм: по умолчанию LEAD_LIMITS, тесты ставят свои */
   leadLimits?: LeadLimits
   /**
-   * Сборка сайта на сервере после публикации (модуль 9): очередь из src/publish/queue.ts.
+   * Сборка сайта на сервере после публикации: очередь из src/publish/queue.ts.
    * Нет (разработка, PUBLISH_DIR не задан) — публикация только меняет базу
    */
   publisher?: SitePublisher

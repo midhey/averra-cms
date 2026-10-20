@@ -1,4 +1,4 @@
-# Установка Averra на VPS клиента (модуль 9): PostgreSQL, API и Caddy.
+# Установка Averra на VPS клиента: PostgreSQL, API и Caddy.
 # Значения — из .env рядом (его создаёт install.sh, права 600). Запуск — из папки установки:
 #   docker compose up -d
 # API наружу не открыт: в него ходит только Caddy по внутренней сети.
@@ -52,7 +52,8 @@ services:
       # Итоги бэкапов и обновлений от averra.sh — для «Состояния» в админке
       STATE_DIR: /data/state
       # SMTP задают в админке (страница «Почта»): пароль шифруется MAIL_ENCRYPTION_KEY.
-      # SMTP из окружения — через compose.override.yaml (см. README, «Установка на сервер»)
+      # SMTP из окружения — через compose.override.yaml
+      # (см. https://midhey.github.io/averra-cms/install/server/)
     volumes:
       - sites:/data/sites
       - media:/data/media
