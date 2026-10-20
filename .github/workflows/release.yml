@@ -3,8 +3,10 @@
 # пуш тега от GITHUB_TOKEN workflow не запускает, поэтому на теги он и не подписан. Вручную —
 # пересобрать образы уже выпущенной версии (Actions → release → Run workflow).
 # На VPS клиента образы скачивает install.sh (docker compose pull) по AVERRA_VERSION из .env.
-# Пакет GHCR по умолчанию закрыт, даже у открытого репозитория: серверу нужен токен только на
-# чтение (read:packages).
+# Видимость пакета GHCR от репозитория не наследуется: первый пуш создаёт закрытый пакет. После
+# первого релиза владелец один раз делает averra-api и averra-web публичными (Package settings →
+# Change visibility → Public) — дальше серверы скачивают образы без входа и без токена. Обратно
+# закрытым публичный пакет не сделать.
 #
 # Сторонние actions закреплены по SHA коммита (в комментарии — версия): тег можно передвинуть,
 # коммит — нет. Обновлять — вместе с SHA
@@ -67,7 +69,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: version
-        # v0.6.0 → 0.6.0: тег образа — версия без «v». Тег приходит снаружи — только через env
+        # v0.1.0 → 0.1.0: тег образа — версия без «v». Тег приходит снаружи — только через env
         env:
           TAG: ${{ inputs.tag }}
         run: |
@@ -86,5 +88,9 @@ jobs:
           # Версия установки в образе API: её показывают «Состояние» в админке и averra.sh status
           build-args: AVERRA_VERSION=${{ steps.version.outputs.version }}
           tags: ghcr.io/${{ github.repository_owner }}/averra-${{ matrix.target }}:${{ steps.version.outputs.version }}
+          # Метка source привязывает пакет GHCR к репозиторию: со страницы пакета видно, откуда он
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
