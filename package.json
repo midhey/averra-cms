@@ -1,5 +1,6 @@
 {
   "name": "averra-cms",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.9.1",
@@ -11,15 +12,17 @@
     }
   },
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
+    "dev": "pnpm -r --parallel --filter=!@averra/docs dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "biome check . && pnpm lint:styles",
     "lint:styles": "stylelint \"**/*.scss\"",
     "format": "biome check --write . && stylelint \"**/*.scss\" --fix",
-    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm docs:build",
     "e2e": "pnpm --filter @averra/e2e e2e",
+    "docs:dev": "pnpm --filter @averra/docs dev",
+    "docs:build": "pnpm --filter @averra/docs build",
     "db:generate": "pnpm --filter @averra/api db:generate",
     "user:create": "pnpm --filter @averra/api user:create",
     "user:password": "pnpm --filter @averra/api user:password",

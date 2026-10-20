@@ -36,6 +36,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/admin/package.json apps/admin/
 COPY apps/renderer/package.json apps/renderer/
 COPY apps/mcp/package.json apps/mcp/
+COPY apps/docs/package.json apps/docs/
 COPY packages/schema/package.json packages/schema/
 COPY packages/blocks/package.json packages/blocks/
 COPY packages/tokens/package.json packages/tokens/
@@ -55,6 +56,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/admin/package.json apps/admin/
 COPY apps/renderer/package.json apps/renderer/
 COPY apps/mcp/package.json apps/mcp/
+COPY apps/docs/package.json apps/docs/
 COPY packages/schema/package.json packages/schema/
 COPY packages/blocks/package.json packages/blocks/
 COPY packages/tokens/package.json packages/tokens/
@@ -79,7 +81,7 @@ COPY apps/renderer/scripts apps/renderer/scripts
 COPY apps/api/drizzle apps/api/drizzle
 COPY --from=build /repo/apps/api/dist apps/api/dist
 # Манифесты, которые нужны только сборке, в итоговом образе не нужны
-RUN rm -rf apps/admin apps/mcp e2e deploy
+RUN rm -rf apps/admin apps/mcp apps/docs e2e deploy
 # Конфигурация установки этой версии: averra.sh update берёт compose.yaml и сам averra.sh отсюда,
 # поэтому они меняются вместе с версией, а не отдельной ручной правкой на сервере
 COPY deploy/compose.yaml deploy/averra.sh deploy/

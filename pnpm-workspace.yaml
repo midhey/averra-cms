@@ -7,9 +7,12 @@ packages:
 # Одна версия общих зависимостей на весь репозиторий.
 # В package.json пакетов вместо версии пишем "catalog:"
 catalog:
+  '@astrojs/check': ^0.9.10
+  '@fontsource/golos-text': ^5.3.0
   '@types/node': ^24.19.1
   '@types/react': ^19.3.0
   '@types/react-dom': ^19.3.0
+  astro: ^7.3.5
   hono: ^4.13.13
   react: ^19.3.0
   react-dom: ^19.3.0

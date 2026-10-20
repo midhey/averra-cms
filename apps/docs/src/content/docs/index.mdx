@@ -1,0 +1,57 @@
+---
+title: Документация
+description: Лёгкая CMS для лендингов. У каждого клиента своя установка на его сервере, студия её ставит и сопровождает.
+template: splash
+hero:
+  title: Averra
+  tagline: Лёгкая CMS для лендингов. Сайт собирается в статический HTML, у каждого клиента своя установка на его сервере.
+  actions:
+    - text: Что такое Averra
+      link: /averra-cms/overview/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/midhey/averra-cms
+      icon: github
+      variant: minimal
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+Страница — это данные из блоков по схемам, а не HTML в базе. Из них собирается быстрый статический
+сайт. Всё, ради чего в WordPress ставят плагины, — формы, медиа, почта — есть в ядре. Нейронки
+работают с теми же схемами через MCP, с правами редактора, а заявки им закрыты.
+
+## Куда дальше
+
+<CardGrid>
+  <LinkCard
+    title="Обзор"
+    description="Что умеет Averra, из чего состоит и чем отличается от конструкторов."
+    href="/averra-cms/overview/"
+  />
+  <LinkCard
+    title="Установка и сопровождение"
+    description="Установка на VPS клиента, обновления с откатом, бэкапы."
+    href="/averra-cms/install/"
+  />
+  <LinkCard
+    title="Работа в админке"
+    description="Страницы и редактор, медиатека, заявки, настройки сайта."
+    href="/averra-cms/admin/"
+  />
+  <LinkCard
+    title="Нейронки и MCP"
+    description="Как нейронка собирает лендинг и что ей можно."
+    href="/averra-cms/mcp/"
+  />
+  <LinkCard
+    title="Разработчику"
+    description="Запуск локально, устройство репозитория, свои блоки."
+    href="/averra-cms/dev/"
+  />
+  <LinkCard
+    title="Решения"
+    description="Почему сделано так, а не иначе."
+    href="/averra-cms/decisions/"
+  />
+</CardGrid>

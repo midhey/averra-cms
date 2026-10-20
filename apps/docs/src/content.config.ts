@@ -1,0 +1,10 @@
+import { defineCollection } from 'astro:content'
+import { docsLoader, i18nLoader } from '@astrojs/starlight/loaders'
+import { docsSchema, i18nSchema } from '@astrojs/starlight/schema'
+
+export const collections = {
+  docs: defineCollection({ loader: docsLoader(), schema: docsSchema() }),
+  // Подписи интерфейса по языкам: src/content/i18n/<язык>.json. В русском переводе Starlight нет
+  // строк окна поиска (Pagefind) — они в ru.json
+  i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
+}

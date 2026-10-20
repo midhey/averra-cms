@@ -19,13 +19,13 @@
     "@averra/blocks": "workspace:*",
     "@averra/schema": "workspace:*",
     "@averra/tokens": "workspace:*",
-    "astro": "^7.3.5",
+    "astro": "catalog:",
     "hono": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
+    "@astrojs/check": "catalog:",
     "@averra/api": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
