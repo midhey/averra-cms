@@ -1,0 +1,159 @@
+---
+title: API
+description: "Все маршруты API Averra: вход, права, форматы ошибок и что отвечает каждый маршрут."
+sidebar:
+  order: 7
+---
+
+Для разработчика админки, MCP или своей интеграции. После страницы вы найдёте нужный маршрут,
+будете знать, кто его может вызвать и какие ошибки ждать.
+
+API — Hono, все маршруты под `/api`. Типы API (`AppType`) читают админка и MCP: они ходят в него
+типизированным клиентом Hono, и опечатка в пути не скомпилируется.
+
+## Вход и права
+
+- **Cookie сессии** Better Auth (httpOnly, `SameSite=Lax`, в проде `Secure`) — для людей из админки.
+  Изменяющие запросы с cookie принимаются только с `Origin` админки (`ADMIN_URL`).
+- **`Authorization: Bearer <токен>`** — токен API, редактор на одном сайте. Origin не проверяется:
+  браузер сам токен не подставит.
+- **Закрыто по умолчанию.** Без входа открыты только маршруты с пометкой «открыт» ниже и
+  `/api/auth/*` — там решает Better Auth. Остальное без входа — 401.
+- **Права сайта** решает одна таблица действий (`src/auth/access.ts`): маршрут объявляет действие
+  (`requireSite(db, 'page.publish')`), а не проверяет роль сам. Кто что может —
+  [Роли](/averra-cms/admin/).
+- **Персональные данные** (заявки, полная выгрузка) токену запрещены всегда — 403.
+
+## Ошибки
+
+Один формат, по-русски, включая 404 неизвестного маршрута, 500 и ответы Better Auth:
+
+```json
+{ "error": { "code": "conflict", "message": "Такой адрес уже есть", "issues": [{ "path": "slug", "message": "…" }] } }
+```
+
+| Код | Когда |
+|---|---|
+| 400 `validation` | вход не прошёл схему; `issues` — путь до каждого кривого поля |
+| 401 | не вошёл, сессия кончилась или токен недействителен |
+| 403 | роль на сайте есть, но действие ей не разрешено |
+| 404 | нет сайта или страницы — **или сайт чужой**: снаружи это неразличимо |
+| 409 `conflict` | запрос верный, но спорит с базой (адрес занят, картинка используется) |
+| 410 | ссылка из письма была, но больше не действует (приглашение принято, отозвано, истекло) |
+| 413, 415 | файл или тело слишком большие; тип файла не тот |
+| 429 `rate_limited` | лимит попыток |
+| 503 `mail_disabled` | действию нужна почта, а её нет |
+
+Создание отвечает 201 с созданным, удаление — 204 без тела.
+
+## Служебные
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/health` | API жив. **Открыт** |
+| `GET /api/health/ready` | API и база готовы; база не отвечает — 503. **Открыт**, версии в ответе нет |
+| `GET /api/status` | состояние установки — только владелец, `Cache-Control: no-store`. См. [Состояние](/averra-cms/install/status/) |
+
+## Вход, пароль, кто я
+
+| Запрос | Что делает |
+|---|---|
+| `POST /api/auth/sign-in/email` | вход `{ email, password }`, ставит cookie. Не больше 3 попыток за 10 секунд с IP |
+| `/api/auth/*` | остальное Better Auth: `sign-out`, `get-session` и т. п. **Открыт** — решает Better Auth |
+| `POST /api/auth/verify-password` | закрыт (404): через уведённую сессию по нему подбирали бы пароль мимо лимита |
+| `POST /api/auth/change-password` | `{ currentPassword, newPassword }` → новая cookie, остальные входы завершаются. Неверный пароль — 403 `invalid_password`; не больше 5 неудач за 15 минут на пользователя (общий счётчик с паролем у настроек SMTP) |
+| `GET /api/password-reset` | работает ли сброс по почте: `{ available }`. **Открыт** |
+| `POST /api/auth/request-password-reset` | «Забыли пароль?»: `{ email }`. Ответ всегда `200 { status: "sent" }` и не раньше 300 мс. 5 запросов за 15 минут с IP, 3 — на адрес. Нет почты — 503 |
+| `POST /api/auth/reset-password` | новый пароль по ссылке `{ token, newPassword }`; ссылка негодная — 400 `invalid_token`. Все сессии завершаются |
+| `GET /api/auth/reset-password/:token` | закрыт (404): токен в пути попал бы в лог |
+| `GET /api/me` | кто вошёл: `{ kind: "user", user }` или `{ kind: "token", token: { id, siteId } }` |
+
+## Сайты и страницы
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites` | доступные сайты: владельцу — все, токену — его сайт |
+| `POST /api/sites` | создать сайт `{ name }` — только владелец. Главная создаётся сразу черновиком |
+| `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны) |
+| `GET /api/sites/:siteId/snapshot` | тема, опубликованные страницы и справочник `media` — всё для рендерера. **Открыт** |
+| `GET /api/sites/:siteId/pages` | страницы: заголовок, адрес, когда опубликована, есть ли неопубликованные правки |
+| `POST /api/sites/:siteId/pages` | создать `{ slug, title, template: "empty" \| "hero" }`; адрес занят — 409 |
+| `GET /api/sites/:siteId/pages/:slug` | страница с черновиком и опубликованной версией |
+| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks } }`. Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта — 409 с путём до поля |
+| `POST /api/sites/:siteId/pages/:slug/publish` | опубликовать черновик с заголовком; пишет версию в историю и ставит сборку |
+| `DELETE /api/sites/:siteId/pages/:slug` | удалить вместе с историей; главную — 409 |
+
+## История
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/pages/:slug/revisions` | публикации, новые сверху, последние 100: `id`, `version`, `title`, `publishedAt`, `author` |
+| `GET /api/sites/:siteId/pages/:slug/revisions/:revisionId` | версия с `content` |
+| `POST /api/sites/:siteId/pages/:slug/revisions/:revisionId/restore` | вернуть версию в черновик; отвечает страницей. Не проходит нынешние схемы или в ней удалённая картинка — 409 |
+
+## Медиатека
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/media` | `{ items, maxBytes }`: картинки с вариантами и предел размера файла |
+| `POST /api/sites/:siteId/media` | загрузить: multipart, поле `file` → 201. Не тот тип — 415, слишком большой — 413 (тело сверх лимита обрывается, не дочитанным) |
+| `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице — 409 со списком страниц |
+| `GET /api/media/:mediaId/:file` | файл варианта (`480.avif`, `960.webp`…), `immutable`, `nosniff`. **Открыт** |
+
+## Участники
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/invitations` | приглашения сайта (владелец), последние 100, без токенов |
+| `POST /api/sites/:siteId/invitations` | пригласить `{ email, role: "editor" \| "client" }` → 201, письмо в очередь. Владелец или участник — 409; нет почты — 503; лимит — 429 |
+| `DELETE /api/sites/:siteId/invitations/:invitationId` | отозвать: 204 (и повторно); принятое — 409 |
+| `POST /api/invitations/lookup` | что за приглашение по токену: сайт, роль, кто пригласил, есть ли вход у адреса. **Открыт** |
+| `POST /api/invitations/register` | принять новым пользователем `{ token, name, password }` → 201. **Открыт**. У адреса уже есть вход — 409 `user_exists` |
+| `POST /api/invitations/accept` | принять под текущим входом `{ token }`; другой адрес или токен API — 403 |
+
+Ошибки ссылки: 404 `invitation_not_found`, 410 `invitation_used` / `invitation_revoked` /
+`invitation_expired`. Токен всегда в теле, не в пути: путь пишется в лог.
+
+## Почта (только владелец)
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/mail` | состояние почты (провайдер без пароля или причина), `maxAttempts`, `retentionDays`, `linkWarning`, список шаблонов |
+| `GET /api/mail/smtp` | настройки SMTP без пароля: откуда (`env`, `database`, `none`), можно ли править и почему нет, состояние пароля |
+| `POST /api/mail/smtp/check` | проверить ещё не сохранённые настройки по шагам → `{ ok, steps, checkToken }`. Только порты 465 и 587, 10 проверок за 15 минут |
+| `PUT /api/mail/smtp` | сохранить: настройки, `currentPassword` и `checkToken` или `skipCheck: true`. Неверный пароль — 403, проверка устарела — 409 `check_stale`, правка недоступна — 409 `mail_settings_locked` |
+| `DELETE /api/mail/smtp` | удалить настройки `{ currentPassword }` |
+| `GET /api/mail/outbox` | последние 100 писем очереди со статусом и ошибкой, без данных писем |
+| `POST /api/mail/outbox/:id/retry` | вернуть письмо в очередь; отправленное или с истёкшей ссылкой — 409 |
+| `GET /api/mail/templates/:template/preview` | шаблон на примерных данных: `subject`, `html`, `text` |
+
+## Заявки (владелец и клиент, токену — 403)
+
+| Запрос | Что делает |
+|---|---|
+| `POST /api/forms/:siteId/:slug/:blockId` | приём заявки с формы сайта: `application/x-www-form-urlencoded`, до ~227 КБ. Успех — 303 на страницу с `#<id блока>-sent`; ошибки — HTML-страница (400, 404, 413, 415, 429, 500); с `Accept` без `text/html` — JSON. **Открыт** |
+| `GET /api/sites/:siteId/leads` | заявки, новые сверху, до 500; `?status=new\|processed`; состояние уведомлений |
+| `GET /api/sites/:siteId/leads/recent` | последние для обзора, `?limit=1…20` (по умолчанию 3), без согласия |
+| `GET /api/sites/:siteId/leads/:leadId` | заявка целиком |
+| `PATCH /api/sites/:siteId/leads/:leadId` | `{ status: "processed" \| "new" }` |
+| `DELETE /api/sites/:siteId/leads/:leadId` | удалить: 204 |
+| `GET /api/sites/:siteId/leads/export` | все заявки в CSV потоком: `;`, UTF-8 с BOM, формулы обезврежены |
+| `GET /api/sites/:siteId/leads/settings` | адреса уведомлений, срок хранения, подтверждение посетителю |
+| `PUT /api/sites/:siteId/leads/settings` | сохранить: до 10 адресов, срок 7–1825 дней; сменились адреса — письмо владельцам и прежним адресам |
+
+## Сборка и выгрузка
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/build` | сборка на сервере: `enabled`, последняя (`latest`) и та, что на сайте (`live`) |
+| `POST /api/sites/:siteId/build` | «Собрать заново» (владелец, редактор, токен) → 202; без `PUBLISH_DIR` — 409 `publish_disabled` |
+| `GET /api/sites/:siteId/export/static` | ZIP текущей версии сайта потоком; токену — 403. Без сборки — 409 `not_built`, больше 3,5 ГБ — 413 |
+| `GET /api/sites/:siteId/export/data` | ZIP с `site.json`, оригиналами картинок и `README.txt` — владелец и клиент |
+
+## Открытые маршруты
+
+Ровно эти и `/api/auth/*`: `GET /api/health`, `GET /api/health/ready`,
+`GET /api/sites/:siteId/snapshot`, `GET /api/media/:mediaId/:file`, `GET /api/password-reset`,
+`POST /api/invitations/lookup`, `POST /api/invitations/register`,
+`POST /api/forms/:siteId/:slug/:blockId`. Список живёт в `src/auth/middleware.ts`: открыть новый
+маршрут — значит осознанно вписать его туда ([Доступ и секреты](/averra-cms/dev/security/)).

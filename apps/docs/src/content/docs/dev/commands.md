@@ -1,0 +1,80 @@
+---
+title: Команды
+description: "Все команды pnpm и команды терминала API: разработка, проверки, пользователи, токены, почта."
+sidebar:
+  order: 1
+---
+
+Справочник для разработчика и студии. После страницы вы найдёте нужную команду и будете знать,
+как она называется на сервере.
+
+Команды — скрипты корневого `package.json`, он работает вместо Makefile. pnpm стоит в проекте и
+как dev-зависимость, поэтому скрипты вызывают его сами.
+
+## Разработка и проверки
+
+| Команда | Что делает |
+|---|---|
+| `pnpm dev` | API, админка и рендерер вместе (документация — отдельно) |
+| `pnpm check` | линтер, типы, тесты и сборка документации с проверкой ссылок — всё, что нужно перед коммитом |
+| `pnpm e2e` | сквозные тесты в браузере (Playwright) — [Тесты](/averra-cms/dev/testing/) |
+| `pnpm format` | Biome и stylelint с исправлением |
+| `pnpm lint` | Biome для кода и stylelint для `*.scss`, без исправлений |
+| `pnpm typecheck` | типы во всех пакетах |
+| `pnpm test` | тесты во всех пакетах (Vitest) |
+| `pnpm build` | сборка всего: API в `apps/api/dist/server`, админка, рендерер, документация. Рендереру нужны `CMS_SITE_ID` и запущенный API |
+| `pnpm docs:dev` | сайт документации на `http://localhost:4330/averra-cms/` |
+| `pnpm docs:build` | сборка документации в `apps/docs/dist` с проверкой ссылок |
+| `pnpm db:generate` | миграция по изменениям в `apps/api/src/db/schema.ts` |
+
+Свой пакет — `pnpm --filter <пакет> <скрипт>`, например `pnpm --filter @averra/api test`.
+
+## Пользователи, сайты, токены, почта
+
+Локально команды открывают базу напрямую: со встроенной базой сначала остановите `pnpm dev`. На
+сервере — та же команда собранным файлом в контейнере API:
+`docker compose exec api node dist/server/<файл>.js …` из `/opt/averra`.
+
+| Команда | На сервере | Что делает |
+|---|---|---|
+| `pnpm user:create --email … --name … [--role owner\|member] [--if-missing]` | `user-create.js` | пользователь админки, по умолчанию владелец. `--if-missing` — такой уже есть: выйти без ошибки и не спрашивать пароль |
+| `pnpm user:password --email …` | `user-password.js` | новый пароль, все входы пользователя завершаются, ссылки сброса сгорают. Путь вернуть доступ без почты |
+| `pnpm site:create --name … [--print-id]` | `site-create.js` | сайт, как «Новый сайт» в админке. `--print-id` печатает только id |
+| `pnpm member:add --email … --site <id> --role editor\|client` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль |
+| `pnpm member:invite --email … --site <id> --role editor\|client [--by <почта владельца>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
+| `pnpm token:create --site <id> --name … [--by <почта>]` | `token-create.js` | токен API для MCP, показывается один раз |
+| `pnpm token:list` | `token-list.js` | токены без самих токенов: сайт, кто выпустил, когда пользовались, отозван ли |
+| `pnpm token:revoke --id <id>` | `token-revoke.js` | отозвать токен |
+| `pnpm mail:test --to <адрес>` | `mail-test.js` | проверочное письмо напрямую, по шагам. Проверяет только SMTP из окружения |
+| `pnpm --filter @averra/api status [--json]` | `status.js` | состояние установки. На сервере его зовёт `averra.sh status` |
+
+Пароль команды спрашивают скрыто или берут из переменной `CMS_USER_PASSWORD` — не аргументом: он
+не печатается и не попадает в историю и логи.
+
+`member:invite` ссылку не печатает, но говорит, на какой адрес админки (`ADMIN_URL`) она ведёт.
+Ссылку на localhost при почте через SMTP она не ставит вовсе. SMTP из админки, пароль которого API
+не расшифрует, почтой не считает и отказывает с той же причиной, что показывает API.
+
+## Установка и студия
+
+| Команда | Где | Что делает |
+|---|---|---|
+| `bash install.sh …` | сервер | установка и повторный запуск — [Установка](/averra-cms/install/server/) |
+| `averra.sh backup [--kind manual\|scheduled]` | сервер | бэкап с проверкой — [Бэкапы](/averra-cms/install/backups/) |
+| `averra.sh backups` | сервер | список бэкапов |
+| `averra.sh verify <бэкап>` | сервер | проверить бэкап ещё раз |
+| `averra.sh restore [--from-s3] <бэкап> [--yes]` | сервер | восстановить |
+| `averra.sh update --version X [--yes]` | сервер | обновить с откатом — [Обновления](/averra-cms/install/updates/) |
+| `averra.sh status [--json]` | сервер | состояние установки |
+| `pnpm fleet status [--file <список>]` | машина студии | состояние всех установок — [Несколько установок](/averra-cms/install/fleet/) |
+| `pnpm fleet update --version X [--only имя,…] [--file <список>]` | машина студии | обновить все по очереди |
+
+## Сквозные тесты
+
+```bash
+pnpm --filter @averra/e2e exec playwright install chromium   # один раз
+pnpm e2e                        # все
+pnpm e2e --shuffle              # в случайном порядке
+pnpm e2e tests/editor.spec.ts   # один файл
+pnpm e2e --headed               # с окном браузера
+```

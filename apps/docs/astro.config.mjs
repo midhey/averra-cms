@@ -31,9 +31,9 @@ export default defineConfig({
         { label: 'Установка и сопровождение', items: [{ autogenerate: { directory: 'install' } }] },
         { label: 'Работа в админке', items: [{ autogenerate: { directory: 'admin' } }] },
         { label: 'Нейронки и MCP', items: [{ autogenerate: { directory: 'mcp' } }] },
-        // Разделы из одной страницы — просто ссылки: группа с единственным пунктом лишняя
-        { label: 'Разработчику', slug: 'dev' },
-        { label: 'Решения', slug: 'decisions' },
+        { label: 'Разработчику', items: [{ autogenerate: { directory: 'dev' } }] },
+        { label: 'Решения', items: [{ autogenerate: { directory: 'decisions' } }] },
+        // Раздел из одной страницы — просто ссылка: группа с единственным пунктом лишняя
         { label: 'Дорожная карта', slug: 'roadmap' },
       ],
     }),
