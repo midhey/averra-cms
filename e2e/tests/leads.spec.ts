@@ -89,8 +89,10 @@ test('список и карточка рядом: вкладки, «Ответ�
   await card.getByRole('button', { name: 'Отметить обработанной' }).click()
   await expect(card.getByRole('status')).toHaveText('Заявка обработана')
   await expect(card.getByRole('button', { name: 'Вернуть в новые' })).toBeVisible()
-  // Когда обработана — видно глазами, а не только диктору
-  await expect(card.getByText(/^Обработана \d/u)).toBeVisible()
+  // Когда обработана — видно глазами, а не только диктору: своей строкой с датой, не в плашке
+  const processedLine = card.locator('p').filter({ hasText: /^Обработана \d/u })
+  await expect(processedLine.locator('time')).toBeVisible()
+  await expect(card.getByText('Обработана', { exact: true })).toBeVisible()
   // Во вкладке «Новые» её больше нет, в «Обработанных» — есть. Вкладки — стрелками
   await tabs.getByRole('tab', { selected: true }).focus()
   await page.keyboard.press('ArrowRight')
@@ -201,6 +203,106 @@ test('на телефоне — по очереди: список, потом к
   await card.getByRole('link', { name: 'Все заявки' }).click()
   await expect(page).toHaveURL(`/sites/${demoSite.id}/leads`)
   await expect(list).toBeVisible()
+})
+
+test('длинное имя на телефоне: плашка уходит под имя, слово не рвётся посреди', async ({
+  page,
+  demoSite,
+}) => {
+  const word = 'Константинопольская'
+  const name = `${word} ${Date.now()}`
+  await createLead(demoSite.id, { name, phone: '+7 921 333-44-55', email: '', comment: '' })
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page
+    .getByRole('list', { name: 'Список заявок' })
+    .getByRole('link')
+    .filter({ hasText: name })
+    .click()
+  const card = page.getByRole('article', { name })
+  const heading = card.getByRole('heading', { level: 2, name })
+  await expect(heading).toBeVisible()
+
+  // Код выполняется в браузере: типов DOM у e2e нет, нужное описано руками
+  type Rect = { top: number }
+  type Heading = {
+    firstChild: unknown
+    ownerDocument: {
+      createRange: () => {
+        setStart: (node: unknown, offset: number) => void
+        setEnd: (node: unknown, offset: number) => void
+        getClientRects: () => Rect[]
+      }
+    }
+  }
+  // Первое слово имени — одной строкой: у каждой строки свой прямоугольник с другим верхом
+  const wordLines = await heading.evaluate((element, length) => {
+    const h2 = element as unknown as Heading
+    const range = h2.ownerDocument.createRange()
+    range.setStart(h2.firstChild, 0)
+    range.setEnd(h2.firstChild, length)
+    return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+  }, word.length)
+  expect(wordLines).toBe(1)
+
+  // Плашка — ниже имени, а не сбоку
+  const pill = card.getByText('Новая', { exact: true })
+  const nameBox = await heading.boundingBox()
+  const pillBox = await pill.boundingBox()
+  expect(nameBox && pillBox).toBeTruthy()
+  if (!nameBox || !pillBox) return
+  expect(pillBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 1)
+})
+
+test('принудительные цвета: выбранная заявка — обводкой, точка новой заявки видна', async ({
+  page,
+  demoSite,
+}) => {
+  const stamp = Date.now()
+  const first = `Пётр ${stamp}`
+  const second = `Павел ${stamp}`
+  await createLead(demoSite.id, { name: first, phone: '+7 921 444-55-66', email: '', comment: '' })
+  await createLead(demoSite.id, { name: second, phone: '+7 921 555-66-77', email: '', comment: '' })
+  await page.emulateMedia({ forcedColors: 'active' })
+  await page.goto(`/sites/${demoSite.id}/leads?status=new`)
+  const list = page.getByRole('list', { name: 'Список заявок' })
+  const selected = list.getByRole('link').filter({ hasText: first })
+  const other = list.getByRole('link').filter({ hasText: second })
+  await selected.click()
+  await expect(selected).toHaveAttribute('aria-current', 'page')
+
+  // Код выполняется в браузере: типов DOM у e2e нет, нужное описано руками
+  type Browser = {
+    document: { activeElement: { blur: () => void } | null }
+    getComputedStyle: (el: unknown) => {
+      outlineStyle: string
+      outlineWidth: string
+      backgroundColor: string
+    }
+  }
+  // Обводка без фокуса: кольцо фокуса — тоже outline
+  const outlineOf = (locator: typeof selected) =>
+    locator.evaluate((el) => {
+      const browser = globalThis as unknown as Browser
+      browser.document.activeElement?.blur()
+      const style = browser.getComputedStyle(el)
+      return `${style.outlineStyle} ${style.outlineWidth}`
+    })
+  expect(await outlineOf(selected)).toBe('solid 2px')
+  expect(await outlineOf(other)).not.toBe('solid 2px')
+
+  // Точка нарисована цветом, отличным от фона карточки: в этом режиме фон браузер перекрашивает
+  const colors = await other.evaluate((el) => {
+    const browser = globalThis as unknown as Browser
+    const link = el as unknown as { querySelector: (selector: string) => unknown }
+    const dot = link.querySelector('[aria-hidden="true"]')
+    return {
+      dot: browser.getComputedStyle(dot).backgroundColor,
+      card: browser.getComputedStyle(el).backgroundColor,
+    }
+  })
+  expect(colors.dot).not.toBe(colors.card)
+  expect(colors.dot).not.toBe('rgba(0, 0, 0, 0)')
 })
 
 test('заявки с таким id нет — сообщение в колонке карточки, список и заголовок экрана на месте', async ({
