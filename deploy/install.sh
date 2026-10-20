@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Установка Averra на чистый Ubuntu VPS одной командой.
 #
-#   sudo ./install.sh --site-domain example.ru --email studio@example.com --version 0.6.0
+#   sudo ./install.sh --site-domain example.ru --email studio@example.com --version 0.1.0
 #
 # Что делает: проверяет окружение (Docker, свободные порты 80 и 443, DNS доменов указывает на этот
 # сервер), пишет папку установки (compose.yaml и .env с секретами, права 600), поднимает
@@ -27,7 +27,7 @@ usage() {
 Обязательные при первой установке (дальше берутся из .env):
   --site-domain <домен>   домен сайта, например example.ru
   --email <почта>         почта для Let's Encrypt и вход владельца админки
-  --version <версия>      версия образов Averra (тег в GHCR), например 0.6.0
+  --version <версия>      версия образов Averra (тег в GHCR), например 0.1.0
 
 Необязательные:
   --admin-domain <домен>  поддомен админки, по умолчанию admin.<домен сайта>
@@ -38,7 +38,8 @@ usage() {
   --web-image <образ>     образ Caddy с админкой, по умолчанию ghcr.io/midhey/averra-web
   --public-ip <IP>        публичный адрес сервера, если его нет на сетевых интерфейсах (NAT);
                           у сервера с IPv4 и IPv6 — флаг на каждый адрес
-  --ghcr-user <логин>     вход в ghcr.io для приватных образов: токен спросят скрыто
+  --ghcr-user <логин>     вход в ghcr.io для закрытых образов (свой форк или пакет): токен
+                          спросят скрыто. Образы Averra публичные, им вход не нужен
   --skip-dns-check        не проверять, что домены указывают на сервер
   --skip-port-check       не проверять, что порты 80 и 443 свободны
   --install-docker        поставить Docker из пакетов Ubuntu (docker.io, docker-compose-v2)
@@ -49,10 +50,10 @@ usage() {
 
 Секреты — не флагами: они попали бы в историю команд и список процессов. Без терминала их
 передают переменными окружения, не набирая значение в командной строке:
-  read -rs GHCR_TOKEN && export GHCR_TOKEN && sudo -E bash install.sh … --ghcr-user <логин>
-  GHCR_TOKEN              токен ghcr.io (только read:packages), иначе его спросят скрыто
-  GHCR_USER               то же, что --ghcr-user
+  read -rs AVERRA_OWNER_PASSWORD && export AVERRA_OWNER_PASSWORD && sudo -E bash install.sh … --yes
   AVERRA_OWNER_PASSWORD   пароль владельца без вопроса (иначе его спросят скрыто)
+  GHCR_TOKEN              токен ghcr.io для --ghcr-user (только read:packages), иначе спросят скрыто
+  GHCR_USER               то же, что --ghcr-user
 EOF
 }
 
@@ -468,7 +469,7 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
 fi
 
 step "Скачиваю образы $AVERRA_VERSION"
-compose pull
+compose pull || fail "образы $AVERRA_VERSION не скачались. denied или unauthorized — пакеты в GHCR ещё закрытые (переключите в Public) или нет такой версии; для закрытых образов — --ghcr-user и токен read:packages"
 
 step 'Поднимаю PostgreSQL и API'
 compose up -d postgres api

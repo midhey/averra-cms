@@ -240,7 +240,7 @@ const envSchema = (options: ConfigOptions) =>
         .string()
         .trim()
         .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/, {
-          error: 'AVERRA_VERSION — тег версии, например 0.7.0',
+          error: 'AVERRA_VERSION — тег версии, например 0.1.0',
         })
         .default('dev'),
       // Папка состояния установки: итоги бэкапов и обновлений, которые пишет deploy/averra.sh

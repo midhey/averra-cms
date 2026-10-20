@@ -1113,7 +1113,7 @@ cmd_update() {
       *) fail "непонятный аргумент: $1" ;;
     esac
   done
-  [[ "$target" =~ $VERSION_RE ]] || fail 'нужна версия: averra.sh update --version 0.7.0'
+  [[ "$target" =~ $VERSION_RE ]] || fail 'нужна версия: averra.sh update --version 0.2.0'
   current="$(env_get AVERRA_VERSION)"
   [[ -n "$current" ]] || fail "в $ENV_FILE нет AVERRA_VERSION: это папка установки?"
   # Обновление уже идёт (например, его запустила оборвавшаяся SSH-сессия): показать его ход

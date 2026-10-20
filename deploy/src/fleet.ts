@@ -244,7 +244,7 @@ export async function fleetUpdate(
   log: (line: string) => void,
 ): Promise<UpdateOutcome> {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(version)) {
-    throw new Error(`«${version}» — не версия (например, 0.7.0)`)
+    throw new Error(`«${version}» — не версия (например, 0.2.0)`)
   }
   const updated: string[] = []
   for (const [index, server] of servers.entries()) {
@@ -370,7 +370,7 @@ export async function main(
     log(result.table)
     return result.code
   }
-  if (!values.version) throw new Error('Нужна версия: pnpm fleet update --version 0.7.0')
+  if (!values.version) throw new Error('Нужна версия: pnpm fleet update --version 0.2.0')
   const outcome = await fleetUpdate(servers, values.version, exec, log)
   log(`\n${describeOutcome(outcome)}`)
   return outcome.failed ? 1 : 0
