@@ -23,13 +23,16 @@ MCP-сервер Averra — процесс на вашей машине, кли�
    Токен показывается один раз.
 3. Скопируйте `apps/mcp/.env.example` в `apps/mcp/.env` (он в `.gitignore`) и вставьте строку
    `CMS_API_TOKEN=…` из вывода команды.
-4. Запустите `pnpm dev`, откройте новую сессию Claude Code в папке репозитория и разрешите сервер
+4. Скопируйте `.mcp.example.json` в `.mcp.json` в корне репозитория (он в `.gitignore`). На
+   Windows поправьте `command` на `node_modules/.bin/node.exe`. Если на macOS или Linux файла
+   `node_modules/.bin/node` нет, укажите в `command` путь, который выведет
+   `pnpm exec node -p process.execPath`.
+5. Запустите `pnpm dev`, откройте новую сессию Claude Code в папке репозитория и разрешите сервер
    `averra`. Был запущен — перезапустите: токен читается при старте.
 
-Сервер описан в `.mcp.json` в корне репозитория и запускается на Node, закреплённой в проекте.
-Путь к ней в `.mcp.json` записан под Windows (`node_modules/.bin/node.exe`); на macOS и Linux
-поправьте его у себя на свою Node 24. stdout сервера занят протоколом MCP, поэтому запускайте его
-напрямую через Node, а не через `pnpm run`: pnpm печатает в stdout свои строки.
+`.mcp.json` запускает сервер на Node, закреплённой в проекте: её кладёт в `node_modules/.bin`
+`pnpm install`. stdout сервера занят протоколом MCP, поэтому сервер запускается напрямую через
+Node, а не через `pnpm run`: pnpm печатает в stdout свои строки.
 
 ## С установкой клиента
 

@@ -53,8 +53,8 @@ pnpm fleet status
 ## Обновление всех установок
 
 ```bash
-pnpm fleet update --version 0.7.0               # все по очереди
-pnpm fleet update --version 0.7.0 --only remont # только эти (через запятую)
+pnpm fleet update --version 0.2.0               # все по очереди
+pnpm fleet update --version 0.2.0 --only remont # только эти (через запятую)
 ```
 
 По одной, первая ошибка останавливает обход. В конце — что обновлено, где сломалось и что не

@@ -46,9 +46,11 @@ sidebar:
 - **SSH по ключу** с root или `sudo` без пароля для `/opt/averra/averra.sh` — им пользуется
   [`pnpm fleet`](/averra-cms/install/fleet/). Первый вход — руками, со сверкой отпечатка ключа
   сервера.
-- **Токен GitHub только с `read:packages`** — скачать образы из GHCR. Пакет GHCR закрыт, даже
-  когда репозиторий открыт. Docker хранит токен в `/root/.docker/config.json` в base64 (это не
-  шифр), поэтому токен — только на чтение пакетов.
+- **Доступ к образам** не нужен: образы `averra-api` и `averra-web` в GHCR публичные и
+  скачиваются без входа. Токен GitHub (только `read:packages`) нужен, лишь если вы ставите свои
+  закрытые образы или пакеты ещё не переключены в Public — флаг `--ghcr-user` в
+  [установке](/averra-cms/install/server/). Docker хранит этот токен на сервере в
+  `/root/.docker/config.json` в base64, без шифрования, — поэтому только `read:packages`.
 - **Почта для Let's Encrypt и входа владельца** — например, `studio@example.com`.
 - **SMTP-ящик** на домене, с которого пойдут письма, — понадобится после установки
   ([Почта](/averra-cms/install/mail/)).

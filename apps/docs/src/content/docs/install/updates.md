@@ -13,7 +13,7 @@ sidebar:
 ## Обновить
 
 ```bash
-sudo /opt/averra/averra.sh update --version 0.7.0
+sudo /opt/averra/averra.sh update --version 0.2.0
 ```
 
 В терминале скрипт спросит подтверждение («да»), `--yes` — без вопроса. Все установки студии сразу, по очереди — [`pnpm fleet update`](/averra-cms/install/fleet/).
@@ -42,7 +42,7 @@ API перед бэкапом до готовности новой версии 
 Ждать готовности дольше — переменной окружения процесса, а не строкой `.env`:
 
 ```bash
-sudo AVERRA_READY_TIMEOUT=300 /opt/averra/averra.sh update --version 0.7.0
+sudo AVERRA_READY_TIMEOUT=300 /opt/averra/averra.sh update --version 0.2.0
 ```
 
 ## Откат

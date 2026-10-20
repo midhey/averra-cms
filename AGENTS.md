@@ -73,5 +73,12 @@
 
 ## Git
 
-Conventional Commits на английском (`feat: …`, `fix: …`, `docs: …`), ветка `master`. Версию и
-теги руками не ставить — их ведёт release-please (`dev/releases.md`). Секреты — только в `.env`.
+- Conventional Commits на английском, ветка `master`. Тип выбирайте по тому, что заметят на
+  установке: `feat`, `fix`, `perf`, `revert` поднимают версию и попадают в `CHANGELOG.md`,
+  `refactor`, `chore`, `docs`, `test`, `ci`, `build`, `style` — нет. Ломающее для установок
+  (ручной шаг на сервере, новая строка `.env`) — `feat!:` и подвал
+  `BREAKING CHANGE: <что сделать на сервере>` в конце сообщения: в заметки релиза идёт только он,
+  обычный текст тела — нет.
+- Версию, теги и `CHANGELOG.md` руками не трогать — их ведёт release-please, версия одна на весь
+  продукт (`dev/releases.md`).
+- Секреты — только в `.env`. `.mcp.json` — локальный (в `.gitignore`), пример — `.mcp.example.json`.

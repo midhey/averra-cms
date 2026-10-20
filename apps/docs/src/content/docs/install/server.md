@@ -22,11 +22,10 @@ ssh root@vps mkdir -p /root/averra-deploy
 scp deploy/install.sh deploy/averra.sh deploy/compose.yaml root@vps:/root/averra-deploy/
 # на сервере
 cd /root/averra-deploy
-sudo bash install.sh --site-domain example.ru --email studio@example.com --version 0.6.0 \
-  --ghcr-user <логин GitHub>
+sudo bash install.sh --site-domain example.ru --email studio@example.com --version 0.1.0
 ```
 
-Установщик спросит скрыто токен GHCR и пароль владельца. Секреты флагами не передаются: они
+Установщик спросит скрыто пароль владельца. Секреты флагами не передаются: они
 попали бы в историю команд и список процессов.
 
 Что он делает:
@@ -34,7 +33,11 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
 1. Проверяет Docker, свободные порты 80 и 443 и DNS обоих доменов.
 2. Пишет `/opt/averra/.env` с новыми секретами (`AUTH_SECRET`, `MAIL_ENCRYPTION_KEY`, пароль
    Postgres, `BACKUP_PASSPHRASE`) с правами 600 и кладёт рядом `compose.yaml` и `averra.sh`.
-3. Входит в `ghcr.io`, скачивает образы, поднимает PostgreSQL и API, ждёт готовности до трёх минут.
+3. Скачивает образы (с `--ghcr-user` сначала входит в `ghcr.io`), поднимает PostgreSQL и API,
+   ждёт готовности до трёх минут. Скачивание упало с `denied` или `unauthorized` — пакеты в GHCR
+   ещё закрытые (их не переключили в Public после первого релиза,
+   [Релизы](/averra-cms/dev/releases/)) или такой версии нет. Переключите пакеты или повторите
+   установку с `--ghcr-user` и токеном `read:packages`.
 4. Создаёт владельца и сайт, id сайта пишет в `.env` (`SITE_ID`) — его Caddy отдаёт на домене.
 5. Поднимает Caddy и ставит ежедневный бэкап (`averra-backup.timer`).
 
@@ -46,14 +49,14 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
 |---|---|
 | `--site-domain <домен>` | домен сайта. Обязателен при первой установке |
 | `--email <почта>` | почта для Let's Encrypt и вход владельца. Обязателен при первой установке |
-| `--version <версия>` | версия образов, например `0.6.0`. Обязателен при первой установке |
+| `--version <версия>` | версия образов, например `0.1.0`. Обязателен при первой установке |
 | `--admin-domain <домен>` | поддомен админки, по умолчанию `admin.<домен сайта>` |
 | `--owner-name <имя>` | имя владельца, по умолчанию «Владелец» |
 | `--site-name <название>` | название сайта в админке, по умолчанию домен |
 | `--dir <папка>` | папка установки, по умолчанию `/opt/averra` |
 | `--api-image`, `--web-image` | свои образы без тега (по умолчанию `ghcr.io/midhey/averra-api` и `averra-web`) |
 | `--public-ip <IP>` | адрес сервера за NAT; у сервера с IPv4 и IPv6 — флаг на каждый адрес |
-| `--ghcr-user <логин>` | вход в ghcr.io, токен спросят скрыто |
+| `--ghcr-user <логин>` | вход в ghcr.io для закрытых образов (свой форк или пакет), токен спросят скрыто |
 | `--skip-dns-check` | не проверять DNS. Сертификата не будет, пока DNS не заработает |
 | `--skip-port-check` | не проверять порты 80 и 443 |
 | `--install-docker` | поставить Docker из пакетов Ubuntu |
@@ -68,10 +71,12 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
 строке:
 
 ```bash
-read -rs GHCR_TOKEN; export GHCR_TOKEN
 read -rs AVERRA_OWNER_PASSWORD; export AVERRA_OWNER_PASSWORD
-sudo -E bash install.sh … --ghcr-user <логин> --yes
+sudo -E bash install.sh … --yes
 ```
+
+Токен для закрытых образов передаётся так же: `read -rs GHCR_TOKEN; export GHCR_TOKEN` и флаг
+`--ghcr-user <логин>`.
 
 ## Первый вход
 
