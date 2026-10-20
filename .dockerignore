@@ -13,6 +13,8 @@ coverage
 **/*.log
 e2e/playwright-report
 e2e/test-results
-deploy/.env
+# Локальное: планы шагов и конфиг MCP с путями своей машины
+.work
+.mcp.json
 # Список серверов студии (pnpm fleet): в образ клиента он попадать не должен
 **/servers.txt

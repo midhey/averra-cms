@@ -23,3 +23,6 @@ test-results
 
 # Рабочие планы шагов (контракт для проверяющего) — локальные, не в git
 .work/
+
+# Конфиг MCP-сервера для Claude Code: путь к Node своей машины. Пример — .mcp.example.json
+.mcp.json

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "averra": {
-      "command": "node_modules/.bin/node.exe",
+      "command": "node_modules/.bin/node",
       "args": ["apps/mcp/node_modules/tsx/dist/cli.mjs", "apps/mcp/src/index.ts"]
     }
   }
