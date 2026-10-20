@@ -7,6 +7,10 @@ import type { DbOrTx } from '../../mail/outbox'
 /** Сколько заявок отдаёт список в админке за раз: новые сверху */
 export const LEADS_LIST_LIMIT = 500
 
+/** Последние заявки на обзоре сайта: сколько по умолчанию и сколько можно попросить */
+export const RECENT_LEADS_DEFAULT = 3
+export const RECENT_LEADS_MAX = 20
+
 /** Порция выгрузки CSV: в памяти API лежит она, а не все заявки сайта */
 export const LEADS_EXPORT_BATCH = 500
 
@@ -84,6 +88,26 @@ export function leadsRepo(db: Db) {
         )
         .orderBy(desc(leads.createdAt), desc(leads.id))
         .limit(LEADS_LIST_LIMIT)
+    },
+
+    /**
+     * Последние limit заявок сайта, новые сверху, — только поля карточки обзора: откуда, кто,
+     * что написал, новая ли и когда пришла
+     */
+    recent(siteId: string, limit: number) {
+      return db
+        .select({
+          id: leads.id,
+          pageSlug: leads.pageSlug,
+          formTitle: leads.formTitle,
+          data: leads.data,
+          status: leads.status,
+          createdAt: leads.createdAt,
+        })
+        .from(leads)
+        .where(eq(leads.siteId, siteId))
+        .orderBy(desc(leads.createdAt), desc(leads.id))
+        .limit(limit)
     },
 
     /**

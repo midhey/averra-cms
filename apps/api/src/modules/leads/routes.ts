@@ -7,12 +7,20 @@ import { errorForLog } from '../../log-error'
 import { validate } from '../../validate'
 import type { MailDeps } from '../mail/routes'
 import { CSV_BOM, csvLine, leadCsvRow, leadsCsvHeader } from './csv'
-import { type ExportCursor, leadsRepo } from './repo'
+import { type ExportCursor, leadsRepo, RECENT_LEADS_DEFAULT, RECENT_LEADS_MAX } from './repo'
 import { saveLeadSettings } from './service'
 
 const SiteParams = z.object({ siteId: Uuid() })
 const LeadParams = SiteParams.extend({ leadId: Uuid() })
 const ListQuery = z.object({ status: LeadStatus.optional() })
+const RecentQuery = z.object({
+  limit: z
+    .string()
+    .regex(/^\d{1,3}$/u, `Число от 1 до ${RECENT_LEADS_MAX}`)
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(RECENT_LEADS_MAX))
+    .optional(),
+})
 
 const LEAD_NOT_FOUND = 'Заявка не найдена'
 
@@ -53,6 +61,22 @@ export function leadsRoutes({ db, mail }: { db: Db; mail: MailDeps }) {
             },
             200,
           )
+        },
+      )
+
+      // Последние заявки для обзора сайта: limit штук (по умолчанию RECENT_LEADS_DEFAULT)
+      // и только то, что показывает карточка обзора, — без согласия, версии страницы и прочего.
+      // Обзор открывают часто, и полный список с персональными данными туда не уходит.
+      // Права — как у списка: владелец и клиент, редактору и токену API — 403
+      .get(
+        '/recent',
+        validate('param', SiteParams),
+        site('leads.read'),
+        validate('query', RecentQuery),
+        async (c) => {
+          const { siteId } = c.req.valid('param')
+          const { limit } = c.req.valid('query')
+          return c.json({ items: await repo.recent(siteId, limit ?? RECENT_LEADS_DEFAULT) }, 200)
         },
       )
 

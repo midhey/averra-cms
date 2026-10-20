@@ -833,6 +833,33 @@ describe('раздел «Заявки» в админке', () => {
     expect(again.status).toBe(404)
   })
 
+  it('последние заявки для обзора: limit штук, новые сверху, только поля карточки', async () => {
+    const siteId = await siteWithForm()
+    for (const name of ['Первая', 'Вторая', 'Третья', 'Четвёртая']) {
+      await submit(siteId, validFields({ name }))
+    }
+    const recent = async (query = '') =>
+      api.app.request(`${leadsUrl(siteId)}/recent${query}`, { headers: owner.headers })
+
+    const byDefault = await recent()
+    expect(byDefault.status).toBe(200)
+    const { items } = (await byDefault.json()) as { items: Record<string, unknown>[] }
+    expect(items.map((lead) => (lead.data as { value: unknown }[])[0]?.value)).toEqual([
+      'Четвёртая',
+      'Третья',
+      'Вторая',
+    ])
+    expect(Object.keys(items[0] ?? {}).sort()).toEqual(
+      ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'status'].sort(),
+    )
+
+    const one = (await (await recent('?limit=1')).json()) as { items: unknown[] }
+    expect(one.items).toHaveLength(1)
+    for (const bad of ['?limit=0', '?limit=21', '?limit=abc', '?limit=-1', '?limit=1.5']) {
+      expect((await recent(bad)).status, bad).toBe(400)
+    }
+  })
+
   it('счётчик новых заявок — в данных сайта (null, если роли заявки не видны)', async () => {
     const siteId = await siteWithForm()
     await submit(siteId, validFields())
@@ -867,6 +894,7 @@ describe('раздел «Заявки» в админке', () => {
 
     const requests = (headers: Headers) => [
       api.app.request(leadsUrl(siteId), { headers }),
+      api.app.request(`${leadsUrl(siteId)}/recent`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/export`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/settings`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/${lead?.id}`, { headers }),
