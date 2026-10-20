@@ -4,7 +4,7 @@ import type { ImageFormat } from '@averra/schema'
 // Обработка на sharp — в sharp-processor.ts, её подключают index.ts и testing.ts
 
 /** Ширины вариантов: телефон, планшет и ноутбук, большой экран, Full HD */
-export const VARIANT_WIDTHS = [480, 960, 1440, 1920] as const
+const VARIANT_WIDTHS = [480, 960, 1440, 1920] as const
 
 /**
  * Больше пикселей не обрабатываем: маленький по весу PNG может развернуться в гигабайты

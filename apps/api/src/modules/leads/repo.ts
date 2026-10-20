@@ -5,7 +5,7 @@ import { leads, type StoredLeadField, sites } from '../../db/schema'
 import type { DbOrTx } from '../../mail/outbox'
 
 /** Сколько заявок отдаёт список в админке за раз: новые сверху */
-export const LEADS_LIST_LIMIT = 500
+const LEADS_LIST_LIMIT = 500
 
 /** Последние заявки на обзоре сайта: сколько по умолчанию и сколько можно попросить */
 export const RECENT_LEADS_DEFAULT = 3

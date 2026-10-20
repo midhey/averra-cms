@@ -24,7 +24,7 @@ export type SmtpForm = {
 }
 
 /** Шаги проверки словами — те же, что печатает pnpm mail:test */
-export const smtpStepTitles: Record<string, string> = {
+const smtpStepTitles: Record<string, string> = {
   dns: 'DNS: имя сервера',
   connection: 'Соединение',
   tls: 'TLS: шифрование и сертификат',

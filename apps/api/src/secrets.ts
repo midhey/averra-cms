@@ -1,7 +1,7 @@
 // Случайные секреты и их хеши для ссылок и токенов: токены API, приглашения.
 // Через Web Crypto, без Node API: модули работают и в API, и в командах терминала
 
-export const toHex = (bytes: Uint8Array) =>
+const toHex = (bytes: Uint8Array) =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 
 /** 32 случайных байта в hex — секретная часть токена */

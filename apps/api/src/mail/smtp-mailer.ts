@@ -60,7 +60,7 @@ const DEFAULT_TIMEOUTS = {
  * явный параметр сильнее NODE_TLS_REJECT_UNAUTHORIZED=0 в окружении, так что проверку
  * сертификата не выключить и через него. ignoreTLS и opportunisticTLS не задаются никогда
  */
-export function smtpConnectionOptions(settings: SmtpSettings, options: SmtpOptions = {}) {
+function smtpConnectionOptions(settings: SmtpSettings, options: SmtpOptions = {}) {
   const timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts }
   return {
     host: settings.host,
@@ -487,7 +487,7 @@ export async function diagnoseSmtp(
  * Тайм-ауты кнопки «Проверить подключение»: короче, чем у команды, — человек ждёт ответа
  * на экране, а не в терминале
  */
-export const ADMIN_CHECK_TIMEOUTS = {
+const ADMIN_CHECK_TIMEOUTS = {
   dns: 5000,
   connection: 10_000,
   greeting: 10_000,

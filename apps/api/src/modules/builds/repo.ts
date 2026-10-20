@@ -6,7 +6,7 @@ import { siteBuilds } from '../../db/schema'
 export const BUILDS_KEPT = 20
 
 /** Самая длинная причина сбоя в журнале: хвост вывода сборщика, а не весь лог */
-export const BUILD_ERROR_MAX = 4000
+const BUILD_ERROR_MAX = 4000
 
 /** Что перезапуск API сделал со сборкой, которая шла */
 export const INTERRUPTED_BUILD = 'Сборку прервал перезапуск API — она запущена заново'

@@ -10,7 +10,7 @@ import { buildsRepo, type SiteBuildRow } from './repo'
 const SiteParams = z.object({ siteId: Uuid() })
 
 /** 409 — на этой установке сайт не собирается сам (нет PUBLISH_DIR): собирать нечем */
-export const publishDisabled = () => ({
+const publishDisabled = () => ({
   error: {
     code: 'publish_disabled',
     message:

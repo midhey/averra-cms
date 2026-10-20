@@ -86,7 +86,7 @@ function tryLock(path: string) {
 }
 
 /** Путь к файлу замка базы: рядом с её папкой */
-export const lockPath = (dataDir: string) => `${dataDir.replace(/[\\/]+$/, '')}.lock`
+const lockPath = (dataDir: string) => `${dataDir.replace(/[\\/]+$/, '')}.lock`
 
 /**
  * Берёт замок базы. waitMs — сколько ждать живого владельца: tsx watch перезапускает API

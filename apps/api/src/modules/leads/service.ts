@@ -26,7 +26,7 @@ import { leadsRepo } from './repo'
 // с письмами о ней. HTTP и антиспам — в public-routes.ts
 
 /** Подтверждение посетителю — не чаще раза в сутки в один ящик с одного сайта */
-export const CONFIRMATION_PERIOD_MS = 24 * 60 * 60 * 1000
+const CONFIRMATION_PERIOD_MS = 24 * 60 * 60 * 1000
 
 /** Адрес страницы на сайте: главная открывается по корню */
 export const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)

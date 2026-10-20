@@ -12,7 +12,7 @@ import { INVITATION_TTL_DAYS, invitationProblem, invitationsRepo } from './repo'
  * Ссылка из письма: экран админки, токен — во фрагменте (#). Фрагмент браузер не шлёт
  * на сервер, поэтому токен не попадает в логи статики и прокси и в заголовок Referer
  */
-export const invitationLink = (adminUrl: string, token: string) =>
+const invitationLink = (adminUrl: string, token: string) =>
   `${adminUrl}/invite#token=${encodeURIComponent(token)}`
 
 type NewInvitationInput = {

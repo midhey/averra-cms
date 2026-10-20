@@ -237,7 +237,7 @@ export type MailWorkerOptions = Omit<ProcessOptions, 'stopped' | 'mailer'> & {
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Дольше этого обработчик не ждёт, когда почтовый сервер недоступен: чинят его обычно быстрее */
-export const MAX_SERVER_PAUSE_MS = 30 * 60 * 1000
+const MAX_SERVER_PAUSE_MS = 30 * 60 * 1000
 
 /**
  * Обработчик очереди в процессе API: раз в intervalMs забирает письма и отправляет их, раз

@@ -25,7 +25,7 @@ export const sites = ownerApi.sites
 type DemoSite = { id: string; name: string }
 
 /** Демо-сайт — первый в базе: его кладёт API при старте, новые сайты встают после него */
-export async function findDemoSite(): Promise<DemoSite> {
+async function findDemoSite(): Promise<DemoSite> {
   const [site] = await (await sites.$get()).json()
   if (!site) throw new Error('В базе e2e нет демо-сайта: API должен был положить его при старте')
   return site

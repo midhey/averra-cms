@@ -5,7 +5,7 @@ import type { Db } from '../../db/client'
 import { apiTokens, media, pages, type StoredVariant, users } from '../../db/schema'
 
 /** Адрес файла варианта. Относительный: админка ходит через свой прокси, рендерер добавит хост */
-export const mediaFileUrl = (mediaId: string, file: string) => `/api/media/${mediaId}/${file}`
+const mediaFileUrl = (mediaId: string, file: string) => `/api/media/${mediaId}/${file}`
 
 const withUrls = (mediaId: string, variants: StoredVariant[]) =>
   variants.map(({ format, width, height, size, file }) => ({

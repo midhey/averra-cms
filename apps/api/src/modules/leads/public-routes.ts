@@ -42,7 +42,7 @@ export type LeadLimits = {
 }
 
 /** Окно дневного предела объёма */
-export const LEAD_VOLUME_WINDOW_MS = 24 * 60 * 60 * 1000
+const LEAD_VOLUME_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /**
  * С одного IP — 5 заявок за 10 минут, на сайт — 100 за час и не больше 10 МБ данных крупных
@@ -52,7 +52,7 @@ export const LEAD_VOLUME_WINDOW_MS = 24 * 60 * 60 * 1000
  * и предел останавливает такие на сотне. Худший рост базы — 10 МБ крупных плюс 8 КБ × 2400
  * маленьких (≈19 МБ) в сутки на сайт, а не ~240 МБ без предела
  */
-export const LEAD_LIMITS: LeadLimits = {
+const LEAD_LIMITS: LeadLimits = {
   perIp: { max: 5, windowMs: 10 * 60 * 1000 },
   perSite: { max: 100, windowMs: 60 * 60 * 1000 },
   perSiteDailyBytes: 10 * 1024 * 1024,
@@ -111,7 +111,7 @@ function normalizedPath(pathname: string) {
  * Перенаправляем только на источник, который сам прислал форму, — открытого редиректа нет.
  * Ни Origin, ни Referer (Origin: null, no-referrer) — undefined: API покажет свою страницу
  */
-export function returnUrl(origin: string | undefined, referer: string | undefined, slug: string) {
+function returnUrl(origin: string | undefined, referer: string | undefined, slug: string) {
   const fromReferer = httpUrl(referer)
   const source = httpOrigin(origin) ?? fromReferer?.origin
   if (!source) return undefined

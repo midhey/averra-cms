@@ -9,7 +9,7 @@ import {
 /** Письмо, которое «отправил» memoryMailer: с From, как его поставил бы провайдер */
 export type MemoryMail = OutgoingMail & { from: MailSender; messageId: string }
 
-export const TEST_SENDER: MailSender = { address: 'noreply@averra.test', name: 'Averra CMS' }
+const TEST_SENDER: MailSender = { address: 'noreply@averra.test', name: 'Averra CMS' }
 
 /**
  * Почта в памяти — для тестов. beforeSend даёт тесту сломать отправку (бросить MailSendError)

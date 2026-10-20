@@ -18,7 +18,7 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import styles from './Preview.module.scss'
 import { blockIdAt, previewSelectionCss, type SelectionColors } from './preview-selection'
 
-export const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
+const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
 export type Device = keyof typeof devices
 const deviceLabels: Record<Device, string> = {
   phone: 'Телефон',

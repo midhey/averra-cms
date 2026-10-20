@@ -8,7 +8,7 @@ import { BlockId } from '@averra/schema'
 export type SelectionColors = { selection: string; hover: string }
 
 /** Селектор блока в предпросмотре: Page рисует каждый блок корневым <section id> внутри <main> */
-export const PREVIEW_BLOCK_SELECTOR = 'main > section[id]'
+const PREVIEW_BLOCK_SELECTOR = 'main > section[id]'
 
 // В значение custom property не должно попасть ничего, что закроет правило
 const safeValue = (value: string) =>

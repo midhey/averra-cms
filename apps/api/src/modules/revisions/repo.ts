@@ -3,7 +3,7 @@ import type { Db } from '../../db/client'
 import { apiTokens, pageRevisions, pages, users } from '../../db/schema'
 
 /** Сколько версий отдаёт список. Дальше нужна постраничная выдача — появится, когда понадобится */
-export const REVISIONS_LIMIT = 100
+const REVISIONS_LIMIT = 100
 
 /**
  * Кто опубликовал: имя человека или название токена. null — автора нет: публикация до

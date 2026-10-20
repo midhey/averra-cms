@@ -29,7 +29,7 @@ type InvitationDates = {
  * Состояние из полей. Отзыв уже истёкшего (так его отзывает повторное приглашение) — всё
  * равно «истекло»: человеку важнее, что срок прошёл, чем что его потом закрыли
  */
-export function invitationStatus(row: InvitationDates, now: Date): InvitationStatus {
+function invitationStatus(row: InvitationDates, now: Date): InvitationStatus {
   if (row.acceptedAt) return 'accepted'
   if (row.revokedAt) return row.revokedAt >= row.expiresAt ? 'expired' : 'revoked'
   return row.expiresAt <= now ? 'expired' : 'pending'

@@ -10,7 +10,7 @@ import type { ZipEntry } from './zip'
 // токены, пароли): это данные сайта, а не сервера
 
 /** Формат файла site.json. Меняется — растёт номер, а README.txt в архиве описывает поля */
-export const EXPORT_FORMAT_VERSION = 1
+const EXPORT_FORMAT_VERSION = 1
 
 const README = `Выгрузка сайта из Averra CMS
 ============================

@@ -9,7 +9,7 @@ export type MailData = InferResponseType<typeof api.mail.$get, 200>
 type EnabledStatus = Extract<MailData['status'], { enabled: true }>
 
 /** Состояние письма в очереди словами */
-export const mailStatusLabels: Record<string, string> = {
+const mailStatusLabels: Record<string, string> = {
   pending: 'Ждёт отправки',
   sending: 'Отправляется',
   sent: 'Отправлено',

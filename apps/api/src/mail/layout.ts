@@ -4,7 +4,7 @@ import { html, type SafeHtml } from './html'
 // нормальный CSS (Gmail режет <style>, Outlook рисует движком Word), поэтому вёрстка на
 // таблицах и только инлайн-стили. Шрифты системные: внешних запросов в письме нет
 
-export const mailColors = {
+const mailColors = {
   page: '#f4f5f7',
   card: '#ffffff',
   border: '#e3e5e9',

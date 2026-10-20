@@ -142,7 +142,7 @@ export type EffectivePassword =
  * сессия направила бы проверку на свой сервер и получила бы сохранённый пароль в AUTH.
  * И только если он расшифровывается
  */
-export function effectivePassword(
+function effectivePassword(
   runtime: MailRuntime,
   row: StoredMailSettings | undefined,
   input: { host: string; password?: string | undefined },
