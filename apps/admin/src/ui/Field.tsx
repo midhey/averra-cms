@@ -1,6 +1,7 @@
 import { type ComponentPropsWithRef, type ReactNode, useId } from 'react'
 import { cx } from './cx'
 import styles from './Field.module.scss'
+import { Icon, type IconName } from './Icon'
 
 /** Что поле передаёт своему элементу ввода: id для подписи, связи с подсказкой и ошибкой */
 export type FieldControlProps = {
@@ -110,6 +111,8 @@ type TextInputProps = Omit<ComponentPropsWithRef<'input'>, 'id' | 'prefix'> &
     mono?: boolean
     /** Неизменяемое начало значения, например «/» перед адресом страницы */
     prefix?: string
+    /** Иконка внутри поля слева (лупа у поиска). Только рисунок: смысл несёт подпись поля */
+    icon?: IconName
   }
 
 export function TextInput({
@@ -120,6 +123,7 @@ export function TextInput({
   maxChars,
   mono,
   prefix,
+  icon,
   className,
   autoComplete = 'off',
   'aria-describedby': ownDescribedBy,
@@ -136,7 +140,8 @@ export function TextInput({
       className={className}
     >
       {(control) => (
-        <div className={styles.control}>
+        <div className={cx(styles.control, icon && styles.withIcon)}>
+          {icon && <Icon name={icon} size={16} className={styles.icon} />}
           {prefix && (
             <span className={styles.prefix} aria-hidden="true">
               {prefix}

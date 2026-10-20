@@ -19,14 +19,20 @@ type BlockListProps = {
   onRemove: (id: string) => void
   /** «Добавить блок»: окно с каталогом открывает редактор */
   onAdd: () => void
+  /**
+   * Стрелки и удаление у каждого блока, а не только у выбранного. На узком экране выбор блока
+   * уводит на вкладку «Поля», и до действий выбранного пришлось бы возвращаться
+   */
+  actionsOnEvery?: boolean
 }
 
 /**
  * Блоки страницы по порядку: ручка, тип и подсказка содержимого. Выбранный блок — в рамке,
- * со стрелками и удалением, его поля справа
+ * со стрелками и удалением (на узком экране они у каждого блока), его поля справа
  */
 export function BlockList(props: BlockListProps) {
-  const { blocks, selectedId, invalidIds, onSelect, onMove, onRemove, onAdd } = props
+  const { blocks, selectedId, invalidIds, onSelect, onMove, onRemove, onAdd, actionsOnEvery } =
+    props
   const headingId = useId()
   const limitId = useId()
   const full = blocks.length >= PAGE_MAX_BLOCKS
@@ -57,6 +63,7 @@ export function BlockList(props: BlockListProps) {
               index={index}
               count={blocks.length}
               selected={block.id === selectedId}
+              withActions={actionsOnEvery === true || block.id === selectedId}
               invalid={invalidIds.has(block.id)}
               onSelect={onSelect}
               onMove={onMove}
@@ -65,12 +72,16 @@ export function BlockList(props: BlockListProps) {
           ))}
         </ol>
       </SortableList>
+      {/* На пределе — aria-disabled, а не disabled: кнопка остаётся в порядке Tab, и диктор
+          прочитает пояснение рядом, почему блок больше не добавить */}
       <Button
         icon="plus"
         className={styles.add}
-        disabled={full}
+        aria-disabled={full ? true : undefined}
         aria-describedby={full ? limitId : undefined}
-        onClick={onAdd}
+        onClick={() => {
+          if (!full) onAdd()
+        }}
       >
         Добавить блок
       </Button>
@@ -88,13 +99,16 @@ type BlockItemProps = {
   index: number
   count: number
   selected: boolean
+  /** Показать стрелки и удаление */
+  withActions: boolean
   invalid: boolean
   onSelect: (id: string) => void
   onMove: (from: number, to: number) => void
   onRemove: (id: string) => void
 }
 
-function BlockItem({ block, index, count, selected, invalid, ...actions }: BlockItemProps) {
+function BlockItem(props: BlockItemProps) {
+  const { block, index, count, selected, withActions, invalid, ...actions } = props
   const sortable = useSortableItem(block.id)
   const arrows = useMoveButtons(index, count, actions.onMove)
   const name = blockName(block)
@@ -125,8 +139,9 @@ function BlockItem({ block, index, count, selected, invalid, ...actions }: Block
         <span className={styles.hint}>{blockHint(block)}</span>
       </button>
       {/* Стрелки и удаление — у выбранного блока: список остаётся чистым, как в концепте,
-          а лишних остановок Tab у каждого блока нет. Переставить любой блок можно и ручкой */}
-      {selected && (
+          а лишних остановок Tab у каждого блока нет. Переставить любой блок можно и ручкой.
+          На узком экране — у каждого (withActions) */}
+      {withActions && (
         <span className={styles.actions}>
           <IconButton label="Поднять блок" icon="arrow-up" size="small" {...arrows.up} />
           <IconButton label="Опустить блок" icon="arrow-down" size="small" {...arrows.down} />

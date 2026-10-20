@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import {
   AppShell,
   NavLinkContent,
@@ -7,7 +7,7 @@ import {
   SidebarSection,
   SidebarUser,
 } from '../ui/AppShell'
-import { Button, buttonClassName, IconButton } from '../ui/Button'
+import { Button, buttonClassName, IconButton, iconButtonClassName } from '../ui/Button'
 import { Card, cardClassName } from '../ui/Card'
 import { DataTable } from '../ui/DataTable'
 import { Dialog } from '../ui/Dialog'
@@ -18,7 +18,7 @@ import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
-import { Tabs } from '../ui/Tabs'
+import { TabList, Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import styles from './UiShowcase.module.scss'
 
@@ -84,6 +84,9 @@ export function UiShowcase() {
   const [consent, setConsent] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [largeOpen, setLargeOpen] = useState(false)
+  const [column, setColumn] = useState<'blocks' | 'preview' | 'fields'>('blocks')
+  const columnsId = useId()
   const [deleted, setDeleted] = useState(false)
 
   const sidebar = (
@@ -216,6 +219,15 @@ export function UiShowcase() {
               Ссылка в виде кнопки
               <Icon name="arrow-right" />
             </a>
+            {/* Ссылка-иконка: вид IconButton у ссылки («Назад к сайту» в редакторе) */}
+            <a
+              className={iconButtonClassName({ variant: 'secondary' })}
+              href="#buttons"
+              aria-label="Ссылка-иконка: к кнопкам"
+              title="Ссылка-иконка: к кнопкам"
+            >
+              <Icon name="chevron-left" />
+            </a>
           </div>
         </Section>
 
@@ -246,6 +258,7 @@ export function UiShowcase() {
             <TextInput
               label="Найти страницу"
               hideLabel
+              icon="search"
               type="search"
               placeholder="Найти страницу"
             />
@@ -290,6 +303,11 @@ export function UiShowcase() {
               appearance="cards"
               options={[
                 {
+                  value: 'left',
+                  label: 'Слева',
+                  thumbnail: <LayoutThumbnail sketch="left" />,
+                },
+                {
                   value: 'center',
                   label: 'По центру',
                   thumbnail: <LayoutThumbnail sketch="centered" />,
@@ -327,6 +345,42 @@ export function UiShowcase() {
               }
             </p>
           </Tabs>
+          {/* Вкладки со своими панелями: так колонки редактора становятся вкладками на телефоне.
+              Невыбранная панель — hidden, а не размонтирована */}
+          <div className={styles.stack}>
+            <TabList
+              label="Части редактора (пример)"
+              items={[
+                { id: 'blocks', label: 'Блоки' },
+                { id: 'preview', label: 'Предпросмотр' },
+                { id: 'fields', label: 'Поля' },
+              ]}
+              value={column}
+              onChange={setColumn}
+              tabId={(id) => `${columnsId}-tab-${id}`}
+              panelId={(id) => `${columnsId}-panel-${id}`}
+            />
+            {(['blocks', 'preview', 'fields'] as const).map((id) => (
+              <div
+                key={id}
+                role="tabpanel"
+                id={`${columnsId}-panel-${id}`}
+                aria-labelledby={`${columnsId}-tab-${id}`}
+                hidden={column !== id}
+                // biome-ignore lint/a11y/noNoninteractiveTabindex: панель без фокусируемого по WAI-ARIA — остановка Tab
+                tabIndex={0}
+                className={styles.muted}
+              >
+                {
+                  {
+                    blocks: 'Список блоков страницы.',
+                    preview: 'Предпросмотр страницы.',
+                    fields: 'Поля выбранного блока.',
+                  }[id]
+                }
+              </div>
+            ))}
+          </div>
         </Section>
 
         <Section id="statuses" title="Состояния">
@@ -435,10 +489,26 @@ export function UiShowcase() {
             <Button variant="danger" icon="trash" onClick={() => setDialogOpen(true)}>
               Удалить страницу…
             </Button>
+            <Button onClick={() => setLargeOpen(true)}>Большое окно…</Button>
             <p className={styles.muted} aria-live="polite">
               {deleted ? 'Страница «Отзывы» удалена (понарошку).' : ''}
             </p>
           </div>
+          <Dialog
+            open={largeOpen}
+            onClose={() => setLargeOpen(false)}
+            size="large"
+            title="Добавить блок"
+            description="Большое окно — как каталог «Добавить блок» в редакторе."
+          >
+            <ul className={styles.icons}>
+              {['Первый экран', 'Преимущества', 'Цены', 'Отзывы', 'Форма заявки'].map((name) => (
+                <li key={name} className={cardClassName({ padding: 'compact' })}>
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </Dialog>
           <Dialog
             open={dialogOpen}
             onClose={() => setDialogOpen(false)}

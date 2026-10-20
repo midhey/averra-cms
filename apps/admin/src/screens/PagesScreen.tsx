@@ -99,6 +99,7 @@ function SitePages({ siteId }: { siteId: string }) {
           <TextInput
             label="Найти страницу"
             hideLabel
+            icon="search"
             type="search"
             placeholder="Найти страницу"
             value={search}

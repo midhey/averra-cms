@@ -68,6 +68,11 @@
 
     @media (forced-colors: active) {
       border-color: Highlight;
+
+      // Подложку и тень браузер в этом режиме снимает: выбор — ещё и обводкой
+      // внутри рамки (снаружи её срезала бы прокрутка колонки)
+      outline: ui.rem(2) solid Highlight;
+      outline-offset: ui.rem(-3);
     }
   }
 

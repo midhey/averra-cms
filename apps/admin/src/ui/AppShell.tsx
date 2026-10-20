@@ -4,7 +4,10 @@ import { IconButton } from './Button'
 import { cx } from './cx'
 import { Icon, type IconName } from './Icon'
 
-/** С этой ширины панель стоит сбоку, а верхней полосы с кнопкой меню нет: ui.breakpoint(medium) = 64rem */
+/**
+ * С этой ширины панель стоит сбоку, а верхней полосы с кнопкой меню нет:
+ * ui.breakpoint(medium) = 64rem
+ */
 const WIDE_LAYOUT = '(min-width: 64rem)'
 
 type AppShellProps = {
@@ -19,7 +22,8 @@ type AppShellProps = {
 /**
  * Раскладка админки из концепта: боковая панель и содержимое. На узком экране панель уходит
  * в меню под верхней полосой: кнопка «Меню» (aria-expanded), Esc закрывает и возвращает фокус
- * на кнопку, переход по ссылке в меню закрывает его и переводит фокус на содержимое. Не знает ни роутера, ни данных
+ * на кнопку, переход по ссылке в меню закрывает его и переводит фокус на содержимое.
+ * Не знает ни роутера, ни данных
  */
 export function AppShell({ brand = <ShellBrand />, sidebar, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false)

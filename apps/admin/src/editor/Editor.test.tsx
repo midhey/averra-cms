@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { demoPage as demoInput, demoPageTitle, PageContent } from '@averra/schema'
+import { demoPage as demoInput, demoPageTitle, PAGE_MAX_BLOCKS, PageContent } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { act, cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -149,6 +149,41 @@ describe('блоки', () => {
     await user.click(within(second as HTMLElement).getByRole('button', { name: /^Преимущества/ }))
     expect(within(second as HTMLElement).getByRole('button', { name: 'Удалить блок' })).toBeTruthy()
   })
+
+  it(`на пределе ${PAGE_MAX_BLOCKS} блоков «Добавить блок» недоступна, но в фокусе и с пояснением`, async () => {
+    const user = userEvent.setup()
+    const hero = demoPage.blocks[0]
+    if (!hero) throw new Error('В демо-странице нет блоков')
+    const full: EditorPage = {
+      ...published,
+      draft: {
+        blocks: Array.from({ length: PAGE_MAX_BLOCKS }, (_, index) => ({
+          ...hero,
+          id: `block-${index}`,
+        })),
+      },
+    }
+    await renderWithRouter(<Editor site={site} page={full} />)
+    const add = within(blockList()).getByRole('button', { name: 'Добавить блок' })
+    expect(add.getAttribute('aria-disabled')).toBe('true')
+    // Не disabled: кнопка остаётся в порядке Tab, и диктор прочитает пояснение
+    expect((add as HTMLButtonElement).disabled).toBe(false)
+    const description = document.getElementById(add.getAttribute('aria-describedby') ?? '')
+    expect(description?.textContent).toContain('больше не поместится')
+    await user.click(add)
+    expect(screen.queryByRole('dialog', { name: 'Добавить блок' })).toBeNull()
+  })
+})
+
+describe('заголовок страницы', () => {
+  it('поле похоже на текст, но видно, что его можно править: карандаш и подсказка', async () => {
+    await renderWithRouter(<Editor site={site} page={published} />)
+    const input = screen.getByLabelText('Заголовок страницы')
+    expect(input.getAttribute('title')).toMatch(/изменить/)
+    const pencil = input.nextElementSibling
+    expect(pencil?.tagName.toLowerCase()).toBe('svg')
+    expect(pencil?.getAttribute('aria-hidden')).toBe('true')
+  })
 })
 
 describe('узкий экран', () => {
@@ -179,6 +214,22 @@ describe('узкий экран', () => {
     expect(fieldsPanel?.hidden).toBe(false)
     expect(document.activeElement).toBe(fieldsTab)
     expect(screen.getByRole('heading', { level: 2, name: 'Преимущества' })).toBeTruthy()
+
+    // Переставить и удалить блок можно, не уходя со вкладки «Блоки»: действия у каждого блока
+    await user.click(within(tabs).getByRole('tab', { name: 'Блоки' }))
+    const items = within(blockList()).getAllByRole('listitem') as HTMLElement[]
+    for (const item of items) {
+      expect(within(item).getByRole('button', { name: 'Поднять блок' })).toBeTruthy()
+      expect(within(item).getByRole('button', { name: 'Удалить блок' })).toBeTruthy()
+    }
+    const last = items.at(-1) as HTMLElement
+    const lastName = within(last).getAllByRole('button')[1]?.textContent
+    await user.click(within(last).getByRole('button', { name: 'Поднять блок' }))
+    expect(within(tabs).getByRole('tab', { name: 'Блоки' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    const moved = within(blockList()).getAllByRole('listitem').at(-2) as HTMLElement
+    expect(within(moved).getAllByRole('button')[1]?.textContent).toBe(lastName)
 
     // Открытая история живёт во вкладке полей и называет её
     await user.click(screen.getByRole('button', { name: 'История' }))

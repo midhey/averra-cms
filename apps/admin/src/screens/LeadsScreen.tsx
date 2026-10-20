@@ -122,7 +122,8 @@ function SiteLeads({ siteId }: { siteId: string }) {
               search: next === 'all' ? {} : { status: next },
             })
           }
-          panelFocusable={false}
+          // Пустой список — в панели нечего фокусировать, и по WAI-ARIA сама панель — остановка Tab
+          panelFocusable={items.length === 0}
         >
           <div className={styles.columns}>
             <div className={styles.listColumn}>

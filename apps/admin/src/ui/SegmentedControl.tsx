@@ -22,6 +22,8 @@ type SegmentedControlProps<T extends string> = {
   disabled?: boolean
   /** Имя радиокнопок в форме: по нему focusField ставит фокус на группу с ошибкой */
   name?: string
+  /** Описания группы (ошибка, подсказка рядом): диктор прочитает их, войдя в группу */
+  'aria-describedby'?: string | undefined
 }
 
 /**
@@ -37,11 +39,16 @@ export function SegmentedControl<T extends string>({
   appearance = 'segments',
   disabled,
   name: formName,
+  'aria-describedby': describedBy,
 }: SegmentedControlProps<T>) {
   const ownName = useId()
   const name = formName ?? ownName
   return (
-    <fieldset className={cx(styles.group, styles[appearance])} disabled={disabled}>
+    <fieldset
+      className={cx(styles.group, styles[appearance])}
+      disabled={disabled}
+      aria-describedby={describedBy}
+    >
       <legend className={cx(styles.legend, hideLegend && 'visually-hidden')}>{legend}</legend>
       <div className={styles.options}>
         {options.map((option) => (

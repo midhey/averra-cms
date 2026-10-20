@@ -57,6 +57,12 @@
   color: var(--color-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  // Телефон: полоса в две строки (заголовок с состоянием, действия), высота нужна полям.
+  // Название сайта прячем: к сайту ведёт «Назад к сайту» рядом
+  @include ui.breakpoint-down(small) {
+    display: none;
+  }
 }
 
 .titleRow {
@@ -65,6 +71,27 @@
   gap: ui.rem(4) ui.rem(10);
   align-items: center;
   min-width: 0;
+
+  // Телефон: состояние в той же строке, заголовок сжимается с многоточием
+  @include ui.breakpoint-down(small) {
+    flex-wrap: nowrap;
+  }
+}
+
+// Поле заголовка и карандаш за ним — одним куском: плашка состояния переносится целиком
+.titleField {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: ui.rem(2);
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+// Карандаш — видимая подсказка, что заголовок можно править: рамка у поля только при наведении
+.titleEdit {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
 }
 
 // Заголовок страницы — поле, которое выглядит как текст: рамка видна при наведении и фокусе
@@ -75,6 +102,11 @@
   // Где field-sizing не поддерживается, поле просто шире
   field-sizing: content;
   min-width: ui.rem(160);
+
+  @include ui.breakpoint-down(small) {
+    min-width: ui.rem(96);
+  }
+
   max-width: 100%;
   min-height: var(--size-control-small);
   padding: ui.rem(2) ui.rem(8);
@@ -112,6 +144,7 @@
 
 .status {
   display: inline-flex;
+  flex-shrink: 0;
   min-width: 0;
 }
 

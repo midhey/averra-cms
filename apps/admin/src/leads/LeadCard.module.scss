@@ -22,9 +22,9 @@
   }
 }
 
+// Плашка состояния справа от имени, как в концепте, и на узком экране тоже
 .head {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-3);
   align-items: flex-start;
   justify-content: space-between;
@@ -32,9 +32,14 @@
 
 .title {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: ui.rem(6);
   min-width: 0;
+}
+
+.pill {
+  flex-shrink: 0;
 }
 
 .name {

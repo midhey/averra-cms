@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWithRouter } from '../test/render-with-router'
@@ -79,5 +79,41 @@ describe('LeadCard', () => {
     // Вернулись к списку на ту же вкладку
     expect(router.state.location.pathname).toBe(`/sites/${site.id}/leads`)
     expect(router.state.location.search).toEqual({ status: 'new' })
+  })
+
+  it('обработанная заявка — дата обработки видна в строке сведений, а не только диктору', async () => {
+    const processed = {
+      ...lead(''),
+      status: 'processed' as const,
+      processedAt: '2026-10-20T09:15:00.000Z',
+    }
+    await renderWithRouter(<LeadCard site={site} lead={processed} status={undefined} />)
+    const when = document.querySelector('time[datetime="2026-10-20T09:15:00.000Z"]')
+    expect(when).toBeTruthy()
+    const line = when?.closest('p')
+    expect(line?.textContent).toMatch(/^Обработана /)
+    expect(line?.closest('.visually-hidden')).toBeNull()
+    expect(line?.className).not.toContain('visually-hidden')
+  })
+
+  it('телефон и почта в полях — ссылки tel: и mailto:', async () => {
+    const withPhone = {
+      ...lead('maria@example.ru'),
+      data: [
+        ...lead('maria@example.ru').data,
+        { name: 'phone', label: 'Телефон', type: 'phone', value: '+7 (912) 000-00-00' },
+      ],
+    }
+    await renderWithRouter(<LeadCard site={site} lead={withPhone} status={undefined} />)
+    const fields = document.querySelector<HTMLElement>(
+      'dl[aria-label="Поля заявки"]',
+    ) as HTMLElement
+    expect(
+      within(fields).getByRole('link', { name: '+7 (912) 000-00-00' }).getAttribute('href'),
+    ).toBe('tel:+79120000000')
+    expect(
+      within(fields).getByRole('link', { name: 'maria@example.ru' }).getAttribute('href'),
+    ).toBe('mailto:maria@example.ru')
+    expect(within(fields).queryByRole('link', { name: 'Мария' })).toBeNull()
   })
 })

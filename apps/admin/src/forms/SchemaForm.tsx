@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode, useMemo } from 'react'
+import { type ComponentType, type ReactNode, useId, useMemo } from 'react'
 import { Button, IconButton } from '../ui/Button'
 import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
@@ -158,6 +158,7 @@ function EnumField({ schema, value, path, label, errors, onChange }: FieldProps)
     )
   const error = errors[pathKey(path)]
   const appearance = enumAppearance(schema)
+  const errorId = useId()
 
   if (appearance === 'select') {
     return (
@@ -195,8 +196,13 @@ function EnumField({ schema, value, path, label, errors, onChange }: FieldProps)
         })}
         value={String(current)}
         onChange={pick}
+        aria-describedby={error ? errorId : undefined}
       />
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <p id={errorId} className={styles.error}>
+          {error}
+        </p>
+      )}
     </div>
   )
 }

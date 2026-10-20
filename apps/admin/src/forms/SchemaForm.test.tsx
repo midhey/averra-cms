@@ -83,6 +83,14 @@ describe('SchemaForm', () => {
     expect(formValue().variant).toBe('split')
   })
 
+  it('ошибка варианта связана с группой радиокнопок через aria-describedby', () => {
+    const message = 'В варианте «С картинкой» (split) нужна картинка'
+    render(<BlockForm type="hero" initial={{ title: 'Ремонт' }} errors={{ variant: message }} />)
+    const group = screen.getByRole('group', { name: 'Вариант' })
+    const ids = (group.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toEqual([message])
+  })
+
   it('короткий выбор чисел — сегменты, значение остаётся числом', async () => {
     const user = userEvent.setup()
     render(<BlockForm type="features" initial={{ items: [{ title: 'Смета' }] }} />)

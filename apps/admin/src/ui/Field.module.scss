@@ -75,6 +75,24 @@
   border-radius: var(--radius-control) 0 0 var(--radius-control);
 }
 
+// Иконка поверх поля слева: поле под ней с отступом, щелчок по иконке попадает в поле
+.withIcon {
+  position: relative;
+
+  .input {
+    padding-inline-start: ui.rem(36);
+  }
+}
+
+.icon {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: ui.rem(12);
+  margin-block: auto;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
 .withPrefix {
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
 }

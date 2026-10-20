@@ -77,6 +77,7 @@ const icons = {
       <path d="M9 8.5v4M9 5.5h.01" />
     </>
   ),
+  edit: <path d="M11.5 3.5l3 3L6 15H3v-3l8.5-8.5zM10 5l3 3" />,
   trash: <path d="M3 5h12M7 5V3.5h4V5M4.5 5l.8 10h7.4l.8-10" />,
   download: <path d="M9 3v8.5M5.5 8l3.5 3.5L12.5 8M3.5 14.5h11" />,
   upload: <path d="M9 12V3.5M5.5 7L9 3.5 12.5 7M3.5 14.5h11" />,

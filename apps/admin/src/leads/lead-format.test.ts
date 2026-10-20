@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   displayValue,
+  fieldHref,
   leadEmail,
   leadName,
   leadPreview,
@@ -99,6 +100,18 @@ describe('карточка и список заявок', () => {
     expect(leadEmail([typed('email', 'email', 'не адрес')])).toBeUndefined()
     expect(leadEmail([typed('email', 'email', 'a@b.ru?cc=evil@x.ru')])).toBeUndefined()
     expect(leadEmail([typed('note', 'text', 'a@b.ru')])).toBeUndefined()
+  })
+
+  it('ссылки полей: телефон — tel: из цифр, почта — mailto:, только проверенные значения', () => {
+    const phone = (value: string) => fieldHref({ type: 'phone', value })
+    expect(phone('+7 (912) 000-00-00')).toBe('tel:+79120000000')
+    expect(phone(' 8 912 000 00 00 ')).toBe('tel:89120000000')
+    expect(phone('123')).toBeUndefined()
+    expect(phone('+7 912 javascript:alert(1)')).toBeUndefined()
+    expect(fieldHref({ type: 'email', value: 'maria@example.ru' })).toBe('mailto:maria@example.ru')
+    expect(fieldHref({ type: 'email', value: 'a@b.ru?cc=evil@x.ru' })).toBeUndefined()
+    expect(fieldHref({ type: 'text', value: '+7 912 000-00-00' })).toBeUndefined()
+    expect(fieldHref({ type: 'phone', value: true })).toBeUndefined()
   })
 
   it('«Ответить письмом» — mailto с темой про сайт', () => {

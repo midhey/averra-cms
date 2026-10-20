@@ -1,4 +1,4 @@
-import { type LeadStatus, MailAddress } from '@averra/schema'
+import { type LeadStatus, MailAddress, PHONE_PATTERN, patternRegExp } from '@averra/schema'
 import { pluralRu } from '../format/plural'
 import type { FieldErrors } from '../forms/field-errors'
 import { pagePath } from '../pages-format'
@@ -16,6 +16,26 @@ export const leadStatusLabels: Record<LeadStatus, string> = {
 export const leadStatusTones: Record<LeadStatus, StatusTone> = {
   new: 'info',
   processed: 'neutral',
+}
+
+const PHONE = patternRegExp(PHONE_PATTERN)
+
+/**
+ * Ссылка для значения поля: телефон — tel:, почта — mailto:. Только из значения, которое проходит
+ * проверку формы (шаблон телефона, MailAddress); в tel: — цифры и «+» в начале, без пробелов
+ * и скобок. Другое поле или непроверенное значение — без ссылки
+ */
+export function fieldHref(field: Pick<LeadField, 'type' | 'value'>) {
+  if (typeof field.value !== 'string') return undefined
+  const value = field.value.trim()
+  if (field.type === 'phone' && PHONE.test(value)) {
+    return `tel:${value.startsWith('+') ? '+' : ''}${value.replace(/\D/gu, '')}`
+  }
+  if (field.type === 'email') {
+    const parsed = MailAddress.safeParse(value)
+    if (parsed.success) return `mailto:${parsed.data}`
+  }
+  return undefined
 }
 
 /** Значение поля для человека: флажок — «да»/«нет», пустое — прочерк */

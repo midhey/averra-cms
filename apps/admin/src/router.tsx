@@ -24,6 +24,7 @@ import {
   pageQuery,
   pagesQuery,
   passwordResetQuery,
+  recentLeadsQuery,
   siteQuery,
   sitesQuery,
   statusQuery,
@@ -171,7 +172,7 @@ const siteRoute = createRoute({
       Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
     ])
     if (canSeeLeads(site.access) && site.newLeads !== null) {
-      await Promise.allSettled([queryClient.ensureQueryData(leadsQuery(siteId))])
+      await Promise.allSettled([queryClient.ensureQueryData(recentLeadsQuery(siteId))])
     }
   },
   component: OverviewScreen,

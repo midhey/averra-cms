@@ -12,11 +12,59 @@
   font-size: var(--font-size-caption);
 }
 
+// Ячейки таблицы очереди: адрес и письмо, состояние и ошибка — столбиком
+.recipientCell,
+.statusCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.address {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.template {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
 .error {
   display: block;
   max-width: ui.rem(320);
   font-size: var(--font-size-caption);
   color: var(--color-danger-text);
+  overflow-wrap: anywhere;
+}
+
+// Очередь карточками на узком экране и на ноутбуке, где таблица не помещается
+.mails {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+
+  > li {
+    gap: var(--space-2);
+    min-width: 0;
+  }
+}
+
+.mailHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.recipient {
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 

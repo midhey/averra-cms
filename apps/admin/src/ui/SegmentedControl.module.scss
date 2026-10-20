@@ -153,6 +153,14 @@ $sketch-media-radius: ui.rem(3);
   padding: ui.rem(10);
   background: var(--color-background);
   border-radius: var(--radius-inner);
+
+  // Контрастная тема: рисунок нарисован фоном, а фон браузер сбросил бы в Canvas, и миниатюра
+  // стала бы пустой рамкой. Рисуем её системными цветами сами: линии текстом по холсту
+  @media (forced-colors: active) {
+    background: Canvas;
+    border: ui.rem(1) solid GrayText;
+    forced-color-adjust: none;
+  }
 }
 
 .sketchLines {
@@ -167,11 +175,19 @@ $sketch-media-radius: ui.rem(3);
   height: ui.rem(4);
   background: var(--color-border-strong);
   border-radius: $sketch-line-radius;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+  }
 }
 
 .sketchLineShort {
   width: 60%;
   background: var(--color-border);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
 }
 
 .sketchMedia {
@@ -179,6 +195,10 @@ $sketch-media-radius: ui.rem(3);
   height: ui.rem(22);
   background: var(--color-border);
   border-radius: $sketch-media-radius;
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
 }
 
 // Выбор виден не только цветом: подпись выбранного варианта жирнее, у карточки — галочка.

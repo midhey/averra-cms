@@ -8,6 +8,8 @@ type StatusPillProps = {
   tone: StatusTone
   /** pill — плашка на цветном фоне (таблицы), dot — точка и текст (строка сведений) */
   appearance?: 'pill' | 'dot'
+  /** Место в раскладке экрана (не меняет вид плашки) */
+  className?: string | undefined
   children: ReactNode
 }
 
@@ -15,9 +17,9 @@ type StatusPillProps = {
  * Состояние словами и цветом: «Опубликована», «Черновик», «Есть правки», «Новая», «Ошибка».
  * Цвет только помогает — смысл несёт текст, а точки тонов различаются ещё и по светлоте
  */
-export function StatusPill({ tone, appearance = 'pill', children }: StatusPillProps) {
+export function StatusPill({ tone, appearance = 'pill', className, children }: StatusPillProps) {
   return (
-    <span className={cx(styles.status, styles[appearance], styles[tone])}>
+    <span className={cx(styles.status, styles[appearance], styles[tone], className)}>
       <span className={styles.indicator} aria-hidden="true" />
       {children}
     </span>

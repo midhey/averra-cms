@@ -21,6 +21,7 @@ export const queryKeys = {
   leads: (siteId: string) => ['sites', siteId, 'leads'] as const,
   leadList: (siteId: string, status: LeadStatus | undefined) =>
     ['sites', siteId, 'leads', 'list', status ?? 'all'] as const,
+  recentLeads: (siteId: string) => ['sites', siteId, 'leads', 'recent'] as const,
   lead: (siteId: string, leadId: string) => ['sites', siteId, 'leads', 'item', leadId] as const,
   leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
   passwordReset: ['password-reset'] as const,
@@ -147,6 +148,21 @@ export const leadsQuery = (siteId: string, status?: LeadStatus) =>
         param: { siteId },
         query: status ? { status } : {},
       })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Последние заявки для обзора сайта: три штуки и только поля карточки (откуда, кто, что, когда).
+ * Полный список с персональными данными обзору не нужен. Ключ — под queryKeys.leads: обработка
+ * заявки и настройки обновляют и его
+ */
+export const recentLeadsQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.recentLeads(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].leads.recent.$get({ param: { siteId }, query: {} })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
@@ -288,8 +304,8 @@ export const meQuery = () =>
 
 /**
  * Сменился пользователь (вход или выход): всё, что загружено до этого, — уже не про него.
- * Запрос «кто вошёл» не удаляем, а обновляем на месте: боковая панель подписана на него, и удалённый
- * запрос она бы так и показывала (clear() оставил бы в панели прошлого пользователя)
+ * Запрос «кто вошёл» не удаляем, а обновляем на месте: боковая панель подписана на него,
+ * и удалённый запрос она бы так и показывала (clear() оставил бы в панели прошлого пользователя)
  */
 export async function switchUser(queryClient: QueryClient, signedIn: boolean) {
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] })

@@ -12,7 +12,14 @@ import { filterPages, pagesSummary, pagesWithChanges } from '../pages-format'
 import { canManagePages, canPublish, canSeeLeads } from '../permissions'
 import { buildSummary, failedBuildOutcome } from '../publish/build-format'
 import { useBuild } from '../publish/use-build'
-import { leadsQuery, meQuery, pagesQuery, queryKeys, siteQuery, statusQuery } from '../queries'
+import {
+  meQuery,
+  pagesQuery,
+  queryKeys,
+  recentLeadsQuery,
+  siteQuery,
+  statusQuery,
+} from '../queries'
 import { Button, buttonClassName } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
 import { EmptyState } from '../ui/EmptyState'
@@ -148,6 +155,7 @@ function Overview({ siteId }: { siteId: string }) {
           <TextInput
             label="Найти страницу"
             hideLabel
+            icon="search"
             type="search"
             placeholder="Найти страницу"
             value={search}
@@ -262,10 +270,10 @@ function BackupCard() {
 }
 
 function RecentLeads({ siteId }: { siteId: string }) {
-  const leads = useQuery({ ...leadsQuery(siteId), retryOnMount: false })
+  const leads = useQuery({ ...recentLeadsQuery(siteId), retryOnMount: false })
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
   const pageTitles = new Map(pages.map((page) => [page.slug, page.title]))
-  const recent = leads.data?.items.slice(0, 3) ?? []
+  const recent = leads.data?.items ?? []
   return (
     <Section
       title="Последние заявки"

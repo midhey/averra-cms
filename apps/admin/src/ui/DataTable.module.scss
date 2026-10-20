@@ -46,6 +46,10 @@
   }
 }
 
+.fixed {
+  table-layout: fixed;
+}
+
 .caption {
   padding: ui.rem(14) ui.rem(20) 0;
   font-weight: var(--font-weight-semibold);

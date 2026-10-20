@@ -10,7 +10,7 @@ import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
 import { mediaQuery, queryKeys, revisionQuery } from '../queries'
-import { Button, iconButtonClassName } from '../ui/Button'
+import { Button, IconButton, iconButtonClassName } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
@@ -143,7 +143,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   }, [dirty])
 
   // И уйти по ссылке внутри админки («Назад к сайту») или кнопкой «Назад» браузера. Закрытие
-  // вкладки ловит beforeunload выше, а свой у блокировщика по умолчанию включён всегда, даже без правок
+  // вкладки ловит beforeunload выше, а свой у блокировщика по умолчанию включён всегда,
+  // даже без правок
   useBlocker({
     shouldBlockFn: () =>
       !window.confirm('На странице есть несохранённые изменения. Уйти без сохранения?'),
@@ -194,7 +195,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       if (res.status !== 200) throw new Error(await apiErrorText(res))
       return res.json()
     },
-    // Публикация заводит сборку сайта на сервере: её состояние на обзоре и в «Настройках сайта» тоже устарело
+    // Публикация заводит сборку сайта на сервере: её состояние на обзоре и в «Настройках сайта»
+    // тоже устарело
     onSuccess: () =>
       Promise.all([
         refreshPages(),
@@ -344,17 +346,26 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               <label className="visually-hidden" htmlFor={`${ids}-title`}>
                 Заголовок страницы
               </label>
-              <input
-                id={`${ids}-title`}
-                className={styles.titleInput}
-                value={title}
-                autoComplete="off"
-                onChange={(event) => setTitle(event.target.value)}
-                aria-invalid={titleValid ? undefined : true}
-                aria-describedby={titleValid ? undefined : titleErrorId}
-              />
+              {/* Поле выглядит как текст, как в концепте. Что его можно править, подсказывают
+                  карандаш рядом и подсказка при наведении */}
+              <span className={styles.titleField}>
+                <input
+                  id={`${ids}-title`}
+                  className={styles.titleInput}
+                  value={title}
+                  autoComplete="off"
+                  title="Заголовок страницы — нажмите, чтобы изменить"
+                  onChange={(event) => setTitle(event.target.value)}
+                  aria-invalid={titleValid ? undefined : true}
+                  aria-describedby={titleValid ? undefined : titleErrorId}
+                />
+                <Icon name="edit" size={14} className={styles.titleEdit} />
+              </span>
               <span role="status" className={styles.status}>
-                <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
+                {/* На узком экране — точкой и текстом, без плашки: встаёт в строку заголовка */}
+                <StatusPill tone={pill.tone} appearance={narrow ? 'dot' : 'pill'}>
+                  {pill.label}
+                </StatusPill>
               </span>
             </div>
           </div>
@@ -363,15 +374,28 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         {!narrow && <div className={styles.devices}>{deviceSwitch}</div>}
 
         <div className={styles.actions}>
-          <Button
-            icon="history"
-            size={narrow ? 'small' : 'medium'}
-            aria-expanded={historyOpen}
-            aria-controls={historyOpen ? historyId : undefined}
-            onClick={toggleHistory}
-          >
-            История
-          </Button>
+          {/* На узком экране — только иконка: полоса и так в две строки, а у иконки подпись
+              для диктора и подсказка та же */}
+          {narrow ? (
+            <IconButton
+              label="История"
+              icon="history"
+              variant="secondary"
+              size="small"
+              aria-expanded={historyOpen}
+              aria-controls={historyOpen ? historyId : undefined}
+              onClick={toggleHistory}
+            />
+          ) : (
+            <Button
+              icon="history"
+              aria-expanded={historyOpen}
+              aria-controls={historyOpen ? historyId : undefined}
+              onClick={toggleHistory}
+            >
+              История
+            </Button>
+          )}
           {/* Недоступность — aria-disabled, а не disabled: после сохранения кнопка остаётся
               в фокусе, и следующий Tab идёт дальше по полосе, а не с начала страницы */}
           <Button
@@ -448,6 +472,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             onMove={(from, to) => editBlocks(moveItem(blocks, from, to))}
             onRemove={deleteBlock}
             onAdd={() => setAdding(true)}
+            actionsOnEvery={narrow}
           />
         </div>
 

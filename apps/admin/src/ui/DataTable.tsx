@@ -17,6 +17,8 @@ export type Column<Row> = {
    * роли, дат и кнопок, которые нельзя разрывать
    */
   wrap?: 'anywhere' | 'nowrap'
+  /** Ширина колонки (%, rem) — для таблицы с fixed: остаток делят колонки без ширины */
+  width?: string
 }
 
 type DataTableProps<Row> = {
@@ -31,6 +33,11 @@ type DataTableProps<Row> = {
   empty?: ReactNode
   /** Ширина, уже которой таблица не сжимается, а прокручивается по горизонтали */
   minWidth?: string
+  /**
+   * fixed — колонки по заданным ширинам, а не по содержимому: длинная строка переносится внутри
+   * своей колонки и не раздвигает таблицу шире рамки (очередь писем)
+   */
+  layout?: 'auto' | 'fixed'
 }
 
 /**
@@ -46,6 +53,7 @@ export function DataTable<Row>({
   rowKey,
   empty,
   minWidth = '40rem',
+  layout = 'auto',
 }: DataTableProps<Row>) {
   if (rows.length === 0 && empty) return <div className={styles.frame}>{empty}</div>
   return (
@@ -59,8 +67,15 @@ export function DataTable<Row>({
       // biome-ignore lint/a11y/noNoninteractiveTabindex: прокручиваемая область должна быть доступна с клавиатуры
       tabIndex={0}
     >
-      <table className={styles.table} style={{ minWidth }}>
+      <table className={cx(styles.table, layout === 'fixed' && styles.fixed)} style={{ minWidth }}>
         <caption className={showCaption ? styles.caption : 'visually-hidden'}>{caption}</caption>
+        {columns.some((column) => column.width) && (
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.key} style={column.width ? { width: column.width } : undefined} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr>
             {columns.map((column) => (

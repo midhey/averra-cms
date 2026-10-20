@@ -65,6 +65,16 @@ describe('поля', () => {
     expect(screen.getByRole('searchbox', { name: 'Найти страницу' })).toBeTruthy()
   })
 
+  it('иконка слева — только рисунок: скрыта от диктора, имя поля — подпись', () => {
+    const { container } = render(
+      <TextInput label="Найти страницу" hideLabel type="search" icon="search" />,
+    )
+    expect(screen.getByRole('searchbox', { name: 'Найти страницу' })).toBeTruthy()
+    const svg = container.querySelector('svg')
+    expect(svg?.getAttribute('aria-hidden')).toBe('true')
+    expect(svg?.nextElementSibling?.tagName).toBe('INPUT')
+  })
+
   it('приставка видна, но не входит в имя поля', () => {
     render(<TextInput label="Адрес" prefix="/" />)
     expect(screen.getByRole('textbox', { name: 'Адрес' })).toBeTruthy()

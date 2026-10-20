@@ -91,6 +91,14 @@
   border-right-color: transparent;
   border-radius: var(--radius-pill);
   animation: spin 0.7s linear infinite;
+
+  // Контрастная тема закрасила бы прозрачный сектор цветом рамки, и вращения не было бы видно:
+  // кольцо — цветом текста кнопки (он уже системный), сектор — системным фоном кнопки
+  @media (forced-colors: active) {
+    border-color: currentcolor;
+    border-right-color: ButtonFace;
+    forced-color-adjust: none;
+  }
 }
 
 @keyframes spin {

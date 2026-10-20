@@ -26,10 +26,18 @@ import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { Facts, mutedClassName, Screen, Section } from '../ui/Screen'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
+import { useMediaQuery } from '../ui/use-media-query'
 import { usePageTitle } from '../ui/use-page-title'
 import styles from './MailScreen.module.scss'
 
 type Notice = { kind: 'done' | 'error'; text: string }
+
+/**
+ * Очередь писем — таблицей, когда ей хватает места: панель 16,5rem, поля экрана 5rem и таблица
+ * не уже 48rem, а адрес в своей колонке обычно в одну строку. Уже — письма карточками друг под
+ * другом: ошибка и «Повторить» видны сразу, а не после прокрутки таблицы
+ */
+const OUTBOX_AS_CARDS = '(width < 80rem)'
 
 /**
  * Почта админки — только владельцу: включена ли и через что, настройки SMTP (их можно задать
@@ -41,7 +49,8 @@ export function MailScreen() {
   const titles = new Map(mail.templates.map((template) => [template.id as string, template.title]))
 
   return (
-    <Screen narrow>
+    // Не narrow: очереди писем нужна вся ширина. Формы и так ограничены своей шириной
+    <Screen>
       <PageHeader
         eyebrow="Установка"
         title="Почта"
@@ -125,74 +134,79 @@ function Outbox({ titles }: { titles: Map<string, string> }) {
       }),
   })
 
+  const asCards = useMediaQuery(OUTBOX_AS_CARDS)
+  const template = (mail: OutboxMail) => titles.get(mail.template) ?? mail.template
+  const state = (mail: OutboxMail) => (
+    <span className={styles.status}>
+      <StatusPill tone={outboxTones[mail.status] ?? 'neutral'}>
+        {mailStatusLabel(mail.status)}
+      </StatusPill>
+      <span className={mutedClassName}>{attemptsLabel(mail.attempts)}</span>
+    </span>
+  )
+  // Можно ли повторить, решает API: у письма с одноразовой ссылкой после неудачи данных
+  // нет, и повторять нечего
+  const retryButton = (mail: OutboxMail) =>
+    mail.canRetry && (
+      <Button
+        size="small"
+        aria-label={`Повторить письмо для ${mail.recipient}`}
+        disabled={retry.isPending}
+        onClick={() => {
+          setNotice(undefined)
+          retry.mutate({ id: mail.id, recipient: mail.recipient })
+        }}
+      >
+        Повторить
+      </Button>
+    )
+
+  // Колонки по ширинам (fixed): кому и какое письмо — одной ячейкой, ошибка — под состоянием.
+  // Так таблица укладывается в экран, а «Повторить» всегда на виду. Адрес переносится, только
+  // если не влез в свою колонку
   const columns: Column<OutboxMail>[] = [
-    { key: 'recipient', header: 'Кому', wrap: 'nowrap', cell: (mail) => mail.recipient },
     {
-      key: 'template',
-      header: 'Письмо',
-      cell: (mail) => titles.get(mail.template) ?? mail.template,
+      key: 'recipient',
+      header: 'Кому и что',
+      width: '36%',
+      cell: (mail) => (
+        <span className={styles.recipientCell}>
+          <span className={styles.address}>{mail.recipient}</span>
+          <span className={styles.template}>{template(mail)}</span>
+        </span>
+      ),
     },
     {
       key: 'status',
       header: 'Состояние',
       cell: (mail) => (
-        <span className={styles.status}>
-          <StatusPill tone={outboxTones[mail.status] ?? 'neutral'}>
-            {mailStatusLabel(mail.status)}
-          </StatusPill>
-          <span className={mutedClassName}>{attemptsLabel(mail.attempts)}</span>
+        <span className={styles.statusCell}>
+          {state(mail)}
+          {mail.lastError && <span className={styles.error}>{mail.lastError}</span>}
         </span>
       ),
     },
     {
       key: 'when',
       header: 'Когда',
+      width: '20%',
       muted: true,
-      wrap: 'nowrap',
-      cell: (mail) =>
-        mail.sentAt ? (
-          <>
-            отправлено <time dateTime={mail.sentAt}>{formatDateTime(mail.sentAt)}</time>
-          </>
-        ) : mail.status === 'pending' ? (
-          <>
-            следующая попытка{' '}
-            <time dateTime={mail.nextAttemptAt}>{formatDateTime(mail.nextAttemptAt)}</time>
-          </>
-        ) : (
-          <>
-            создано <time dateTime={mail.createdAt}>{formatDateTime(mail.createdAt)}</time>
-          </>
-        ),
-    },
-    {
-      key: 'error',
-      header: 'Последняя ошибка',
-      cell: (mail) => <span className={styles.error}>{mail.lastError ?? '—'}</span>,
+      cell: (mail) => <MailWhen mail={mail} />,
     },
     {
       key: 'actions',
       header: <span className="visually-hidden">Действия</span>,
+      width: '9rem',
       align: 'end',
       wrap: 'nowrap',
-      // Можно ли повторить, решает API: у письма с одноразовой ссылкой после неудачи данных
-      // нет, и повторять нечего
-      cell: (mail) =>
-        mail.canRetry && (
-          <Button
-            size="small"
-            aria-label={`Повторить письмо для ${mail.recipient}`}
-            disabled={retry.isPending}
-            onClick={() => {
-              setNotice(undefined)
-              retry.mutate({ id: mail.id, recipient: mail.recipient })
-            }}
-          >
-            Повторить
-          </Button>
-        ),
+      cell: retryButton,
     },
   ]
+  const empty = (
+    <EmptyState title="Писем в очереди нет" icon="mail" headingLevel={3}>
+      Здесь появятся письма сброса пароля, приглашения и уведомления о заявках.
+    </EmptyState>
+  )
 
   return (
     <Section
@@ -218,19 +232,35 @@ function Outbox({ titles }: { titles: Map<string, string> }) {
         </p>
       ) : outbox.isError ? (
         <InlineAlert tone="danger">Очередь не загрузилась: {messageOf(outbox.error)}</InlineAlert>
-      ) : (
+      ) : !asCards ? (
         <DataTable
           caption="Очередь писем"
           columns={columns}
           rows={outbox.data}
           rowKey={(mail) => mail.id}
-          minWidth="56rem"
-          empty={
-            <EmptyState title="Писем в очереди нет" icon="mail" headingLevel={3}>
-              Здесь появятся письма сброса пароля, приглашения и уведомления о заявках.
-            </EmptyState>
-          }
+          minWidth="48rem"
+          layout="fixed"
+          empty={empty}
         />
+      ) : outbox.data.length === 0 ? (
+        <div className={cardClassName()}>{empty}</div>
+      ) : (
+        <ul className={styles.mails} aria-label="Очередь писем">
+          {outbox.data.map((mail) => (
+            <li key={mail.id} className={cardClassName({ padding: 'compact' })}>
+              <div className={styles.mailHead}>
+                <span className={styles.recipient}>{mail.recipient}</span>
+                {state(mail)}
+              </div>
+              <span>{template(mail)}</span>
+              <span className={mutedClassName}>
+                <MailWhen mail={mail} />
+              </span>
+              {mail.lastError && <span className={styles.error}>{mail.lastError}</span>}
+              {mail.canRetry && <div>{retryButton(mail)}</div>}
+            </li>
+          ))}
+        </ul>
       )}
       {notice?.kind === 'done' && (
         <InlineAlert tone="success" live>
@@ -239,6 +269,30 @@ function Outbox({ titles }: { titles: Map<string, string> }) {
       )}
       {notice?.kind === 'error' && <InlineAlert tone="danger">{notice.text}</InlineAlert>}
     </Section>
+  )
+}
+
+/** Когда: отправлено, следующая попытка или создано — смотря что с письмом */
+function MailWhen({ mail }: { mail: OutboxMail }) {
+  if (mail.sentAt) {
+    return (
+      <>
+        отправлено <time dateTime={mail.sentAt}>{formatDateTime(mail.sentAt)}</time>
+      </>
+    )
+  }
+  if (mail.status === 'pending') {
+    return (
+      <>
+        следующая попытка{' '}
+        <time dateTime={mail.nextAttemptAt}>{formatDateTime(mail.nextAttemptAt)}</time>
+      </>
+    )
+  }
+  return (
+    <>
+      создано <time dateTime={mail.createdAt}>{formatDateTime(mail.createdAt)}</time>
+    </>
   )
 }
 

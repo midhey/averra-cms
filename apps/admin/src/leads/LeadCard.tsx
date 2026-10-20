@@ -16,6 +16,7 @@ import { StatusPill } from '../ui/StatusPill'
 import styles from './LeadCard.module.scss'
 import {
   displayValue,
+  fieldHref,
   type LeadField,
   leadEmail,
   leadName,
@@ -140,18 +141,27 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
             {pageTitle && <>«{pageTitle}» </>}
             <code className={styles.mono}>{pagePath(lead.pageSlug)}</code>, форма «{lead.formTitle}»
           </p>
-        </div>
-        <StatusPill tone={leadStatusTones[lead.status]}>
-          {leadStatusLabels[lead.status]}
-          {lead.processedAt && (
-            <span className="visually-hidden"> {formatDateTime(lead.processedAt)}</span>
+          {lead.status === 'processed' && lead.processedAt && (
+            <p className={styles.meta}>
+              Обработана <time dateTime={lead.processedAt}>{formatDateTime(lead.processedAt)}</time>
+            </p>
           )}
+        </div>
+        <StatusPill tone={leadStatusTones[lead.status]} className={styles.pill}>
+          {leadStatusLabels[lead.status]}
         </StatusPill>
       </div>
 
       <Facts
         label="Поля заявки"
-        items={fields.map((field) => [field.label, displayValue(field)] as const)}
+        items={fields.map((field) => {
+          // Телефон и почта — ссылками, как в концепте: позвонить или написать в одно касание
+          const href = fieldHref(field)
+          return [
+            field.label,
+            href ? <a href={href}>{displayValue(field)}</a> : displayValue(field),
+          ] as const
+        })}
       />
 
       <section aria-label="Согласие на обработку персональных данных" className={styles.consent}>
