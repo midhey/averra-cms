@@ -22,20 +22,22 @@
   }
 }
 
-// Плашка состояния справа от имени, как в концепте, и на узком экране тоже
+// Имя, под ним сведения
 .head {
   display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.title {
-  display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   gap: ui.rem(6);
   min-width: 0;
+}
+
+// Плашка состояния справа от имени, как в концепте. Длинное имя не влезает рядом с ней —
+// плашка уходит на следующую строку (flex-wrap), а имя занимает всю ширину и не рвётся посреди слова
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  justify-content: space-between;
 }
 
 .pill {
@@ -43,10 +45,14 @@
 }
 
 .name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--font-size-headline);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
-  overflow-wrap: anywhere;
+
+  // Слово рвётся, только если оно одно шире строки
+  overflow-wrap: break-word;
 }
 
 .meta {

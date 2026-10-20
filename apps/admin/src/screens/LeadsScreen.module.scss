@@ -83,6 +83,12 @@
   height: ui.rem(8);
   background: var(--color-info-indicator);
   border-radius: var(--radius-pill);
+
+  // Фон браузер в этом режиме снимает, и точка пропала бы: рисуем её системным цветом сами
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
 }
 
 .itemPreview {

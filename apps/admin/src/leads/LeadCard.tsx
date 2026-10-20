@@ -132,24 +132,24 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
       </Link>
 
       <div className={styles.head}>
-        <div className={styles.title}>
+        <div className={styles.nameRow}>
           <h2 id={headingId} className={styles.name}>
             {name}
           </h2>
-          <p className={styles.meta}>
-            <time dateTime={lead.createdAt}>{created}</time> · страница{' '}
-            {pageTitle && <>«{pageTitle}» </>}
-            <code className={styles.mono}>{pagePath(lead.pageSlug)}</code>, форма «{lead.formTitle}»
-          </p>
-          {lead.status === 'processed' && lead.processedAt && (
-            <p className={styles.meta}>
-              Обработана <time dateTime={lead.processedAt}>{formatDateTime(lead.processedAt)}</time>
-            </p>
-          )}
+          <StatusPill tone={leadStatusTones[lead.status]} className={styles.pill}>
+            {leadStatusLabels[lead.status]}
+          </StatusPill>
         </div>
-        <StatusPill tone={leadStatusTones[lead.status]} className={styles.pill}>
-          {leadStatusLabels[lead.status]}
-        </StatusPill>
+        <p className={styles.meta}>
+          <time dateTime={lead.createdAt}>{created}</time> · страница{' '}
+          {pageTitle && <>«{pageTitle}» </>}
+          <code className={styles.mono}>{pagePath(lead.pageSlug)}</code>, форма «{lead.formTitle}»
+        </p>
+        {lead.status === 'processed' && lead.processedAt && (
+          <p className={styles.meta}>
+            Обработана <time dateTime={lead.processedAt}>{formatDateTime(lead.processedAt)}</time>
+          </p>
+        )}
       </div>
 
       <Facts

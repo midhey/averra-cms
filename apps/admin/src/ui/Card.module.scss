@@ -35,5 +35,16 @@
   &[aria-current="true"],
   &[aria-current="page"] {
     border-color: var(--color-action);
+
+    @media (forced-colors: active) {
+      border-color: Highlight;
+
+      // Цвет рамки в этом режиме не отличить: выбранная — ещё и обводкой внутри рамки.
+      // При фокусе с клавиатуры обводку занимает кольцо фокуса
+      &:not(:focus-visible) {
+        outline: ui.rem(2) solid Highlight;
+        outline-offset: ui.rem(-3);
+      }
+    }
   }
 }
