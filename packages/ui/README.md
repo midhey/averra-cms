@@ -1,6 +1,6 @@
 # @averra/ui
 
-Sass-основа админки Averra: foundation из [frontend-kit](https://github.com/midhey/frontend-kit) владельца и тема Averra. Чистый Sass, без React и без знаний о продукте: компоненты живут в uapps/admin/src/uiu.
+Sass-основа админки Averra: foundation из [frontend-kit](https://github.com/midhey/frontend-kit) владельца и тема Averra. Чистый Sass, без React и без знаний о продукте: компоненты живут в `apps/admin/src/ui`.
 
 ## Входы
 
@@ -37,11 +37,12 @@ Sass-основа админки Averra: foundation из [frontend-kit](https://
 - **Семантические роли** (`tokens/_semantic.scss`) — добавлены роли, которых не хватило концепту: `--color-surface-sidebar`, `--color-surface-inset`, `--color-surface-accent`, `--color-text-placeholder`, `--color-border-strong` (граница полей 3:1 к фону), `--color-border-subtle`, `--color-primary*` (главная кнопка — отдельная роль от акцента ссылок), статусы `info` и `neutral`, `-indicator` у каждого статуса; роли размеров текста (`--font-size-*`), начертаний, высоты строки, радиусов (`--radius-control|card|inner|item|pill`; `item` — пункт меню, сегмент переключателя, ссылка «к содержимому»), теней (`--shadow-raised|overlay`), раскладки (`--size-control`, `--size-sidebar`, `--space-page-*`, `--space-card`). Значения по умолчанию — на палитре кита.
 - **Primitives** (`tokens/_primitives.scss`) — шкала размеров текста `--type-1…8`, `--font-mono`, `--shadow-small` и несколько оттенков палитры для новых ролей.
 - **`base/_global.scss`** — `body` берёт размер и высоту строки из ролей (`--font-size-body`, `--line-height-body`) вместо `line-height: 1.6`: у интерфейса текст плотнее, чем у сайта.
+- **`tools/_mixins.scss`** — добавлен миксин `breakpoint-down(small | medium | <длина>)`: та же граница, что у `breakpoint()`, но «уже, чем» (`width < …`), без перекрытия — ширина ровно на границе уже «широкая». Нужен правилам только узкого экрана (раскладка редактора, оболочка на телефоне), которые иначе пришлось бы писать через `max-width` с вычитанием пикселя. Граница в JS — `NARROW_SCREEN` в `apps/admin/src/ui/use-media-query.ts`.
 - **Комментарии** — по-русски (правило репозитория).
 - **`utilities/_accessibility.scss`** — у `.skip-link` радиус роли `--radius-item` вместо примитива `--radius-small`: примитивы формы вне токенов запрещены.
-- **Проверка токенов** — кит ловит HEX, `rgb()` и `hsl()`; здесь ещё `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` и именованные цвета (`white`, `red`…; `transparent`, `currentcolor` и системные цвета можно). Кроме цветов ловит палитру (`--palette-*`) и примитивы радиусов, теней и шкалы текста (`--radius-small|medium|round`, `--shadow-small|surface`, `--type-*`) вне токенов и тем: тема переопределяет роли, и компонент на примитиве она не переключит. Проверяет и `.css`, а не только `.scss`. Модуль не экспортируется: его берут тесты пакета по относительному пути.
+- **Проверка токенов** — кит ловит HEX, `rgb()` и `hsl()`; здесь ещё `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` и именованные цвета (`white`, `red`…; `transparent` и `currentcolor` можно); системные цвета (`Highlight`, `CanvasText`, устаревшие `WindowText`…) — только внутри `@media (forced-colors: active)`, иначе нарушение вида `system`. Кроме цветов ловит палитру (`--palette-*`) и примитивы радиусов, теней и шкалы текста (`--radius-small|medium|round`, `--shadow-small|surface`, `--type-*`) вне токенов и тем: тема переопределяет роли, и компонент на примитиве она не переключит. Проверяет и `.css`, а не только `.scss`. Модуль не экспортируется: его берут тесты пакета по относительному пути.
 
-Остальное (сброс, `:focus-visible`, `disabled`, `prefers-reduced-motion`, утилиты, Sass API) — как в ките.
+Остальное (сброс, `:focus-visible`, `disabled`, `prefers-reduced-motion`, утилиты, Sass API, кроме `breakpoint-down`) — как в ките.
 
 ## Тема Averra
 

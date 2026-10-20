@@ -100,6 +100,45 @@ describe('проверка токенов: механизм', () => {
     ])
   })
 
+  it('устаревшие системные цвета CSS2 — тоже системные', () => {
+    const source = [
+      '.a { color: WindowText; border-color: ThreeDShadow; background: Menu; }',
+      '.b { outline-color: ButtonHighlight; --x: Window; }',
+      '@media (forced-colors: active) { .c { color: WindowText; } }',
+    ].join('\n')
+    expect(findViolationsInSource(source, 'a.scss').map((v) => [v.kind, v.value])).toEqual([
+      ['system', 'WindowText'],
+      ['system', 'ThreeDShadow'],
+      ['system', 'Menu'],
+      ['system', 'ButtonHighlight'],
+      ['system', 'Window'],
+    ])
+  })
+
+  it('медиазапрос: not отменяет разрешение, (forced-colors) без значения — как active', () => {
+    const source = [
+      '@media not (forced-colors: active) { .a { color: CanvasText; } }',
+      '@media screen and (not (forced-colors: active)) { .b { color: Canvas; } }',
+      '@media (forced-colors: active), print { .c { color: GrayText; } }',
+      '@media (forced-colors) { .d { color: Highlight; } }',
+      '@media screen and (forced-colors: active) { .e { color: LinkText; } }',
+    ].join('\n')
+    expect(findViolationsInSource(source, 'a.scss').map((v) => [v.kind, v.value])).toEqual([
+      ['system', 'CanvasText'],
+      ['system', 'Canvas'],
+      ['system', 'GrayText'],
+    ])
+  })
+
+  it('слово-имя в свойствах имён — не системный цвет', () => {
+    const source = [
+      '.a { grid-area: field; grid-template-areas: "menu field"; animation-name: highlight; }',
+      '.b { grid-column: mark; font-family: Menu, sans-serif; transition-property: background; }',
+      '.c { grid-row-start: window; animation: mark 1s; }',
+    ].join('\n')
+    expect(findViolationsInSource(source, 'a.scss')).toEqual([])
+  })
+
   it('примитивы радиусов, теней и шкалы текста мимо ролей — нарушение', () => {
     const source = [
       '.a { border-radius: var(--radius-small); box-shadow: var(--shadow-surface); }',

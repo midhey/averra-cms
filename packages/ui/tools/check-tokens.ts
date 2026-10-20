@@ -6,9 +6,11 @@ import scss from 'postcss-scss'
 /**
  * Граница токенов (перенос tools/check-tokens.mjs и tools/lib/tokens.mjs из frontend-kit f904954).
  * Сырые цвета (HEX, функции цвета CSS, именованные цвета) живут только в файлах токенов и тем,
- * а стили компонентов берут семантические роли. Кит ловит только HEX, rgb() и hsl() — здесь шире. Добавка к киту: палитру (--palette-*) вне токенов и тем
- * тоже нельзя ни объявлять, ни брать — иначе тёмная тема не переключила бы такой цвет. То же для
- * примитивов радиусов, теней и шкалы текста: тема меняет роли, а не примитивы.
+ * а стили компонентов берут семантические роли. Кит ловит только HEX, rgb() и hsl() — здесь шире.
+ * Добавка к киту: палитру (--palette-*) вне токенов и тем тоже нельзя ни объявлять, ни брать —
+ * иначе тёмная тема не переключила бы такой цвет. То же для примитивов радиусов, теней и шкалы
+ * текста: тема меняет роли, а не примитивы. Системные цвета — только внутри
+ * @media (forced-colors: active), иначе нарушение вида system.
  * Разбираются объявления и параметры at-правил, поэтому селектор #id и комментарий — не нарушение
  */
 
@@ -23,7 +25,11 @@ const PALETTE_PATTERN = /--palette-[\w-]+/gu
 const PRIMITIVE_PATTERN =
   /--(?:radius-(?:small|medium|round)|shadow-(?:small|surface)|type-\d+)(?![\w-])/gu
 
-/** Именованные цвета CSS. transparent, currentcolor и системные цвета (Highlight, CanvasText…) можно */
+/**
+ * Именованные цвета CSS. transparent и currentcolor можно; системные цвета (Highlight,
+ * CanvasText…) — отдельный вид нарушения system: их можно только внутри
+ * @media (forced-colors: active)
+ */
 const NAMED_COLORS = [
   'aliceblue',
   'antiquewhite',
@@ -183,7 +189,8 @@ const NAMED_COLOR_PATTERN = new RegExp(
   'giu',
 )
 /**
- * Системные цвета CSS (CSS Color 4). Ими браузер рисует контрастную тему, поэтому брать их можно
+ * Системные цвета CSS (CSS Color 4) и устаревшие системные цвета CSS2, которые браузеры ещё
+ * понимают (WindowText, ThreeDShadow…). Ими браузер рисует контрастную тему, поэтому брать их можно
  * только внутри @media (forced-colors: active): в обычном режиме они мимо темы и токенов
  */
 const SYSTEM_COLORS = [
@@ -206,12 +213,43 @@ const SYSTEM_COLORS = [
   'SelectedItem',
   'SelectedItemText',
   'VisitedText',
+  // Устаревшие (CSS2), браузер подставляет вместо них цвета из списка выше
+  'ActiveBorder',
+  'ActiveCaption',
+  'AppWorkspace',
+  'Background',
+  'ButtonHighlight',
+  'ButtonShadow',
+  'CaptionText',
+  'InactiveBorder',
+  'InactiveCaption',
+  'InactiveCaptionText',
+  'InfoBackground',
+  'InfoText',
+  'Menu',
+  'MenuText',
+  'Scrollbar',
+  'ThreeDDarkShadow',
+  'ThreeDFace',
+  'ThreeDHighlight',
+  'ThreeDLightShadow',
+  'ThreeDShadow',
+  'Window',
+  'WindowFrame',
+  'WindowText',
 ]
 const SYSTEM_COLOR_PATTERN = new RegExp(
   `(?<![\\w$@#.-])(?:${SYSTEM_COLORS.join('|')})(?![\\w(-])`,
   'giu',
 )
-const FORCED_COLORS_PATTERN = /forced-colors\s*:\s*active/iu
+/** (forced-colors: active) или краткая запись (forced-colors) — то же самое */
+const FORCED_COLORS_PATTERN = /\(\s*forced-colors\s*(?::\s*active\s*)?\)/iu
+/**
+ * Свойства, где слово — имя, а не цвет: grid-area: field, animation: marker, font-family: Menu.
+ * Системный цвет в них не ищем (именованные цвета — ищем: их имена не совпадают с обычными словами)
+ */
+const NAME_PROPERTY_PATTERN =
+  /^(?:grid(?:-area|-row|-column|-template(?:-areas)?)?(?:-start|-end)?|animation(?:-name)?|transition(?:-property)?|font(?:-family)?|counter-(?:reset|increment|set)|list-style(?:-type)?|view-transition-name|container(?:-name)?|will-change|content)$/iu
 const STRINGS_PATTERN = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|url\([^)]*\)/gu
 const STYLE_EXTENSIONS = new Set(['.scss', '.css'])
 
@@ -262,6 +300,16 @@ function position(node: Node, file: string) {
   return { file, line: node.source?.start?.line ?? 1, column: node.source?.start?.column ?? 1 }
 }
 
+/**
+ * Медиазапрос действует только в режиме принудительных цветов: каждый запрос списка требует
+ * (forced-colors: active) или (forced-colors) и нигде не отрицает его через not
+ */
+function isForcedColorsQuery(params: string) {
+  return params
+    .split(',')
+    .every((query) => FORCED_COLORS_PATTERN.test(query) && !/(?<![\w-])not(?![\w-])/iu.test(query))
+}
+
 /** Узел лежит внутри @media (forced-colors: active) — на любой глубине вложенности Sass */
 function inForcedColors(node: Node) {
   for (let parent = node.parent; parent; parent = parent.parent) {
@@ -269,7 +317,7 @@ function inForcedColors(node: Node) {
       parent.type === 'atrule' &&
       'name' in parent &&
       parent.name === 'media' &&
-      FORCED_COLORS_PATTERN.test(String((parent as { params?: string }).params))
+      isForcedColorsQuery(String((parent as { params?: string }).params))
     ) {
       return true
     }
@@ -278,12 +326,15 @@ function inForcedColors(node: Node) {
 }
 
 /** Значение свойства или параметры at-правила: цвета, палитра, примитивы */
-function collect(value: string, node: Node, file: string): TokenViolation[] {
+function collect(value: string, node: Node, file: string, prop?: string): TokenViolation[] {
   const at = position(node, file)
   const bare = value.replace(STRINGS_PATTERN, '""')
-  const system = inForcedColors(node)
-    ? []
-    : [...bare.matchAll(SYSTEM_COLOR_PATTERN)].map((m) => ['system', m] as [Kind, RegExpMatchArray])
+  const system =
+    inForcedColors(node) || (prop !== undefined && NAME_PROPERTY_PATTERN.test(prop))
+      ? []
+      : [...bare.matchAll(SYSTEM_COLOR_PATTERN)].map(
+          (m) => ['system', m] as [Kind, RegExpMatchArray],
+        )
   const found: [Kind, RegExpMatchArray][] = [
     ...[...bare.matchAll(COLOR_PATTERN), ...bare.matchAll(NAMED_COLOR_PATTERN)].map(
       (m) => ['color', m] as [Kind, RegExpMatchArray],
@@ -319,7 +370,10 @@ export function findViolationsInSource(source: string, file: string): TokenViola
   const root = scss.parse(source, { from: file })
   const violations: TokenViolation[] = []
   root.walkDecls((decl) => {
-    violations.push(...collectDeclared(decl.prop, decl, file), ...collect(decl.value, decl, file))
+    violations.push(
+      ...collectDeclared(decl.prop, decl, file),
+      ...collect(decl.value, decl, file, decl.prop),
+    )
   })
   root.walkAtRules((rule) => {
     violations.push(...collect(rule.params, rule, file))
