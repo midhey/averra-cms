@@ -1,0 +1,54 @@
+# Версии и CHANGELOG.md по сообщениям коммитов (Conventional Commits).
+# Каждый пуш в master: release-please открывает или обновляет pull request «chore: release X.Y.Z».
+# Его влили — ставит тег vX.Y.Z, делает релиз на GitHub и здесь же вызывает release.yml (проверки
+# и образы). Настройки — release-please-config.json, текущая версия — .release-please-manifest.json.
+#
+# Токен — встроенный GITHUB_TOKEN. Поэтому: в Settings → Actions → General должно быть включено
+# «Allow GitHub Actions to create and approve pull requests»; на pull request релиза ci.yml сам не
+# запускается (проверки идут в release.yml и в ci.yml после вливания); тег не запускает release.yml
+# сам — отсюда прямой вызов. Перейдёте на PAT — оставьте вызов как есть: release.yml на теги не
+# подписан, двойной сборки не будет.
+#
+# Сторонние actions закреплены по SHA коммита (в комментарии — версия)
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# Запуски по очереди: два пуша подряд не должны править один pull request наперегонки
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    # Ветка и pull request релиза, тег и релиз на GitHub; issues — для меток autorelease
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    # Вызванный workflow получает не больше прав, чем дано здесь: packages — для образов в GHCR
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
