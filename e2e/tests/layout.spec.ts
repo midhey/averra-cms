@@ -19,14 +19,17 @@ test('на 375 px ни один экран не прокручивается в�
     `/sites/${demoSite.id}/settings`,
     '/mail',
     '/status',
-    `/sites/${demoSite.id}/pages/index`,
   ]
   for (const path of screens) {
     await page.goto(path)
-    // У редактора h1 только для диктора: на виду поле заголовка страницы
-    await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     expect(Number(await overflowOf(page)), path).toBeLessThanOrEqual(0)
   }
+  // У редактора h1 только для диктора: на виду поле заголовка страницы
+  await page.goto(`/sites/${demoSite.id}/pages/index`)
+  await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
+  await expect(page.getByLabel('Заголовок страницы')).toBeVisible()
+  expect(Number(await overflowOf(page)), 'редактор').toBeLessThanOrEqual(0)
 })
 
 test('на телефоне панель — меню: кнопка, Esc закрывает и возвращает фокус, переход закрывает', async ({
@@ -127,6 +130,30 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   await expect(ed.blockList).toBeVisible()
   await expect(ed.inspector).toBeHidden()
   await expect(ed.previewFrame).toBeHidden()
+
+  // Полоса редактора — в две строки: полям с экранной клавиатурой остаётся высота
+  const topbarHeight = () =>
+    page
+      .getByRole('banner')
+      .evaluate(
+        (el: { getBoundingClientRect: () => { height: number } }) =>
+          el.getBoundingClientRect().height,
+      )
+  expect(Number(await topbarHeight())).toBeLessThanOrEqual(112)
+  await page.setViewportSize({ width: 320, height: 640 })
+  expect(Number(await topbarHeight())).toBeLessThanOrEqual(112)
+  expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
+  await page.setViewportSize({ width: 375, height: 812 })
+
+  // Переставить и удалить блок можно прямо в списке, не уходя на «Поля»
+  const last = ed.blocks.last()
+  await expect(last).toContainText('Призыв к действию')
+  await last.getByRole('button', { name: 'Поднять блок' }).click()
+  await expect(ed.blocks.nth(1)).toContainText('Призыв к действию')
+  await expect(tabs.getByRole('tab', { name: 'Блоки' })).toHaveAttribute('aria-selected', 'true')
+  await ed.blocks.nth(1).getByRole('button', { name: 'Опустить блок' }).click()
+  await expect(ed.blocks.last()).toContainText('Призыв к действию')
+  await expect(ed.block('Преимущества').getByRole('button', { name: 'Удалить блок' })).toBeVisible()
 
   // Стрелки переключают вкладки
   await tabs.getByRole('tab', { name: 'Блоки' }).focus()

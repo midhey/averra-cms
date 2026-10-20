@@ -171,6 +171,41 @@ test('история и возврат работают с клавиатуры'
   await expect(history.toggle).toHaveAttribute('aria-expanded', 'false')
 })
 
+test('принудительные цвета: выбранный блок и выбранная версия видны не только цветом рамки', async ({
+  page,
+  demoSite,
+}) => {
+  await createPage(demoSite.id)
+  await publishTwiceViaApi(demoSite.id)
+  await page.emulateMedia({ forcedColors: 'active' })
+  const ed = editor(page)
+  const history = historyPanel(page)
+  await ed.open(slug)
+  // Обводка выбранного: толщина и стиль, без фокуса (кольцо фокуса — тоже outline)
+  // Код выполняется в браузере: типов DOM у e2e нет, нужное описано руками
+  type Browser = {
+    document: { activeElement: { blur: () => void } | null }
+    getComputedStyle: (el: unknown) => { outlineStyle: string; outlineWidth: string }
+  }
+  const outlineOf = (locator: ReturnType<typeof page.locator>) =>
+    locator.evaluate((el) => {
+      const browser = globalThis as unknown as Browser
+      browser.document.activeElement?.blur()
+      const style = browser.getComputedStyle(el)
+      return `${style.outlineStyle} ${style.outlineWidth}`
+    })
+
+  const selected = ed.blocks.first()
+  await expect(selected).toHaveAttribute('data-selected', 'true')
+  expect(await outlineOf(selected)).toBe('solid 2px')
+
+  await history.toggle.click()
+  await history.version(1).click()
+  await expect(history.version(1)).toHaveAttribute('aria-pressed', 'true')
+  expect(await outlineOf(history.version(1))).toBe('solid 2px')
+  expect(await outlineOf(history.version(2))).not.toBe('solid 2px')
+})
+
 test('правка блоков при открытой истории возвращает предпросмотр к черновику', async ({
   page,
   demoSite,

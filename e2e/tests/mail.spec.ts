@@ -139,6 +139,70 @@ test('файловый ящик — без предупреждения про l
   await expect(state).not.toContainText('ADMIN_URL')
 })
 
+/** Очередь с неудачным письмом и длинными адресом и ошибкой: в e2e все письма уходят сразу */
+const outbox = [
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    recipient: 'client.with.a.long.address@remont-ivana-kvartir.ru',
+    template: 'lead-notification',
+    status: 'failed',
+    attempts: 5,
+    nextAttemptAt: '2026-10-20T08:00:00.000Z',
+    lastError: '535 5.7.8 Error: authentication failed: Invalid user or password (smtp.yandex.ru)',
+    sentAt: null,
+    createdAt: '2026-10-20T07:00:00.000Z',
+    canRetry: true,
+  },
+  {
+    id: '22222222-2222-4222-8222-222222222222',
+    recipient: 'owner@e2e.test',
+    template: 'password-reset',
+    status: 'pending',
+    attempts: 1,
+    nextAttemptAt: '2026-10-20T09:15:00.000Z',
+    lastError: 'Временный отказ 451: лимит писем отправителя',
+    sentAt: null,
+    createdAt: '2026-10-20T07:10:00.000Z',
+    canRetry: false,
+  },
+]
+
+test('очередь писем: на 1440 px без прокрутки вбок, на телефоне — карточками', async ({ page }) => {
+  await page.route(/\/api\/mail\/outbox$/u, (route) => route.fulfill({ json: outbox }))
+  const retry = page.getByRole('button', { name: `Повторить письмо для ${outbox[0]?.recipient}` })
+  const error = page.getByText(/^535 5\.7\.8 Error/u)
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/mail')
+  const table = page.getByRole('group', { name: 'Очередь писем' })
+  await expect(table.getByRole('table')).toBeVisible()
+  // Таблица целиком в рамке: ошибка и «Повторить» видны без прокрутки вбок
+  const overflow = await table.evaluate(
+    (el: { scrollWidth: number; clientWidth: number }) => el.scrollWidth - el.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(0)
+  // Прокручиваем страницу к очереди, но не саму таблицу вбок
+  await table.scrollIntoViewIfNeeded()
+  for (const target of [retry, error]) {
+    await expect(target).toBeInViewport({ ratio: 1 })
+  }
+
+  await page.setViewportSize({ width: 375, height: 812 })
+  const cards = page.getByRole('list', { name: 'Очередь писем' })
+  await expect(cards.getByRole('listitem')).toHaveCount(2)
+  await expect(page.getByRole('table', { name: 'Очередь писем' })).toHaveCount(0)
+  await retry.scrollIntoViewIfNeeded()
+  await expect(retry).toBeInViewport({ ratio: 1 })
+  await expect(error).toBeVisible()
+  expect(
+    Number(
+      await page.evaluate(
+        'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+      ),
+    ),
+  ).toBeLessThanOrEqual(0)
+})
+
 // Как в client.spec.ts, роль подменяется в ответе /api/me,
 // а ответ API о почте — тем 403, который API отдаёт не владельцу (права проверяет
 // apps/api/src/modules/mail/mail.test.ts). Здесь — что админка слушается роли и честно отказывает

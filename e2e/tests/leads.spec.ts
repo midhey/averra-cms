@@ -71,7 +71,15 @@ test('список и карточка рядом: вкладки, «Ответ�
   await expect(page).toHaveURL(
     new RegExp(`/sites/${demoSite.id}/leads/[0-9a-f-]{36}\\?status=new$`),
   )
-  await expect(card.getByText('+7 912 000-00-00')).toBeVisible()
+  // Телефон и почта — ссылками: позвонить и написать в одно касание
+  await expect(card.getByRole('link', { name: '+7 912 000-00-00' })).toHaveAttribute(
+    'href',
+    'tel:+79120000000',
+  )
+  await expect(card.getByRole('link', { name: email, exact: true })).toHaveAttribute(
+    'href',
+    `mailto:${email}`,
+  )
   await expect(card).toContainText('Согласие на обработку персональных данных')
   await expect(card.getByRole('link', { name: 'Ответить письмом' })).toHaveAttribute(
     'href',
@@ -81,6 +89,8 @@ test('список и карточка рядом: вкладки, «Ответ�
   await card.getByRole('button', { name: 'Отметить обработанной' }).click()
   await expect(card.getByRole('status')).toHaveText('Заявка обработана')
   await expect(card.getByRole('button', { name: 'Вернуть в новые' })).toBeVisible()
+  // Когда обработана — видно глазами, а не только диктору
+  await expect(card.getByText(/^Обработана \d/u)).toBeVisible()
   // Во вкладке «Новые» её больше нет, в «Обработанных» — есть. Вкладки — стрелками
   await tabs.getByRole('tab', { selected: true }).focus()
   await page.keyboard.press('ArrowRight')
@@ -104,6 +114,52 @@ test('список и карточка рядом: вкладки, «Ответ�
   await expect(page).toHaveURL(`/sites/${demoSite.id}/leads`)
   await expect(list.getByRole('link').filter({ hasText: name })).toHaveCount(0)
   await expect(tabs.getByRole('tab', { name: 'Все' })).toBeFocused()
+})
+
+test('обзор берёт только последние заявки и только поля карточки, а не весь список', async ({
+  page,
+  demoSite,
+}) => {
+  const name = `Ирина ${Date.now()}`
+  await createLead(demoSite.id, { name, phone: '+7 900 123-45-67', email: '', comment: '' })
+  const requests: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname.startsWith(`/api/sites/${demoSite.id}/leads`)) {
+      requests.push(url.pathname + url.search)
+    }
+  })
+  const recent = page.waitForResponse((response) =>
+    response.url().includes(`/api/sites/${demoSite.id}/leads/recent`),
+  )
+  await page.goto(`/sites/${demoSite.id}`)
+  const body = (await (await recent).json()) as { items: Record<string, unknown>[] }
+  const section = page.getByRole('region', { name: 'Последние заявки' })
+  await expect(section.getByRole('link').filter({ hasText: name })).toBeVisible()
+  expect(body.items.length).toBeLessThanOrEqual(3)
+  expect(Object.keys(body.items[0] ?? {}).sort()).toEqual(
+    ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'status'].sort(),
+  )
+  // Загрузчик и экран могут спросить дважды, но только последние, а не весь список
+  expect(requests.length).toBeGreaterThan(0)
+  for (const url of requests) expect(url).toBe(`/api/sites/${demoSite.id}/leads/recent`)
+})
+
+test('пустая вкладка: панель — остановка Tab, фокус не уходит со страницы', async ({
+  page,
+  demoSite,
+}) => {
+  // Обработанных заявок нет: ответ API подменён пустым списком
+  await page.route(/\/api\/sites\/[^/]+\/leads\?status=processed$/u, async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), items: [] } })
+  })
+  await page.goto(`/sites/${demoSite.id}/leads?status=processed`)
+  await expect(page.getByRole('heading', { name: 'Таких заявок нет' })).toBeVisible()
+  const tabs = page.getByRole('tablist', { name: 'Фильтр заявок' })
+  await tabs.getByRole('tab', { name: 'Обработанные' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('tabpanel')).toBeFocused()
 })
 
 test('без почты посетителя «Ответить письмом» нет', async ({ page, demoSite }) => {

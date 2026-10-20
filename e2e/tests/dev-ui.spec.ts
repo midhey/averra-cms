@@ -102,7 +102,9 @@ test.describe('витрина компонентов', () => {
     await tabs.getByRole('tab', { name: 'Новые · 3' }).focus()
     await page.keyboard.press('ArrowRight')
     await expect(tabs.getByRole('tab', { name: 'Обработанные · 24' })).toBeFocused()
-    await expect(page.getByRole('tabpanel')).toHaveText('Обработанные заявки за 180 дней.')
+    await expect(page.getByRole('tabpanel', { name: /^Обработанные/u })).toHaveText(
+      'Обработанные заявки за 180 дней.',
+    )
     await page.keyboard.press('End')
     await expect(tabs.getByRole('tab', { name: 'Все' })).toHaveAttribute('aria-selected', 'true')
 
@@ -150,7 +152,7 @@ test.describe('витрина компонентов', () => {
           [...document.querySelectorAll('input[type="radio"]')]
             .find((input) => input.closest('label').textContent === name)
             .closest('label')
-        const text = (label) => getComputedStyle(label.querySelector('span:last-child')).color
+        const text = (label) => getComputedStyle(label.querySelector(':scope > span:last-child')).color
         const segment = option('Десктоп')
         const card = option('С картинкой')
         const otherCard = option('По центру')
@@ -185,6 +187,39 @@ test.describe('витрина компонентов', () => {
       // Вкладки: подчёркнута только выбранная
       expect(result.selectedTabBorder).toBe(result.highlight)
       expect(result.otherTabBorder).toBe(result.canvas)
+    })
+  }
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`принудительные цвета (${colorScheme}): миниатюры вариантов и спиннер видны`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ forcedColors: 'active', colorScheme })
+      await page.goto('/dev/ui')
+      await expect(page.getByRole('button', { name: 'Идёт проверка' })).toBeVisible()
+      const result = (await page.evaluate(`(() => {
+        const option = (name) =>
+          [...document.querySelectorAll('input[type="radio"]')]
+            .find((input) => input.closest('label').textContent === name)
+            .closest('label')
+        const sketch = option('С картинкой').querySelector('[aria-hidden="true"] > span')
+        const [lines, media] = sketch.children
+        const button = [...document.querySelectorAll('button')]
+          .find((el) => el.textContent === 'Идёт проверка')
+        const spinner = getComputedStyle(button.querySelector('span'))
+        return {
+          sketch: getComputedStyle(sketch).backgroundColor,
+          line: getComputedStyle(lines.firstElementChild).backgroundColor,
+          media: getComputedStyle(media).backgroundColor,
+          ringTop: spinner.borderTopColor,
+          ringRight: spinner.borderRightColor,
+        }
+      })()`)) as Record<string, string>
+      // Линии и картинка миниатюры не сливаются с её фоном
+      expect(result.line).not.toBe(result.sketch)
+      expect(result.media).not.toBe(result.sketch)
+      // У спиннера сектор другого цвета, чем кольцо: вращение видно
+      expect(result.ringRight).not.toBe(result.ringTop)
     })
   }
 

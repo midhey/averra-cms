@@ -109,7 +109,7 @@ test('владелец приглашает клиента → клиент по
     .filter({ hasText: email })
     .first()
   await expect(queued).toBeVisible()
-  expect(await lineCount(queued.getByRole('rowheader'))).toBe(1)
+  expect(await lineCount(queued.getByRole('rowheader').getByText(email))).toBe(1)
 })
 
 test('отозванное приглашение больше не открывается', async ({ page, browser }) => {

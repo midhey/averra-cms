@@ -32,6 +32,14 @@ describe('каталог блоков', () => {
     })
   })
 
+  it('у каждого блока — описание одной фразой: по нему нейронка выбирает блок', () => {
+    for (const block of blockCatalog().blocks) {
+      expect(block.description, block.type).toEqual(expect.any(String))
+      expect(block.description.trim().length, block.type).toBeGreaterThan(10)
+      expect(block.description, block.type).not.toMatch(/\.$/u)
+    }
+  })
+
   it('схема save_draft переводится в JSON Schema — в таком виде её видит нейронка', () => {
     expect(() => z.toJSONSchema(SaveDraftInput, { io: 'input' })).not.toThrow()
   })
