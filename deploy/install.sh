@@ -476,7 +476,12 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
 fi
 
 step "Скачиваю образы $AVERRA_VERSION"
-compose pull || fail "образы $AVERRA_VERSION не скачались. denied или unauthorized — пакеты в GHCR ещё закрытые (переключите в Public) или нет такой версии; для закрытых образов — --ghcr-user и токен read:packages"
+# Причину Docker печатает выше. На несуществующий тег публичного пакета он отвечает
+# «manifest unknown», а denied/unauthorized без входа — закрытый пакет или чужое имя образа
+compose pull || fail "образы $AVERRA_VERSION не скачались." \
+  'Ответ denied или unauthorized — пакеты в GHCR закрытые (переключите в Public или войдите:' \
+  '--ghcr-user и токен read:packages) или опечатка в имени образа (--api-image, --web-image).' \
+  'Ответ manifest unknown — такой версии нет, проверьте --version'
 
 step 'Поднимаю PostgreSQL и API'
 compose up -d postgres api

@@ -34,12 +34,15 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
 2. Пишет `/opt/averra/.env` с новыми секретами (`AUTH_SECRET`, `MAIL_ENCRYPTION_KEY`, пароль
    Postgres, `BACKUP_PASSPHRASE`) с правами 600 и кладёт рядом `compose.yaml` и `averra.sh`.
 3. Скачивает образы (с `--ghcr-user` сначала входит в `ghcr.io`), поднимает PostgreSQL и API,
-   ждёт готовности до трёх минут. Скачивание упало с `denied` или `unauthorized` — пакеты в GHCR
-   ещё закрытые (их не переключили в Public после первого релиза,
-   [Релизы](/averra-cms/dev/releases/)) или такой версии нет. Переключите пакеты или повторите
-   установку с `--ghcr-user` и токеном `read:packages`. API при первом запуске сам создаёт сайт
-   установки с названием из `--site-name`: одна установка — один сайт
-   ([почему](/averra-cms/decisions/single-site/)).
+   ждёт готовности до трёх минут. Если скачивание упало, причину видно по ответу Docker:
+   - `denied` или `unauthorized` — пакеты в GHCR ещё закрытые (их не переключили в Public после
+     первого релиза, [Релизы](/averra-cms/dev/releases/)) или в `--api-image` / `--web-image`
+     опечатка. Переключите пакеты или повторите установку с `--ghcr-user` и токеном
+     `read:packages`;
+   - `manifest unknown` — такой версии нет: проверьте `--version`.
+
+   API при первом запуске сам создаёт сайт установки с названием из `--site-name`: одна
+   установка — один сайт ([почему](/averra-cms/decisions/single-site/)).
 4. Создаёт владельца.
 5. Поднимает Caddy и ставит ежедневный бэкап (`averra-backup.timer`).
 

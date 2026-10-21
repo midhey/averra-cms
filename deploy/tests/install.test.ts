@@ -34,6 +34,8 @@ type Fakes = {
   caddyRunning?: boolean
   /** mv временного .env на место падает: прогон обрывается посреди записи .env */
   failEnvMove?: boolean
+  /** docker compose pull падает с этим ответом реестра */
+  pullError?: string
 }
 
 /** Папка с подделками команд: каждая пишет свой вызов (и окружение docker) в журнал */
@@ -90,6 +92,7 @@ case "$*" in
   "info") ${fakes.dockerDenied ? 'exit 1' : 'exit 0'} ;;
   "compose version") exit 0 ;;
   *" ps --status running -q caddy") ${fakes.caddyRunning ? 'echo abc123' : 'true'} ;;
+  *" pull") ${fakes.pullError ? `echo '${fakes.pullError}' >&2; exit 1` : 'exit 0'} ;;
   *"user-create.js"*) echo "Создан владелец" ;;
   *) exit 0 ;;
 esac`,
@@ -477,6 +480,27 @@ describe('полная установка (подделки docker и сети)'
     expect(noToken.calls()).not.toContain('compose pull')
   })
 
+  it('образы не скачались — подсказка различает закрытый пакет и несуществующую версию', () => {
+    const dir = posix(join(tempDir(), 'inst'))
+    // Так отвечает GHCR: публичный пакет без такого тега и закрытый пакет без входа
+    for (const pullError of [
+      'Error response from daemon: manifest unknown',
+      'Error response from daemon: denied',
+    ]) {
+      const run = install([...required, '--dir', dir, '--yes'], {
+        fakes: { dns: dnsOk, pullError },
+        env: { AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+      })
+      expect(run.status).toBe(1)
+      expect(run.stderr).toContain(pullError)
+      expect(run.stderr).toContain('образы 0.6.0 не скачались.')
+      expect(run.stderr).toContain('Ответ denied или unauthorized — пакеты в GHCR закрытые')
+      expect(run.stderr).toContain('опечатка в имени образа')
+      expect(run.stderr).toContain('Ответ manifest unknown — такой версии нет, проверьте --version')
+      expect(run.calls()).not.toContain('up -d')
+    }
+  })
+
   it('повторный запуск владельца второй раз не создаёт, порты занятые своим Caddy — не помеха', () => {
     const dir = join(tempDir(), 'inst')
     const options = { fakes: { dns: dnsOk }, env: { AVERRA_OWNER_PASSWORD: 'пароль-владельца' } }
@@ -767,7 +791,8 @@ describe('Caddyfile: кеш', () => {
   it('админка: index.html и экраны SPA — no-cache на всю ветку, а не только на /index.html', () => {
     const admin = handles(siteBlock('{$ADMIN_DOMAIN}'))
     const spa = admin.find((branch) => branch.matcher === '')
-    // header выполняется раньше try_files и видит исходный путь: матчер по /index.html не сработал бы
+    // header выполняется раньше try_files и видит
+    // исходный путь: матчер по /index.html не сработал бы
     expect(spa?.body).toMatch(/^\t\theader Cache-Control "no-cache"$/m)
     expect(spa?.body).toContain('try_files {path} /index.html')
     expect(siteBlock('{$ADMIN_DOMAIN}')).not.toMatch(/header \/index\.html/)

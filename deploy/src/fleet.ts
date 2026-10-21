@@ -127,7 +127,7 @@ function lastLine(text: string) {
   return text.trim().split('\n').at(-1)?.trim() ?? ''
 }
 
-export async function serverStatus(server: Server, exec: Exec): Promise<ServerStatus> {
+async function serverStatus(server: Server, exec: Exec): Promise<ServerStatus> {
   const result = await exec('ssh', sshArgs(server, `sudo -n ${script(server)} status --json`))
   let json: unknown
   try {
@@ -165,7 +165,7 @@ const ago = (iso: string, now: Date) => {
 }
 
 /** Строка таблицы состояния: сервер, версия, база, бэкап, почта, проблемы */
-export function statusRow(item: ServerStatus, now: Date): string[] {
+function statusRow(item: ServerStatus, now: Date): string[] {
   const { name } = item.server
   if (item.kind === 'unreachable') return [name, '?', '?', '?', '?', item.reason]
   if (item.kind === 'api-down') {
@@ -197,7 +197,7 @@ export function statusRow(item: ServerStatus, now: Date): string[] {
   return [name, status.version, status.db.up ? 'ок' : 'лежит', backup, mail, problems]
 }
 
-export function formatTable(rows: string[][]) {
+function formatTable(rows: string[][]) {
   const header = ['Сервер', 'Версия', 'База', 'Бэкап', 'Почта', 'Проблемы']
   const all = [header, ...rows]
   const widths = header.map((_, column) =>
@@ -285,7 +285,7 @@ export function describeOutcome(outcome: UpdateOutcome) {
 }
 
 /** Настоящий исполнитель: процесс без оболочки, аргументы — массивом */
-export const spawnExec: Exec = (command, args, options = {}) =>
+const spawnExec: Exec = (command, args, options = {}) =>
   new Promise((resolve) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''

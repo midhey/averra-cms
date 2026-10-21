@@ -11,8 +11,8 @@ import { afterEach } from 'vitest'
 function findBash() {
   if (process.env.AVERRA_BASH) return process.env.AVERRA_BASH
   if (process.platform !== 'win32') return 'bash'
-  // Git для Windows ставится и в Program Files, и в профиль пользователя: ищем ещё от git.exe в PATH
-  // (…\Git\cmd или …\Git\mingw64\bin)
+  // Git для Windows ставится и в Program Files, и в профиль пользователя: ищем ещё от git.exe в
+  // PATH (…\Git\cmd или …\Git\mingw64\bin)
   const fromPath = (process.env.PATH ?? '')
     .split(';')
     .filter((dir) => existsSync(join(dir, 'git.exe')))

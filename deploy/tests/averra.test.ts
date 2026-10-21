@@ -28,7 +28,9 @@ type Fakes = {
   pullFails?: boolean
   /** pg_dump падает */
   dumpFails?: boolean
-  /** pg_restore в эту базу падает (averra_verify — проверка бэкапа, averra_restore — восстановление) */
+  /**
+   * pg_restore в эту базу падает (averra_verify — проверка бэкапа, averra_restore — восстановление)
+   */
   restoreFailsInto?: string
   /** Эти версии API не отвечают на /api/health/ready */
   unhealthy?: string[]
@@ -48,7 +50,10 @@ type Fakes = {
   purgeFails?: boolean
   /** У этих версий Caddy не держится в running (ошибка в Caddyfile, битый образ) */
   caddyDown?: string[]
-  /** Процесс обновления убивается (kill -9) на первом вызове docker, подходящем под это регулярное выражение (часто — просто подстрока) */
+  /**
+   * Процесс обновления убивается (kill -9) на первом вызове docker, подходящем под это регулярное
+   * выражение (часто — просто подстрока)
+   */
   killOn?: string
   /** Переименование этих баз падает (ALTER DATABASE <имя> RENAME …) */
   renameFailsFrom?: string[]
@@ -936,7 +941,8 @@ describe('обновление', () => {
         killOn: 'averra_restore RENAME TO averra',
       })
       expect(killed.status, killed.output).toBe(3)
-      // Брошено между переименованиями: базы averra нет, рабочая (16 миграций) — под отложенным именем
+      // Брошено между переименованиями: базы averra нет,
+      // рабочая (16 миграций) — под отложенным именем
       expect(existsSync(join(srv.fake, 'db-averra'))).toBe(false)
       const kept = (
         readdirSync(srv.fake).find((file) => file.startsWith('db-averra_rolled_back_')) ?? ''
