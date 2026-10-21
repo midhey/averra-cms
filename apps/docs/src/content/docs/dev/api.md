@@ -80,12 +80,12 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `GET /api/site/snapshot` | снимок сайта установки, как `…/:siteId/snapshot`: рендереру без `CMS_SITE_ID`. **Открыт** |
 | `GET /api/site/fallback/<путь>` | адрес домена сайта, где нет файла (Caddy, `handle_errors 404`): редирект из настроек — 301 с `Location` (строка запроса исходного адреса переходит в «куда» без своей), иначе 404 со страницей `404.html` текущей версии сайта (без сборки — короткая страница API). `no-cache`. **Открыт** |
 | `GET /api/sites` | для совместимости (`list_sites` в MCP): владельцу — все сайты базы, участнику — свои, токену — его сайт |
-| `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны), `hiddenFromSearch` |
+| `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны), `hiddenFromSearch`, `seo` — что нужно SEO страницы (`SiteSeo`: шаблон заголовка, описание и картинка по умолчанию, адрес сайта, скрыт ли). Всем, кто видит сайт, и токену |
 | `GET /api/sites/:siteId/snapshot` | всё для рендерера: сайт (`name`, `theme`, `url` — адрес из настроек или `SITE_URL`, `settings` — настройки SEO; организация — только при опубликованной главной), опубликованные страницы с `publishedAt` и справочник `media` (картинки страниц и настроек). **Открыт** |
 | `GET /api/sites/:siteId/pages` | страницы: заголовок, адрес, когда опубликована, есть ли неопубликованные правки |
 | `POST /api/sites/:siteId/pages` | создать `{ slug, title, template: "empty" \| "hero" }`; адрес занят — 409 |
 | `GET /api/sites/:siteId/pages/:slug` | страница с черновиком и опубликованной версией |
-| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks, seo? } }`; `seo` — `{ description?, noindex? }`. Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта — 409 с путём до поля |
+| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks, seo? } }`; `seo` — `{ title?, description?, image?: { mediaId }, canonical?, noindex? }` (`PageSeo`). Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта (в блоке или `seo.image`) — 409 с путём до поля |
 | `POST /api/sites/:siteId/pages/:slug/publish` | опубликовать черновик с заголовком; пишет версию в историю и ставит сборку |
 | `DELETE /api/sites/:siteId/pages/:slug` | удалить вместе с историей; главную — 409 |
 
@@ -95,9 +95,20 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 |---|---|
 | `GET /api/sites/:siteId/settings` | `{ settings, installationUrl, url }`: настройки (`SiteSettings`), адрес установки (`SITE_URL`) и адрес сайта, который из них выходит |
 | `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`) — целиком. Ставит сборку. Картинка не из медиатеки и редирект с адреса страницы — 409 с путём до поля |
-| `GET /api/sites/:siteId/icons/:file` | иконка сайта из картинки настроек: `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`; иконки нет — 404. Кеш в памяти, `no-cache`. **Открыт**: их берёт рендерер |
 
-Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/) и [решение](/averra-cms/decisions/seo-settings/).
+Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/) и
+[решение](/averra-cms/decisions/seo-settings/).
+
+## Иконки и карточки для соцсетей
+
+Картинки, которые API рисует из настроек и страниц. Права у каждой — свои, в строке: собранный
+сайт берёт иконки и карточки без входа, а предпросмотр черновика — только тем, кто видит сайт.
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/icons/:file` | иконка сайта из картинки настроек: `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`; иконки нет — 404. Кеш в памяти, `no-cache`. **Открыт**: их берёт рендерер |
+| `GET /api/sites/:siteId/og/:slug` | карточка опубликованной страницы для соцсетей: PNG 1200 × 630 из опубликованного заголовка ([решение](/averra-cms/decisions/og-card/)); страница не опубликована — 404. Кеш в памяти, `no-cache`. **Открыт**: её берёт рендерер |
+| `GET /api/sites/:siteId/og-card?title=…` | та же карточка для заголовка черновика — предпросмотр в редакторе. `site.read`, `private, max-age=300`. Свой кеш, очередь не длиннее четырёх: сверх того — 429 |
 
 ## История
 

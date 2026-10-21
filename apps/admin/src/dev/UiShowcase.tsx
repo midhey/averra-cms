@@ -2,7 +2,9 @@ import { type ReactNode, useId, useState } from 'react'
 import { MediaCard } from '../media/MediaCard'
 import { RedirectRows } from '../seo/RedirectRows'
 import { SearchSnippet } from '../seo/SearchSnippet'
+import { SeoChecks } from '../seo/SeoChecks'
 import { SettingsCardActions } from '../seo/SettingsCard'
+import { SocialCard } from '../seo/SocialCard'
 import type { RedirectRow } from '../seo/seo-format'
 import { SiteHeader } from '../shell/SiteHeader'
 import {
@@ -15,6 +17,7 @@ import {
 } from '../ui/AppShell'
 import { Button, buttonClassName, IconButton, iconButtonClassName } from '../ui/Button'
 import { Card, cardClassName } from '../ui/Card'
+import { CountBadge } from '../ui/CountBadge'
 import { DataTable } from '../ui/DataTable'
 import { Dialog } from '../ui/Dialog'
 import { EmptyState } from '../ui/EmptyState'
@@ -221,6 +224,18 @@ export function UiShowcase() {
             <IconButton label="Закрыть" icon="close" size="small" />
             <IconButton label="Открыть сайт" icon="external" variant="secondary" size="small" />
             <IconButton label="Выключена" icon="trash" disabled />
+            {/* Число на кнопке: советы SEO страницы. Словами — в подписи для диктора */}
+            <IconButton
+              label="SEO: 2 совета"
+              icon="search"
+              variant="secondary"
+              badge={<CountBadge count={2} tone="warning" />}
+            />
+            <Button icon="search">
+              SEO
+              <CountBadge count={3} tone="danger" />
+              <span className="visually-hidden">: 3 совета</span>
+            </Button>
             <a className={buttonClassName({ variant: 'ghost', size: 'small' })} href="#cards">
               Ссылка в виде кнопки
               <Icon name="arrow-right" />
@@ -562,6 +577,48 @@ export function UiShowcase() {
               description="Ремонт квартир под ключ в Твери: фиксированная смета, свои бригады и гарантия 3 года."
             />
             <SearchSnippet address="remont-ivana.ru" title="Ремонт у Ивана" description="" />
+            {/* SEO страницы в редакторе: строка Яндекса и Google с обрезкой по их пределам */}
+            <SearchSnippet
+              engine="yandex"
+              address="remont-ivana.ru › ceny"
+              title="Цены на ремонт квартир под ключ в Твери: смета за день, цена в договоре и гарантия"
+              description="Ремонт квартир под ключ в Твери: фиксированная смета, свои бригады и гарантия 3 года. Приезжаем на замер бесплатно и на следующий день присылаем подробную смету по каждой комнате."
+            />
+            <SearchSnippet
+              engine="google"
+              siteName="Ремонт у Ивана"
+              address="remont-ivana.ru › ceny"
+              title="Цены на ремонт квартир под ключ в Твери: смета за день, цена в договоре и гарантия"
+              description="Ремонт квартир под ключ в Твери: фиксированная смета, свои бригады и гарантия 3 года. Приезжаем на замер бесплатно и на следующий день присылаем подробную смету по каждой комнате."
+            />
+            <SocialCard
+              domain="remont-ivana.ru"
+              title="Цены на ремонт квартир"
+              description="Фиксированная смета, свои бригады и гарантия 3 года."
+              imageNote="без адреса сайта картинки нет"
+            />
+            <SeoChecks
+              checks={[
+                {
+                  id: 'description',
+                  level: 'problem',
+                  title: 'Описания нет',
+                  advice: 'Поисковик возьмёт кусок текста со страницы сам, часто неудачный.',
+                },
+                {
+                  id: 'title',
+                  level: 'warning',
+                  title: 'Заголовок 64 символа: Google может обрезать',
+                  advice: 'Google показывает около 60 символов, Яндекс — чуть больше.',
+                },
+                {
+                  id: 'h1',
+                  level: 'good',
+                  title: 'Главный заголовок (h1) один: «Ремонт под ключ»',
+                },
+                { id: 'alt', level: 'good', title: 'У всех картинок есть описание (alt)' },
+              ]}
+            />
           </div>
           {/* Кнопки карточки раздела: всё сохранено и есть несохранённые правки */}
           <div className={styles.row}>

@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef } from 'react'
+import type { ComponentPropsWithRef, ReactNode } from 'react'
 import styles from './Button.module.scss'
 import { cx } from './cx'
 import { Icon, type IconName } from './Icon'
@@ -79,6 +79,11 @@ type IconButtonProps = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-
   icon: IconName
   variant?: 'secondary' | 'ghost' | undefined
   size?: ButtonSize | undefined
+  /**
+   * Значок в углу кнопки (CountBadge): «3 совета» у «SEO». Число должно быть и в label — значок
+   * для диктора скрыт
+   */
+  badge?: ReactNode
 }
 
 /** Кнопка-иконка без видимой подписи: «Закрыть», «Меню», «Назад к сайту» */
@@ -89,6 +94,7 @@ export function IconButton({
   size,
   type = 'button',
   className,
+  badge,
   ...rest
 }: IconButtonProps) {
   return (
@@ -96,10 +102,15 @@ export function IconButton({
       type={type}
       aria-label={label}
       title={label}
-      className={cx(iconButtonClassName({ variant, size }), className)}
+      className={cx(
+        iconButtonClassName({ variant, size }),
+        badge ? styles.withBadge : undefined,
+        className,
+      )}
       {...rest}
     >
       <Icon name={icon} />
+      {badge && <span className={styles.badge}>{badge}</span>}
     </button>
   )
 }

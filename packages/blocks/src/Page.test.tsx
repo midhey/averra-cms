@@ -1,4 +1,10 @@
-import { demoPage, type MediaMap, PageContent } from '@averra/schema'
+import {
+  demoPage,
+  type MediaMap,
+  mainHeadingBlock,
+  PageContent,
+  pageSeoChecks,
+} from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Page } from './Page'
@@ -44,6 +50,38 @@ describe('Page', () => {
     })
     expect(countH1(html)).toBe(1)
     expect(html).toMatch(/<h2[^>]*>Второй<\/h2>/)
+  })
+
+  it.each([
+    [
+      'без «Первого экрана»',
+      [{ id: 'c', type: 'cta', props: { title: 'Жми', button: { label: 'Да', href: '#c' } } }],
+    ],
+    [
+      '«Первый экран» не первым',
+      [
+        { id: 'c', type: 'cta', props: { title: 'Жми', button: { label: 'Да', href: '#c' } } },
+        { id: 'h', type: 'hero', props: { title: 'Главный' } },
+        { id: 'h2', type: 'hero', props: { title: 'Ещё' } },
+      ],
+    ],
+  ])('проверка h1 в редакторе говорит то же, что рисует страница: %s', (_, blocks) => {
+    const content = PageContent.parse({ blocks })
+    const html = render(content)
+    const main = mainHeadingBlock(content.blocks)
+    expect(countH1(html)).toBe(main ? 1 : 0)
+    if (main?.type === 'hero') expect(html).toContain(`>${main.props.title}</h1>`)
+    const site = {
+      titleTemplate: '',
+      description: '',
+      ogImage: null,
+      url: null,
+      hideFromSearch: false,
+    }
+    const h1 = pageSeoChecks({ slug: 'a', title: 'А', blocks: content.blocks }, site).find(
+      (check) => check.id === 'h1',
+    )
+    expect(h1?.level).toBe(main ? 'warning' : 'problem')
   })
 
   it('первый экран split выводит картинку рядом с текстом', () => {

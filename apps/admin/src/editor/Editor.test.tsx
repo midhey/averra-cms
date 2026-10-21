@@ -16,6 +16,13 @@ const site: EditorSite = {
   name: 'Ремонт у Ивана',
   theme: defaultTheme,
   access: 'owner',
+  seo: {
+    titleTemplate: '',
+    description: '',
+    ogImage: null,
+    url: 'https://remont.example',
+    hideFromSearch: false,
+  },
 }
 
 const published: EditorPage = {
@@ -254,21 +261,51 @@ describe('узкий экран', () => {
   })
 })
 
-describe('панель «Страница»', () => {
-  it('на среднем экране «Страница» и «История» — иконки с подписью для диктора', async () => {
+describe('панель «SEO»', () => {
+  // Демо-главная: заголовок «Ремонт квартир под ключ» короче 30 символов, описания нет ни у
+  // страницы, ни у сайта — два совета
+  const seoButton = () => screen.getByRole('button', { name: /^SEO/ })
+  const panel = () => screen.getByRole('complementary', { name: 'SEO страницы' })
+
+  it('на среднем экране «SEO» и «История» — иконки с подписью, у «SEO» — число советов', async () => {
     medium = true
     const user = userEvent.setup()
     await renderWithRouter(<Editor site={site} page={published} />)
-    for (const name of ['Страница', 'История']) {
-      const button = screen.getByRole('button', { name })
-      expect(button.textContent).toBe('')
-      expect(button.getAttribute('title')).toBe(name)
-    }
-    await user.click(screen.getByRole('button', { name: 'Страница' }))
-    expect(screen.getByRole('complementary', { name: 'Страница: поиск и соцсети' })).toBeTruthy()
+    const history = screen.getByRole('button', { name: 'История' })
+    expect(history.getAttribute('title')).toBe('История')
+    expect(seoButton().getAttribute('aria-label')).toBe('SEO: 2 совета')
+    expect(seoButton().getAttribute('title')).toBe('SEO: 2 совета')
+    expect(seoButton().textContent).toBe('2')
+    await user.click(seoButton())
+    expect(panel()).toBeTruthy()
   })
 
-  it('описание и noindex уходят в черновик полем seo, пустые — не уходят вовсе', async () => {
+  it('советы — на кнопке до публикации и уходят, когда их выполнили', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    expect(seoButton().textContent).toBe('SEO2: 2 совета')
+    await user.click(seoButton())
+    const checks = within(panel()).getByRole('region', { name: 'Проверки' })
+    expect(checks.textContent).toContain('Важно: Описания нет')
+    expect(checks.textContent).toContain('Заголовок короткий: 23 символа')
+
+    await user.click(within(panel()).getByLabelText('Описание'))
+    await user.paste(
+      'Ремонт квартир под ключ в Твери: смета за день, цена в договоре и гарантия 3 года',
+    )
+    expect(seoButton().textContent).toBe('SEO1: 1 совет')
+    await user.type(
+      within(panel()).getByLabelText('SEO-заголовок'),
+      'Ремонт квартир под ключ в Твери — смета за день',
+    )
+    expect(seoButton().textContent).toBe('SEO')
+    // Советы публиковать не мешают
+    expect(
+      screen.getByRole('button', { name: 'Опубликовать' }).getAttribute('aria-disabled'),
+    ).toBeNull()
+  })
+
+  it('поля уходят в черновик полем seo, пустые — не уходят вовсе', async () => {
     const user = userEvent.setup()
     const bodies: { title: string; content: PageContent }[] = []
     vi.stubGlobal(
@@ -283,48 +320,104 @@ describe('панель «Страница»', () => {
       }),
     )
     await renderWithRouter(<Editor site={site} page={published} />)
-    const toggle = screen.getByRole('button', { name: 'Страница' })
+    const toggle = seoButton()
     await user.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    const panel = screen.getByRole('complementary', { name: 'Страница: поиск и соцсети' })
 
     // Открыли и закрыли флажок — правок нет: пустое seo не считается изменением
-    const noindex = within(panel).getByLabelText('Скрыть страницу от поисковиков')
+    const noindex = within(panel()).getByLabelText('Скрыть страницу от поисковиков')
     await user.click(noindex)
     expect(status().textContent).toBe('Есть несохранённые правки')
     await user.click(noindex)
     expect(status().textContent).toBe('Опубликовано')
+    await user.type(within(panel()).getByLabelText('SEO-заголовок'), '   ')
+    expect(status().textContent).toBe('Опубликовано')
 
-    await user.type(within(panel).getByLabelText('Описание'), 'Ремонт квартир под ключ в Твери')
+    await user.type(within(panel()).getByLabelText('SEO-заголовок'), 'Ремонт в Твери')
+    await user.type(within(panel()).getByLabelText('Описание'), 'Ремонт квартир под ключ в Твери')
+    await user.type(within(panel()).getByLabelText('Канонический адрес (canonical)'), '/akciya/')
     await user.click(noindex)
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await vi.waitFor(() => expect(bodies).toHaveLength(1))
     expect(bodies[0]?.content.seo).toEqual({
+      title: 'Ремонт в Твери',
       description: 'Ремонт квартир под ключ в Твери',
+      canonical: '/akciya/',
       noindex: true,
     })
     expect(bodies[0]?.content.blocks).toHaveLength(demoPage.blocks.length)
   })
 
-  it('описание длиннее предела — сохранить нельзя, ошибка видна и при закрытой панели', async () => {
+  it('сниппет: SEO-заголовок целиком, у Google — название сайта сверху', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(
+      <Editor
+        site={{ ...site, seo: { ...site.seo, titleTemplate: '%s — Ремонт у Ивана' } }}
+        page={{ ...published, slug: 'ceny', title: 'Цены' }}
+      />,
+    )
+    await user.click(seoButton())
+    const title = within(panel()).getByLabelText('SEO-заголовок') as HTMLInputElement
+    expect(title.placeholder).toBe('Цены — Ремонт у Ивана')
+    expect(
+      within(panel()).getByText('Примерно так — в Яндексе').parentElement?.textContent,
+    ).toContain('Цены — Ремонт у Ивана')
+    await user.type(title, 'Цены на ремонт квартир')
+    await user.click(within(panel()).getByRole('radio', { name: 'Google' }))
+    const google = within(panel()).getByText('Примерно так — в Google').parentElement
+    expect(google?.textContent).toContain('Ремонт у Ивана')
+    expect(google?.textContent).toContain('remont.example › ceny')
+    expect(google?.textContent).toContain('Цены на ремонт квартир')
+    expect(google?.textContent).not.toContain('Цены на ремонт квартир — Ремонт у Ивана')
+  })
+
+  it('кривой canonical — сохранить нельзя, ошибка видна и при закрытой панели', async () => {
     const user = userEvent.setup()
     await renderWithRouter(<Editor site={site} page={published} />)
-    await user.click(screen.getByRole('button', { name: 'Страница' }))
-    const description = screen.getByLabelText('Описание')
-    await user.click(description)
+    await user.click(seoButton())
+    await user.type(
+      within(panel()).getByLabelText('Канонический адрес (canonical)'),
+      '//evil.example',
+    )
+    expect(screen.getByRole('button', { name: 'Сохранить' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    )
+    await user.click(seoButton())
+    expect(screen.getByText(/SEO страницы, канонический адрес: Путь на этом сайте/)).toBeTruthy()
+  })
+
+  it('описание длиннее предела — сохранить нельзя', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    await user.click(seoButton())
+    await user.click(within(panel()).getByLabelText('Описание'))
     await user.paste('а'.repeat(301))
     expect(screen.getByRole('button', { name: 'Сохранить' }).getAttribute('aria-disabled')).toBe(
       'true',
     )
-    await user.click(screen.getByRole('button', { name: 'Страница' }))
-    expect(screen.getByText(/Описание страницы \(панель «Страница»\)/)).toBeTruthy()
   })
 
-  it('у страницы 404 нет флажка noindex: она скрыта всегда', async () => {
+  it('без своей картинки и картинки сайта — карточка из заголовка от API', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    await user.click(seoButton())
+    const card = await within(panel()).findByRole('img', { name: /^Карточка из заголовка/ })
+    expect(card.getAttribute('src')).toBe(
+      `/api/sites/${site.id}/og-card?title=${encodeURIComponent(demoPageTitle)}`,
+    )
+    expect(panel().textContent).toContain('карточка из заголовка')
+  })
+
+  it('у страницы 404 нет индексации: она скрыта всегда', async () => {
     const user = userEvent.setup()
     await renderWithRouter(<Editor site={site} page={{ ...published, slug: '404' }} />)
-    await user.click(screen.getByRole('button', { name: 'Страница' }))
+    await user.click(seoButton())
     expect(screen.getByText('Служебная страница 404')).toBeTruthy()
     expect(screen.queryByLabelText('Скрыть страницу от поисковиков')).toBeNull()
+    expect(screen.queryByLabelText('Канонический адрес (canonical)')).toBeNull()
+    // Карточку из заголовка сайт странице 404 не ставит — и превью её не обещает
+    expect(within(panel()).queryByRole('img', { name: /^Карточка из заголовка/ })).toBeNull()
+    expect(panel().textContent).toContain('у страницы 404 карточки из заголовка нет')
+    expect(panel().textContent).toContain('Без картинки')
   })
 })

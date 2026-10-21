@@ -18,6 +18,7 @@ import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
+import { ogRoutes } from './modules/og/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { iconsRoutes } from './modules/settings/icons'
 import { settingsRoutes } from './modules/settings/routes'
@@ -25,6 +26,7 @@ import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
+import type { OgCardRenderers } from './og/card'
 import type { SitePublisher } from './publish/queue'
 import { createRateLimiter } from './rate-limit'
 
@@ -44,6 +46,11 @@ export type AppDeps = {
   mediaMaxBytes: number
   /** Набор иконок сайта из картинки медиатеки (sharp, с кешем): favicon.ico, PNG для манифеста */
   icons: IconRenderer
+  /**
+   * Карточки для соцсетей из заголовка страницы (sharp и Golos Text): опубликованные и
+   * предпросмотр — с раздельными кешами и общей очередью
+   */
+  ogCards: OgCardRenderers
   /**
    * Почта: почта процесса (состояние без секретов, настройки SMTP из админки, проверка
    * подключения) и очередь. Провайдера берёт обработчик очереди (index.ts)
@@ -142,6 +149,8 @@ export function createApp(deps: AppDeps) {
       settingsRoutes({ db, siteUrl: deps.siteUrl, publisher: deps.publisher, log }),
     )
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
+    // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке
+    .route('/sites/:siteId', ogRoutes({ db, siteUrl: deps.siteUrl, cards: deps.ogCards }))
     .route('/sites/:siteId/build', buildsRoutes({ db, publisher: deps.publisher }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))

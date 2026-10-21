@@ -37,6 +37,7 @@
     "@averra/schema": "workspace:*",
     "@averra/tokens": "workspace:*",
     "@electric-sql/pglite": "^0.5.8",
+    "@fontsource/golos-text": "catalog:",
     "@hono/node-server": "^2.1.3",
     "@hono/zod-validator": "^0.9.1",
     "better-auth": "^1.7.7",
@@ -44,6 +45,7 @@
     "fflate": "0.8.3",
     "hono": "catalog:",
     "nodemailer": "^10.1.0",
+    "opentype.js": "2.0.0",
     "pg": "8.23.1",
     "sharp": "catalog:",
     "zod": "catalog:"

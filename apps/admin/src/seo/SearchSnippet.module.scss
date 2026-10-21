@@ -49,3 +49,22 @@
   font-style: italic;
   color: var(--color-text-muted);
 }
+
+// Строка над адресом у Google: название сайта
+.site {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Описание у Google — до двух строк, у Яндекса бывает и три
+.yandex .description {
+  -webkit-line-clamp: 3;
+}
+
+.yandex .title,
+.google .title {
+  white-space: normal;
+}

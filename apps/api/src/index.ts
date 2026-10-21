@@ -25,6 +25,7 @@ import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
 import { defaultSiteName, sitesRepo } from './modules/sites/repo'
+import { sharpOgCards } from './og/sharp-og'
 import { installationNotFoundPage, linkInstallationSite } from './publish/installation-link'
 import { publishedSite } from './publish/published-site'
 import { createPublishQueue } from './publish/queue'
@@ -208,6 +209,7 @@ const app = createApp({
   storage,
   images: sharpProcessor(),
   icons: sharpIcons(),
+  ogCards: sharpOgCards(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
   mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,

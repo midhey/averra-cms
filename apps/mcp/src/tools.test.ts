@@ -66,6 +66,115 @@ describe('инструменты', () => {
     expect(page.published?.blocks).toHaveLength(3)
   })
 
+  it('задают и читают SEO страницы той же схемой и возвращают советы по нему', async () => {
+    const ref = { slug: 'seo-mcp' }
+    const seo = {
+      title: 'Ремонт квартир под ключ в Твери — смета за день',
+      description: 'Короткое',
+      canonical: '/seo-mcp/',
+      noindex: true,
+    }
+    const { seoChecks } = await tools.saveDraft(
+      SaveDraftInput.parse({ ...ref, title: 'SEO', content: { ...demoPage, seo } }),
+    )
+    if (!seoChecks) throw new Error('Нет советов по SEO')
+    // Описание короче 70 символов и noindex — советы; заголовок в самый раз — не совет
+    expect(seoChecks.map((check) => check.title)).toEqual(
+      expect.arrayContaining([
+        'Описание короткое: 8 символов',
+        'Страница скрыта от поисковиков (noindex)',
+      ]),
+    )
+    expect(seoChecks.every((check) => check.level !== 'good')).toBe(true)
+
+    const page = z
+      .object({ draft: PageContent, seoChecks: z.array(z.object({ title: z.string() })) })
+      .parse(await tools.getPage(ref))
+    expect(page.draft.seo).toEqual(seo)
+    expect(page.seoChecks).toEqual(seoChecks.map(({ title }) => ({ title })))
+  })
+
+  it('черновик, которого эта версия не знает целиком, не ломает get_page: только без советов', async () => {
+    const ref = { slug: 'iz-budushchego' }
+    await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Новее', content: demoPage }))
+    // Так отвечает API после отката с более новой версии: в черновике незнакомые блок и поле SEO
+    const future = cmsTools(
+      hc<AppType>('http://cms.test', {
+        fetch: async (input: string | URL | Request, init?: RequestInit) => {
+          const res = await api.app.request(input, init)
+          if (!String(input instanceof Request ? input.url : input).endsWith(`/pages/${ref.slug}`))
+            return res
+          const body = (await res.json()) as { draft: { blocks: unknown[]; seo?: object } }
+          body.draft.blocks.push({ id: 'n', type: 'pricing', props: { plans: [] } })
+          body.draft.seo = { title: 42, schema: 'Product' }
+          return Response.json(body)
+        },
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    )
+    const page = z
+      .object({ title: z.string(), seoChecks: z.unknown() })
+      .parse(await future.getPage(ref))
+    expect(page.title).toBe('Новее')
+    // Блоки и SEO разобраны нестрого: советы есть, а кривое поле просто не учтено
+    expect(page.seoChecks).toEqual(expect.any(Array))
+  })
+
+  /** Инструменты против API, у которого ответ GET /api/sites/:siteId подменён */
+  const toolsWithSite = (site: (res: Response) => Promise<Response>) =>
+    cmsTools(
+      hc<AppType>('http://cms.test', {
+        fetch: async (input: string | URL | Request, init?: RequestInit) => {
+          const url = String(input instanceof Request ? input.url : input)
+          const res = await api.app.request(input, init)
+          return url.endsWith(`/api/sites/${api.demoSiteId}`) ? site(res) : res
+        },
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    )
+
+  it('установка старше MCP (сайт без seo): get_page и save_draft работают, только без советов', async () => {
+    const old = toolsWithSite(async (res) => {
+      const { seo: _seo, ...site } = (await res.json()) as { seo?: unknown }
+      return Response.json(site)
+    })
+    const ref = { slug: 'staraya' }
+    const saved = await old.saveDraft(
+      SaveDraftInput.parse({ ...ref, title: 'Старая установка', content: demoPage }),
+    )
+    expect(saved.seoChecks).toBeUndefined()
+    const page = z
+      .object({ title: z.string(), seoChecks: z.unknown() })
+      .parse(await old.getPage(ref))
+    expect(page.title).toBe('Старая установка')
+    expect(page.seoChecks).toBeUndefined()
+  })
+
+  it('сбой запроса сайта после сохранения — не ошибка: черновик сохранён, советов нет', async () => {
+    const broken = toolsWithSite(async () => {
+      throw new TypeError('fetch failed')
+    })
+    const ref = { slug: 'sboy-saita' }
+    const saved = await broken.saveDraft(
+      SaveDraftInput.parse({ ...ref, title: 'Сохранено', content: demoPage }),
+    )
+    expect(saved.seoChecks).toBeUndefined()
+    // Черновик и правда сохранён: обычные инструменты его видят
+    const page = z.object({ title: z.string() }).parse(await tools.getPage(ref))
+    expect(page.title).toBe('Сохранено')
+
+    const failing = toolsWithSite(async () => Response.json({ error: 'Сбой' }, { status: 500 }))
+    const read = z.object({ seoChecks: z.unknown() }).parse(await failing.getPage(ref))
+    expect(read.seoChecks).toBeUndefined()
+  })
+
+  it('правила каталога — про SEO страницы', () => {
+    const rules = blockCatalog().rules.join('\n')
+    expect(rules).toContain('seo.image')
+    expect(rules).toContain('seoChecks')
+    expect(rules).toMatch(/30–60 символов/)
+  })
+
   it('возвращают ошибку API с путём до кривого поля', async () => {
     const button = { label: 'Жми', href: 'javascript:alert(1)' }
     const save = tools.saveDraft({

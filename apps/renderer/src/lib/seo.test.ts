@@ -1,6 +1,7 @@
 import {
   defaultNotFoundContent,
   type MediaMap,
+  ogCardVersion,
   readSiteSettings,
   type StoredSiteSettings,
 } from '@averra/schema'
@@ -12,7 +13,9 @@ import {
   canonicalPath,
   documentTitle,
   headTags,
+  needsOgCard,
   organizationJsonLd,
+  pageOgCard,
   robotsTxt,
   type SeoPage,
   type SeoSite,
@@ -120,14 +123,83 @@ describe('<head> страницы', () => {
     const hidden = head(site({ hideFromSearch: true }), page('ceny'))
     expect(hidden).toContain('<meta name="robots" content="noindex, nofollow">')
     expect(hidden).not.toContain('canonical')
+    expect(hidden).not.toContain('og:url')
 
-    const noindex = page('ceny', { content: { blocks: [], seo: { noindex: true } } })
+    // Скрытой странице не нужен ни canonical, ни og:url — даже заданный руками
+    const noindex = page('ceny', {
+      content: { blocks: [], seo: { noindex: true, canonical: '/uslugi/' } },
+    })
     expect(head(site(), noindex)).toContain('<meta name="robots" content="noindex">')
+    expect(head(site(), noindex)).not.toContain('canonical')
+    expect(head(site(), noindex)).not.toContain('og:url')
     const notFound = page('404', { content: defaultNotFoundContent() })
     expect(head(site(), notFound)).toContain('<meta name="robots" content="noindex">')
     expect(head(site(), notFound)).not.toContain('canonical')
+    expect(head(site(), notFound)).not.toContain('og:url')
 
     expect(head(site(), page('ceny'))).not.toContain('name="robots"')
+  })
+
+  it('SEO-заголовок страницы — в title и og:title целиком, без шаблона сайта', () => {
+    const s = site({ titleTemplate: '%s — Ремонт & Ко' })
+    const own = page('ceny', {
+      content: { blocks: [], seo: { title: 'Цены на ремонт квартир в Твери за м²' } },
+    })
+    const html = head(s, own)
+    expect(html).toContain('<title>Цены на ремонт квартир в Твери за м²</title>')
+    expect(html).toContain(
+      '<meta property="og:title" content="Цены на ремонт квартир в Твери за м²">',
+    )
+    // Без SEO-заголовка og:title — заголовок страницы: название сайта и так в og:site_name
+    expect(head(s, page('ceny'))).toContain('<meta property="og:title" content="Цены">')
+  })
+
+  it('картинка страницы главнее картинки сайта', () => {
+    const own = page('ceny', { content: { blocks: [], seo: { image: { mediaId: logoId } } } })
+    const html = head(site({ ogImage: ogId }), own)
+    expect(html).toContain(
+      `<meta property="og:image" content="https://remont.example/media/${logoId}/480.webp">`,
+    )
+    expect(html).not.toContain(ogId)
+  })
+
+  it('ни своей картинки, ни картинки сайта — карточка из заголовка с версией в адресе', () => {
+    const s = site()
+    expect(needsOgCard(s, page('ceny'))).toBe(true)
+    const version = ogCardVersion(pageOgCard(s, page('ceny')))
+    const html = head(s, page('ceny'))
+    expect(html).toContain(
+      `<meta property="og:image" content="https://remont.example/og/ceny.png?v=${version}">`,
+    )
+    expect(html).toContain('<meta property="og:image:width" content="1200">')
+    expect(html).toContain('<meta property="og:image:height" content="630">')
+    // Заголовок поменяли — адрес другой
+    expect(head(s, page('ceny', { title: 'Прайс' }))).not.toContain(version)
+    // Карточки нет у 404, при картинке сайта и без адреса сайта
+    expect(needsOgCard(s, page('404', { content: defaultNotFoundContent() }))).toBe(false)
+    expect(needsOgCard(site({ ogImage: ogId }), page('ceny'))).toBe(false)
+    expect(needsOgCard(site({}, null), page('ceny'))).toBe(false)
+  })
+
+  it('canonical страницы: путь — на домене сайта, https — как есть, og:url тот же', () => {
+    const path = page('akciya-2', { content: { blocks: [], seo: { canonical: '/akciya/' } } })
+    expect(head(site(), path)).toContain(
+      '<link rel="canonical" href="https://remont.example/akciya/">',
+    )
+    expect(head(site(), path)).toContain(
+      '<meta property="og:url" content="https://remont.example/akciya/">',
+    )
+    const other = page('ceny', {
+      content: { blocks: [], seo: { canonical: 'https://partner.example/ceny?a=1&b=2' } },
+    })
+    expect(head(site(), other)).toContain(
+      '<link rel="canonical" href="https://partner.example/ceny?a=1&amp;b=2">',
+    )
+    // noindex главнее: у скрытой страницы canonical нет
+    const hidden = page('ceny', {
+      content: { blocks: [], seo: { canonical: '/a/', noindex: true } },
+    })
+    expect(head(site(), hidden)).not.toContain('canonical')
   })
 
   it('коды проверки прав и иконки — только когда заданы', () => {
@@ -251,6 +323,11 @@ describe('robots.txt и sitemap.xml', () => {
       page('index'),
       page('404'),
       page('skryta', { content: { blocks: [], seo: { noindex: true } } }),
+      // canonical на другую страницу — в карте только канонические адреса
+      page('kopiya', { content: { blocks: [], seo: { canonical: '/ceny/' } } }),
+      page('svoya', {
+        content: { blocks: [], seo: { canonical: 'https://remont.example/svoya/' } },
+      }),
     ])
     expect(xml).toBe(
       [
@@ -258,6 +335,7 @@ describe('robots.txt и sitemap.xml', () => {
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
         '  <url><loc>https://remont.example/</loc><lastmod>2026-10-20</lastmod></url>',
         '  <url><loc>https://remont.example/ceny/</loc><lastmod>2026-10-20</lastmod></url>',
+        '  <url><loc>https://remont.example/svoya/</loc><lastmod>2026-10-20</lastmod></url>',
         '</urlset>',
         '',
       ].join('\n'),

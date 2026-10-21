@@ -22,6 +22,9 @@ const sitePages = {
       // иконок и манифест. Адреса с точкой: страница сайта так называться не может (PageSlug)
       injectRoute({ pattern: '/robots.txt', entrypoint: './src/routes/robots.ts', prerender })
       injectRoute({ pattern: '/sitemap.xml', entrypoint: './src/routes/sitemap.ts', prerender })
+      // Карточки страниц для соцсетей из заголовка: /og/<адрес>.png. В dev неизвестный адрес под
+      // /og/ — редирект или страница 404 сайта, как на сервере
+      injectRoute({ pattern: '/og/[slug].png', entrypoint: './src/routes/og.ts', prerender })
       const manifest = './src/routes/manifest.ts'
       const favicon = './src/routes/favicon.ts'
       const icons = './src/routes/icons.ts'

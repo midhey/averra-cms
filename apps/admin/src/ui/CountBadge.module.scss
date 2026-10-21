@@ -1,0 +1,33 @@
+@use "@averra/ui" as ui;
+
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: ui.rem(18);
+  height: ui.rem(18);
+  padding-inline: ui.rem(5);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--badge-text);
+  background: var(--badge-surface);
+  border-radius: var(--radius-pill);
+
+  // В контрастной теме фон пропадает: число остаётся в рамке
+  @media (forced-colors: active) {
+    border: ui.rem(1) solid currentcolor;
+  }
+}
+
+.warning {
+  --badge-surface: var(--color-warning-surface);
+  --badge-text: var(--color-warning-text);
+}
+
+.danger {
+  --badge-surface: var(--color-danger-surface);
+  --badge-text: var(--color-danger-text);
+}

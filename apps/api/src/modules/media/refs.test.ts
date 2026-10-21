@@ -131,6 +131,17 @@ describe('снимок сайта', () => {
     })
   })
 
+  it('картинка для соцсетей из SEO страницы — тоже в справочнике и в файлах релиза', async () => {
+    const siteId = await createSite('Сайт с картинкой для соцсетей')
+    const og = await uploadTo(siteId)
+    const content: PageContentInput = { blocks: [], seo: { image: { mediaId: og.id } } }
+    expect((await save('akciya', content, siteId)).status).toBe(200)
+    expect((await publish('akciya', siteId)).status).toBe(200)
+
+    expect(Object.keys(await snapshotMedia(siteId))).toEqual([og.id])
+    expect(await sitesRepo(api.db).publishedMediaIds(siteId)).toEqual(new Set([og.id]))
+  })
+
   it('сайт без картинок — пустой справочник', async () => {
     const siteId = await createSite('Сайт без картинок')
     expect(await snapshotMedia(siteId)).toEqual({})
@@ -172,5 +183,35 @@ describe('возврат версии', () => {
     })
     const page = await app.request(pageUrl('istoriya', siteId), { headers: owner.headers })
     expect(((await page.json()) as { draft: unknown }).draft).toEqual({ blocks: [] })
+  })
+
+  it('версию с удалённой картинкой для соцсетей вернуть нельзя: 409 с путём до SEO', async () => {
+    const siteId = await createSite('Сайт с историей SEO')
+    const og = await uploadTo(siteId)
+    const content: PageContentInput = { blocks: [], seo: { image: { mediaId: og.id } } }
+    expect((await save('seo-istoriya', content, siteId)).status).toBe(200)
+    expect((await publish('seo-istoriya', siteId)).status).toBe(200)
+    expect((await save('seo-istoriya', { blocks: [] }, siteId)).status).toBe(200)
+    expect((await publish('seo-istoriya', siteId)).status).toBe(200)
+    const removed = await app.request(`/api/sites/${siteId}/media/${og.id}`, {
+      method: 'DELETE',
+      headers: owner.headers,
+    })
+    expect(removed.status).toBe(204)
+
+    const list = await app.request(`${pageUrl('seo-istoriya', siteId)}/revisions`, {
+      headers: owner.headers,
+    })
+    const revisions = (await list.json()) as { id: string; version: number }[]
+    const first = revisions.find((revision) => revision.version === 1)
+    if (!first) throw new Error('Нет версии 1')
+    const res = await app.request(
+      `${pageUrl('seo-istoriya', siteId)}/revisions/${first.id}/restore`,
+      { method: 'POST', headers: owner.headers },
+    )
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      error: { issues: [{ path: 'content.seo.image.mediaId' }] },
+    })
   })
 })

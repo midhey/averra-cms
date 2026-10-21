@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { BlockInstance, hero } from './blocks'
+import { MediaId } from './media'
+import { HTTPS_URL, isInternalPath } from './url'
 
 /** Сколько блоков может быть на странице: редактор пишет «3 из 50» и не даёт добавить больше */
 export const PAGE_MAX_BLOCKS = 50
@@ -8,18 +10,53 @@ export const PAGE_MAX_BLOCKS = 50
 export const SEO_DESCRIPTION_MAX = 300
 export const SEO_DESCRIPTION_RECOMMENDED = 160
 
+/** SEO-заголовок страницы: тот же предел, что у заголовка страницы */
+export const SEO_TITLE_MAX = 120
+
 /**
- * Поиск и соцсети на уровне страницы. Необязательно целиком и по полям: страница без них берёт
- * описание сайта (раздел «SEO»). Живёт в содержимом страницы, поэтому версионируется вместе с
- * блоками: правка описания попадает на сайт только с публикацией
+ * Canonical страницы: путь на этом сайте (/ceny/) или ссылка https:// — по тем же правилам, что
+ * «куда» у редиректов. Пусто — свой адрес страницы. Кавычки, < > и управляющие символы на выходе
+ * экранируются, но адрес с ними — всё равно кривой: поисковик его не поймёт. Поэтому их нет и в
+ * ссылке https, где правило домена хвост не проверяет
+ */
+export const PageCanonical = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine(
+    (href) =>
+      href === '' ||
+      ((isInternalPath(href) || HTTPS_URL.test(href)) && !/[\s#"<>\\\p{Cc}]/u.test(href)),
+    'Путь на этом сайте (/ceny/) или ссылка https://, без пробелов, кавычек, <, > и #',
+  )
+
+/**
+ * Поиск и соцсети на уровне страницы. Необязательно целиком и по полям: чего нет — берётся у сайта
+ * (раздел «SEO») или из самой страницы. Живёт в содержимом страницы, поэтому версионируется вместе
+ * с блоками: правка попадает на сайт только с публикацией и остаётся в истории.
+ *
+ * Картинка — { mediaId }, как у блоков: по ключу mediaId её находят проверка медиатеки, защита от
+ * удаления, справочник картинок сборки и «где используется». Описания (alt) у неё нет — картинку
+ * для соцсетей показывают превью ссылки
  */
 export const PageSeo = z.strictObject({
+  title: z
+    .string()
+    .trim()
+    .max(SEO_TITLE_MAX)
+    .optional()
+    .meta({ title: 'SEO-заголовок', description: 'Целиком, шаблон сайта не добавляется' }),
   description: z
     .string()
     .trim()
     .max(SEO_DESCRIPTION_MAX)
     .optional()
     .meta({ title: 'Описание для поисковиков и соцсетей' }),
+  image: z
+    .strictObject({ mediaId: MediaId.meta({ title: 'Картинка' }) })
+    .optional()
+    .meta({ title: 'Картинка для соцсетей' }),
+  canonical: PageCanonical.optional().meta({ title: 'Канонический адрес (canonical)' }),
   noindex: z.boolean().optional().meta({ title: 'Скрыть страницу от поисковиков' }),
 })
 export type PageSeo = z.infer<typeof PageSeo>

@@ -1,12 +1,17 @@
 import {
-  applyTitleTemplate,
+  canonicalElsewhere,
+  canonicalPath,
   Ga4Id,
   MAIN_PAGE_SLUG,
   type MediaFile,
   type MediaMap,
   MetrikaId,
   NOT_FOUND_PAGE_SLUG,
+  ogCardOf,
+  ogCardVersion,
   type PageContent,
+  pageCanonicalUrl,
+  pageDocumentTitle,
   type StoredSiteSettings,
   siteLanguages,
   type Theme,
@@ -43,18 +48,11 @@ export function escapeHtml(text: string) {
     .replaceAll("'", '&#39;')
 }
 
-/**
- * Адрес страницы на собранном сайте: главная — /, остальные — /адрес/ с косой чертой. Так их
- * отдаёт Caddy (папка с index.html), и такой адрес — канонический
- */
-export const canonicalPath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}/`)
+export { canonicalPath }
 
-/** Заголовок во вкладке: по шаблону сайта, а у главной — как есть (его пишут целиком) */
-export function documentTitle(site: SeoSite, page: SeoPage) {
-  return page.slug === MAIN_PAGE_SLUG
-    ? page.title
-    : applyTitleTemplate(site.settings.titleTemplate, page.title)
-}
+/** Заголовок во вкладке: SEO-заголовок целиком или заголовок по шаблону сайта (у главной — как есть) */
+export const documentTitle = (site: SeoSite, page: SeoPage) =>
+  pageDocumentTitle({ ...page, seo: page.content.seo }, site.settings.titleTemplate)
 
 /**
  * Попадает ли страница в индекс: сайт не скрыт, у страницы нет noindex, и это не страница 404
@@ -92,6 +90,49 @@ export function socialImage(file: MediaFile) {
 const absolute = (site: SeoSite, path: string) =>
   site.url ? new URL(path, site.url).href : undefined
 
+/** Размер карточки из заголовка: его рисует API (src/og) */
+export const OG_CARD_SIZE = { width: 1200, height: 630 } as const
+
+/** Файл карточки страницы в корне сайта: /og/<адрес>.png (главная — /og/index.png) */
+export const ogCardPath = (slug: string) => `/og/${slug}.png`
+
+/**
+ * Нужна ли странице карточка из заголовка: своей картинки нет, картинки сайта нет, есть адрес
+ * сайта (og:image — только абсолютный адрес), и это не страница 404. Сборка кладёт такие
+ * карточки в /og/, а <head> ссылается на них
+ */
+export function needsOgCard(site: SeoSite, page: SeoPage) {
+  return (
+    site.url !== null &&
+    page.slug !== NOT_FOUND_PAGE_SLUG &&
+    !page.content.seo?.image &&
+    !site.settings.ogImage
+  )
+}
+
+/** Что нарисовано на карточке страницы: заголовок страницы, название и домен сайта, цвета темы */
+export const pageOgCard = (site: SeoSite, page: SeoPage) =>
+  ogCardOf({ title: page.title, siteName: site.name, siteUrl: site.url, theme: site.theme })
+
+/**
+ * Картинка страницы для соцсетей: своя, иначе сайта (вариант JPEG/PNG от 1200 px), иначе карточка
+ * из заголовка. У карточки в адресе версия (?v=): заголовок поменяли — адрес другой, и соцсеть не
+ * покажет закешированную старую
+ */
+function socialImageOf(site: SeoSite, page: SeoPage, media: MediaMap) {
+  const mediaId = page.content.seo?.image?.mediaId ?? site.settings.ogImage
+  const file = mediaId ? media[mediaId] : undefined
+  const variant = file && socialImage(file)
+  if (variant) {
+    const url = absolute(site, variant.url)
+    return url ? { url, width: variant.width, height: variant.height } : undefined
+  }
+  if (!needsOgCard(site, page)) return undefined
+  const path = `${ogCardPath(page.slug)}?v=${ogCardVersion(pageOgCard(site, page))}`
+  const url = absolute(site, path)
+  return url ? { url, ...OG_CARD_SIZE } : undefined
+}
+
 const meta = (attribute: 'name' | 'property', key: string, content: string) =>
   `<meta ${attribute}="${key}" content="${escapeHtml(content)}">`
 
@@ -126,10 +167,9 @@ export function headTags({
   const title = documentTitle(site, page)
   const description = pageDescription(site, page)
   const indexable = isIndexable(site, page)
-  const canonical = absolute(site, canonicalPath(page.slug))
-  const ogFile = settings.ogImage ? media[settings.ogImage] : undefined
-  const ogVariant = ogFile && socialImage(ogFile)
-  const ogImage = ogVariant && absolute(site, ogVariant.url)
+  // Свой адрес или заданный в SEO страницы (путь — на домене сайта)
+  const canonical = pageCanonicalUrl({ slug: page.slug, seo: page.content.seo }, site.url)
+  const image = socialImageOf(site, page, media)
 
   const tags = [`<title>${escapeHtml(title)}</title>`]
   if (description) tags.push(meta('name', 'description', description))
@@ -144,19 +184,20 @@ export function headTags({
   tags.push(
     meta('property', 'og:type', 'website'),
     meta('property', 'og:site_name', site.name),
-    meta('property', 'og:title', page.title),
+    // SEO-заголовок, а без него — заголовок страницы: название сайта и так в og:site_name
+    meta('property', 'og:title', page.content.seo?.title?.trim() || page.title),
     meta('property', 'og:locale', siteLanguages[settings.language].locale),
   )
   if (description) tags.push(meta('property', 'og:description', description))
   if (canonical && indexable) tags.push(meta('property', 'og:url', canonical))
-  if (ogImage && ogVariant) {
+  if (image) {
     tags.push(
-      meta('property', 'og:image', ogImage),
-      meta('property', 'og:image:width', String(ogVariant.width)),
-      meta('property', 'og:image:height', String(ogVariant.height)),
+      meta('property', 'og:image', image.url),
+      meta('property', 'og:image:width', String(image.width)),
+      meta('property', 'og:image:height', String(image.height)),
     )
   }
-  tags.push(meta('name', 'twitter:card', ogImage ? 'summary_large_image' : 'summary'))
+  tags.push(meta('name', 'twitter:card', image ? 'summary_large_image' : 'summary'))
 
   if (settings.verification.yandex) {
     tags.push(meta('name', 'yandex-verification', settings.verification.yandex))
@@ -278,13 +319,18 @@ export function robotsTxt(site: SeoSite) {
 }
 
 /**
- * sitemap.xml: индексируемые опубликованные страницы с датой публикации. Скрытый сайт или сайт
- * без адреса — пустой список (абсолютных адресов без домена не бывает)
+ * sitemap.xml: индексируемые опубликованные страницы со своим каноническим адресом и датой
+ * публикации. Скрытый сайт или сайт без адреса — пустой список (абсолютных адресов без домена нет)
  */
 export function sitemapXml(site: SeoSite, pages: readonly SeoPage[]) {
   const entries = site.url
     ? pages
-        .filter((page) => isIndexable(site, page))
+        // Только канонические адреса: страница, чей canonical указывает на другой, — не в карте
+        .filter(
+          (page) =>
+            isIndexable(site, page) &&
+            !canonicalElsewhere({ slug: page.slug, seo: page.content.seo }, site.url),
+        )
         .toSorted((a, b) => (a.slug === MAIN_PAGE_SLUG ? -1 : b.slug === MAIN_PAGE_SLUG ? 1 : 0))
         .map((page) => {
           const loc = `<loc>${escapeHtml(absolute(site, canonicalPath(page.slug)) ?? '')}</loc>`

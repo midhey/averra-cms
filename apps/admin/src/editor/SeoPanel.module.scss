@@ -1,0 +1,16 @@
+@use "@averra/ui" as ui;
+
+// Группа панели SEO страницы: «Поиск», «Соцсети», «Индексация» — с чертой сверху
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.heading {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}

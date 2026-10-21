@@ -28,6 +28,8 @@ import { sitesRepo } from './modules/sites/repo'
 import type { HostStatus } from './modules/status/service'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
+import type { OgCardRenderers } from './og/card'
+import { sharpOgCards } from './og/sharp-og'
 import type { SitePublisher } from './publish/queue'
 
 /** Адреса, под которыми API видит себя и админку в тестах */
@@ -82,7 +84,10 @@ export async function createTestApi({
   siteUrl,
   // Страница 404 текущей версии сайта на сервере (fallback домена сайта)
   notFoundPage,
+  // Карточки для соцсетей: тест очереди даёт свою отрисовку, остальные — настоящую на sharp
+  ogCards = sharpOgCards(),
 }: {
+  ogCards?: OgCardRenderers
   siteUrl?: string
   notFoundPage?: () => Promise<string | undefined>
   published?: PublishedSite
@@ -160,6 +165,7 @@ export async function createTestApi({
     storage,
     images,
     icons: sharpIcons(),
+    ogCards,
     mediaMaxBytes,
     mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
     adminUrl: testOrigins.admin,

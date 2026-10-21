@@ -1,10 +1,55 @@
 import type { AppType } from '@averra/api'
-import { blocks, describeApiError, PageContent, PageSlug, PageTitle, Uuid } from '@averra/schema'
+import {
+  blocks,
+  describeApiError,
+  PageContent,
+  PageSlug,
+  PageTitle,
+  pageSeoChecks,
+  SEO_DESCRIPTION_RANGE,
+  SEO_TITLE_RANGE,
+  type SiteSeo,
+  SLUG_RECOMMENDED_MAX,
+  seoAdvice,
+  Uuid,
+} from '@averra/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
 
 export type Api = ReturnType<typeof hc<AppType>>
+
+/** Сайт из GET /api/sites/:siteId — только SEO, нужное советам по странице */
+const SiteWithSeo = z.object({
+  seo: z.object({
+    titleTemplate: z.string(),
+    description: z.string(),
+    ogImage: z.string().nullable(),
+    url: z.string().nullable(),
+    hideFromSearch: z.boolean(),
+  }),
+})
+
+/**
+ * Черновик из ответа API — ровно то, что нужно советам. Блоки — как есть (проверки читают их и
+ * недописанными), SEO — без строгих правил: незнакомое поле или значение не ломает разбор
+ */
+const SavedDraft = z.object({
+  title: z.string(),
+  draft: z.object({
+    blocks: z.array(z.looseObject({ id: z.string(), type: z.string(), props: z.unknown() })),
+    seo: z
+      .looseObject({
+        title: z.string().optional().catch(undefined),
+        description: z.string().optional().catch(undefined),
+        image: z.looseObject({ mediaId: z.string() }).optional().catch(undefined),
+        canonical: z.string().optional().catch(undefined),
+        noindex: z.boolean().optional().catch(undefined),
+      })
+      .optional()
+      .catch(undefined),
+  }),
+})
 
 const PageRef = z.object({
   // Одна установка — один сайт, и токен выпущен на него: id указывать не нужно
@@ -33,7 +78,10 @@ const rules = [
   'Лишних полей быть не должно: используй только поля из схем блоков.',
   'Картинка — { mediaId, alt }: mediaId из медиатеки этого сайта (её пополняют в админке), alt обязателен — коротко, что на картинке. Чужой или выдуманный mediaId API не примет. hero в варианте split («С картинкой») без картинки не пройдёт, в других вариантах картинки быть не должно.',
   'Форма заявки (form): у каждого поля уникальный ключ name (латиница, цифры, _; website и consent заняты), тип из списка, у select — варианты options. policyUrl — ссылка на политику конфиденциальности, обязательна. Форма работает без JavaScript, заявки видны только в админке: через MCP их не прочитать (персональные данные).',
-  'Поиск и соцсети страницы — необязательное поле seo рядом с blocks: { description, noindex }. description — 1–2 предложения до 160 символов о том, что на странице (без него берётся описание сайта); noindex: true скрывает страницу от поисковиков. Заголовок для вкладки собирается по шаблону сайта из title.',
+  `SEO страницы — необязательное поле seo рядом с blocks: { title, description, image, canonical, noindex }, все поля необязательны. Без title заголовок во вкладке и в поиске собирается по шаблону сайта из заголовка страницы; title пишется целиком, шаблон к нему не добавляется — лучше ${SEO_TITLE_RANGE.min}–${SEO_TITLE_RANGE.max} символов. description — 1–2 предложения о том, что на странице, ${SEO_DESCRIPTION_RANGE.min}–${SEO_DESCRIPTION_RANGE.max} символов (без него берётся описание сайта).`,
+  'seo.image — { mediaId } картинки для соцсетей из медиатеки, лучше 1200 × 630; без неё — картинка сайта, а если нет и её — карточка из заголовка страницы. seo.canonical — путь на этом сайте (/ceny/) или https://…, только если страница копирует другую; иначе не задавай. noindex: true скрывает страницу от поисковиков — только для служебных страниц («Спасибо», политика).',
+  `Адрес новой страницы — короткий, 2–4 слова, не длиннее ${SLUG_RECOMMENDED_MAX} символов. У картинок в блоках alt описывает, что на картинке, а не имя файла.`,
+  'get_page и save_draft возвращают seoChecks — советы по SEO черновика (warning — стоит поправить, problem — важно). Публиковать они не мешают, но поправь их, если можешь.',
   'Страница с адресом 404 — служебная: её показывают на адресах, где страницы нет. Делай её из блоков, как обычную, с кнопкой на главную.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
 ]
@@ -86,6 +134,35 @@ export function cmsTools(client: Api | undefined) {
   }
   const sites = client.api.sites
   const page = sites[':siteId'].pages[':slug']
+  // SEO сайта (шаблон заголовка, описание и картинка по умолчанию, адрес) — для советов по
+  // странице: GET /api/sites/:siteId отдаёт их и токену. Установка старше 3.13 seo не отдаёт —
+  // тогда undefined
+  const siteSeoOf = async (siteId: string): Promise<SiteSeo | undefined> => {
+    const site = SiteWithSeo.safeParse(
+      await unwrap(() => sites[':siteId'].$get({ param: { siteId } })),
+    )
+    return site.success ? site.data.seo : undefined
+  }
+  /**
+   * Советы SEO по черновику — те же проверки, что в панели «SEO» редактора. Советы — добавка:
+   * MCP студии ходит и в установки клиентов старее себя, и черновик к этому моменту уже сохранён.
+   * Любой сбой (старый API без site.seo, незнакомый черновик после отката, API не ответил на
+   * второй запрос) — не повод уронить get_page или ответить ошибкой на сохранённое: тогда без
+   * советов
+   */
+  const seoChecksOf = async (siteId: string, slug: string, saved: unknown) => {
+    try {
+      const parsed = SavedDraft.safeParse(saved)
+      if (!parsed.success) return undefined
+      const siteSeo = await siteSeoOf(siteId)
+      if (!siteSeo) return undefined
+      const { title, draft } = parsed.data
+      const checks = pageSeoChecks({ slug, title, blocks: draft.blocks, seo: draft.seo }, siteSeo)
+      return seoAdvice(checks).map(({ level, title, advice }) => ({ level, title, advice }))
+    } catch {
+      return undefined
+    }
+  }
   // Сайт токена (GET /api/site) — один раз на сервер: токен выпущен на один сайт и не меняется
   let tokenSite: Promise<string> | undefined
   const siteOf = (siteId: string | undefined) => {
@@ -103,11 +180,13 @@ export function cmsTools(client: Api | undefined) {
     listSites: () => unwrap(() => sites.$get()),
     getPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
-      return unwrap(() => page.$get({ param }))
+      const found = await unwrap(() => page.$get({ param }))
+      return { ...(found as object), seoChecks: await seoChecksOf(param.siteId, slug, found) }
     },
     saveDraft: async ({ siteId, slug, title, content }: SaveDraftInput) => {
       const param = { siteId: await siteOf(siteId), slug }
-      return unwrap(() => page.$put({ param, json: { title, content } }))
+      const saved = await unwrap(() => page.$put({ param, json: { title, content } }))
+      return { seoChecks: await seoChecksOf(param.siteId, slug, saved) }
     },
     publishPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
@@ -149,7 +228,8 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     'get_page',
     {
       title: 'Страница',
-      description: 'Черновик и опубликованная версия страницы.',
+      description:
+        'Черновик и опубликованная версия страницы, с SEO (content.seo) и советами по SEO черновика (seoChecks).',
       inputSchema: PageRef,
       annotations: { readOnlyHint: true },
     },
@@ -161,14 +241,15 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Сохранить черновик',
       description:
-        'Сохраняет черновик страницы целиком: заголовок и все блоки. Опубликованная версия не меняется.',
+        'Сохраняет черновик страницы целиком: заголовок, все блоки и SEO (content.seo). Опубликованная версия не меняется. Возвращает советы по SEO (seoChecks).',
       inputSchema: SaveDraftInput,
       annotations: { idempotentHint: true },
     },
     async (args) => {
-      await tools.saveDraft(args)
+      const { seoChecks } = await tools.saveDraft(args)
       return asText({
         result: `Черновик сохранён: ${args.content.blocks.length} блоков`,
+        seoChecks,
         next: 'Чтобы изменения попали на сайт, вызови publish_page',
       })
     },

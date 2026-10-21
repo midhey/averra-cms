@@ -8,15 +8,19 @@ import {
 } from '@averra/schema'
 import { hc } from 'hono/client'
 import { ICON_FILES } from './icon-files'
+import { oncePerBuild } from './once-per-build'
 
 const api = hc<AppType>(CMS_API_URL).api
 
 /**
  * Опубликованный сайт из API: тема и страницы. Какой сайт — CMS_SITE_ID (его ставит API сборщику
  * публикации), а без него — сайт установки: одна установка — один сайт, и id искать не нужно.
- * Без запущенного API сборка падает с понятной ошибкой
+ * Без запущенного API сборка падает с понятной ошибкой. При сборке снимок один на все маршруты
+ * (once-per-build.ts): страницы и файлы карточек /og/*.png из одной версии сайта
  */
-export async function loadSnapshot() {
+export const loadSnapshot = oncePerBuild(fetchSnapshot, import.meta.env.DEV)
+
+async function fetchSnapshot() {
   const res = await request(() =>
     CMS_SITE_ID
       ? api.sites[':siteId'].snapshot.$get({ param: { siteId: CMS_SITE_ID } })
@@ -102,6 +106,18 @@ export function notFoundPage(pages: readonly SnapshotPage[]): SnapshotPage {
 }
 
 export { ICON_FILES }
+
+/**
+ * Карточка опубликованной страницы для соцсетей из API (/api/sites/:siteId/og/:slug). Эндпоинт
+ * рендерера отдаёт её как есть: в dev — вживую, при сборке Astro кладёт её в /og/<адрес>.png
+ */
+export async function ogCardFile(siteId: string, slug: string) {
+  const res = await request(() =>
+    api.sites[':siteId'].og[':slug'].$get({ param: { siteId, slug } }),
+  )
+  if (res.status !== 200) throw new Error(`API ответил ${res.status} на карточку страницы ${slug}`)
+  return new Response(await res.arrayBuffer(), { headers: { 'content-type': 'image/png' } })
+}
 
 /**
  * Файл иконки сайта из API (/api/sites/:siteId/icons/:file). Эндпоинты рендерера отдают его как

@@ -6,6 +6,7 @@ import {
   PageSlug,
   PageTitle,
   pageTemplateContent,
+  type SiteSeo,
   Uuid,
 } from '@averra/schema'
 import { Hono } from 'hono'
@@ -21,6 +22,7 @@ import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
+import { effectiveSiteUrl } from '../settings/repo'
 import { sitesRepo } from './repo'
 import { siteSnapshot } from './snapshot'
 
@@ -75,18 +77,30 @@ export function sitesRoutes({
       // Роль на сайте (access) нужна админке, чтобы не показывать то, что этой роли нельзя.
       // newLeads — сколько новых заявок (счётчик в навигации сайта); null — заявки этой роли
       // не видны (редактор, токен API). hiddenFromSearch — сайт скрыт от поисковиков (раздел
-      // «SEO»): обзор напоминает об этом до запуска
+      // «SEO»): обзор напоминает об этом до запуска. seo — шаблон заголовка, описание, картинка и
+      // адрес сайта для панели «SEO» страницы в редакторе
       .get('/:siteId', validate('param', SiteParams), site('site.read'), async (c) => {
         const { siteId } = c.req.valid('param')
         const found = await repo.find(siteId)
         if (!found) return c.json(notFound('Сайт не найден'), 404)
         const seesLeads = c.var.actor.kind === 'user' && can(c.var.siteRole, 'leads.read')
+        const settings = readStoredSettings(found.settings)
+        // Что редактору страницы нужно от SEO сайта: сниппет, карточка и проверки в панели «SEO»
+        // страницы. Всё это и так видно на опубликованных страницах; настройки целиком — владельцу
+        const seo: SiteSeo = {
+          titleTemplate: settings.titleTemplate,
+          description: settings.description,
+          ogImage: settings.ogImage,
+          url: effectiveSiteUrl(settings, siteUrl),
+          hideFromSearch: settings.hideFromSearch,
+        }
         return c.json({
           id: found.id,
           name: found.name,
           theme: found.theme,
           access: c.var.siteRole,
-          hiddenFromSearch: readStoredSettings(found.settings).hideFromSearch,
+          hiddenFromSearch: settings.hideFromSearch,
+          seo,
           newLeads: seesLeads ? await leads.countNew(siteId) : null,
         })
       })

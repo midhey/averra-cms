@@ -90,6 +90,7 @@ export {
   NOT_FOUND_PAGE_SLUG,
   NOT_FOUND_PAGE_TITLE,
   PAGE_MAX_BLOCKS,
+  PageCanonical,
   PageContent,
   type PageContentInput,
   PageSeo,
@@ -99,8 +100,32 @@ export {
   pageTemplateContent,
   SEO_DESCRIPTION_MAX,
   SEO_DESCRIPTION_RECOMMENDED,
+  SEO_TITLE_MAX,
 } from './page'
 export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
+export {
+  canonicalElsewhere,
+  canonicalPath,
+  isWeakAlt,
+  mainHeadingBlock,
+  OG_CARD_DESIGN,
+  type OgCard,
+  ogCardOf,
+  ogCardVersion,
+  pageCanonicalUrl,
+  pageDocumentTitle,
+  pageSeoChecks,
+  SEO_DESCRIPTION_RANGE,
+  SEO_TITLE_RANGE,
+  type SeoBlock,
+  type SeoCheck,
+  type SeoCheckId,
+  type SeoCheckLevel,
+  type SeoCheckPage,
+  type SiteSeo,
+  SLUG_RECOMMENDED_MAX,
+  seoAdvice,
+} from './seo'
 export { SITE_NAME_MAX, SiteName } from './site'
 export {
   applyTitleTemplate,

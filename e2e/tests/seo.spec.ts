@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import sharp from 'sharp'
@@ -202,8 +202,8 @@ test('описание и noindex страницы — в редакторе; т
 
   const ed = editor(page)
   await ed.open('spasibo')
-  await page.getByRole('button', { name: 'Страница', exact: true }).click()
-  const panel = page.getByRole('complementary', { name: 'Страница: поиск и соцсети' })
+  await page.getByRole('button', { name: /^SEO/ }).click()
+  const panel = page.getByRole('complementary', { name: 'SEO страницы' })
   await panel.getByLabel('Описание').fill('Заявка получена — перезвоним за 15 минут')
   await panel.getByLabel('Скрыть страницу от поисковиков').check()
   await ed.publishButton.click()
@@ -301,7 +301,7 @@ test('страница 404 создаётся из раздела SEO и отк�
   await section.getByRole('button', { name: 'Создать страницу 404' }).click()
   await expect(page).toHaveURL('/pages/404')
   await expect(page.getByLabel('Заголовок страницы')).toHaveValue('Страница не найдена')
-  await page.getByRole('button', { name: 'Страница', exact: true }).click()
+  await page.getByRole('button', { name: /^SEO/ }).click()
   await expect(page.getByText('Служебная страница 404')).toBeVisible()
 
   await page.goto('/seo')
@@ -356,4 +356,101 @@ test('страница, созданная по адресу редиректа,
   // Строку убрали — таблица сохраняется
   await redirects.region.getByRole('button', { name: /^Удалить редирект 1/ }).click()
   await redirects.save(/Редиректы сохранены/)
+})
+
+test('SEO страницы в редакторе: советы до публикации, теги и карточка из заголовка на сайте', async ({
+  page,
+  demoSite,
+}) => {
+  test.slow()
+  const opened = await sites[':siteId'].settings.$patch({
+    param: { siteId: demoSite.id },
+    json: { hideFromSearch: false },
+  })
+  expect(opened.status).toBe(200)
+  const created = await sites[':siteId'].pages.$post({
+    param: { siteId: demoSite.id },
+    json: { slug: 'ceny', title: 'Цены', template: 'hero' },
+  })
+  expect(created.status).toBe(201)
+
+  const ed = editor(page)
+  await ed.open('ceny')
+  // Советы видны на кнопке ещё до того, как панель открыли: короткий заголовок и нет описания
+  const seoButton = page.getByRole('button', { name: /^SEO/ })
+  await expect(seoButton).toHaveAccessibleName(/SEO.*2 совета/)
+  await seoButton.click()
+  const panel = page.getByRole('complementary', { name: 'SEO страницы' })
+  const checks = panel.getByRole('region', { name: 'Проверки' })
+  await expect(checks).toContainText('Важно: Описания нет')
+  await expect(checks).toContainText('Заголовок короткий: 4 символа')
+  // Карточка из заголовка — от API: картинка загрузилась
+  const card = panel.getByRole('img', { name: /^Карточка из заголовка «Цены»/ })
+  await expect(card).toBeVisible()
+  await expect
+    .poll(() => card.evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth))
+    .toBe(1200)
+
+  await panel.getByLabel('SEO-заголовок').fill('Цены на ремонт квартир в Твери — Ремонт у Ивана')
+  await panel
+    .getByLabel('Описание')
+    .fill(
+      'Сколько стоит ремонт квартиры под ключ: смета за день, цена в договоре и гарантия 3 года',
+    )
+  await expect(checks).toContainText('Заголовок 47 символов — в самый раз')
+  await expect(seoButton).toHaveAccessibleName('SEO')
+  await expect(panel).toContainText('Примерно так — в Яндексе')
+  await expect(panel).toContainText('Цены на ремонт квартир в Твери — Ремонт у Ивана')
+
+  // Canonical на другой адрес — совет, а не запрет; убрали — совета нет
+  const canonical = panel.getByLabel('Канонический адрес (canonical)')
+  await canonical.fill('/uslugi/')
+  await expect(checks).toContainText('Основной адрес — другой: /uslugi/')
+  await expect(seoButton).toHaveAccessibleName(/1 совет/)
+  await canonical.fill('')
+  await expect(seoButton).toHaveAccessibleName('SEO')
+
+  await ed.publishButton.click()
+  await expect(ed.status).toHaveText(/Опубликовано/)
+
+  // Версия на «сервере»: теги из SEO страницы и файл карточки рядом со страницей. Сборки заводят и
+  // сброс фикстуры, и этот тест, а current переключается на каждый новый релиз. Поэтому ждём
+  // релиз, где есть и страница с SEO, и карточка, и дальше читаем только из его папки
+  const seoTitle = '<title>Цены на ремонт квартир в Твери — Ремонт у Ивана</title>'
+  let release = ''
+  await expect
+    .poll(
+      async () => {
+        release = await realpath(join(publishDir, demoSite.id, 'current')).catch(() => '')
+        if (!release) return false
+        const page = await readFile(join(release, 'ceny', 'index.html'), 'utf8').catch(() => '')
+        return page.includes(seoTitle) && existsSync(join(release, 'og', 'ceny.png'))
+      },
+      { timeout: 90_000 },
+    )
+    .toBe(true)
+  const html = await readFile(join(release, 'ceny', 'index.html'), 'utf8')
+  expect(html).toContain(
+    '<meta property="og:title" content="Цены на ремонт квартир в Твери — Ремонт у Ивана">',
+  )
+  expect(html).toContain('<meta name="description" content="Сколько стоит ремонт квартиры под ключ')
+  expect(html).toContain(`<link rel="canonical" href="${urls.renderer}/ceny/">`)
+  expect(html).toMatch(
+    new RegExp(
+      `<meta property="og:image" content="${urls.renderer}/og/ceny[.]png[?]v=[0-9a-f]{8}">`,
+    ),
+  )
+  const meta = await sharp(await readFile(join(release, 'og', 'ceny.png'))).metadata()
+  expect([meta.format, meta.width, meta.height]).toEqual(['png', 1200, 630])
+  expect(await readFile(join(release, 'sitemap.xml'), 'utf8')).toContain(
+    `<loc>${urls.renderer}/ceny/</loc>`,
+  )
+
+  // Dev-рендерер — то же: карточка по адресу, неизвестная — страница 404 сайта
+  const devCard = await fetch(`${urls.renderer}/og/ceny.png`)
+  expect(devCard.status).toBe(200)
+  expect(devCard.headers.get('content-type')).toBe('image/png')
+  const devMissing = await fetch(`${urls.renderer}/og/net-takoy.png`)
+  expect(devMissing.status).toBe(404)
+  expect(await devMissing.text()).toContain('Страница не найдена')
 })

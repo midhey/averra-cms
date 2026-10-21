@@ -1,4 +1,13 @@
-import { type BlockType, type PageContent, PageSeo, PageTitle, type Theme } from '@averra/schema'
+import {
+  type BlockType,
+  type PageContent,
+  type PageSeo,
+  PageTitle,
+  pageSeoChecks,
+  type SiteSeo,
+  seoAdvice,
+  type Theme,
+} from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useBlocker } from '@tanstack/react-router'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -10,7 +19,15 @@ import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
 import { mediaQuery, queryKeys, revisionQuery } from '../queries'
+import {
+  adviceText,
+  checkPageSeo,
+  normalizedSeo,
+  type SeoField,
+  seoFieldLabels,
+} from '../seo/page-seo-format'
 import { Button, IconButton, iconButtonClassName } from '../ui/Button'
+import { CountBadge } from '../ui/CountBadge'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
@@ -27,11 +44,18 @@ import styles from './Editor.module.scss'
 import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
-import { normalizedSeo, PagePanel } from './PagePanel'
 import { type Device, DeviceSwitch, Preview } from './Preview'
+import { SeoPanel } from './SeoPanel'
 import { validateBlocks } from './validation'
 
-export type EditorSite = { id: string; name: string; theme: Theme; access: SiteAccess }
+export type EditorSite = {
+  id: string
+  name: string
+  theme: Theme
+  access: SiteAccess
+  /** SEO сайта для панели «SEO» страницы: шаблон заголовка, описание, картинка, адрес */
+  seo: SiteSeo
+}
 export type EditorPage = {
   slug: string
   title: string
@@ -61,7 +85,7 @@ const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
 export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [title, setTitle] = useState(page.title)
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
-  // Поиск и соцсети страницы: описание и noindex (панель «Страница»), часть черновика
+  // SEO страницы (панель «SEO»): заголовок, описание, картинка, canonical, noindex — часть черновика
   const [seo, setSeo] = useState<PageSeo>(page.draft.seo ?? {})
   const [selectedId, setSelectedId] = useState(page.draft.blocks[0]?.id ?? null)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
@@ -73,8 +97,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Какая кнопка запустила идущее действие: она крутит спиннер и остаётся в фокусе
   const [pending, setPending] = useState<'save' | 'publish' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
-  // Панель «Страница» в колонке полей — вместо полей блока, как история
-  const [pageOpen, setPageOpen] = useState(false)
+  // Панель «SEO» в колонке полей — вместо полей блока, как история
+  const [seoOpen, setSeoOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   // На телефоне «десктоп» в масштабе не прочитать: там предпросмотр начинается с телефона
   const [device, setDevice] = useState<Device>(() =>
@@ -84,7 +108,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
   const ids = useId()
   const historyId = `${ids}-history`
-  const pagePanelId = `${ids}-page`
+  const seoPanelId = `${ids}-seo`
   const titleErrorId = `${ids}-title-error`
   usePageTitle(title.trim() || pagePath(page.slug), 'редактор')
 
@@ -108,7 +132,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const fieldsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     fieldsRef.current?.scrollTo?.({ top: 0 })
-  }, [selectedId, historyOpen, pageOpen])
+  }, [selectedId, historyOpen, seoOpen])
 
   // Медиатека сайта: из неё поле «картинка» выбирает, а предпросмотр берёт адреса вариантов
   const library = useQuery(mediaQuery(site.id))
@@ -128,13 +152,35 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   }, [validation.content])
 
   const dirty = snapshotOf(title, blocks, seo) !== savedSnapshot
-  // Описание страницы — по той же схеме, что у API: длиннее предела не сохранить
-  const pageSeo = normalizedSeo(seo)
-  const seoCheck = PageSeo.safeParse(pageSeo ?? {})
-  const seoError = seoCheck.error?.issues[0]?.message
+  // SEO страницы — по той же схеме, что у API: кривой canonical или длинное описание не сохранить
+  const seoResult = checkPageSeo(seo)
+  const seoErrorField = Object.keys(seoResult.errors)[0] as SeoField | undefined
+  const seoError = seoErrorField && seoResult.errors[seoErrorField]
   const content: PageContent | null = validation.content
-    ? { ...validation.content, ...(pageSeo && seoCheck.success ? { seo: seoCheck.data } : {}) }
+    ? { ...validation.content, ...(seoResult.seo ? { seo: seoResult.seo } : {}) }
     : null
+  // Советы SEO по черновику как есть: видны на кнопке «SEO» до публикации и публиковать не мешают
+  const seoChecks = useMemo(
+    () =>
+      pageSeoChecks(
+        { slug: page.slug, title: title.trim(), blocks, seo: normalizedSeo(seo) },
+        site.seo,
+      ),
+    [page.slug, title, blocks, seo, site.seo],
+  )
+  const advice = seoAdvice(seoChecks)
+  const adviceBadge =
+    advice.length > 0 ? (
+      <CountBadge
+        count={advice.length}
+        tone={advice.some((check) => check.level === 'problem') ? 'danger' : 'warning'}
+      />
+    ) : undefined
+  const adviceWords =
+    advice.length > 0 ? (
+      <span className="visually-hidden">: {adviceText(advice.length)}</span>
+    ) : undefined
+  const seoLabel = advice.length > 0 ? `SEO: ${adviceText(advice.length)}` : 'SEO'
   // Та же схема, что у API: те же правила (пробелы — тоже пусто, не больше 120 символов).
   // Сообщение совпадёт с ответом сервера, пока и тут и там включён setupZodMessages
   const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
@@ -277,17 +323,17 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
 
   function toggleHistory() {
     setHistoryOpen(!historyOpen)
-    setPageOpen(false)
+    setSeoOpen(false)
     setShownRevision(null)
     // На узком экране история — во вкладке полей: открыли — показываем её
     if (!historyOpen) setTab('fields')
   }
 
-  function togglePage() {
-    setPageOpen(!pageOpen)
+  function toggleSeo() {
+    setSeoOpen(!seoOpen)
     setHistoryOpen(false)
     setShownRevision(null)
-    if (!pageOpen) setTab('fields')
+    if (!seoOpen) setTab('fields')
   }
 
   // Правят всё равно черновик: выбор блока возвращает к его полям и к его предпросмотру.
@@ -296,7 +342,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     (id: string, reveal = false) => {
       setSelectedId(id)
       setHistoryOpen(false)
-      setPageOpen(false)
+      setSeoOpen(false)
       setShownRevision(null)
       if (reveal && narrow) {
         setTab('fields')
@@ -398,26 +444,30 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         {!narrow && <div className={styles.devices}>{deviceSwitch}</div>}
 
         <div className={styles.actions}>
-          {/* На узком экране в полосе места нет: «Страница» — под списком блоков. На среднем —
-              иконкой, как «История»: с подписями кнопки не встают в одну строку */}
+          {/* На узком экране в полосе места нет: «SEO» — под списком блоков. На среднем —
+              иконкой, как «История»: с подписями кнопки не встают в одну строку. Число советов —
+              значком, а словами — в подписи для диктора */}
           {!narrow &&
             (compact ? (
               <IconButton
-                label="Страница"
+                label={seoLabel}
                 icon="search"
                 variant="secondary"
-                aria-expanded={pageOpen}
-                aria-controls={pageOpen ? pagePanelId : undefined}
-                onClick={togglePage}
+                badge={adviceBadge}
+                aria-expanded={seoOpen}
+                aria-controls={seoOpen ? seoPanelId : undefined}
+                onClick={toggleSeo}
               />
             ) : (
               <Button
                 icon="search"
-                aria-expanded={pageOpen}
-                aria-controls={pageOpen ? pagePanelId : undefined}
-                onClick={togglePage}
+                aria-expanded={seoOpen}
+                aria-controls={seoOpen ? seoPanelId : undefined}
+                onClick={toggleSeo}
               >
-                Страница
+                SEO
+                {adviceBadge}
+                {adviceWords}
               </Button>
             ))}
           {/* На узком и среднем экране — только иконка: на узком полоса и так в две строки, а у
@@ -481,8 +531,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               Заголовок страницы: {titleError}
             </p>
           )}
-          {seoError !== undefined && (
-            <p className={styles.pageError}>Описание страницы (панель «Страница»): {seoError}</p>
+          {seoErrorField && seoError !== undefined && (
+            <p className={styles.pageError}>
+              SEO страницы, {seoFieldLabels[seoErrorField].toLowerCase()}: {seoError}
+            </p>
           )}
           {validation.pageErrors.length > 0 && (
             <p className={styles.pageError}>{validation.pageErrors.join('. ')}</p>
@@ -505,7 +557,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
                 { id: 'preview', label: 'Предпросмотр' },
                 {
                   id: 'fields',
-                  label: historyOpen ? 'История' : pageOpen ? 'Страница' : 'Поля',
+                  label: historyOpen ? 'История' : seoOpen ? 'SEO' : 'Поля',
                 },
               ]}
               value={tab}
@@ -530,11 +582,13 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               narrow && (
                 <Button
                   icon="search"
-                  aria-expanded={pageOpen}
-                  aria-controls={pageOpen ? pagePanelId : undefined}
-                  onClick={togglePage}
+                  aria-expanded={seoOpen}
+                  aria-controls={seoOpen ? seoPanelId : undefined}
+                  onClick={toggleSeo}
                 >
-                  Страница: поиск и соцсети
+                  SEO страницы
+                  {adviceBadge}
+                  {adviceWords}
                 </Button>
               )
             }
@@ -565,12 +619,18 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               onSelect={setShownRevision}
               onRestore={restore}
             />
-          ) : pageOpen ? (
-            <PagePanel
-              id={pagePanelId}
+          ) : seoOpen ? (
+            <SeoPanel
+              id={seoPanelId}
+              siteId={site.id}
+              siteName={site.name}
+              siteSeo={site.seo}
               slug={page.slug}
+              pageTitle={title}
               seo={seo}
-              descriptionError={seoError}
+              errors={seoResult.errors}
+              checks={seoChecks}
+              library={library.data?.items}
               onChange={setSeo}
             />
           ) : (

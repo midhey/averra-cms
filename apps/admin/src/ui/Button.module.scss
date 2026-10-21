@@ -83,6 +83,18 @@
   min-width: var(--size-control-small);
 }
 
+// Значок с числом в углу кнопки-иконки: «SEO» с тремя советами
+.withBadge {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: ui.rem(-6);
+  right: ui.rem(-6);
+  display: flex;
+}
+
 .spinner {
   flex-shrink: 0;
   width: 1em;

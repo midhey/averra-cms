@@ -1,0 +1,103 @@
+@use "@averra/ui" as ui;
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.heading {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.summary {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// Пункт: иконка уровня и текст. Важное и «стоит поправить» — на своей подложке, хорошее — без неё
+.item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-top: ui.rem(2);
+  color: var(--check-icon);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+// Слово уровня перед текстом совета: уровень виден не только цветом и формой иконки
+.level {
+  font-weight: var(--font-weight-semibold);
+  color: var(--check-icon);
+}
+
+.advice {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.problem {
+  --check-icon: var(--color-danger-text);
+
+  background: var(--color-danger-surface);
+}
+
+.warning {
+  --check-icon: var(--color-warning-text);
+
+  background: var(--color-warning-surface);
+}
+
+.good {
+  --check-icon: var(--color-success-text);
+
+  padding-block: ui.rem(2);
+
+  .title {
+    font-weight: var(--font-weight-regular);
+  }
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

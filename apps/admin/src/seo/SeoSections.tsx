@@ -184,7 +184,7 @@ export function IndexingSection({ siteId, view }: SectionProps) {
           <a href={`${view.url}/sitemap.xml`} target="_blank" rel="noreferrer">
             sitemap.xml
           </a>
-          . Скрыть одну страницу можно в её редакторе: панель «Страница».
+          . Скрыть одну страницу можно в её редакторе: кнопка «SEO».
         </p>
       )}
     </SettingsCard>

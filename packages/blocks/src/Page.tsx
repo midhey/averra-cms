@@ -1,4 +1,9 @@
-import type { BlockInstance, MediaMap, PageContent } from '@averra/schema'
+import {
+  type BlockInstance,
+  type MediaMap,
+  mainHeadingBlock,
+  type PageContent,
+} from '@averra/schema'
 import { Cta } from './cta/Cta'
 import { Features } from './features/Features'
 import { Form } from './form/Form'
@@ -13,8 +18,9 @@ type PageProps = {
 }
 
 export function Page({ content, media = {}, formAction }: PageProps) {
-  // h1 на странице один: его получает первый блок «Первый экран»
-  const mainHeroId = content.blocks.find((block) => block.type === 'hero')?.id
+  // h1 на странице один: его получает первый блок «Первый экран». Правило — в схеме: по нему же
+  // проверки SEO в редакторе говорят, есть ли h1
+  const mainHeroId = mainHeadingBlock(content.blocks)?.id
   return (
     <main>
       {content.blocks.map((block, index) => (

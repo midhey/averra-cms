@@ -3,6 +3,7 @@ import { MAIL_ADDRESS_PATTERN } from './mail'
 import { MediaId } from './media'
 import { SEO_DESCRIPTION_MAX } from './page'
 import { SiteName } from './site'
+import { HTTPS_ORIGIN, HTTPS_URL, isInternalPath } from './url'
 
 // Настройки сайта для поиска, соцсетей и аналитики (раздел «SEO» в админке). Хранятся в
 // sites.settings (jsonb), название — в sites.name. Всё отсюда попадает в HTML опубликованного
@@ -55,19 +56,6 @@ export const SiteLanguage = z.enum(
 export type SiteLanguage = z.infer<typeof SiteLanguage>
 
 const SITE_URL_MESSAGE = 'Адрес сайта — https:// и домен без пути, например https://example.ru'
-
-/**
- * Домен: части из букв любого алфавита, цифр и дефиса (не по краям) через точку, зона начинается
- * с буквы. Кириллица — как есть (пример.рф): браузер сам переведёт её в punycode. Разбор
- * шаблоном, а не URL: схема работает везде, где есть Zod, без API среды
- */
-const DOMAIN = String.raw`(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+\p{L}[\p{L}\p{N}-]*[\p{L}\p{N}]`
-
-/** https://домен и, может быть, косая черта — без порта, пути, параметров и логина */
-const HTTPS_ORIGIN = new RegExp(`^https://${DOMAIN}/?$`, 'iu')
-
-/** Ссылка https:// на домен (без логина и пароля в адресе) и что угодно после него */
-const HTTPS_URL = new RegExp(String.raw`^https://${DOMAIN}(?::\d{1,5})?(?:[/?#]\S*)?$`, 'iu')
 
 /**
  * Канонический адрес сайта: https и домен, без пути. Пусто — адрес установки (SITE_URL).
@@ -243,17 +231,11 @@ export function normalizeRedirectPath(path: string) {
 /** Путь внутренней ссылки без ?… и #… */
 const pathOf = (href: string) => href.split(/[?#]/)[0] ?? href
 
-/**
- * Путь на этом сайте: / в начале, но не // и не /\. Браузер читает \ как /, и /\evil.example
- * увёл бы на чужой домен. Поэтому обратной косой черты и управляющих символов нет нигде в пути
- */
-const isInternal = (href: string) => /^\/(?![/\\])/.test(href) && !/[\\\p{Cc}]/u.test(href)
-
 export const RedirectFrom = z
   .string()
   .trim()
   .max(300)
-  .refine(isInternal, 'Адрес на этом сайте, с / в начале, например /old-page')
+  .refine(isInternalPath, 'Адрес на этом сайте, с / в начале, например /old-page')
   .refine((path) => !/[?#\s]/.test(path), 'Без ?, # и пробелов: редирект срабатывает по пути')
   .transform(normalizeRedirectPath)
   .refine((path) => path !== '/', 'С главной перенаправить нельзя: она есть всегда')
@@ -272,7 +254,7 @@ export const RedirectTo = z
   .max(2000)
   .refine((href) => !/\s/.test(href), 'Без пробелов')
   .refine(
-    (href) => isInternal(href) || HTTPS_URL.test(href),
+    (href) => isInternalPath(href) || HTTPS_URL.test(href),
     'Путь на этом сайте (/new-page) или ссылка https://',
   )
   // Половинка суррогатной пары не кодируется в адрес (redirectLocation упал бы на каждом заходе)
@@ -293,7 +275,7 @@ export type Redirect = z.infer<typeof Redirect>
  * сайт. siteUrl — адрес сайта (https://домен): ссылка https на него — тоже на этот сайт
  */
 function targetPath(to: string, siteUrl: string | undefined) {
-  if (isInternal(to)) return normalizeRedirectPath(pathOf(to))
+  if (isInternalPath(to)) return normalizeRedirectPath(pathOf(to))
   if (!siteUrl) return undefined
   const origin = siteUrl.toLowerCase().replace(/\/$/, '')
   if (!to.toLowerCase().startsWith(origin)) return undefined
