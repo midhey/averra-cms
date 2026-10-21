@@ -20,6 +20,7 @@ import { adminSmtp, type SmtpOptions, smtpMailer } from './mail/smtp-mailer'
 import { processOutbox } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
 import type { ImageProcessor } from './media/processor'
+import { sharpIcons } from './media/sharp-favicon'
 import { sharpProcessor } from './media/sharp-processor'
 import type { PublishedSite } from './modules/export/routes'
 import type { LeadLimits } from './modules/leads/public-routes'
@@ -79,8 +80,11 @@ export async function createTestApi({
   host,
   // Адрес опубликованного сайта (SITE_URL) для GET /api/site
   siteUrl,
+  // Страница 404 текущей версии сайта на сервере (fallback домена сайта)
+  notFoundPage,
 }: {
   siteUrl?: string
+  notFoundPage?: () => Promise<string | undefined>
   published?: PublishedSite
   version?: string
   host?: HostStatus
@@ -155,10 +159,12 @@ export async function createTestApi({
     log,
     storage,
     images,
+    icons: sharpIcons(),
     mediaMaxBytes,
     mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
     adminUrl: testOrigins.admin,
     siteUrl,
+    notFoundPage,
     resetResponseMs,
     leadLimits,
     publisher,

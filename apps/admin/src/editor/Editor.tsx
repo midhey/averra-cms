@@ -1,4 +1,4 @@
-import { type BlockType, type PageContent, PageTitle, type Theme } from '@averra/schema'
+import { type BlockType, type PageContent, PageSeo, PageTitle, type Theme } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useBlocker } from '@tanstack/react-router'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -16,7 +16,7 @@ import { InlineAlert } from '../ui/InlineAlert'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
 import { moveItem } from '../ui/sortable'
 import { TabList } from '../ui/Tabs'
-import { NARROW_SCREEN, useMediaQuery } from '../ui/use-media-query'
+import { COMPACT_SCREEN, NARROW_SCREEN, useMediaQuery } from '../ui/use-media-query'
 import { usePageTitle } from '../ui/use-page-title'
 import { AddBlockDialog } from './AddBlockDialog'
 import { BlockList } from './BlockList'
@@ -27,6 +27,7 @@ import styles from './Editor.module.scss'
 import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
+import { normalizedSeo, PagePanel } from './PagePanel'
 import { type Device, DeviceSwitch, Preview } from './Preview'
 import { validateBlocks } from './validation'
 
@@ -45,8 +46,8 @@ type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 /** Колонка редактора; на узком экране — вкладка */
 type Column = 'blocks' | 'preview' | 'fields'
 
-const snapshotOf = (title: string, blocks: readonly EditorBlock[]) =>
-  JSON.stringify({ title, blocks })
+const snapshotOf = (title: string, blocks: readonly EditorBlock[], seo: PageSeo) =>
+  JSON.stringify({ title, blocks, seo: normalizedSeo(seo) ?? null })
 
 /** Что из ответа API нужно плашке состояния: черновик и опубликованная версия */
 const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
@@ -60,9 +61,11 @@ const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
 export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [title, setTitle] = useState(page.title)
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
+  // Поиск и соцсети страницы: описание и noindex (панель «Страница»), часть черновика
+  const [seo, setSeo] = useState<PageSeo>(page.draft.seo ?? {})
   const [selectedId, setSelectedId] = useState(page.draft.blocks[0]?.id ?? null)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    snapshotOf(page.title, page.draft.blocks),
+    snapshotOf(page.title, page.draft.blocks, page.draft.seo ?? {}),
   )
   // Страница, какой её последний раз отдал API: по ней плашка говорит, опубликовано ли
   const [server, setServer] = useState<ServerPage>(() => serverPageOf(page))
@@ -70,6 +73,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Какая кнопка запустила идущее действие: она крутит спиннер и остаётся в фокусе
   const [pending, setPending] = useState<'save' | 'publish' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Панель «Страница» в колонке полей — вместо полей блока, как история
+  const [pageOpen, setPageOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   // На телефоне «десктоп» в масштабе не прочитать: там предпросмотр начинается с телефона
   const [device, setDevice] = useState<Device>(() =>
@@ -79,11 +84,14 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
   const ids = useId()
   const historyId = `${ids}-history`
+  const pagePanelId = `${ids}-page`
   const titleErrorId = `${ids}-title-error`
   usePageTitle(title.trim() || pagePath(page.slug), 'редактор')
 
   // Узкий экран: колонки — вкладки. Роли вкладок нужны только там, где вкладки есть
   const narrow = useMediaQuery(NARROW_SCREEN)
+  // Узкий экран — всегда и средний
+  const compact = useMediaQuery(COMPACT_SCREEN) || narrow
   const [tab, setTab] = useState<Column>('blocks')
   const tabId = (column: Column) => `${ids}-tab-${column}`
   const panelId = (column: Column) => `${ids}-panel-${column}`
@@ -100,7 +108,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const fieldsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     fieldsRef.current?.scrollTo?.({ top: 0 })
-  }, [selectedId, historyOpen])
+  }, [selectedId, historyOpen, pageOpen])
 
   // Медиатека сайта: из неё поле «картинка» выбирает, а предпросмотр берёт адреса вариантов
   const library = useQuery(mediaQuery(site.id))
@@ -119,12 +127,19 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     if (validation.content) setPreviewContent(validation.content)
   }, [validation.content])
 
-  const dirty = snapshotOf(title, blocks) !== savedSnapshot
+  const dirty = snapshotOf(title, blocks, seo) !== savedSnapshot
+  // Описание страницы — по той же схеме, что у API: длиннее предела не сохранить
+  const pageSeo = normalizedSeo(seo)
+  const seoCheck = PageSeo.safeParse(pageSeo ?? {})
+  const seoError = seoCheck.error?.issues[0]?.message
+  const content: PageContent | null = validation.content
+    ? { ...validation.content, ...(pageSeo && seoCheck.success ? { seo: seoCheck.data } : {}) }
+    : null
   // Та же схема, что у API: те же правила (пробелы — тоже пусто, не больше 120 символов).
   // Сообщение совпадёт с ответом сервера, пока и тут и там включён setupZodMessages
   const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
   const titleValid = titleError === undefined
-  const canSave = validation.content !== null && titleValid
+  const canSave = content !== null && titleValid && seoError === undefined
   const busy = status.kind === 'busy'
   const canSaveNow = dirty && canSave && !busy
   const canPublishNow = canSave && !busy
@@ -205,11 +220,11 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   })
 
   async function save() {
-    if (!validation.content || !titleValid) return false
+    if (!content || !titleValid || seoError !== undefined) return false
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
-      const saved = await saveDraft.mutateAsync({ title, content: validation.content })
-      setSavedSnapshot(snapshotOf(title, blocks))
+      const saved = await saveDraft.mutateAsync({ title, content })
+      setSavedSnapshot(snapshotOf(title, blocks, seo))
       setServer(serverPageOf(saved))
       // Итог сохранения — сама плашка: «Сохранено · правки не опубликованы» и подобное
       setStatus({ kind: 'idle' })
@@ -248,7 +263,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       // Редактор берёт черновик из ответа API, как при открытии страницы
       setTitle(restored.title)
       setBlocks(restored.draft.blocks)
-      setSavedSnapshot(snapshotOf(restored.title, restored.draft.blocks))
+      setSeo(restored.draft.seo ?? {})
+      setSavedSnapshot(snapshotOf(restored.title, restored.draft.blocks, restored.draft.seo ?? {}))
       setServer(serverPageOf(restored))
       setSelectedId(restored.draft.blocks[0]?.id ?? null)
       setPreviewContent(restored.draft)
@@ -261,9 +277,17 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
 
   function toggleHistory() {
     setHistoryOpen(!historyOpen)
+    setPageOpen(false)
     setShownRevision(null)
     // На узком экране история — во вкладке полей: открыли — показываем её
     if (!historyOpen) setTab('fields')
+  }
+
+  function togglePage() {
+    setPageOpen(!pageOpen)
+    setHistoryOpen(false)
+    setShownRevision(null)
+    if (!pageOpen) setTab('fields')
   }
 
   // Правят всё равно черновик: выбор блока возвращает к его полям и к его предпросмотру.
@@ -272,6 +296,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     (id: string, reveal = false) => {
       setSelectedId(id)
       setHistoryOpen(false)
+      setPageOpen(false)
       setShownRevision(null)
       if (reveal && narrow) {
         setTab('fields')
@@ -373,14 +398,36 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         {!narrow && <div className={styles.devices}>{deviceSwitch}</div>}
 
         <div className={styles.actions}>
-          {/* На узком экране — только иконка: полоса и так в две строки, а у иконки подпись
-              для диктора и подсказка та же */}
-          {narrow ? (
+          {/* На узком экране в полосе места нет: «Страница» — под списком блоков. На среднем —
+              иконкой, как «История»: с подписями кнопки не встают в одну строку */}
+          {!narrow &&
+            (compact ? (
+              <IconButton
+                label="Страница"
+                icon="search"
+                variant="secondary"
+                aria-expanded={pageOpen}
+                aria-controls={pageOpen ? pagePanelId : undefined}
+                onClick={togglePage}
+              />
+            ) : (
+              <Button
+                icon="search"
+                aria-expanded={pageOpen}
+                aria-controls={pageOpen ? pagePanelId : undefined}
+                onClick={togglePage}
+              >
+                Страница
+              </Button>
+            ))}
+          {/* На узком и среднем экране — только иконка: на узком полоса и так в две строки, а у
+              иконки подпись для диктора и подсказка та же */}
+          {compact ? (
             <IconButton
               label="История"
               icon="history"
               variant="secondary"
-              size="small"
+              size={narrow ? 'small' : 'medium'}
               aria-expanded={historyOpen}
               aria-controls={historyOpen ? historyId : undefined}
               onClick={toggleHistory}
@@ -425,6 +472,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       </header>
 
       {(titleError !== undefined ||
+        seoError !== undefined ||
         validation.pageErrors.length > 0 ||
         status.kind === 'error') && (
         <div className={styles.alerts}>
@@ -432,6 +480,9 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             <p id={titleErrorId} className={styles.pageError}>
               Заголовок страницы: {titleError}
             </p>
+          )}
+          {seoError !== undefined && (
+            <p className={styles.pageError}>Описание страницы (панель «Страница»): {seoError}</p>
           )}
           {validation.pageErrors.length > 0 && (
             <p className={styles.pageError}>{validation.pageErrors.join('. ')}</p>
@@ -452,7 +503,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               items={[
                 { id: 'blocks', label: 'Блоки' },
                 { id: 'preview', label: 'Предпросмотр' },
-                { id: 'fields', label: historyOpen ? 'История' : 'Поля' },
+                {
+                  id: 'fields',
+                  label: historyOpen ? 'История' : pageOpen ? 'Страница' : 'Поля',
+                },
               ]}
               value={tab}
               onChange={setTab}
@@ -472,6 +526,18 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             onRemove={deleteBlock}
             onAdd={() => setAdding(true)}
             actionsOnEvery={narrow}
+            footer={
+              narrow && (
+                <Button
+                  icon="search"
+                  aria-expanded={pageOpen}
+                  aria-controls={pageOpen ? pagePanelId : undefined}
+                  onClick={togglePage}
+                >
+                  Страница: поиск и соцсети
+                </Button>
+              )
+            }
           />
         </div>
 
@@ -498,6 +564,14 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               restoring={busy}
               onSelect={setShownRevision}
               onRestore={restore}
+            />
+          ) : pageOpen ? (
+            <PagePanel
+              id={pagePanelId}
+              slug={page.slug}
+              seo={seo}
+              descriptionError={seoError}
+              onChange={setSeo}
             />
           ) : (
             <Inspector

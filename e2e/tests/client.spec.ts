@@ -58,6 +58,8 @@ test('клиенту не видны «Новая страница», «Удал
   await expect(page.getByRole('button', { name: 'Опубликовать правки' })).toHaveCount(0)
   // Клиенту видны заявки (это его заявки), а почта и состояние установки — нет
   await expect(sidebar(page).section('Заявки')).toBeVisible()
+  // Раздел «SEO» — только владельцу: индексацию, адрес и счётчики решает студия
+  await expect(sidebar(page).section('SEO')).toHaveCount(0)
   await expect(sidebar(page).installation).toHaveCount(0)
   await expect(page.getByText('Клиент', { exact: true })).toBeVisible()
 

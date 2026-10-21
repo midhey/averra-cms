@@ -8,7 +8,7 @@ import { mediaKey } from '../media/storage'
 import { BuildFailure } from './queue'
 import { copyReferencedMedia, pruneUnusedAssets, referencedMedia } from './release-files'
 import type { Render } from './renderer'
-import { hasCurrentRelease, staticSiteBuilder } from './site-builder'
+import { RELEASE_MARKER, releaseOutdated, staticSiteBuilder } from './site-builder'
 
 const dirs: string[] = []
 afterEach(async () => {
@@ -32,13 +32,17 @@ const pageHtml = (title: string) => `<!doctype html><html><head>
 <img src="/media/${mediaId}/960.jpg" alt=""></picture>
 <form method="post" action="/api/forms/${siteId}/index/lead"></form></body></html>`
 
-/** Рендерер-подделка: кладёт то же, что Astro, — страницу, CSS со шрифтом и лишний бандл React */
+/**
+ * Рендерер-подделка: кладёт то же, что Astro, — страницу, страницу 404, CSS со шрифтом и лишний
+ * бандл React. withNotFound: false — как сборка прежней Averra, до страницы 404 в релизе
+ */
 const fakeRender =
-  (title = 'Главная', calls: string[] = []): Render =>
+  (title = 'Главная', calls: string[] = [], { withNotFound = true } = {}): Render =>
   async ({ siteId: id, outDir }) => {
     calls.push(id)
     await mkdir(join(outDir, '_astro'), { recursive: true })
     await writeFile(join(outDir, 'index.html'), pageHtml(title))
+    if (withNotFound) await writeFile(join(outDir, RELEASE_MARKER), pageHtml('Страница не найдена'))
     await writeFile(join(outDir, '_astro', 'page.ABC123.css'), 'body{font:url(./font.XYZ.woff2)}')
     await writeFile(join(outDir, '_astro', 'font.XYZ.woff2'), 'шрифт')
     await writeFile(join(outDir, '_astro', 'client.DEF456.js'), 'react'.repeat(1000))
@@ -149,14 +153,32 @@ describe('сборка сайта в релиз', () => {
       storage: await storageWithImage(),
       render: fakeRender('Версия 1'),
     })
-    expect(await hasCurrentRelease(publishDir, siteId)).toBe(false)
+    expect(await releaseOutdated(publishDir, siteId)).toBe(true)
     const result = await build(siteId, new AbortController().signal)
     expect(result).toEqual({ release: expect.any(String), peakRssBytes: 300 * 2 ** 20 })
     const current = join(publishDir, siteId, 'current')
     expect(await readFile(join(current, 'index.html'), 'utf8')).toContain('Версия 1')
     expect(await readdir(join(current, 'media', mediaId))).toHaveLength(3)
     expect(await readdir(join(current, '_astro'))).not.toContain('client.DEF456.js')
-    expect(await hasCurrentRelease(publishDir, siteId)).toBe(true)
+    expect(await releaseOutdated(publishDir, siteId)).toBe(false)
+  })
+
+  it('версия прежнего формата (без страницы 404) требует пересборки', async () => {
+    const publishDir = await tempDir('publish')
+    const options = {
+      publishDir,
+      keepReleases: 5,
+      storage: await storageWithImage(),
+      publishedMedia,
+    }
+    const signal = new AbortController().signal
+    await staticSiteBuilder({
+      ...options,
+      render: fakeRender('Старая', [], { withNotFound: false }),
+    })(siteId, signal)
+    expect(await releaseOutdated(publishDir, siteId)).toBe(true)
+    await staticSiteBuilder({ ...options, render: fakeRender('Новая') })(siteId, signal)
+    expect(await releaseOutdated(publishDir, siteId)).toBe(false)
   })
 
   it('сбой сборки не трогает текущую версию и не оставляет мусора', async () => {

@@ -1,5 +1,6 @@
 import react from '@astrojs/react'
 import { defineConfig, envField } from 'astro/config'
+import { ICON_FILES } from './src/lib/icon-files.ts'
 
 /**
  * Страницы сайта — один маршрут на все адреса. При сборке он статический: getStaticPaths
@@ -12,11 +13,31 @@ const sitePages = {
   name: 'averra-site-pages',
   hooks: {
     'astro:config:setup': ({ command, injectRoute }) => {
-      injectRoute({
-        pattern: '/[...slug]',
-        entrypoint: './src/routes/page.astro',
-        prerender: command !== 'dev',
-      })
+      const prerender = command !== 'dev'
+      injectRoute({ pattern: '/[...slug]', entrypoint: './src/routes/page.astro', prerender })
+      // В dev у /404 своя заглушка Astro, и она главнее маршрута [...slug]: страница 404 сайта
+      // по её адресу — отдельным маршрутом. При сборке 404.html пишет [...slug]
+      if (!prerender) injectRoute({ pattern: '/404', entrypoint: './src/routes/page.astro' })
+      // Служебные файлы сайта в корне: robots.txt, sitemap.xml, а при иконке в «SEO» — набор
+      // иконок и манифест. Адреса с точкой: страница сайта так называться не может (PageSlug)
+      injectRoute({ pattern: '/robots.txt', entrypoint: './src/routes/robots.ts', prerender })
+      injectRoute({ pattern: '/sitemap.xml', entrypoint: './src/routes/sitemap.ts', prerender })
+      const manifest = './src/routes/manifest.ts'
+      const favicon = './src/routes/favicon.ts'
+      const icons = './src/routes/icons.ts'
+      if (prerender) {
+        // Сборке нужен параметр: getStaticPaths без иконки не отдаёт ни одного адреса, и файлов
+        // иконок в релизе нет вовсе
+        injectRoute({ pattern: '/[name].webmanifest', entrypoint: manifest, prerender })
+        injectRoute({ pattern: '/[name].ico', entrypoint: favicon, prerender })
+        injectRoute({ pattern: '/[icon].png', entrypoint: icons, prerender })
+      } else {
+        // В dev — только точные адреса: маршрут /[icon].png забрал бы любой /x.png, и такой адрес
+        // не дошёл бы до редиректов и страницы 404 сайта, как доходит на сервере
+        injectRoute({ pattern: '/manifest.webmanifest', entrypoint: manifest })
+        injectRoute({ pattern: '/favicon.ico', entrypoint: favicon })
+        for (const icon of ICON_FILES) injectRoute({ pattern: `/${icon}.png`, entrypoint: icons })
+      }
     },
   },
 }

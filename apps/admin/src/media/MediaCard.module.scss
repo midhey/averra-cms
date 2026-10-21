@@ -1,0 +1,65 @@
+@use "@averra/ui" as ui;
+
+// Карточка выбранной картинки: превью, имя и размеры, кнопка «Заменить»
+.card {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+  padding: ui.rem(10);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+
+  // Ошибка у картинки видна и рамкой карточки, а не только текстом ниже
+  &[data-invalid] {
+    border-color: var(--color-danger-text);
+  }
+}
+
+.thumb,
+.placeholder {
+  flex-shrink: 0;
+  width: ui.rem(64);
+  height: ui.rem(48);
+  border-radius: var(--radius-inner);
+}
+
+.thumb {
+  object-fit: cover;
+  background: var(--color-surface-muted);
+}
+
+// Квадратная картинка (иконка сайта) — квадратом и целиком, без обрезки
+.square {
+  width: ui.rem(48);
+  object-fit: contain;
+}
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  background: var(--color-surface-inset);
+}
+
+.about {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

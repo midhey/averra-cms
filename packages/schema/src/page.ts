@@ -4,9 +4,30 @@ import { BlockInstance, hero } from './blocks'
 /** Сколько блоков может быть на странице: редактор пишет «3 из 50» и не даёт добавить больше */
 export const PAGE_MAX_BLOCKS = 50
 
+/** Описание для поисковиков и соцсетей (страницы и сайта). Поисковик покажет около 160 символов */
+export const SEO_DESCRIPTION_MAX = 300
+export const SEO_DESCRIPTION_RECOMMENDED = 160
+
+/**
+ * Поиск и соцсети на уровне страницы. Необязательно целиком и по полям: страница без них берёт
+ * описание сайта (раздел «SEO»). Живёт в содержимом страницы, поэтому версионируется вместе с
+ * блоками: правка описания попадает на сайт только с публикацией
+ */
+export const PageSeo = z.strictObject({
+  description: z
+    .string()
+    .trim()
+    .max(SEO_DESCRIPTION_MAX)
+    .optional()
+    .meta({ title: 'Описание для поисковиков и соцсетей' }),
+  noindex: z.boolean().optional().meta({ title: 'Скрыть страницу от поисковиков' }),
+})
+export type PageSeo = z.infer<typeof PageSeo>
+
 export const PageContent = z
   .strictObject({
     blocks: z.array(BlockInstance).max(PAGE_MAX_BLOCKS),
+    seo: PageSeo.optional(),
   })
   .refine((page) => new Set(page.blocks.map((block) => block.id)).size === page.blocks.length, {
     error: 'Id блоков на странице должны быть уникальными',
@@ -23,6 +44,12 @@ export const PageTitle = z.string().trim().min(1).max(120)
 
 /** Адрес главной страницы сайта: она открывается по корню, и удалить её нельзя */
 export const MAIN_PAGE_SLUG = 'index'
+
+/**
+ * Служебный адрес страницы 404: её показывают по любому адресу, где страницы нет. Это обычная
+ * страница из блоков; нет своей — на сайте стандартная. Она всегда скрыта от поисковиков
+ */
+export const NOT_FOUND_PAGE_SLUG = '404'
 
 /**
  * Адрес страницы — часть URL сайта: латиница в нижнем регистре и цифры, дефис только между
@@ -64,4 +91,28 @@ export type NewPage = z.infer<typeof NewPage>
 export function pageTemplateContent(template: PageTemplate): PageContent {
   const blocks = template === 'hero' ? [{ id: 'hero', type: 'hero', props: hero.example }] : []
   return PageContent.parse({ blocks })
+}
+
+/** Заголовок стандартной страницы 404: она на сайте, пока своей страницы с адресом 404 нет */
+export const NOT_FOUND_PAGE_TITLE = 'Страница не найдена'
+
+/**
+ * Стандартная страница 404 — первый экран в теме сайта с кнопкой на главную. Проходит через
+ * схему, как и страницы из редактора
+ */
+export function defaultNotFoundContent(): PageContent {
+  return PageContent.parse({
+    blocks: [
+      {
+        id: 'not-found',
+        type: 'hero',
+        props: {
+          title: NOT_FOUND_PAGE_TITLE,
+          subtitle: 'Возможно, её удалили или в адресе опечатка.',
+          button: { label: 'На главную', href: '/' },
+        },
+      },
+    ],
+    seo: { noindex: true },
+  })
 }

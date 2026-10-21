@@ -146,6 +146,14 @@ describe('все данные сайта', () => {
       consentedAt: new Date(),
     })
 
+    // Настройки раздела «SEO» — тоже данные сайта: при переезде их не набирать заново
+    const settings = await api.app.request(`/api/sites/${api.demoSiteId}/settings`, {
+      method: 'PATCH',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ hideFromSearch: false, redirects: [{ from: '/old', to: '/new' }] }),
+    })
+    expect(settings.status).toBe(200)
+
     const res = await api.app.request(url('data'), { headers })
     expect(res.headers.get('content-disposition')).toMatch(
       /filename="averra-d0000000-data-\d{8}\.zip"/,
@@ -158,7 +166,15 @@ describe('все данные сайта', () => {
       format: 'averra-site-export',
       formatVersion: 1,
       averraVersion: '0.7.0',
-      site: { id: api.demoSiteId, leadSettings: { retentionDays: 180 } },
+      site: {
+        id: api.demoSiteId,
+        leadSettings: { retentionDays: 180 },
+        settings: {
+          hideFromSearch: false,
+          language: 'ru',
+          redirects: [{ from: '/old', to: '/new' }],
+        },
+      },
       missingFiles: [`media/${missingId}/original.jpg`],
     })
     const index = site.pages.find((page: { slug: string }) => page.slug === 'index')

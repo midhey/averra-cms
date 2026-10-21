@@ -81,5 +81,6 @@ test('главная открывается только по корню: /index
   expect((await page.request.get(`${urls.renderer}/`)).status()).toBe(200)
   const index = await page.request.get(`${urls.renderer}/index`)
   expect(index.status()).toBe(404)
-  expect(await index.text()).toContain('Главная страница открывается по адресу /')
+  // Как на сервере: адреса нет — страница 404 сайта
+  expect(await index.text()).toContain('Страница не найдена')
 })

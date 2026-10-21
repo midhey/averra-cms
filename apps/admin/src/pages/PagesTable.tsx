@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { relativeTime } from '../format/time'
-import { formatDateTime, pagePath, pageState } from '../pages-format'
+import { formatDateTime, pageNote, pagePath, pageState } from '../pages-format'
 import { type Column, DataTable } from '../ui/DataTable'
 import { StatusPill } from '../ui/StatusPill'
 
@@ -53,7 +53,10 @@ export function PagesTable({ pages, actions, empty }: PagesTableProps) {
       mono: true,
       muted: true,
       wrap: 'anywhere',
-      cell: (page) => pagePath(page.slug),
+      cell: (page) => {
+        const note = pageNote(page.slug)
+        return note ? `${pagePath(page.slug)} · ${note}` : pagePath(page.slug)
+      },
     },
     {
       key: 'state',

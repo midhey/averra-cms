@@ -1,0 +1,2 @@
+ALTER TABLE "sites" ADD COLUMN "settings" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "sites" ADD CONSTRAINT "sites_settings_object" CHECK (jsonb_typeof("sites"."settings") = 'object');

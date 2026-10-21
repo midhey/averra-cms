@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { mkdir, readlink, rename, symlink, unlink } from 'node:fs/promises'
+import { mkdir, readFile, readlink, rename, symlink, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 /**
@@ -46,4 +46,20 @@ export async function linkInstallationSite(publishDir: string, siteId: string) {
     await rename(tmpLink, link)
   }
   return true
+}
+
+/**
+ * Страница 404 текущей версии сайта установки: PUBLISH_DIR/main/current/404.html (Astro пишет её
+ * в корень релиза). Её отдаёт API на адреса домена сайта, где нет файла (modules/site). Сайт ещё
+ * не собран — undefined
+ */
+export function installationNotFoundPage(publishDir: string) {
+  return async () => {
+    try {
+      return await readFile(join(publishDir, INSTALLATION_LINK, 'current', '404.html'), 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+  }
 }

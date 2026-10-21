@@ -20,15 +20,16 @@ import { createMailRuntime } from './mail/runtime'
 import { adminSmtp } from './mail/smtp-mailer'
 import { startMailWorker } from './mail/worker'
 import { diskStorage } from './media/disk-storage'
+import { sharpIcons } from './media/sharp-favicon'
 import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
 import { defaultSiteName, sitesRepo } from './modules/sites/repo'
-import { linkInstallationSite } from './publish/installation-link'
+import { installationNotFoundPage, linkInstallationSite } from './publish/installation-link'
 import { publishedSite } from './publish/published-site'
 import { createPublishQueue } from './publish/queue'
 import { defaultRendererDir, rendererProcess } from './publish/renderer'
-import { hasCurrentRelease, staticSiteBuilder } from './publish/site-builder'
+import { releaseOutdated, staticSiteBuilder } from './publish/site-builder'
 import { diskTargets, hostStatus } from './status/host'
 
 setupZodMessages()
@@ -206,12 +207,14 @@ const app = createApp({
   log: console.log,
   storage,
   images: sharpProcessor(),
+  icons: sharpIcons(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
   mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,
   siteUrl: config.SITE_URL,
   publisher: publishQueue,
   published: config.PUBLISH_DIR ? publishedSite(config.PUBLISH_DIR) : undefined,
+  notFoundPage: config.PUBLISH_DIR ? installationNotFoundPage(config.PUBLISH_DIR) : undefined,
   version: config.AVERRA_VERSION,
   // Состояние установки: итоги бэкапов и обновлений от deploy/averra.sh и место на дисках
   host: hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) }),
@@ -229,12 +232,13 @@ const server = serve(
       console.log(`Публикация на сервере: сайты собираются в ${publishDir}`)
       // Сборщик ходит в этот API, поэтому очередь оживает, когда сервер уже слушает порт.
       // Прерванные перезапуском сборки и опубликованные сайты без текущей версии на диске
-      // (свежая установка, потерянный том) собираются заново
+      // (свежая установка, потерянный том) или с версией, собранной до нынешнего формата
+      // релиза (после обновления Averra), собираются заново
       void (async () => {
         const published = await sites.sitesWithPublishedPages()
         const missing: string[] = []
         for (const siteId of published) {
-          if (!(await hasCurrentRelease(publishDir, siteId))) missing.push(siteId)
+          if (await releaseOutdated(publishDir, siteId)) missing.push(siteId)
         }
         await publishQueue.resume(interruptedSites, missing)
       })().catch((error: unknown) =>

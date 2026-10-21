@@ -1,4 +1,9 @@
 import { type ReactNode, useId, useState } from 'react'
+import { MediaCard } from '../media/MediaCard'
+import { RedirectRows } from '../seo/RedirectRows'
+import { SearchSnippet } from '../seo/SearchSnippet'
+import { SettingsCardActions } from '../seo/SettingsCard'
+import type { RedirectRow } from '../seo/seo-format'
 import { SiteHeader } from '../shell/SiteHeader'
 import {
   AppShell,
@@ -37,6 +42,7 @@ const sections = [
   { id: 'cards', label: 'Карточки и таблица', icon: 'media' },
   { id: 'alerts', label: 'Сообщения', icon: 'info' },
   { id: 'dialog', label: 'Окно', icon: 'mail' },
+  { id: 'seo', label: 'SEO', icon: 'search' },
   { id: 'icons', label: 'Иконки', icon: 'settings' },
 ] as const
 
@@ -89,6 +95,11 @@ export function UiShowcase() {
   const [column, setColumn] = useState<'blocks' | 'preview' | 'fields'>('blocks')
   const columnsId = useId()
   const [deleted, setDeleted] = useState(false)
+  const [redirects, setRedirects] = useState<RedirectRow[]>([
+    { key: 'r1', from: '/old-price', to: '/ceny' },
+    { key: 'r2', from: '/ceny', to: '/old-price' },
+    { key: 'r3', from: '/uslugi', to: '/' },
+  ])
 
   const sidebar = (
     <>
@@ -526,6 +537,63 @@ export function UiShowcase() {
           >
             <TextInput label="Причина (необязательно)" />
           </Dialog>
+        </Section>
+
+        <Section id="seo" title="SEO">
+          <div className={styles.grid}>
+            <MediaCard
+              meta="Картинка не выбрана"
+              action={<Button size="small">Выбрать картинку</Button>}
+            />
+            <MediaCard
+              name="logo-remont.png"
+              meta="512 × 512 · AVIF, WebP, PNG"
+              square
+              action={<Button size="small">Заменить</Button>}
+            />
+            <MediaCard
+              meta="Этой картинки нет в медиатеке сайта"
+              invalid
+              action={<Button size="small">Заменить</Button>}
+            />
+            <SearchSnippet
+              address="remont-ivana.ru › ceny"
+              title="Цены — Ремонт у Ивана"
+              description="Ремонт квартир под ключ в Твери: фиксированная смета, свои бригады и гарантия 3 года."
+            />
+            <SearchSnippet address="remont-ivana.ru" title="Ремонт у Ивана" description="" />
+          </div>
+          {/* Кнопки карточки раздела: всё сохранено и есть несохранённые правки */}
+          <div className={styles.row}>
+            <SettingsCardActions saveLabel="Сохранить" pending={false} unsaved={false} />
+            <SettingsCardActions saveLabel="Сохранить редиректы" pending={false} unsaved />
+          </div>
+          <RedirectRows
+            rows={redirects}
+            names={(row) => ({ from: `${row.key}.from`, to: `${row.key}.to` })}
+            error={(name) =>
+              name === 'r2.to'
+                ? 'Петля: цепочка редиректов от /ceny возвращается на /ceny'
+                : undefined
+            }
+            warning={(row) =>
+              row.from === '/uslugi'
+                ? 'По этому адресу есть страница «Услуги»: редирект не сработает. Удалите строку или страницу'
+                : undefined
+            }
+            onChange={(key, part, value) =>
+              setRedirects((rows) =>
+                rows.map((row) => (row.key === key ? { ...row, [part]: value } : row)),
+              )
+            }
+            onRemove={(key) => setRedirects((rows) => rows.filter((row) => row.key !== key))}
+            onAdd={() =>
+              setRedirects((rows) => [...rows, { key: `r${Date.now()}`, from: '', to: '' }])
+            }
+          />
+          <InlineAlert tone="warning" title="Сайт скрыт от поисковиков">
+            Так и задумано, пока сайт делают. Перед запуском снимите флажок.
+          </InlineAlert>
         </Section>
 
         <Section id="icons" title="Иконки">

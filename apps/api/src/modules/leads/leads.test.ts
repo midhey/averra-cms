@@ -150,7 +150,7 @@ describe('приём заявки', () => {
     const siteId = await siteWithForm()
     const res = await submit(siteId, validFields({ comment: 'Нужен\r\nремонт', call_me: 'yes' }))
     expect(res.status).toBe(303)
-    expect(res.headers.get('location')).toBe(`${SITE_ORIGIN}/#lead-sent`)
+    expect(res.headers.get('location')).toBe(`${SITE_ORIGIN}/?sent=lead#lead-sent`)
 
     const [lead] = await leadsOf(api, siteId)
     expect(lead).toMatchObject({
@@ -183,19 +183,21 @@ describe('приём заявки', () => {
     // Настоящие заголовки браузера: Referer без пути — всё равно страница «о нас», не главная
     const real = await fromPage(`${SITE_ORIGIN}/`)
     expect(real.status).toBe(303)
-    expect(real.headers.get('location')).toBe(`${SITE_ORIGIN}/o-nas#lead-sent`)
+    expect(real.headers.get('location')).toBe(`${SITE_ORIGIN}/o-nas?sent=lead#lead-sent`)
     // Без Referer — так же
-    expect((await fromPage('')).headers.get('location')).toBe(`${SITE_ORIGIN}/o-nas#lead-sent`)
+    expect((await fromPage('')).headers.get('location')).toBe(
+      `${SITE_ORIGIN}/o-nas?sent=lead#lead-sent`,
+    )
     // Полный Referer этой страницы (политика сайта мягче) — её точный вид со слешем или .html
     expect((await fromPage(`${SITE_ORIGIN}/o-nas/?utm=1`)).headers.get('location')).toBe(
-      `${SITE_ORIGIN}/o-nas/#lead-sent`,
+      `${SITE_ORIGIN}/o-nas/?sent=lead#lead-sent`,
     )
     expect((await fromPage(`${SITE_ORIGIN}/o-nas.html`)).headers.get('location')).toBe(
-      `${SITE_ORIGIN}/o-nas.html#lead-sent`,
+      `${SITE_ORIGIN}/o-nas.html?sent=lead#lead-sent`,
     )
     // Referer другой страницы того же сайта не уводит с этой
     expect((await fromPage(`${SITE_ORIGIN}/kontakty`)).headers.get('location')).toBe(
-      `${SITE_ORIGIN}/o-nas#lead-sent`,
+      `${SITE_ORIGIN}/o-nas?sent=lead#lead-sent`,
     )
     // Ссылка «назад» со страницы ошибки — тоже на эту страницу
     const bad = await fromPage(`${SITE_ORIGIN}/`, validFields({ phone: '12' }))
@@ -209,7 +211,7 @@ describe('приём заявки', () => {
     const foreign = await submit(siteId, validFields(), {
       headers: { referer: 'https://evil.example/page' },
     })
-    expect(foreign.headers.get('location')).toBe(`${SITE_ORIGIN}/#lead-sent`)
+    expect(foreign.headers.get('location')).toBe(`${SITE_ORIGIN}/?sent=lead#lead-sent`)
 
     const blind = await submit(siteId, validFields(), {
       headers: { origin: 'null', referer: '' },
@@ -473,7 +475,7 @@ describe('антиспам', () => {
       validFields({ website: 'https://spam.example', email: freshEmail() }),
     )
     expect(res.status).toBe(303)
-    expect(res.headers.get('location')).toBe(`${SITE_ORIGIN}/#lead-sent`)
+    expect(res.headers.get('location')).toBe(`${SITE_ORIGIN}/?sent=lead#lead-sent`)
     expect(await leadsOf(api, siteId)).toEqual([])
     expect(await outboxOf(api, siteId)).toEqual([])
   })

@@ -1,0 +1,51 @@
+@use "@averra/ui" as ui;
+
+// Как страница будет выглядеть в поиске: адрес, заголовок, описание. Только для примера —
+// цвета админки, а не поисковика: смысл несёт текст
+.snippet {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-control);
+}
+
+.label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.address {
+  overflow: hidden;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title {
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-info-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Поисковик показывает около двух строк описания
+.description {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--color-text);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.empty {
+  font-style: italic;
+  color: var(--color-text-muted);
+}

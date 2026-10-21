@@ -1,5 +1,5 @@
 import { PAGE_MAX_BLOCKS } from '@averra/schema'
-import { useId, useMemo } from 'react'
+import { type ReactNode, useId, useMemo } from 'react'
 import { Button, IconButton } from '../ui/Button'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { StatusPill } from '../ui/StatusPill'
@@ -24,6 +24,8 @@ type BlockListProps = {
    * уводит на вкладку «Поля», и до действий выбранного пришлось бы возвращаться
    */
   actionsOnEvery?: boolean
+  /** Под списком: на узком экране — «Страница: поиск и соцсети» (в полосе для неё нет места) */
+  footer?: ReactNode
 }
 
 /**
@@ -31,8 +33,17 @@ type BlockListProps = {
  * со стрелками и удалением (на узком экране они у каждого блока), его поля справа
  */
 export function BlockList(props: BlockListProps) {
-  const { blocks, selectedId, invalidIds, onSelect, onMove, onRemove, onAdd, actionsOnEvery } =
-    props
+  const {
+    blocks,
+    selectedId,
+    invalidIds,
+    onSelect,
+    onMove,
+    onRemove,
+    onAdd,
+    actionsOnEvery,
+    footer,
+  } = props
   const headingId = useId()
   const limitId = useId()
   const full = blocks.length >= PAGE_MAX_BLOCKS
@@ -90,6 +101,7 @@ export function BlockList(props: BlockListProps) {
           На странице уже {PAGE_MAX_BLOCKS} блоков — больше не поместится.
         </p>
       )}
+      {footer}
     </nav>
   )
 }

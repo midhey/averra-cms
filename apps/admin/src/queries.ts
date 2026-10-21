@@ -24,6 +24,7 @@ export const queryKeys = {
   recentLeads: (siteId: string) => ['sites', siteId, 'leads', 'recent'] as const,
   lead: (siteId: string, leadId: string) => ['sites', siteId, 'leads', 'item', leadId] as const,
   leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
+  siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   mail: ['mail'] as const,
@@ -196,6 +197,20 @@ export const leadSettingsQuery = (siteId: string) =>
     queryKey: queryKeys.leadSettings(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].leads.settings.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * SEO и настройки сайта (раздел «SEO»): настройки, адрес установки и адрес сайта, который из них
+ * выходит. Только владельцу: остальным API ответит 403
+ */
+export const siteSettingsQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.siteSettings(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].settings.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

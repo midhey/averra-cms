@@ -3,6 +3,7 @@ import {
   fileTooLargeMessage,
   imageMimeTypes,
   MAIN_PAGE_SLUG,
+  type SiteSettings,
   Uuid,
 } from '@averra/schema'
 import { Hono } from 'hono'
@@ -20,6 +21,7 @@ import {
 } from '../../media/processor'
 import { type MediaStorage, mediaKey } from '../../media/storage'
 import { validate } from '../../validate'
+import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
 
 export type MediaDeps = {
@@ -75,6 +77,15 @@ function displayName(name: string) {
 }
 
 const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
+
+/** Где в настройках SEO стоит картинка — словами для сообщения */
+function settingsMediaRoles(settings: SiteSettings, mediaId: string) {
+  return [
+    settings.icon === mediaId && 'иконка сайта',
+    settings.ogImage === mediaId && 'картинка для соцсетей',
+    settings.organization.logo === mediaId && 'логотип организации',
+  ].filter((role): role is string => role !== false)
+}
 
 const usageWhere = ({ draft, published }: MediaUsage) =>
   draft && published ? 'черновик и сайт' : draft ? 'черновик' : 'сайт'
@@ -192,6 +203,20 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
             }))
             const message = `Картинка используется на страницах: ${list}. Уберите её оттуда и опубликуйте страницы, тогда её можно будет удалить`
             return c.json(conflict(message, issues), 409)
+          }
+
+          // Картинка в настройках SEO (иконка, картинка для соцсетей, логотип) — тоже на сайте
+          const settings = await settingsRepo(db).read(siteId)
+          const roles = settings ? settingsMediaRoles(settings, mediaId) : []
+          if (roles.length > 0) {
+            const message = `Картинка стоит в разделе «SEO»: ${roles.join(', ')}. Замените её там, тогда её можно будет удалить`
+            return c.json(
+              conflict(
+                message,
+                roles.map((role) => ({ path: 'settings', message: role })),
+              ),
+              409,
+            )
           }
 
           if (!(await repo.delete(siteId, mediaId))) {

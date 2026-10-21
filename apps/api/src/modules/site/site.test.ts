@@ -1,3 +1,4 @@
+import { readSiteSettings } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -36,6 +37,12 @@ describe('сайт установки в базе', () => {
       expect(main).toEqual([
         expect.objectContaining({ slug: 'index', title: 'Ремонт квартир', published: null }),
       ])
+      // Новый сайт делают на настоящем домене до запуска: он скрыт от поисковиков сразу
+      const [created] = await db
+        .select({ settings: sites.settings })
+        .from(sites)
+        .where(eq(sites.id, first.site.id))
+      expect(readSiteSettings(created?.settings).hideFromSearch).toBe(true)
     } finally {
       await close()
     }
@@ -61,6 +68,9 @@ describe('сайт установки в базе', () => {
       expect(ensured).toMatchObject({ created: false, site: { id: older.id } })
       expect(await repo.count()).toBe(2)
       expect(await repo.find(younger.id)).toMatchObject({ name: 'Младший' })
+      // Сайт из базы до раздела «SEO» (настроек нет — {}) уже работает: он остаётся открытым
+      expect(older.settings).toEqual({})
+      expect(readSiteSettings(older.settings).hideFromSearch).toBe(false)
     } finally {
       await close()
     }

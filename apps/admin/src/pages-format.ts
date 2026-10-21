@@ -1,4 +1,4 @@
-import { MAIN_PAGE_SLUG } from '@averra/schema'
+import { MAIN_PAGE_SLUG, NOT_FOUND_PAGE_SLUG } from '@averra/schema'
 import { countRu } from './format/plural'
 import type { StatusTone } from './ui/StatusPill'
 
@@ -49,6 +49,13 @@ export function pagesSummary(pages: readonly PageStatus[]) {
 
 /** Адрес страницы на сайте: главная открывается по корню */
 export const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
+
+/**
+ * Пометка служебной страницы в списке: страница 404 показывается на адресах, где страницы нет
+ * (раздел «SEO» → «Страница 404»). У обычной страницы пометки нет
+ */
+export const pageNote = (slug: string) =>
+  slug === NOT_FOUND_PAGE_SLUG ? 'на адресах, где страницы нет' : undefined
 
 /** Дата и время по-русски. Часовой пояс задаётся только в тестах, в админке — пояс браузера */
 export function formatDateTime(iso: string, timeZone?: string) {

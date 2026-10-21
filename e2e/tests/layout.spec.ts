@@ -174,4 +174,13 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   await expect(tabs.getByRole('tab', { name: 'История' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('complementary', { name: 'История публикаций' })).toBeVisible()
   expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
+
+  // Поиск и соцсети страницы — кнопкой под списком блоков (в полосе места нет), тоже третья вкладка
+  await tabs.getByRole('tab', { name: 'Блоки' }).click()
+  await ed.blockList.getByRole('button', { name: 'Страница: поиск и соцсети' }).click()
+  await expect(tabs.getByRole('tab', { name: 'Страница' })).toHaveAttribute('aria-selected', 'true')
+  await expect(
+    page.getByRole('complementary', { name: 'Страница: поиск и соцсети' }).getByLabel('Описание'),
+  ).toBeVisible()
+  expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
 })

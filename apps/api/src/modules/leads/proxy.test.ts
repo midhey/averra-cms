@@ -76,7 +76,7 @@ describe('форма сайта через прокси домена сайта'
   it('303 обратно на ту же страницу того же домена, с якорем «Спасибо»', async () => {
     const res = await viaProxy('o-nas', '203.0.113.10')
     expect(res.status).toBe(303)
-    expect(res.headers.get('location')).toBe(`${SITE}/o-nas/#lead-sent`)
+    expect(res.headers.get('location')).toBe(`${SITE}/o-nas/?sent=lead#lead-sent`)
   })
 
   it('лимит по IP считается по X-Forwarded-For от Caddy, а не по адресу Caddy', async () => {

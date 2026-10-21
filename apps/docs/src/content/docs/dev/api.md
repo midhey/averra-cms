@@ -78,15 +78,26 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 |---|---|
 | `GET /api/site` | сайт, с которым работает пришедший: человеку — сайт установки (нет доступа — 403), токену — его сайт. `{ id, name, url, otherSites }`: `url` — `SITE_URL` или `null`, `otherSites` — сколько ещё сайтов в базе (только владельцу, иначе `null`) |
 | `GET /api/site/snapshot` | снимок сайта установки, как `…/:siteId/snapshot`: рендереру без `CMS_SITE_ID`. **Открыт** |
+| `GET /api/site/fallback/<путь>` | адрес домена сайта, где нет файла (Caddy, `handle_errors 404`): редирект из настроек — 301 с `Location` (строка запроса исходного адреса переходит в «куда» без своей), иначе 404 со страницей `404.html` текущей версии сайта (без сборки — короткая страница API). `no-cache`. **Открыт** |
 | `GET /api/sites` | для совместимости (`list_sites` в MCP): владельцу — все сайты базы, участнику — свои, токену — его сайт |
-| `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны) |
-| `GET /api/sites/:siteId/snapshot` | тема, опубликованные страницы и справочник `media` — всё для рендерера. **Открыт** |
+| `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны), `hiddenFromSearch` |
+| `GET /api/sites/:siteId/snapshot` | всё для рендерера: сайт (`name`, `theme`, `url` — адрес из настроек или `SITE_URL`, `settings` — настройки SEO; организация — только при опубликованной главной), опубликованные страницы с `publishedAt` и справочник `media` (картинки страниц и настроек). **Открыт** |
 | `GET /api/sites/:siteId/pages` | страницы: заголовок, адрес, когда опубликована, есть ли неопубликованные правки |
 | `POST /api/sites/:siteId/pages` | создать `{ slug, title, template: "empty" \| "hero" }`; адрес занят — 409 |
 | `GET /api/sites/:siteId/pages/:slug` | страница с черновиком и опубликованной версией |
-| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks } }`. Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта — 409 с путём до поля |
+| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks, seo? } }`; `seo` — `{ description?, noindex? }`. Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта — 409 с путём до поля |
 | `POST /api/sites/:siteId/pages/:slug/publish` | опубликовать черновик с заголовком; пишет версию в историю и ставит сборку |
 | `DELETE /api/sites/:siteId/pages/:slug` | удалить вместе с историей; главную — 409 |
+
+## SEO и настройки сайта (только владелец)
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/settings` | `{ settings, installationUrl, url }`: настройки (`SiteSettings`), адрес установки (`SITE_URL`) и адрес сайта, который из них выходит |
+| `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`) — целиком. Ставит сборку. Картинка не из медиатеки и редирект с адреса страницы — 409 с путём до поля |
+| `GET /api/sites/:siteId/icons/:file` | иконка сайта из картинки настроек: `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`; иконки нет — 404. Кеш в памяти, `no-cache`. **Открыт**: их берёт рендерер |
+
+Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/) и [решение](/averra-cms/decisions/seo-settings/).
 
 ## История
 
@@ -102,7 +113,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 |---|---|
 | `GET /api/sites/:siteId/media` | `{ items, maxBytes }`: картинки с вариантами и предел размера файла |
 | `POST /api/sites/:siteId/media` | загрузить: multipart, поле `file` → 201. Не тот тип — 415, слишком большой — 413 (тело сверх лимита обрывается, не дочитанным) |
-| `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице — 409 со списком страниц |
+| `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице или в настройках SEO (иконка, картинка для соцсетей, логотип) — 409 с тем, где стоит |
 | `GET /api/media/:mediaId/:file` | файл варианта (`480.avif`, `960.webp`…), `immutable`, `nosniff`. **Открыт** |
 
 ## Участники
@@ -136,7 +147,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 
 | Запрос | Что делает |
 |---|---|
-| `POST /api/forms/:siteId/:slug/:blockId` | приём заявки с формы сайта: `application/x-www-form-urlencoded`, до ~227 КБ. Успех — 303 на страницу с `#<id блока>-sent`; ошибки — HTML-страница (400, 404, 413, 415, 429, 500); с `Accept` без `text/html` — JSON. **Открыт** |
+| `POST /api/forms/:siteId/:slug/:blockId` | приём заявки с формы сайта: `application/x-www-form-urlencoded`, до ~227 КБ. Успех — 303 на страницу с `?sent=<id блока>#<id блока>-sent` (адрес «спасибо» для целей аналитики); ошибки — HTML-страница (400, 404, 413, 415, 429, 500); с `Accept` без `text/html` — JSON. **Открыт** |
 | `GET /api/sites/:siteId/leads` | заявки, новые сверху, до 500; `?status=new\|processed`; состояние уведомлений |
 | `GET /api/sites/:siteId/leads/recent` | последние для обзора, `?limit=1…20` (по умолчанию 3), без согласия |
 | `GET /api/sites/:siteId/leads/:leadId` | заявка целиком |
@@ -158,8 +169,8 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 ## Открытые маршруты
 
 Ровно эти и `/api/auth/*`: `GET /api/health`, `GET /api/health/ready`,
-`GET /api/sites/:siteId/snapshot`, `GET /api/site/snapshot`, `GET /api/media/:mediaId/:file`,
-`GET /api/password-reset`,
+`GET /api/sites/:siteId/snapshot`, `GET /api/site/snapshot`, `GET /api/site/fallback/*`,
+`GET /api/sites/:siteId/icons/:file`, `GET /api/media/:mediaId/:file`, `GET /api/password-reset`,
 `POST /api/invitations/lookup`, `POST /api/invitations/register`,
 `POST /api/forms/:siteId/:slug/:blockId`. Список живёт в `src/auth/middleware.ts`: открыть новый
 маршрут — значит осознанно вписать его туда ([Доступ и секреты](/averra-cms/dev/security/)).

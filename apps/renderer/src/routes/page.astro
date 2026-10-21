@@ -1,41 +1,66 @@
 ---
 import { Page } from '@averra/blocks'
 import '@averra/blocks/base.css'
+import { findRedirect, MAIN_PAGE_SLUG, NOT_FOUND_PAGE_SLUG, redirectLocation } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
-import { formActionFor, loadSnapshot } from '../lib/snapshot'
+import { analyticsBody, analyticsHead, headTags, organizationJsonLd } from '../lib/seo'
+import { formActionFor, loadSnapshot, notFoundPage } from '../lib/snapshot'
 
 // Маршрут подключается в astro.config.mjs: при сборке он статический, в dev — по запросу.
 // Поэтому в dev Astro пишет в лог «getStaticPaths() ignored in dynamic page…» и советует
 // prerender = true. Так и задумано: совет не выполняем, getStaticPaths нужен только сборке.
-// Главная страница сайта хранится со slug «index» и открывается по корню
+// Главная страница сайта хранится со slug «index» и открывается по корню. Страница 404 есть
+// всегда — своя или стандартная: Astro пишет её в 404.html, её отдаёт сервер на чужих адресах
 export async function getStaticPaths() {
   const { pages } = await loadSnapshot()
-  return pages.map((page) => ({ params: { slug: page.slug === 'index' ? undefined : page.slug } }))
+  const slugs = new Set([...pages.map((page) => page.slug), NOT_FOUND_PAGE_SLUG])
+  return [...slugs].map((slug) => ({
+    params: { slug: slug === MAIN_PAGE_SLUG ? undefined : slug },
+  }))
 }
 
 // Содержимое грузим здесь, а не в getStaticPaths: в dev-режиме этот код выполняется
 // на каждый запрос, и опубликованные правки видны после обновления страницы
 const { site, pages, media } = await loadSnapshot()
-const slug = Astro.params.slug ?? 'index'
-const page = pages.find((candidate) => candidate.slug === slug)
-// При сборке сюда попадают только опубликованные страницы. В dev адрес может быть любым:
-// неопубликованная или удалённая страница — это 404, как и на собранном сайте. /index — тоже:
-// главная только по корню, а в сборке папки /index/ нет
-if (Astro.params.slug === 'index') {
-  return new Response('Главная страница открывается по адресу /', { status: 404 })
+// /404 в dev — отдельный маршрут (astro.config.mjs): иначе Astro показал бы там свою заглушку
+const devNotFound = Astro.routePattern === '/404'
+if (devNotFound) Astro.response.status = 404
+const slug = devNotFound ? NOT_FOUND_PAGE_SLUG : (Astro.params.slug ?? MAIN_PAGE_SLUG)
+// /index — не страница: главная только по корню, а в сборке папки /index/ нет
+const found =
+  Astro.params.slug === MAIN_PAGE_SLUG
+    ? undefined
+    : slug === NOT_FOUND_PAGE_SLUG
+      ? notFoundPage(pages)
+      : pages.find((candidate) => candidate.slug === slug)
+let page = found
+if (!page) {
+  // При сборке сюда не попасть: собираются только опубликованные страницы и 404. В dev адрес
+  // может быть любым — как на сервере, сначала редирект из таблицы «SEO», потом страница 404
+  const to = findRedirect(site.settings.redirects, Astro.url.pathname)
+  if (to) return Astro.redirect(redirectLocation(to, Astro.url.search), 301)
+  Astro.response.status = 404
+  page = notFoundPage(pages)
 }
-if (!page) return new Response(`Страница «${slug}» не опубликована`, { status: 404 })
+const seoSite = { name: site.name, url: site.url, theme: site.theme, settings: site.settings }
+const head = headTags({ site: seoSite, page, media })
+const scripts = [
+  ...analyticsHead(site.settings),
+  ...(page.slug === MAIN_PAGE_SLUG ? [organizationJsonLd(seoSite, media) ?? ''] : []),
+]
 const themeCss = themeToCss(site.theme)
 ---
 
-<html lang="ru">
+<html lang={site.settings.language}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{page.title}</title>
+    <Fragment set:html={head.join('\n')} />
     <style is:inline set:html={themeCss}></style>
+    <Fragment set:html={scripts.join('\n')} />
   </head>
   <body>
+    <Fragment set:html={analyticsBody(site.settings).join('')} />
     <Page content={page.content} media={media} formAction={formActionFor(site.id, page.slug)} />
   </body>
 </html>

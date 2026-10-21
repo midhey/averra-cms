@@ -3,6 +3,7 @@ import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
 import { type MediaStorage, mediaKey } from '../../media/storage'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
+import { readStoredSettings } from '../settings/read'
 import type { ZipEntry } from './zip'
 
 // Полный экспорт данных сайта (принцип 8 «клиент не заложник»): всё, что человек завёл в этой
@@ -16,7 +17,9 @@ const README = `Выгрузка сайта из Averra CMS
 ============================
 
 site.json — все данные сайта (формат averra-site-export, версия ${EXPORT_FORMAT_VERSION}):
-  site      — название, тема оформления (цвета, шрифты) и настройки заявок;
+  site      — название, тема оформления (цвета, шрифты), настройки заявок и SEO (settings:
+              шаблон заголовка, описание, язык, адрес, индексация, иконка, коды проверки,
+              счётчики аналитики, организация, редиректы);
   pages     — страницы: адрес (slug), черновик (draft) и опубликованная версия (published)
               с заголовками; блоки страницы — JSON по схемам блоков Averra;
               revisions — история публикаций страницы;
@@ -114,6 +117,7 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
         retentionDays: site.leadRetentionDays,
         confirmToVisitor: site.leadConfirmation,
       },
+      settings: readStoredSettings(site.settings),
     },
   }
   const tail = { media: mediaView, missingFiles }

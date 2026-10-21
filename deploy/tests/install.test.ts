@@ -803,5 +803,23 @@ describe('Caddyfile: кеш', () => {
     expect(re.test('/media/index.html')).toBe(false)
     expect(re.test('/')).toBe(false)
     expect(re.test('/o-nas/')).toBe(false)
+    // Иконки и манифест могут смениться под тем же адресом: проверяются при каждом заходе
+    expect(re.test('/favicon.ico')).toBe(false)
+    expect(re.test('/manifest.webmanifest')).toBe(false)
+  })
+
+  it('сайт: адрес без файла уходит в API — редирект из «SEO» или страница 404 релиза', () => {
+    const site = siteBlock('{$SITE_DOMAIN}')
+    const errors = /^\thandle_errors 404 \{\n([\s\S]*?)^\t\}/m.exec(site)?.[1] ?? ''
+    expect(errors).toContain('reverse_proxy api:4000')
+    // Путь — исходный, до перезаписей: API ищет по нему редирект (GET /api/site/fallback/*)
+    expect(errors).toMatch(
+      /^\t\t\trewrite \/api\/site\/fallback\{http\.request\.orig_uri\.path\}$/m,
+    )
+    expect(errors).toContain('import security')
+    // Своего текста 404 у Caddy больше нет: страницу 404 отдаёт API из релиза
+    expect(errors).not.toContain('respond')
+    // Наружу из API на домене сайта открыт только приём форм: fallback — через ошибку 404
+    expect(handles(site).map((branch) => branch.matcher)).toEqual(['/api/forms/*', ''])
   })
 })

@@ -28,6 +28,7 @@ import {
   recentLeadsQuery,
   siteIdOf,
   siteQuery,
+  siteSettingsQuery,
   statusQuery,
 } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
@@ -42,6 +43,7 @@ import { MediaScreen } from './screens/MediaScreen'
 import { OverviewScreen } from './screens/OverviewScreen'
 import { PagesScreen } from './screens/PagesScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
+import { SeoScreen } from './screens/SeoScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AdminLayout } from './shell/AdminLayout'
@@ -271,6 +273,22 @@ const settingsRoute = createRoute({
   component: SiteSettingsScreen,
 })
 
+// SEO и настройки сайта — только владельцу: участнику API ответит 403, и экран ошибки скажет
+// почему. Медиатека — для выбора иконки и картинок, страницы — для карточки «Страница 404»
+const seoRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/seo',
+  loader: async ({ context: { queryClient } }) => {
+    const siteId = await siteIdOf(queryClient)
+    await Promise.all([
+      queryClient.ensureQueryData(siteSettingsQuery(siteId)),
+      queryClient.ensureQueryData(pagesQuery(siteId)),
+      queryClient.ensureQueryData(mediaQuery(siteId)),
+    ])
+  },
+  component: SeoScreen,
+})
+
 // Почта — только владельцу: участнику API ответит 403, и экран ошибки скажет почему
 const mailRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -335,6 +353,7 @@ const routeTree = rootRoute.addChildren([
     pagesRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
+    seoRoute,
     settingsRoute,
     mailRoute,
     statusRoute,

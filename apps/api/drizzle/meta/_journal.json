@@ -106,6 +106,13 @@
       "when": 1792132570158,
       "tag": "0014_site_builds",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792569834833,
+      "tag": "0015_site_settings",
+      "breakpoints": true
     }
   ]
 }

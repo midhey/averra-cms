@@ -4,8 +4,16 @@ import { roleName, seesInstallation, siteSections } from './sidebar-model'
 const ids = (site: Parameters<typeof siteSections>[0]) => siteSections(site).map(({ id }) => id)
 
 describe('разделы сайта в панели', () => {
-  it('владелец и клиент видят заявки со счётчиком новых', () => {
+  it('владелец и клиент видят заявки со счётчиком новых, «SEO» — только владелец', () => {
     expect(ids({ access: 'owner', newLeads: 3 })).toEqual([
+      'overview',
+      'pages',
+      'media',
+      'leads',
+      'seo',
+      'settings',
+    ])
+    expect(ids({ access: 'client', newLeads: 0 })).toEqual([
       'overview',
       'pages',
       'media',

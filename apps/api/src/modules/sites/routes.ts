@@ -20,6 +20,7 @@ import { validate, validationError } from '../../validate'
 import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
+import { readStoredSettings } from '../settings/read'
 import { sitesRepo } from './repo'
 import { siteSnapshot } from './snapshot'
 
@@ -40,8 +41,11 @@ export function sitesRoutes({
   db,
   publisher,
   log,
+  siteUrl,
 }: {
   db: Db
+  /** Адрес установки (SITE_URL): адрес сайта в снимке, если своего в настройках SEO нет */
+  siteUrl: string | undefined
   /** Сборка сайта на сервере после публикации. Нет — публикация только меняет базу */
   publisher?: SitePublisher
   log: (message: string) => void
@@ -70,7 +74,8 @@ export function sitesRoutes({
 
       // Роль на сайте (access) нужна админке, чтобы не показывать то, что этой роли нельзя.
       // newLeads — сколько новых заявок (счётчик в навигации сайта); null — заявки этой роли
-      // не видны (редактор, токен API)
+      // не видны (редактор, токен API). hiddenFromSearch — сайт скрыт от поисковиков (раздел
+      // «SEO»): обзор напоминает об этом до запуска
       .get('/:siteId', validate('param', SiteParams), site('site.read'), async (c) => {
         const { siteId } = c.req.valid('param')
         const found = await repo.find(siteId)
@@ -81,13 +86,14 @@ export function sitesRoutes({
           name: found.name,
           theme: found.theme,
           access: c.var.siteRole,
+          hiddenFromSearch: readStoredSettings(found.settings).hideFromSearch,
           newLeads: seesLeads ? await leads.countNew(siteId) : null,
         })
       })
 
       // Снимок для рендерера (sites/snapshot.ts). Открыт без входа (auth/middleware.ts)
       .get('/:siteId/snapshot', validate('param', SiteParams), async (c) => {
-        const snapshot = await siteSnapshot(db, c.req.valid('param').siteId)
+        const snapshot = await siteSnapshot(db, c.req.valid('param').siteId, siteUrl)
         if (!snapshot) return c.json(notFound('Сайт не найден'), 404)
         return c.json(snapshot)
       })

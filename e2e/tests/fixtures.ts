@@ -24,6 +24,9 @@ export const sites = ownerApi.sites
 
 type DemoSite = { id: string; name: string }
 
+/** Название демо-сайта в базе e2e (его кладёт сид API): к нему же возвращает сброс */
+export const DEMO_SITE_NAME = 'Демо: ремонт квартир'
+
 /**
  * Демо-сайт — сайт установки: его кладёт API при старте в пустую базу (--dev). Одна установка —
  * один сайт, поэтому id берётся так же, как его берёт админка, — без id в адресе
@@ -43,7 +46,27 @@ async function findDemoSite(): Promise<DemoSite> {
  * Так каждый тест стартует с одного и того же известного состояния, в каком бы порядке ни шёл
  */
 async function resetDemoSite() {
-  const site = await findDemoSite()
+  const found = await findDemoSite()
+  // Настройки SEO — как у нового сайта установки: скрыт от поисковиков, остальное пусто
+  const settings = await sites[':siteId'].settings.$patch({
+    param: { siteId: found.id },
+    json: {
+      name: DEMO_SITE_NAME,
+      titleTemplate: '',
+      description: '',
+      language: 'ru',
+      url: '',
+      ogImage: null,
+      icon: null,
+      hideFromSearch: true,
+      verification: {},
+      analytics: {},
+      organization: {},
+      redirects: [],
+    },
+  })
+  expect(settings.status, 'сброс настроек SEO демо-сайта').toBe(200)
+  const site = { ...found, name: DEMO_SITE_NAME }
   const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })

@@ -1,4 +1,11 @@
-import { demoPage, demoPageTitle, demoSiteId, MAIN_PAGE_SLUG, PageContent } from '@averra/schema'
+import {
+  demoPage,
+  demoPageTitle,
+  demoSiteId,
+  MAIN_PAGE_SLUG,
+  newSiteSettings,
+  PageContent,
+} from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import type { Auth } from '../auth/auth'
 import { usersRepo } from '../modules/users/repo'
@@ -16,7 +23,13 @@ export async function seedDemo(db: Db) {
   await db.transaction(async (tx) => {
     const [site] = await tx
       .insert(sites)
-      .values({ id: demoSiteId, name: 'Демо: ремонт квартир', theme: defaultTheme })
+      // Новый сайт, как сайт установки, скрыт от поисковиков (modules/sites/repo.ts)
+      .values({
+        id: demoSiteId,
+        name: 'Демо: ремонт квартир',
+        theme: defaultTheme,
+        settings: newSiteSettings(),
+      })
       .returning({ id: sites.id })
     if (!site) throw new Error('Не удалось создать демо-сайт')
 

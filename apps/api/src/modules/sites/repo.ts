@@ -1,14 +1,18 @@
 import {
   collectMediaRefs,
   MAIN_PAGE_SLUG,
+  newSiteSettings,
   type PageContent,
   SITE_NAME_MAX,
+  type StoredSiteSettings,
+  settingsMediaIds,
   type Theme,
 } from '@averra/schema'
 import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
+import { readStoredSettings } from '../settings/read'
 
 /**
  * Название сайта установки, когда SITE_NAME не задан: домен сайта (из SITE_URL), а без него —
@@ -40,13 +44,14 @@ export function sitesRepo(db: Db) {
 
   /**
    * Сайт создаётся сразу с главной: пустой черновик под названием сайта, не опубликован.
-   * Без главной у сайта нет корня, а её же запрещено удалять — пусть она будет всегда
+   * Без главной у сайта нет корня, а её же запрещено удалять — пусть она будет всегда.
+   * settings — настройки SEO; без них — по умолчанию (сайт открыт поисковикам)
    */
-  function createSite(name: string, theme: Theme) {
+  function createSite(name: string, theme: Theme, settings: Partial<StoredSiteSettings> = {}) {
     return db.transaction(async (tx) => {
       const [site] = await tx
         .insert(sites)
-        .values({ name, theme })
+        .values({ name, theme, settings })
         .returning({ id: sites.id, name: sites.name, theme: sites.theme })
       if (!site) throw new Error('База не вернула созданный сайт')
       await tx
@@ -88,12 +93,14 @@ export function sitesRepo(db: Db) {
 
     /**
      * Сайт установки, а если в базе нет ни одного — создаёт его (с главной). Так сайт появляется
-     * при первом запуске API, без отдельного шага установки. created — создан ли он сейчас
+     * при первом запуске API, без отдельного шага установки. created — создан ли он сейчас.
+     * Новый сайт скрыт от поисковиков: его делают на настоящем домене до запуска, и недоделанный
+     * сайт не должен попасть в индекс. Открывают его в разделе «SEO» при запуске
      */
     async ensureInstallationSite(name: string, theme: Theme) {
       const existing = await installationSite()
       if (existing) return { site: existing, created: false }
-      await createSite(name, theme)
+      await createSite(name, theme, newSiteSettings())
       const site = await installationSite()
       if (!site) throw new Error('База не вернула созданный сайт')
       return { site, created: true }
@@ -228,32 +235,44 @@ export function sitesRepo(db: Db) {
 
     async publishedPages(siteId: string) {
       const rows = await db
-        .select({ slug: pages.slug, title: pages.publishedTitle, content: pages.published })
+        .select({
+          slug: pages.slug,
+          title: pages.publishedTitle,
+          content: pages.published,
+          publishedAt: pages.publishedAt,
+        })
         .from(pages)
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
         .orderBy(asc(pages.slug))
       // published и published_title заполнены вместе — это держит CHECK в базе
       // (pages_published_with_title), так что фильтр только сужает типы и страниц не теряет.
-      // Сравниваем с null, а не на истинность: пустой заголовок — тоже заголовок
-      return rows.flatMap(({ slug, title, content }) =>
-        content !== null && title !== null ? [{ slug, title, content }] : [],
+      // Сравниваем с null, а не на истинность: пустой заголовок — тоже заголовок.
+      // publishedAt — дата страницы в sitemap.xml (lastmod)
+      return rows.flatMap(({ slug, title, content, publishedAt }) =>
+        content !== null && title !== null ? [{ slug, title, content, publishedAt }] : [],
       )
     },
 
     /**
-     * Картинки опубликованных страниц сайта — id из полей-картинок блоков (collectMediaRefs),
-     * как в снимке для рендерера. По ним сборка решает, какие файлы картинок класть в релиз
+     * Картинки опубликованного сайта — id из полей-картинок блоков опубликованных страниц
+     * (collectMediaRefs) и картинки настроек (OG, логотип, иконка), как в снимке для рендерера.
+     * По ним сборка решает, какие файлы картинок класть в релиз
      */
     async publishedMediaIds(siteId: string) {
       const rows = await db
         .select({ content: pages.published })
         .from(pages)
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
-      return new Set(
-        rows.flatMap(({ content }) =>
+      const [site] = await db
+        .select({ settings: sites.settings })
+        .from(sites)
+        .where(eq(sites.id, siteId))
+      return new Set([
+        ...rows.flatMap(({ content }) =>
           content ? collectMediaRefs(content).map((ref) => ref.mediaId) : [],
         ),
-      )
+        ...(site ? settingsMediaIds(readStoredSettings(site.settings)) : []),
+      ])
     },
   }
 }

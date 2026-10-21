@@ -1,3 +1,4 @@
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MediaStorage } from '../media/storage'
 import { BuildFailure, type SiteBuild } from './queue'
@@ -69,6 +70,22 @@ export function staticSiteBuilder({
   }
 }
 
-/** Есть ли у сайта собранная текущая версия на диске */
-export const hasCurrentRelease = async (publishDir: string, siteId: string) =>
-  (await siteReleases(join(publishDir, siteId)).current()) !== undefined
+/**
+ * Файл, по которому видно, что версия собрана нынешним форматом релиза: страница 404 в корне
+ * появилась вместе с SEO (robots.txt, sitemap.xml, иконки). Версия без него собрана прежней
+ * Averra — после обновления такой сайт собирается заново при старте API
+ */
+export const RELEASE_MARKER = '404.html'
+
+/** Сайт надо собрать: версии на диске нет или она собрана до нынешнего формата релиза */
+export async function releaseOutdated(publishDir: string, siteId: string) {
+  const releases = siteReleases(join(publishDir, siteId))
+  const current = await releases.current()
+  if (current === undefined) return true
+  try {
+    await access(join(releases.pathOf(current), RELEASE_MARKER))
+    return false
+  } catch {
+    return true
+  }
+}

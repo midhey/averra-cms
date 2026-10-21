@@ -1,7 +1,13 @@
 import { CMS_API_URL, CMS_LINKS, CMS_SITE_ID } from 'astro:env/server'
 import type { AppType } from '@averra/api'
-import type { MediaMap } from '@averra/schema'
+import {
+  defaultNotFoundContent,
+  type MediaMap,
+  NOT_FOUND_PAGE_SLUG,
+  NOT_FOUND_PAGE_TITLE,
+} from '@averra/schema'
 import { hc } from 'hono/client'
+import { ICON_FILES } from './icon-files'
 
 const api = hc<AppType>(CMS_API_URL).api
 
@@ -76,4 +82,40 @@ async function request<T>(call: () => Promise<T>): Promise<T> {
   } catch (cause) {
     throw new Error(`API не отвечает на ${CMS_API_URL}. Запусти его: pnpm dev`, { cause })
   }
+}
+
+type SnapshotPage = Awaited<ReturnType<typeof loadSnapshot>>['pages'][number]
+
+/**
+ * Страница 404 сайта: своя (обычная страница с адресом 404) или стандартная — первый экран
+ * «Страница не найдена» в теме сайта. Сборка пишет её в 404.html
+ */
+export function notFoundPage(pages: readonly SnapshotPage[]): SnapshotPage {
+  return (
+    pages.find((page) => page.slug === NOT_FOUND_PAGE_SLUG) ?? {
+      slug: NOT_FOUND_PAGE_SLUG,
+      title: NOT_FOUND_PAGE_TITLE,
+      content: defaultNotFoundContent(),
+      publishedAt: null,
+    }
+  )
+}
+
+export { ICON_FILES }
+
+/**
+ * Файл иконки сайта из API (/api/sites/:siteId/icons/:file). Эндпоинты рендерера отдают его как
+ * есть: в dev — вживую, при сборке Astro кладёт его в корень сайта
+ */
+export async function iconFile(
+  siteId: string,
+  file: 'favicon.ico' | `${(typeof ICON_FILES)[number]}.png`,
+) {
+  const res = await request(() =>
+    api.sites[':siteId'].icons[':file'].$get({ param: { siteId, file } }),
+  )
+  if (res.status !== 200) throw new Error(`API ответил ${res.status} на иконку ${file}`)
+  return new Response(await res.arrayBuffer(), {
+    headers: { 'content-type': res.headers.get('content-type') ?? 'image/png' },
+  })
 }

@@ -5,6 +5,7 @@ import { act, cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithRouter } from '../test/render-with-router'
+import { COMPACT_SCREEN } from '../ui/use-media-query'
 import { Editor, type EditorPage, type EditorSite } from './Editor'
 
 // Как отдаёт API: значения по умолчанию уже подставлены
@@ -26,14 +27,19 @@ const published: EditorPage = {
   publishedAt: '2026-10-12T10:30:00.000Z',
 }
 
-/** Узкий экран или нет: matchMedia отвечает по этому флагу на любой запрос ширины */
+/**
+ * Ширина экрана: matchMedia отвечает по этим флагам. narrow — на любой запрос ширины, medium —
+ * только на запрос среднего экрана (COMPACT_SCREEN)
+ */
 let narrow = false
+let medium = false
 
 beforeEach(() => {
   narrow = false
+  medium = false
   vi.stubGlobal('matchMedia', (query: string) => ({
     media: query,
-    matches: query.includes('width') ? narrow : false,
+    matches: query === COMPACT_SCREEN ? narrow || medium : query.includes('width') ? narrow : false,
     addEventListener: () => {},
     removeEventListener: () => {},
   }))
@@ -245,5 +251,80 @@ describe('узкий экран', () => {
     expect(
       (within(banner).getByRole('radio', { name: 'Десктоп' }) as HTMLInputElement).checked,
     ).toBe(true)
+  })
+})
+
+describe('панель «Страница»', () => {
+  it('на среднем экране «Страница» и «История» — иконки с подписью для диктора', async () => {
+    medium = true
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    for (const name of ['Страница', 'История']) {
+      const button = screen.getByRole('button', { name })
+      expect(button.textContent).toBe('')
+      expect(button.getAttribute('title')).toBe(name)
+    }
+    await user.click(screen.getByRole('button', { name: 'Страница' }))
+    expect(screen.getByRole('complementary', { name: 'Страница: поиск и соцсети' })).toBeTruthy()
+  })
+
+  it('описание и noindex уходят в черновик полем seo, пустые — не уходят вовсе', async () => {
+    const user = userEvent.setup()
+    const bodies: { title: string; content: PageContent }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          const body = JSON.parse(String(init.body))
+          bodies.push(body)
+          return Response.json({ ...published, title: body.title, draft: body.content })
+        }
+        return Response.json({ items: [], maxBytes: 1024 })
+      }),
+    )
+    await renderWithRouter(<Editor site={site} page={published} />)
+    const toggle = screen.getByRole('button', { name: 'Страница' })
+    await user.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const panel = screen.getByRole('complementary', { name: 'Страница: поиск и соцсети' })
+
+    // Открыли и закрыли флажок — правок нет: пустое seo не считается изменением
+    const noindex = within(panel).getByLabelText('Скрыть страницу от поисковиков')
+    await user.click(noindex)
+    expect(status().textContent).toBe('Есть несохранённые правки')
+    await user.click(noindex)
+    expect(status().textContent).toBe('Опубликовано')
+
+    await user.type(within(panel).getByLabelText('Описание'), 'Ремонт квартир под ключ в Твери')
+    await user.click(noindex)
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await vi.waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]?.content.seo).toEqual({
+      description: 'Ремонт квартир под ключ в Твери',
+      noindex: true,
+    })
+    expect(bodies[0]?.content.blocks).toHaveLength(demoPage.blocks.length)
+  })
+
+  it('описание длиннее предела — сохранить нельзя, ошибка видна и при закрытой панели', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    await user.click(screen.getByRole('button', { name: 'Страница' }))
+    const description = screen.getByLabelText('Описание')
+    await user.click(description)
+    await user.paste('а'.repeat(301))
+    expect(screen.getByRole('button', { name: 'Сохранить' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    )
+    await user.click(screen.getByRole('button', { name: 'Страница' }))
+    expect(screen.getByText(/Описание страницы \(панель «Страница»\)/)).toBeTruthy()
+  })
+
+  it('у страницы 404 нет флажка noindex: она скрыта всегда', async () => {
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={{ ...published, slug: '404' }} />)
+    await user.click(screen.getByRole('button', { name: 'Страница' }))
+    expect(screen.getByText('Служебная страница 404')).toBeTruthy()
+    expect(screen.queryByLabelText('Скрыть страницу от поисковиков')).toBeNull()
   })
 })

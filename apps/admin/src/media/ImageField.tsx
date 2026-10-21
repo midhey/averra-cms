@@ -6,8 +6,8 @@ import { mediaQuery } from '../queries'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
 import { TextInput } from '../ui/Field'
-import { Icon } from '../ui/Icon'
 import styles from './ImageField.module.scss'
+import { MediaCard } from './MediaCard'
 import { MediaLibrary } from './MediaLibrary'
 import { type MediaItem, mediaFormats, thumbnailUrl } from './media-format'
 
@@ -63,38 +63,30 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
         </p>
       )}
 
-      <div className={styles.card}>
-        {mediaId && chosen ? (
-          <>
-            <img className={styles.thumb} src={thumbnailUrl(chosen.variants)} alt="" />
-            <span className={styles.about}>
-              <span className={styles.name}>{chosen.originalName}</span>
-              <span className={styles.meta}>
-                {chosen.width} × {chosen.height}
-                {chosen.variants.length > 0 && ` · ${mediaFormats(chosen.variants)}`}
-              </span>
-            </span>
-          </>
-        ) : (
-          <>
-            <span className={styles.placeholder} aria-hidden="true">
-              <Icon name="media" />
-            </span>
-            <span className={styles.about}>
-              <span className={styles.meta}>
-                {!mediaId
-                  ? 'Картинка не выбрана'
-                  : library
-                    ? 'Этой картинки нет в медиатеке сайта'
-                    : 'Загружаю…'}
-              </span>
-            </span>
-          </>
-        )}
-        <Button size="small" onClick={() => setPicking(true)}>
-          {mediaId ? 'Заменить' : 'Выбрать картинку'}
-        </Button>
-      </div>
+      <MediaCard
+        invalid={error !== undefined}
+        thumbnail={mediaId && chosen ? thumbnailUrl(chosen.variants) : undefined}
+        name={mediaId && chosen ? chosen.originalName : undefined}
+        meta={
+          mediaId && chosen ? (
+            <>
+              {chosen.width} × {chosen.height}
+              {chosen.variants.length > 0 && ` · ${mediaFormats(chosen.variants)}`}
+            </>
+          ) : !mediaId ? (
+            'Картинка не выбрана'
+          ) : library ? (
+            'Этой картинки нет в медиатеке сайта'
+          ) : (
+            'Загружаю…'
+          )
+        }
+        action={
+          <Button size="small" onClick={() => setPicking(true)}>
+            {mediaId ? 'Заменить' : 'Выбрать картинку'}
+          </Button>
+        }
+      />
 
       {error && (
         <p id={errorId} className={styles.error}>

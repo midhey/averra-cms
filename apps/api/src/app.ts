@@ -7,6 +7,7 @@ import { createPasswordConfirmation } from './auth/confirm-password'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
 import { errorForLog } from './log-error'
+import type { IconRenderer } from './media/favicon'
 import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
@@ -18,7 +19,9 @@ import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
-import { siteRoutes } from './modules/site/routes'
+import { iconsRoutes } from './modules/settings/icons'
+import { settingsRoutes } from './modules/settings/routes'
+import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
@@ -39,6 +42,8 @@ export type AppDeps = {
   images: ImageProcessor
   /** Самый большой файл медиатеки в байтах */
   mediaMaxBytes: number
+  /** Набор иконок сайта из картинки медиатеки (sharp, с кешем): favicon.ico, PNG для манифеста */
+  icons: IconRenderer
   /**
    * Почта: почта процесса (состояние без секретов, настройки SMTP из админки, проверка
    * подключения) и очередь. Провайдера берёт обработчик очереди (index.ts)
@@ -65,6 +70,11 @@ export type AppDeps = {
    * (PUBLISH_DIR)
    */
   published?: PublishedSite
+  /**
+   * Страница 404 текущей версии сайта на сервере (PUBLISH_DIR/main/current/404.html): её отдаёт
+   * API на адреса домена сайта, где нет файла и нет редиректа. Есть вместе с publisher
+   */
+  notFoundPage?: () => Promise<string | undefined>
   /** Версия установки (AVERRA_VERSION из образа). По умолчанию dev */
   version?: string
   /**
@@ -93,7 +103,13 @@ export function createApp(deps: AppDeps) {
   // больший перебор
   const passwords = createPasswordConfirmation(auth)
   const app = new Hono<AuthEnv>()
-    .use(logger(log))
+    // Адреса сайта без файла (fallback) — не построчно: туда идут /favicon.ico и сканеры
+    // (/wp-login.php…) со всего интернета, и лог API утонул бы в них. Это не события API
+    .use(
+      logger((line) => {
+        if (!line.includes(` ${FALLBACK_PREFIX}/`)) log(line)
+      }),
+    )
     .basePath('/api')
     // Закрыто всё, кроме короткого списка в auth/middleware.ts
     .use(authenticate({ db, auth, trustedOrigins }))
@@ -118,8 +134,14 @@ export function createApp(deps: AppDeps) {
       }),
     )
     // Сайт установки без id в адресе: одна установка — один сайт (modules/site)
-    .route('/site', siteRoutes({ db, siteUrl: deps.siteUrl }))
-    .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log }))
+    .route('/site', siteRoutes({ db, siteUrl: deps.siteUrl, notFoundPage: deps.notFoundPage }))
+    .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log, siteUrl: deps.siteUrl }))
+    // SEO и настройки сайта — владельцу; иконки сайта открыты: их берёт рендерер (modules/settings)
+    .route(
+      '/sites/:siteId/settings',
+      settingsRoutes({ db, siteUrl: deps.siteUrl, publisher: deps.publisher, log }),
+    )
+    .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     .route('/sites/:siteId/build', buildsRoutes({ db, publisher: deps.publisher }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))
     .route('/sites/:siteId/media', mediaRoutes({ ...deps, maxBytes: deps.mediaMaxBytes }))

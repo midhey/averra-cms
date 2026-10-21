@@ -181,11 +181,15 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
     return c.html(page, status, PAGE_HEADERS)
   }
 
-  /** Принято (или поймана ловушка — снаружи неотличимо): назад на страницу с якорем успеха */
+  /**
+   * Принято (или поймана ловушка — снаружи неотличимо): назад на страницу с параметром sent и
+   * якорем успеха. sent=<id формы> — адрес «спасибо» для целей аналитики без своего JS (Метрика:
+   * «посещение страницы, URL содержит sent=»). Id блока — латиница, цифры, _ и - (BlockId)
+   */
   function success(c: Context, slug: string, blockId: string, successText: string) {
     if (wantsJson(c)) return c.json({ status: 'accepted' as const }, 200)
     const back = returnUrl(c.req.header('origin'), c.req.header('referer'), slug)
-    if (back) return c.redirect(`${back}#${sentAnchor(blockId)}`, 303)
+    if (back) return c.redirect(`${back}?sent=${blockId}#${sentAnchor(blockId)}`, 303)
     return c.html(
       messagePage({ title: 'Заявка отправлена', message: successText }),
       200,

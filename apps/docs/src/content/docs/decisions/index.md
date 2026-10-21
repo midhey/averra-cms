@@ -21,6 +21,7 @@ sidebar:
 - [Статический сайт, собранный на сервере](/averra-cms/decisions/static-output/)
 - [Посетители сайта — потом](/averra-cms/decisions/visitors-later/)
 - [Заявки видит клиент, а не редактор и не нейронка](/averra-cms/decisions/leads-access/)
+- [SEO и настройки сайта](/averra-cms/decisions/seo-settings/)
 
 ## Стек
 

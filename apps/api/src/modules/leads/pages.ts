@@ -21,9 +21,17 @@ type PageInput = {
   problems?: readonly string[]
   /** Куда вернуться: страница с формой. Нет — только совет нажать «Назад» */
   back?: string | undefined
+  /** Подпись ссылки back */
+  backLabel?: string
 }
 
-export function messagePage({ title, message, problems = [], back }: PageInput) {
+export function messagePage({
+  title,
+  message,
+  problems = [],
+  back,
+  backLabel = 'Вернуться к форме',
+}: PageInput) {
   return html`<!doctype html>
 <html lang="ru">
 <head>
@@ -44,7 +52,7 @@ export function messagePage({ title, message, problems = [], back }: PageInput) 
 <h1>${title}</h1>
 <p>${message}</p>
 ${problems.length > 0 ? html`<ul>${problems.map((problem) => html`<li>${problem}</li>`)}</ul>` : ''}
-${back ? html`<p><a href="${back}">Вернуться к форме</a></p>` : ''}
+${back ? html`<p><a href="${back}">${backLabel}</a></p>` : ''}
 </main>
 </body>
 </html>`.value

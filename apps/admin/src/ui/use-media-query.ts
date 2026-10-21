@@ -20,3 +20,9 @@ export function useMediaQuery(query: string) {
 
 /** Узкий экран — уже `ui.breakpoint(medium)` (64rem): на нём у оболочки меню, у редактора вкладки */
 export const NARROW_SCREEN = '(width < 64rem)'
+
+/**
+ * Средний экран — уже 80rem (1280 px): полосе редактора с подписями у всех кнопок не хватает места,
+ * и «Страница» с «Историей» становятся иконками
+ */
+export const COMPACT_SCREEN = '(width < 80rem)'

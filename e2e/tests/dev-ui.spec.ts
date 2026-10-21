@@ -17,7 +17,16 @@ test.describe('витрина компонентов', () => {
     await page.goto('/dev/ui')
     await expect(page).toHaveTitle('Витрина компонентов — Averra CMS')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Витрина компонентов')
-    for (const name of ['Кнопки', 'Поля', 'Выбор', 'Вкладки', 'Состояния', 'Окно', 'Иконки']) {
+    for (const name of [
+      'Кнопки',
+      'Поля',
+      'Выбор',
+      'Вкладки',
+      'Состояния',
+      'Окно',
+      'SEO',
+      'Иконки',
+    ]) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible()
     }
     // Старой шапки здесь нет: витрина сама в оболочке AppShell

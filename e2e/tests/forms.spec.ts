@@ -55,7 +55,7 @@ test('форма без JavaScript: посетитель отправляет �
     await site.form.getByRole('button', { name: 'Отправить заявку' }).click()
 
     // 303 из API вернул на ту же страницу с якорем: CSS показывает «Спасибо» и прячет форму
-    await expect(site.page).toHaveURL(`${urls.renderer}/#form-1-sent`)
+    await expect(site.page).toHaveURL(`${urls.renderer}/?sent=form-1#form-1-sent`)
     await expect(site.page.getByText(SUCCESS)).toBeVisible()
     await expect(site.form).toBeHidden()
   } finally {
@@ -122,7 +122,7 @@ test('ловушка для ботов: «Спасибо» на экране, н
     // Ловушку человек не видит (она за краем экрана и скрыта от диктора), а бот заполняет
     await site.page.locator('input[name="website"]').fill('https://spam.example', { force: true })
     await site.form.getByRole('button', { name: 'Отправить заявку' }).click()
-    await expect(site.page).toHaveURL(`${urls.renderer}/#lead-sent`)
+    await expect(site.page).toHaveURL(`${urls.renderer}/?sent=lead#lead-sent`)
     await expect(site.page.getByText(SUCCESS)).toBeVisible()
   } finally {
     await site.context.close()
@@ -161,7 +161,7 @@ test('форма на неглавной странице без JavaScript: п�
     await site.form.getByLabel('Телефон').fill('+7 900 765-43-21')
     await site.form.getByLabel('Я согласен на обработку персональных данных').check()
     await site.form.getByRole('button', { name: 'Отправить заявку' }).click()
-    await expect(site.page).toHaveURL(`${urls.renderer}/${slug}#about-form-sent`)
+    await expect(site.page).toHaveURL(`${urls.renderer}/${slug}?sent=about-form#about-form-sent`)
     await expect(site.page.getByText(SUCCESS)).toBeVisible()
     await expect(site.form).toBeHidden()
   } finally {

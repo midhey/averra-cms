@@ -39,11 +39,15 @@ export const sites = pgTable(
     leadRetentionDays: integer().notNull().default(180),
     // Слать ли посетителю подтверждение, что заявка получена (фиксированный текст)
     leadConfirmation: boolean().notNull().default(true),
+    // SEO и настройки сайта (раздел «SEO»): схема SiteSettings, читает readSiteSettings.
+    // Пусто — значения по умолчанию, сайт открыт поисковикам (новый сайт установки — скрыт)
+    settings: jsonb().$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     check('sites_lead_retention_valid', sql`${table.leadRetentionDays} BETWEEN 7 AND 1825`),
     check('sites_lead_recipients_array', sql`jsonb_typeof(${table.leadRecipients}) = 'array'`),
+    check('sites_settings_object', sql`jsonb_typeof(${table.settings}) = 'object'`),
   ],
 )
 

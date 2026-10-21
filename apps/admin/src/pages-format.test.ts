@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   filterPages,
   formatDateTime,
+  pageNote,
   pagePath,
   pageState,
   pagesSummary,
@@ -72,6 +73,11 @@ describe('адрес и дата', () => {
   it('главная открывается по корню, остальные по своему адресу', () => {
     expect(pagePath('index')).toBe('/')
     expect(pagePath('o-nas')).toBe('/o-nas')
+  })
+
+  it('служебная страница 404 помечена в списке, обычные — нет', () => {
+    expect(pageNote('404')).toBe('на адресах, где страницы нет')
+    expect(pageNote('o-nas')).toBeUndefined()
   })
 
   it('дата публикации по-русски, в часовом поясе человека', () => {
