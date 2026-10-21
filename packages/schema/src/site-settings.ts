@@ -91,7 +91,9 @@ export const MetrikaId = z
   .trim()
   .regex(/^(\d{4,12})?$/, 'Номер счётчика — только цифры, например 98765432')
 
-/** Идентификатор потока Google Analytics 4: G-XXXXXXXXXX. Подставляется в скрипт — поэтому строго */
+/**
+ * Идентификатор потока Google Analytics 4: G-XXXXXXXXXX. Подставляется в скрипт — поэтому строго
+ */
 export const Ga4Id = z
   .string()
   .trim()

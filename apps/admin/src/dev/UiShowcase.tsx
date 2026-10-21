@@ -454,6 +454,26 @@ export function UiShowcase() {
               <span className={styles.statLabel}>хранится 14 копий</span>
             </Card>
           </div>
+          {/* Выбранная карточка-ссылка (aria-current), как заявка в списке рядом с карточкой. В
+              принудительных цветах её отличает обводка: цвет рамки там не различить */}
+          <ul className={styles.picks} aria-label="Заявки в списке">
+            <li>
+              <a
+                className={cardClassName({ padding: 'compact', interactive: true })}
+                href="#cards"
+                aria-current="page"
+              >
+                <span className={styles.statLabel}>Главная · 5 минут назад</span>
+                <span className={styles.pickName}>Мария Иванова</span>
+              </a>
+            </li>
+            <li>
+              <a className={cardClassName({ padding: 'compact', interactive: true })} href="#cards">
+                <span className={styles.statLabel}>Цены · вчера</span>
+                <span className={styles.pickName}>Пётр Смирнов</span>
+              </a>
+            </li>
+          </ul>
           <DataTable
             caption="Страницы сайта"
             columns={[

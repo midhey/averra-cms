@@ -8,7 +8,9 @@ import { SiteBuildStatus } from './publish'
 /** Время в ISO 8601 с зоной: так его пишет averra.sh (date -u +%Y-%m-%dT%H:%M:%SZ) */
 const IsoTime = z.iso.datetime({ offset: true })
 
-/** Причина сбоя — фиксированная строка скрипта, не вывод команд: в нём бывают параметры подключения */
+/**
+ * Причина сбоя — фиксированная строка скрипта, не вывод команд: в нём бывают параметры подключения
+ */
 const RunError = z.string().max(500).nullable()
 
 /** Откуда бэкап: по расписанию (таймер), руками или перед обновлением */
@@ -22,7 +24,10 @@ export type BackupKind = z.infer<typeof BackupKind>
 export const BackupRemote = z.enum(['off', 'uploaded', 'failed', 'cleanup-failed'])
 export type BackupRemote = z.infer<typeof BackupRemote>
 
-/** Один бэкап: файл state/backup-last.json (последний) и state/backup-last-ok.json (последний удачный) */
+/**
+ * Один бэкап: файл state/backup-last.json (последний)
+ * и state/backup-last-ok.json (последний удачный)
+ */
 export const BackupRun = z.object({
   name: z.string().regex(/^[0-9]{8}-[0-9]{6}-[a-z-]+$/),
   kind: BackupKind,
@@ -70,7 +75,9 @@ export const UpdateRun = z.object({
   /** Нет, пока обновление идёт (in-progress) */
   finishedAt: IsoTime.nullable(),
   result: UpdateResult,
-  /** При откате база восстановлена из бэкапа перед обновлением: миграции новой версии успели пройти */
+  /**
+   * При откате база восстановлена из бэкапа перед обновлением: миграции новой версии успели пройти
+   */
   dbRestored: z.boolean(),
   /**
    * База, которая работала до восстановления при откате: в ней данные, принятые после бэкапа
@@ -187,7 +194,9 @@ export type InstallationFacts = z.infer<typeof InstallationFacts>
 export const InstallationStatus = InstallationFacts.extend({ problems: z.array(StatusProblem) })
 export type InstallationStatus = z.infer<typeof InstallationStatus>
 
-/** Пороги проблем. Бэкап раз в сутки, поэтому «старый» — больше двух суток: один пропуск не тревога */
+/**
+ * Пороги проблем. Бэкап раз в сутки, поэтому «старый» — больше двух суток: один пропуск не тревога
+ */
 export const STATUS_LIMITS = {
   backupMaxAgeMs: 48 * 60 * 60 * 1000,
   /** Сколько дней показывать откат при обновлении: дальше это история, а не проблема */

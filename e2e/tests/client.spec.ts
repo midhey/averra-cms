@@ -2,9 +2,10 @@ import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@averra/schema'
 import type { Page } from '@playwright/test'
 import { editor, expect, sidebar, siteScreen, sites, test } from './fixtures'
 
-// Что админка прячет от клиента сайта. Роль подменяется в браузере — в ответах API о пользователе
-// и о сайте: так один тест проверяет все экраны на демо-сайте с его страницами. Настоящего клиента
-// заводит приглашение (invitations.spec.ts). Права это не проверяет (их решает API, см. apps/api/src/auth/access.test.ts):
+// Что админка прячет от клиента сайта. Роль подменяется в браузере — в ответах
+// API о пользователе и о сайте: так один тест проверяет все экраны на демо-сайте
+// с его страницами. Настоящего клиента заводит приглашение (invitations.spec.ts).
+// Права это не проверяет (их решает API, см. apps/api/src/auth/access.test.ts):
 // здесь только то, что экраны слушаются роли и не показывают недоступное
 
 async function actAsClient(page: Page) {
@@ -51,7 +52,8 @@ test('клиенту не видны «Новая страница», «Удал
 
   await actAsClient(page)
 
-  // Обзор — первый экран, как у всех: ни «Новой страницы», ни «Опубликовать правки», хотя правки есть
+  // Обзор — первый экран, как у всех: ни «Новой
+  // страницы», ни «Опубликовать правки», хотя правки есть
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByRole('link', { name: 'Новая страница' })).toHaveCount(0)

@@ -15,8 +15,10 @@ export default defineConfig({
       title: 'Averra',
       description: 'Документация Averra — лёгкой CMS для лендингов: установка, админка, MCP.',
       logo: { src: './src/assets/mark.svg' },
-      // Русский — корневая локаль: страницы прямо в src/content/docs, адреса без /ru/.
-      // Английский добавится папкой src/content/docs/en и строкой en: { label: 'English', lang: 'en' }
+      // Русский — корневая локаль: страницы прямо в src/content/docs, адреса без /ru/. Английский
+      // добавится папкой src/content/docs/en, строкой en: { label: 'English', lang: 'en' } и
+      // translations: { en: '…' } у групп сайдбара: их label — подпись корневой локали, поэтому
+      // русскую в translations не пишем
       defaultLocale: 'root',
       locales: {
         root: { label: 'Русский', lang: 'ru' },

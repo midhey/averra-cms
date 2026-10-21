@@ -50,7 +50,9 @@ export function escapeHtml(text: string) {
 
 export { canonicalPath }
 
-/** Заголовок во вкладке: SEO-заголовок целиком или заголовок по шаблону сайта (у главной — как есть) */
+/**
+ * Заголовок во вкладке: SEO-заголовок целиком или заголовок по шаблону сайта (у главной — как есть)
+ */
 export const documentTitle = (site: SeoSite, page: SeoPage) =>
   pageDocumentTitle({ ...page, seo: page.content.seo }, site.settings.titleTemplate)
 
@@ -243,7 +245,9 @@ export function analyticsBody(settings: StoredSiteSettings): string[] {
     : []
 }
 
-/** JSON внутри <script>: «<» и разделители строк — escape-последовательностями, без выхода из тега */
+/**
+ * JSON внутри <script>: «<» и разделители строк — escape-последовательностями, без выхода из тега
+ */
 const scriptJson = (value: unknown) =>
   JSON.stringify(value)
     .replaceAll('<', '\\u003c')

@@ -47,7 +47,7 @@ const API_MEDIA_PREFIX = '/api/media/'
  * на сервере) — на /media/<id>/<файл> от корня сайта: эти файлы публикация кладёт в папку релиза
  * (apps/api/src/publish), и сайт целиком — статика без API
  */
-export function siteMediaUrl(apiUrl: string, links: 'api' | 'relative' = CMS_LINKS) {
+function siteMediaUrl(apiUrl: string, links: 'api' | 'relative' = CMS_LINKS) {
   if (links === 'api') return new URL(apiUrl, CMS_API_URL).href
   if (!apiUrl.startsWith(API_MEDIA_PREFIX)) {
     throw new Error(`Неожиданный адрес файла картинки: ${apiUrl}`)

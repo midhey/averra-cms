@@ -1,6 +1,8 @@
 import type { EnumSketch } from '@averra/schema'
 
-/** Та часть JSON Schema, которую понимает конструктор форм. Её же отдаёт Zod через z.toJSONSchema */
+/**
+ * Та часть JSON Schema, которую понимает конструктор форм. Её же отдаёт Zod через z.toJSONSchema
+ */
 export type JsonSchema = {
   type?: string
   title?: string
@@ -18,7 +20,10 @@ export type JsonSchema = {
   'x-widget'?: string
   /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
   'x-enum-titles'?: Readonly<Record<string, string>>
-  /** Миниатюры вариантов оформления: значение → рисунок на карточке варианта (вариант первого экрана) */
+  /**
+   * Миниатюры вариантов оформления: значение → рисунок
+   * на карточке варианта (вариант первого экрана)
+   */
   'x-enum-sketches'?: Readonly<Record<string, EnumSketch>>
 }
 

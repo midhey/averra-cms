@@ -14,8 +14,9 @@ export const PASSWORD_RESET_TTL_MINUTES = 60
 export const RESET_IDENTIFIER_PREFIX = 'reset-password:'
 
 /**
- * Так начинается идентификатор записи сброса в базе: reset-password#<SHA-256>. На месте
- * разделителя — #, которого нет в приставках Better Auth, и это главное, см. hashVerificationIdentifier
+ * Так начинается идентификатор записи сброса в базе:
+ * reset-password#<SHA-256>. На месте разделителя — #, которого нет в
+ * приставках Better Auth, и это главное, см. hashVerificationIdentifier
  */
 export const RESET_STORED_PREFIX = 'reset-password#'
 

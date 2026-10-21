@@ -156,7 +156,9 @@ function isGuardedPathVariant(url: string) {
   return GUARDED_AUTH_PATHS.test(path)
 }
 
-/** Better Auth отказал из-за неверного текущего пароля (а не из-за нового пароля, лимита, Origin) */
+/**
+ * Better Auth отказал из-за неверного текущего пароля (а не из-за нового пароля, лимита, Origin)
+ */
 async function isWrongPassword(res: Response) {
   if (res.status !== 400) return false
   const body = BetterAuthError.safeParse(

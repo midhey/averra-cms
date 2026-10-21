@@ -54,7 +54,8 @@ await build({
   target: 'node24',
   external,
   sourcemap: 'linked',
-  // Имена функций и классов остаются: по ним читается стек ошибки и работают instanceof-проверки имени
+  // Имена функций и классов остаются: по ним читается
+  // стек ошибки и работают instanceof-проверки имени
   keepNames: true,
   logLevel: 'warning',
 })

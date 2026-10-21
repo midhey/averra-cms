@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto'
 import { demoPage, demoPageTitle, form, MAIN_PAGE_SLUG } from '@averra/schema'
 import { request } from '@playwright/test'
 import { urls } from '../urls'
-import { answerDialogs, expect, sites, test } from './fixtures'
+import { answerDialogs, expect, expectSeenByEye, lineCount, sites, test } from './fixtures'
 
 // Экран заявок по концепту (Leads.dc.html): вкладки, список и карточка рядом, «Ответить письмом»,
 // удаление с подтверждением, на телефоне — по очереди. Приём заявок и CSV — forms.spec.ts
@@ -89,7 +89,7 @@ test('список и карточка рядом: вкладки, «Ответ�
   await expect(card.getByRole('button', { name: 'Вернуть в новые' })).toBeVisible()
   // Когда обработана — видно глазами, а не только диктору: своей строкой с датой, не в плашке
   const processedLine = card.locator('p').filter({ hasText: /^Обработана \d/u })
-  await expect(processedLine.locator('time')).toBeVisible()
+  await expectSeenByEye(processedLine.locator('time'))
   await expect(card.getByText('Обработана', { exact: true })).toBeVisible()
   // Во вкладке «Новые» её больше нет, в «Обработанных» — есть. Вкладки — стрелками
   await tabs.getByRole('tab', { selected: true }).focus()
@@ -247,6 +247,34 @@ test('длинное имя на телефоне: плашка уходит п�
   expect(nameBox && pillBox).toBeTruthy()
   if (!nameBox || !pillBox) return
   expect(pillBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 1)
+})
+
+test('длинное имя на десктопе: переносится в две строки, плашка остаётся справа', async ({
+  page,
+  demoSite,
+}) => {
+  // 54 символа: leadName режет только с 60, а в одну строку карточки на 1440 px это не влезает
+  const name = `Анна-Мария Константиновна Преображенская ${Date.now()}`
+  await createLead(demoSite.id, { name, phone: '+7 921 333-44-56', email: '', comment: '' })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/leads')
+  await page
+    .getByRole('list', { name: 'Список заявок' })
+    .getByRole('link')
+    .filter({ hasText: name })
+    .click()
+  const card = page.getByRole('article', { name })
+  const heading = card.getByRole('heading', { level: 2, name })
+  await expect(heading).toBeVisible()
+  expect(await lineCount(heading)).toBe(2)
+
+  // Плашка — справа от имени и на его высоте, а не под ним
+  const nameBox = await heading.boundingBox()
+  const pillBox = await card.getByText('Новая', { exact: true }).boundingBox()
+  expect(nameBox && pillBox).toBeTruthy()
+  if (!nameBox || !pillBox) return
+  expect(pillBox.x).toBeGreaterThanOrEqual(nameBox.x + nameBox.width - 1)
+  expect(pillBox.y).toBeLessThan(nameBox.y + nameBox.height)
 })
 
 test('принудительные цвета: выбранная заявка — обводкой, точка новой заявки видна', async ({

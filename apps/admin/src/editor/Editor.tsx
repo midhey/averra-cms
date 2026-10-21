@@ -85,7 +85,8 @@ const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
 export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [title, setTitle] = useState(page.title)
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
-  // SEO страницы (панель «SEO»): заголовок, описание, картинка, canonical, noindex — часть черновика
+  // SEO страницы (панель «SEO»): заголовок, описание,
+  // картинка, canonical, noindex — часть черновика
   const [seo, setSeo] = useState<PageSeo>(page.draft.seo ?? {})
   const [selectedId, setSelectedId] = useState(page.draft.blocks[0]?.id ?? null)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>

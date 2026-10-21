@@ -294,3 +294,22 @@ export function lineCount(locator: Locator) {
     return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
   })
 }
+
+/**
+ * Элемент виден глазами, а не только диктору. toBeVisible считает видимым и `visually-hidden`
+ * (1 × 1 px с clip-path), поэтому смотрим размер и обрезку у самого элемента и у всех предков
+ */
+export async function expectSeenByEye(locator: Locator) {
+  await expect(locator).toBeVisible()
+  const hidden = await locator.evaluate((element) => {
+    for (let node = element; node; node = node.parentElement) {
+      const rect = node.getBoundingClientRect()
+      const style = node.ownerDocument.defaultView.getComputedStyle(node)
+      if (rect.width <= 1 || rect.height <= 1 || style.clipPath !== 'none') {
+        return `${node.tagName.toLowerCase()}.${node.className}`
+      }
+    }
+    return null
+  })
+  expect(hidden, 'элемент или его предок скрыт от глаз').toBeNull()
+}

@@ -23,7 +23,9 @@ export type SeoBlock = { readonly id: string; readonly type: string; readonly pr
 export const mainHeadingBlock = <B extends SeoBlock>(blocks: readonly B[]) =>
   blocks.find((block) => block.type === 'hero')
 
-/** Что сайт сообщает странице для SEO: GET /api/sites/:siteId отдаёт это всем, кто правит страницы */
+/**
+ * Что сайт сообщает странице для SEO: GET /api/sites/:siteId отдаёт это всем, кто правит страницы
+ */
 export type SiteSeo = {
   /** Шаблон заголовка (%s — заголовок страницы), пусто — без шаблона */
   titleTemplate: string

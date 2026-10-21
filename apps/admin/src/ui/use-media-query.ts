@@ -18,7 +18,9 @@ export function useMediaQuery(query: string) {
   return useSyncExternalStore(subscribe, () => window.matchMedia?.(query).matches ?? false)
 }
 
-/** Узкий экран — уже `ui.breakpoint(medium)` (64rem): на нём у оболочки меню, у редактора вкладки */
+/**
+ * Узкий экран — уже `ui.breakpoint(medium)` (64rem): на нём у оболочки меню, у редактора вкладки
+ */
 export const NARROW_SCREEN = '(width < 64rem)'
 
 /**

@@ -24,7 +24,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
-// В коде поля в camelCase, в базе колонки в snake_case: casing задан в drizzle.config.ts и client.ts
+// В коде поля в camelCase, в базе колонки в snake_case:
+// casing задан в drizzle.config.ts и client.ts
 
 export const sites = pgTable(
   'sites',
@@ -379,7 +380,7 @@ export const media = pgTable(
 )
 
 /** Состояние письма в очереди: ждёт, отправляется, отправлено, окончательно не отправлено */
-export const mailStatuses = ['pending', 'sending', 'sent', 'failed'] as const
+const mailStatuses = ['pending', 'sending', 'sent', 'failed'] as const
 export type MailStatusValue = (typeof mailStatuses)[number]
 
 /**
@@ -449,10 +450,11 @@ export const mailOutbox = pgTable(
 )
 
 /**
- * Настройки SMTP, которые владелец задаёт в админке (страница «Почта»). Строка с site_id = NULL —
- * на всю установку, она одна (уникальность с NULLS NOT DISTINCT). Потом сюда лягут строки сайтов:
- * свой SMTP у сайта для писем о заявках. SMTP из окружения (SMTP_HOST…) главнее этой таблицы.
- * Пароль — только зашифрованным (src/crypto), и наружу он не отдаётся никогда (src/mail/settings.ts)
+ * Настройки SMTP, которые владелец задаёт в админке (страница «Почта»). Строка с
+ * site_id = NULL — на всю установку, она одна (уникальность с NULLS NOT DISTINCT).
+ * Потом сюда лягут строки сайтов: свой SMTP у сайта для писем о заявках. SMTP из
+ * окружения (SMTP_HOST…) главнее этой таблицы. Пароль — только зашифрованным
+ * (src/crypto), и наружу он не отдаётся никогда (src/mail/settings.ts)
  */
 export const mailSettings = pgTable(
   'mail_settings',

@@ -126,7 +126,7 @@ test.describe('витрина компонентов', () => {
   // Контрастная тема Windows (forced colors): выбор виден системным «выделением», подписи читаются.
   // Светлая и тёмная системные палитры дают разные пары цветов — проверяем обе
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`принудительные цвета (${colorScheme}): выбранный вариант и вкладка видны`, async ({
+    test(`принудительные цвета (${colorScheme}): выбранные вариант, вкладка и карточка видны`, async ({
       page,
     }) => {
       await page.emulateMedia({ forcedColors: 'active', colorScheme })
@@ -168,6 +168,11 @@ test.describe('витрина компонентов', () => {
         const tabs = [...document.querySelectorAll('[role="tab"]')]
         const selectedTab = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')
         const otherTab = tabs.find((tab) => tab.getAttribute('aria-selected') !== 'true')
+        const [pick, otherPick] = document.querySelectorAll('[aria-label="Заявки в списке"] a')
+        const outline = (el) => {
+          const style = getComputedStyle(el)
+          return style.outlineStyle + ' ' + style.outlineWidth
+        }
         return {
           highlight: probe('Highlight'),
           highlightText: probe('HighlightText'),
@@ -181,6 +186,11 @@ test.describe('витрина компонентов', () => {
           checkmark: getComputedStyle(card, '::after').borderRightColor,
           selectedTabBorder: getComputedStyle(selectedTab).borderBottomColor,
           otherTabBorder: getComputedStyle(otherTab).borderBottomColor,
+          pickCurrent: pick.getAttribute('aria-current'),
+          pickBorder: getComputedStyle(pick).borderTopColor,
+          pickOutline: outline(pick),
+          otherPickBorder: getComputedStyle(otherPick).borderTopColor,
+          otherPickOutline: outline(otherPick),
         }
       })()`)) as Record<string, string | number>
 
@@ -196,6 +206,13 @@ test.describe('витрина компонентов', () => {
       // Вкладки: подчёркнута только выбранная
       expect(result.selectedTabBorder).toBe(result.highlight)
       expect(result.otherTabBorder).toBe(result.canvas)
+      // Выбранная карточка-ссылка: рамка «выделения» и обводка внутри неё — цвет рамки в этом
+      // режиме не различить. У соседней нет ни того, ни другого
+      expect(result.pickCurrent).toBe('page')
+      expect(result.pickBorder).toBe(result.highlight)
+      expect(result.pickOutline).toBe('solid 2px')
+      expect(result.otherPickBorder).not.toBe(result.highlight)
+      expect(result.otherPickOutline).not.toBe('solid 2px')
     })
   }
 

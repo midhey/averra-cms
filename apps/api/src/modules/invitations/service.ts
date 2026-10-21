@@ -131,7 +131,8 @@ export async function registerByInvitation(
   const problem = invitationProblem(invitation, now)
   if (problem) return { ok: false as const, problem }
 
-  // Без проверенной ссылки хеш не считаем: иначе открытый маршрут грузил бы процессор по любому запросу
+  // Без проверенной ссылки хеш не считаем: иначе открытый
+  // маршрут грузил бы процессор по любому запросу
   const passwordHash = await hashPassword(password)
   try {
     const user = await db.transaction(async (tx) => {

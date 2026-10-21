@@ -338,7 +338,7 @@ function TemplatePreview({ template }: { template: TemplateInfo }) {
           <p>
             <span className={mutedClassName}>Тема:</span> {preview.data.subject}
           </p>
-          {/* sandbox без разрешений: в письме нет скриптов, а iframe не получает доступ к админке */}
+          {/* sandbox без разрешений: в письме нет скриптов, iframe не получает доступ к админке */}
           <iframe
             className={styles.frame}
             title={`Предпросмотр письма «${template.title}»`}

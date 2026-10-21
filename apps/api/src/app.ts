@@ -58,7 +58,9 @@ export type AppDeps = {
   mail: MailDeps
   /** Адрес админки: из него собираются ссылки в письмах (приглашение, сброс пароля) */
   adminUrl: string
-  /** Адрес опубликованного сайта (SITE_URL): его домен админка показывает в панели. Нет — не знаем */
+  /**
+   * Адрес опубликованного сайта (SITE_URL): его домен админка показывает в панели. Нет — не знаем
+   */
   siteUrl?: string
   /**
    * Через сколько миллисекунд, не раньше, отвечать на «Забыли пароль?»: по времени ответа
@@ -92,7 +94,7 @@ export type AppDeps = {
 }
 
 /** Запросов сброса пароля на один адрес: не больше трёх за 15 минут */
-export const RESET_REQUESTS_PER_EMAIL = { max: 3, windowMs: 15 * 60 * 1000 } as const
+const RESET_REQUESTS_PER_EMAIL = { max: 3, windowMs: 15 * 60 * 1000 } as const
 
 export function createApp(deps: AppDeps) {
   const { db, auth, trustedOrigins, log, mail, adminUrl } = deps

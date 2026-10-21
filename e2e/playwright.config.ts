@@ -36,7 +36,7 @@ export default defineConfig({
       // --dev — учебный режим, как в pnpm dev: без своего AUTH_SECRET, с демо-сайтом и владельцем
       // в пустой базе. Без флага API на учебном секрете не стартует (см. isLocalDev в config.ts).
       // tsx напрямую, а не скрипт start: pnpm мог бы принять --dev за свой флаг.
-      // smtp-certs — CA тестового SMTP-сервера: его файл должен быть до старта API (NODE_EXTRA_CA_CERTS)
+      // smtp-certs — CA тестового SMTP-сервера: файл для NODE_EXTRA_CA_CERTS нужен до старта API
       command:
         'node scripts/clean-data.ts && node scripts/smtp-certs.ts && pnpm --filter @averra/api exec tsx src/index.ts --dev',
       url: `${urls.api}/api/health/ready`,
@@ -82,10 +82,10 @@ export default defineConfig({
     },
     {
       name: 'Рендерер',
-      // Astro держит один файл-замок apps/renderer/.astro/dev.json на проект и не даёт
-      // запустить второй astro dev рядом с рендерером из pnpm dev (и наоборот).
-      // --ignore-lock не берёт и не пишет замок (разве что удалит брошенный), а заодно не даёт Astro уйти в фон,
-      // когда он решит, что его запустил агент: webServer должен владеть процессом
+      // Astro держит один файл-замок apps/renderer/.astro/dev.json на проект и не даёт запустить
+      // второй astro dev рядом с рендерером из pnpm dev (и наоборот). --ignore-lock не берёт и не
+      // пишет замок (разве что удалит брошенный), а заодно не даёт Astro уйти в фон, когда он
+      // решит, что его запустил агент: webServer должен владеть процессом
       command: `pnpm --filter @averra/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
       url: urls.renderer,
       reuseExistingServer: false,

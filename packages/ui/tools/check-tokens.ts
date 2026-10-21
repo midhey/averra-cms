@@ -14,7 +14,10 @@ import scss from 'postcss-scss'
  * Разбираются объявления и параметры at-правил, поэтому селектор #id и комментарий — не нарушение
  */
 
-/** HEX и функции цвета CSS. color-mix() сам не цвет: сырой цвет внутри него поймают остальные шаблоны */
+/**
+ * HEX и функции цвета CSS. color-mix() сам не цвет:
+ * сырой цвет внутри него поймают остальные шаблоны
+ */
 const COLOR_PATTERN =
   /#[\da-f]{3,8}\b|(?<![\w-])(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\s*\(/giu
 const PALETTE_PATTERN = /--palette-[\w-]+/gu
@@ -181,8 +184,8 @@ const NAMED_COLORS = [
   'yellowgreen',
 ]
 /**
- * Слово-цвет само по себе: не часть имени (--color-red, $red, ui.red, red-dot) и не функция (tan()).
- * Строки и url() вырезаются до поиска: "Golos Text" и имена файлов не цвета
+ * Слово-цвет само по себе: не часть имени (--color-red, $red, ui.red, red-dot) и не функция
+ * (tan()). Строки и url() вырезаются до поиска: "Golos Text" и имена файлов не цвета
  */
 const NAMED_COLOR_PATTERN = new RegExp(
   `(?<![\\w$@#.-])(?:${NAMED_COLORS.join('|')})(?![\\w(-])`,
@@ -348,7 +351,9 @@ function collect(value: string, node: Node, file: string, prop?: string): TokenV
   return found.map(([kind, m]) => ({ ...at, kind, value: m[0] }))
 }
 
-/** Имя свойства: объявить палитру или примитив нельзя, а слово-цвет в имени (border-color) — не цвет */
+/**
+ * Имя свойства: объявить палитру или примитив нельзя, а слово-цвет в имени (border-color) — не цвет
+ */
 function collectDeclared(prop: string, node: Node, file: string): TokenViolation[] {
   const at = position(node, file)
   return [

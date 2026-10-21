@@ -25,6 +25,7 @@ sidebar:
 | `pnpm build` | сборка всего: API в `apps/api/dist/server`, админка, рендерер, документация. Рендереру нужен запущенный API: он собирает сайт установки |
 | `pnpm docs:dev` | сайт документации на `http://localhost:4330/averra-cms/` |
 | `pnpm docs:build` | сборка документации в `apps/docs/dist` с проверкой ссылок |
+| `pnpm --filter @averra/docs preview` | собранная документация (после `docs:build`) на `http://localhost:4330/averra-cms/` — с поиском, которого в `docs:dev` нет |
 | `pnpm db:generate` | миграция по изменениям в `apps/api/src/db/schema.ts` |
 
 Свой пакет — `pnpm --filter <пакет> <скрипт>`, например `pnpm --filter @averra/api test`.

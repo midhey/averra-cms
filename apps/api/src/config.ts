@@ -32,9 +32,9 @@ export function isDevAuthSecret(secret: string) {
 }
 
 /**
- * Ключ шифрования пароля SMTP для разработки и e2e: base64 строки «dev-only-mail-key-not-for-prod!!».
- * Он лежит в репозитории, поэтому, как и DEV_AUTH_SECRET, годится только для учебного режима:
- * пароль, зашифрованный им, защищён только для вида
+ * Ключ шифрования пароля SMTP для разработки и e2e: base64 строки
+ * «dev-only-mail-key-not-for-prod!!». Он лежит в репозитории, поэтому, как и DEV_AUTH_SECRET,
+ * годится только для учебного режима: пароль, зашифрованный им, защищён только для вида
  */
 export const DEV_MAIL_ENCRYPTION_KEY = 'ZGV2LW9ubHktbWFpbC1rZXktbm90LWZvci1wcm9kISE='
 
@@ -62,8 +62,8 @@ function decodeMailKey(value: string) {
 
 /**
  * Учебный ключ шифрования или его вариант: с пробелами и кавычками, в другом регистре, в записи
- * base64url или без «=», его часть, а ещё тот же учебный текст, записанный в base64 иначе. Все они —
- * публичный ключ из репозитория (ловим небрежность при копировании, как isDevAuthSecret)
+ * base64url или без «=», его часть, а ещё тот же учебный текст, записанный в base64 иначе. Все
+ * они — публичный ключ из репозитория (ловим небрежность при копировании, как isDevAuthSecret)
  */
 export function isDevMailKey(value: string) {
   const normalized = lettersAndDigits(value)
@@ -247,8 +247,8 @@ const envSchema = (options: ConfigOptions) =>
           error: 'AVERRA_VERSION — тег версии, например 0.1.0',
         })
         .default('dev'),
-      // Папка состояния установки: итоги бэкапов и обновлений, которые пишет deploy/averra.sh
-      // на сервере (в контейнере — только на чтение). Не задана — бэкапов у установки нет (разработка)
+      // Папка состояния установки: итоги бэкапов и обновлений, которые пишет deploy/averra.sh на
+      // сервере (в контейнере — только на чтение). Не задана — бэкапов у установки нет (разработка)
       STATE_DIR: z.string().min(1).optional(),
       // Настоящий PostgreSQL (сервер): postgres://пользователь:пароль@хост:порт/база. Задан —
       // API и команды работают с ним, PGLITE_DIR не нужен. Не задан — встроенный PGlite.
@@ -270,8 +270,8 @@ const envSchema = (options: ConfigOptions) =>
       PUBLISH_KEEP_RELEASES: z.coerce.number().int().min(2).max(50).default(5),
       // Сколько секунд ждать сборку сайта, прежде чем остановить её и считать упавшей
       PUBLISH_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(3600).default(300),
-      // Предел кучи JavaScript процесса сборки, МБ (--max-old-space-size): сборка не съест память VPS.
-      // Замер демо-сайта — 288–355 МБ RSS всего процесса (машина разработки)
+      // Предел кучи JavaScript процесса сборки, МБ (--max-old-space-size): сборка не съест память
+      // VPS. Замер демо-сайта — 288–355 МБ RSS всего процесса (машина разработки)
       PUBLISH_MAX_MEMORY_MB: z.coerce.number().int().min(128).max(8192).default(768),
       // Папка пакета рендерера (apps/renderer). По умолчанию — рядом с API в репозитории или образе
       RENDERER_DIR: z.string().min(1).optional(),
@@ -311,8 +311,9 @@ const envSchema = (options: ConfigOptions) =>
       // Владелец, которого API создаёт в пустой базе в учебном режиме. Без --dev не используется
       DEV_OWNER_EMAIL: z.email().optional(),
       DEV_OWNER_PASSWORD: z.string().min(10).max(128).optional(),
-      // Почта (документация: Установка и сопровождение → Почта). smtp — настоящая отправка, file — письма в папку
-      // (разработка), off — выключена. Не задано: SMTP_HOST → smtp, учебный режим → file, иначе off
+      // Почта (документация: Установка и сопровождение → Почта). smtp —
+      // настоящая отправка, file — письма в папку (разработка), off —
+      // выключена. Не задано: SMTP_HOST → smtp, учебный режим → file, иначе off
       MAIL_TRANSPORT: z.enum(['smtp', 'file', 'off']).optional(),
       SMTP_HOST: z.string().trim().min(1).optional(),
       SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),

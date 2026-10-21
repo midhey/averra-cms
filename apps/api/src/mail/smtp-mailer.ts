@@ -418,8 +418,8 @@ export async function diagnoseSmtp(
     ...smtpConnectionOptions(settings, options),
     connection: socket,
   })
-  // Сбой соединения SMTPConnection сообщает событием error, а не в колбэк connect: ждём одно из двух.
-  // Обработчик error остаётся и после: без него поздняя ошибка сокета уронила бы процесс
+  // Сбой соединения SMTPConnection сообщает событием error, а не в колбэк connect: ждём одно из
+  // двух. Обработчик error остаётся и после: без него поздняя ошибка сокета уронила бы процесс
   let lastError: Error | undefined
   connection.on('error', (error) => {
     lastError = error
