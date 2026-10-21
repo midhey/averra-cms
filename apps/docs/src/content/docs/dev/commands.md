@@ -22,7 +22,7 @@ sidebar:
 | `pnpm lint` | Biome для кода и stylelint для `*.scss`, без исправлений |
 | `pnpm typecheck` | типы во всех пакетах |
 | `pnpm test` | тесты во всех пакетах (Vitest) |
-| `pnpm build` | сборка всего: API в `apps/api/dist/server`, админка, рендерер, документация. Рендереру нужны `CMS_SITE_ID` и запущенный API |
+| `pnpm build` | сборка всего: API в `apps/api/dist/server`, админка, рендерер, документация. Рендереру нужен запущенный API: он собирает сайт установки |
 | `pnpm docs:dev` | сайт документации на `http://localhost:4330/averra-cms/` |
 | `pnpm docs:build` | сборка документации в `apps/docs/dist` с проверкой ссылок |
 | `pnpm db:generate` | миграция по изменениям в `apps/api/src/db/schema.ts` |
@@ -39,10 +39,9 @@ sidebar:
 |---|---|---|
 | `pnpm user:create --email … --name … [--role owner\|member] [--if-missing]` | `user-create.js` | пользователь админки, по умолчанию владелец. `--if-missing` — такой уже есть: выйти без ошибки и не спрашивать пароль |
 | `pnpm user:password --email …` | `user-password.js` | новый пароль, все входы пользователя завершаются, ссылки сброса сгорают. Путь вернуть доступ без почты |
-| `pnpm site:create --name … [--print-id]` | `site-create.js` | сайт, как «Новый сайт» в админке. `--print-id` печатает только id |
-| `pnpm member:add --email … --site <id> --role editor\|client` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль |
-| `pnpm member:invite --email … --site <id> --role editor\|client [--by <почта владельца>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
-| `pnpm token:create --site <id> --name … [--by <почта>]` | `token-create.js` | токен API для MCP, показывается один раз |
+| `pnpm member:add --email … --role editor\|client [--site <id>]` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль |
+| `pnpm member:invite --email … --role editor\|client [--by <почта владельца>] [--site <id>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
+| `pnpm token:create --name … [--by <почта>] [--site <id>]` | `token-create.js` | токен API для MCP, показывается один раз |
 | `pnpm token:list` | `token-list.js` | токены без самих токенов: сайт, кто выпустил, когда пользовались, отозван ли |
 | `pnpm token:revoke --id <id>` | `token-revoke.js` | отозвать токен |
 | `pnpm mail:test --to <адрес>` | `mail-test.js` | проверочное письмо напрямую, по шагам. Проверяет только SMTP из окружения |

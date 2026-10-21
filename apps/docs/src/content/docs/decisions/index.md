@@ -16,6 +16,7 @@ sidebar:
 ## Продукт
 
 - [Своя установка у каждого клиента](/averra-cms/decisions/own-install/)
+- [Одна установка — один сайт](/averra-cms/decisions/single-site/)
 - [Секции, а не свободный холст](/averra-cms/decisions/sections/)
 - [Статический сайт, собранный на сервере](/averra-cms/decisions/static-output/)
 - [Посетители сайта — потом](/averra-cms/decisions/visitors-later/)

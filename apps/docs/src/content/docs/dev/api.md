@@ -70,10 +70,15 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 
 ## Сайты и страницы
 
+Одна установка — один сайт ([почему](/averra-cms/decisions/single-site/)). Его создаёт API при
+первом запуске, создания сайтов в API нет. Маршруты с `:siteId` остаются: это задел под мультисайт,
+и по ним ходят админка, MCP и сборщик, узнав id из `GET /api/site`.
+
 | Запрос | Что делает |
 |---|---|
-| `GET /api/sites` | доступные сайты: владельцу — все, токену — его сайт |
-| `POST /api/sites` | создать сайт `{ name }` — только владелец. Главная создаётся сразу черновиком |
+| `GET /api/site` | сайт, с которым работает пришедший: человеку — сайт установки (нет доступа — 403), токену — его сайт. `{ id, name, url, otherSites }`: `url` — `SITE_URL` или `null`, `otherSites` — сколько ещё сайтов в базе (только владельцу, иначе `null`) |
+| `GET /api/site/snapshot` | снимок сайта установки, как `…/:siteId/snapshot`: рендереру без `CMS_SITE_ID`. **Открыт** |
+| `GET /api/sites` | для совместимости (`list_sites` в MCP): владельцу — все сайты базы, участнику — свои, токену — его сайт |
 | `GET /api/sites/:siteId` | сайт: название, тема, роль вошедшего (`access`), `newLeads` (или `null`, если роли заявки не видны) |
 | `GET /api/sites/:siteId/snapshot` | тема, опубликованные страницы и справочник `media` — всё для рендерера. **Открыт** |
 | `GET /api/sites/:siteId/pages` | страницы: заголовок, адрес, когда опубликована, есть ли неопубликованные правки |
@@ -153,7 +158,8 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 ## Открытые маршруты
 
 Ровно эти и `/api/auth/*`: `GET /api/health`, `GET /api/health/ready`,
-`GET /api/sites/:siteId/snapshot`, `GET /api/media/:mediaId/:file`, `GET /api/password-reset`,
+`GET /api/sites/:siteId/snapshot`, `GET /api/site/snapshot`, `GET /api/media/:mediaId/:file`,
+`GET /api/password-reset`,
 `POST /api/invitations/lookup`, `POST /api/invitations/register`,
 `POST /api/forms/:siteId/:slug/:blockId`. Список живёт в `src/auth/middleware.ts`: открыть новый
 маршрут — значит осознанно вписать его туда ([Доступ и секреты](/averra-cms/dev/security/)).

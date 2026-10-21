@@ -37,8 +37,10 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
    ждёт готовности до трёх минут. Скачивание упало с `denied` или `unauthorized` — пакеты в GHCR
    ещё закрытые (их не переключили в Public после первого релиза,
    [Релизы](/averra-cms/dev/releases/)) или такой версии нет. Переключите пакеты или повторите
-   установку с `--ghcr-user` и токеном `read:packages`.
-4. Создаёт владельца и сайт, id сайта пишет в `.env` (`SITE_ID`) — его Caddy отдаёт на домене.
+   установку с `--ghcr-user` и токеном `read:packages`. API при первом запуске сам создаёт сайт
+   установки с названием из `--site-name`: одна установка — один сайт
+   ([почему](/averra-cms/decisions/single-site/)).
+4. Создаёт владельца.
 5. Поднимает Caddy и ставит ежедневный бэкап (`averra-backup.timer`).
 
 В конце — адрес админки и что делать дальше.
@@ -52,7 +54,7 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
 | `--version <версия>` | версия образов, например `0.1.0`. Обязателен при первой установке |
 | `--admin-domain <домен>` | поддомен админки, по умолчанию `admin.<домен сайта>` |
 | `--owner-name <имя>` | имя владельца, по умолчанию «Владелец» |
-| `--site-name <название>` | название сайта в админке, по умолчанию домен |
+| `--site-name <название>` | название сайта при первом запуске (`SITE_NAME`), по умолчанию домен. Без кавычек и знаков `$ # \`; потом название живёт в базе |
 | `--dir <папка>` | папка установки, по умолчанию `/opt/averra` |
 | `--api-image`, `--web-image` | свои образы без тега (по умолчанию `ghcr.io/midhey/averra-api` и `averra-web`) |
 | `--public-ip <IP>` | адрес сервера за NAT; у сервера с IPv4 и IPv6 — флаг на каждый адрес |
@@ -116,7 +118,7 @@ docker compose exec api node dist/server/user-password.js --email anna@example.r
 ```
 
 Команды терминала на сервере — `node dist/server/<команда>.js` в контейнере API: `user-create`,
-`user-password`, `site-create`, `member-add`, `member-invite`, `token-create`, `token-list`,
+`user-password`, `member-add`, `member-invite`, `token-create`, `token-list`,
 `token-revoke`, `mail-test`, `status`. С PostgreSQL они работают при запущенном API. Что делает каждая —
 [Команды](/averra-cms/dev/commands/).
 
