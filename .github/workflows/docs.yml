@@ -1,5 +1,7 @@
 # Сайт документации (apps/docs) → GitHub Pages: https://midhey.github.io/averra-cms/
 # Выкладывается при пуше в master, если поменялось то, из чего он собирается, и вручную.
+# Корневого package.json в paths нет: release-please меняет в нём версию при каждом релизе, а сайт
+# её не показывает. Поменяли там docs:build — выложите вручную (Actions → docs → Run workflow).
 # Сборка здесь та же, что в pnpm check, с проверкой ссылок: битый сайт на Pages не уедет, даже
 # если попал в master (пушим прямо в master, ci.yml проверяет уже после пуша).
 # В настройках репозитория: Settings → Pages → Source — GitHub Actions
@@ -10,7 +12,6 @@ on:
     branches: [master]
     paths:
       - apps/docs/**
-      - package.json
       - .npmrc
       - pnpm-lock.yaml
       - pnpm-workspace.yaml

@@ -19,14 +19,15 @@ on:
 permissions:
   contents: read
 
-# Запуски по очереди: два пуша подряд не должны править один pull request наперегонки
-concurrency:
-  group: release-please
-  cancel-in-progress: false
-
 jobs:
   release-please:
     runs-on: ubuntu-24.04
+    # Запуски по очереди: два пуша подряд не должны править один pull request наперегонки.
+    # Очередь — только у этого job: сборка образов под QEMU (release) идёт минуты и не должна
+    # держать следующий пуш, а pull request релиза — ждать её
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
     # Ветка и pull request релиза, тег и релиз на GitHub; issues — для меток autorelease
     permissions:
       contents: write
