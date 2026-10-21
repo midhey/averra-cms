@@ -331,8 +331,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             Живые области role="status" есть ещё у каждого списка с перетаскиванием */}
         <section className={styles.page} aria-label="Страница">
           <Link
-            to="/sites/$siteId"
-            params={{ siteId: site.id }}
+            to="/"
             className={iconButtonClassName({ variant: 'secondary' })}
             aria-label="Назад к сайту"
             title="Назад к сайту"

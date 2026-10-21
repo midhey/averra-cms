@@ -1,11 +1,11 @@
 import { z } from 'zod'
 
+/** Самое длинное название сайта, символов */
+export const SITE_NAME_MAX = 80
+
 /**
  * Название сайта. Им же называется главная страница нового сайта, поэтому после публикации
- * оно видно и во вкладке опубликованного сайта — пока заголовок не поменяют в редакторе
+ * оно видно и во вкладке опубликованного сайта — пока заголовок не поменяют в редакторе.
+ * Сайт установки создаёт API при первом запуске (SITE_NAME), создания сайтов в API нет
  */
-export const SiteName = z.string().trim().min(1).max(80)
-
-/** Что присылают в API, чтобы создать сайт. Тема пока всегда по умолчанию */
-export const NewSite = z.strictObject({ name: SiteName })
-export type NewSite = z.infer<typeof NewSite>
+export const SiteName = z.string().trim().min(1).max(SITE_NAME_MAX)

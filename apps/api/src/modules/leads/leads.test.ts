@@ -52,13 +52,8 @@ let siteCount = 0
 /** Новый сайт владельца с опубликованной главной, на которой стоит форма */
 async function siteWithForm(testApi: TestApi = api, headers: Headers = owner.headers) {
   siteCount += 1
-  const created = await testApi.app.request('/api/sites', {
-    method: 'POST',
-    headers: json(headers),
-    body: JSON.stringify({ name: `Ремонт ${siteCount}` }),
-  })
-  if (created.status !== 201) throw new Error(`Сайт не создался: ${created.status}`)
-  const { id } = (await created.json()) as { id: string }
+  // API сайтов не создаёт (одна установка — один сайт): сайт кладётся напрямую (testing.ts)
+  const id = await testApi.createSite(`Ремонт ${siteCount}`)
   await saveDraft(testApi, id, [formBlock()], headers)
   await publish(testApi, id, headers)
   return id
@@ -592,7 +587,8 @@ describe('письма о заявке', () => {
     expect(sent?.html).not.toContain('<script>')
     expect(sent?.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
     expect(sent?.text).toContain('Комментарий: Строка 1\n  Строка 2')
-    expect(sent?.text).toContain(`/sites/${siteId}/leads/`)
+    // Ссылка на заявку — в админку без id сайта: в установке сайт один
+    expect(sent?.text).toMatch(/http:\/\/localhost:5173\/leads\/[0-9a-f-]{36}/)
   })
 
   it('адреса уведомлений из настроек сайта вместо владельцев', async () => {

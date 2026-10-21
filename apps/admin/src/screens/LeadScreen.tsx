@@ -8,14 +8,16 @@ import { cardClassName } from '../ui/Card'
 import { EmptyState } from '../ui/EmptyState'
 import { InlineAlert } from '../ui/InlineAlert'
 import { usePageTitle } from '../ui/use-page-title'
+import { useSiteId } from '../use-site'
 import { focusLeadsList } from './LeadsScreen'
 import styles from './LeadsScreen.module.scss'
 
-const route = getRouteApi('/_app/sites/$siteId/leads/$leadId')
+const route = getRouteApi('/_app/leads/$leadId')
 
 /** Карточка выбранной заявки рядом со списком (на телефоне — вместо него) */
 export function LeadScreen() {
-  const { siteId, leadId } = route.useParams()
+  const siteId = useSiteId()
+  const { leadId } = route.useParams()
   const { status } = route.useSearch()
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
   const { data: lead } = useSuspenseQuery(leadQuery(siteId, leadId))
@@ -48,15 +50,9 @@ export function NoLeadSelected() {
 
 /** «Все заявки» с той же вкладкой: путь назад из карточки, которая не открылась */
 function BackToLeads() {
-  const { siteId } = route.useParams()
   const { status } = route.useSearch()
   return (
-    <Link
-      to="/sites/$siteId/leads"
-      params={{ siteId }}
-      search={status ? { status } : {}}
-      className={buttonClassName()}
-    >
+    <Link to="/leads" search={status ? { status } : {}} className={buttonClassName()}>
       Все заявки
     </Link>
   )

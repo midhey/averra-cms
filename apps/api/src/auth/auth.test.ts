@@ -213,7 +213,7 @@ describe('без входа', () => {
   const closed: [string, string, RequestInit?][] = [
     ['GET', '/api/me'],
     ['GET', '/api/sites'],
-    ['POST', '/api/sites', { headers: json, body: JSON.stringify({ name: 'Чужой' }) }],
+    ['GET', '/api/site'],
     ['GET', `/api/sites/${siteId}`],
     ['GET', `/api/sites/${siteId}/pages`],
     ['POST', `/api/sites/${siteId}/pages`, { headers: json, body: '{"slug":"x","title":"X"}' }],
@@ -233,6 +233,10 @@ describe('без входа', () => {
     const res = await app.request(`/api/sites/${siteId}/snapshot`)
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ site: { id: siteId }, pages: [{ slug: 'index' }] })
+    // И снимок сайта установки без id — рендереру не нужен CMS_SITE_ID
+    const installation = await app.request('/api/site/snapshot')
+    expect(installation.status).toBe(200)
+    expect(await installation.json()).toMatchObject({ site: { id: siteId } })
   })
 
   it('выдуманная cookie — тоже 401', async () => {

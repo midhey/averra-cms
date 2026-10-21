@@ -3,8 +3,10 @@ import { canDeleteMedia, canInvite, canManagePages, canPublish, safeRedirect } f
 
 describe('возврат после входа', () => {
   it.each([
-    ['/sites/abc', '/sites/abc'],
-    ['/sites/abc/pages/index?x=1#top', '/sites/abc/pages/index?x=1#top'],
+    ['/pages', '/pages'],
+    ['/pages/index?x=1#top', '/pages/index?x=1#top'],
+    // Старый адрес с id сайта: вход вернёт на него, а роутер перенаправит без id
+    ['/sites/abc/media', '/sites/abc/media'],
     ['/', '/'],
   ])('адрес внутри админки %s сохраняется', (target, expected) => {
     expect(safeRedirect(target)).toBe(expected)
@@ -16,16 +18,16 @@ describe('возврат после входа', () => {
     '/\\evil.example',
     '/\\/evil.example',
     'javascript:alert(1)',
-    'sites/abc',
+    'pages/index',
     '',
     undefined,
     42,
-  ])('чужой или кривой адрес %s → список сайтов', (target) => {
+  ])('чужой или кривой адрес %s → обзор сайта', (target) => {
     expect(safeRedirect(target)).toBe('/')
   })
 
   it('на сам вход не возвращает: иначе после входа снова форма входа', () => {
-    expect(safeRedirect('/login?redirect=/sites')).toBe('/')
+    expect(safeRedirect('/login?redirect=/pages')).toBe('/')
   })
 })
 

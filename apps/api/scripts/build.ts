@@ -30,7 +30,6 @@ const entryPoints = {
   index: 'src/index.ts',
   'user-create': 'src/cli/user-create.ts',
   'user-password': 'src/cli/user-password.ts',
-  'site-create': 'src/cli/site-create.ts',
   'member-add': 'src/cli/member-add.ts',
   'member-invite': 'src/cli/member-invite.ts',
   'token-create': 'src/cli/token-create.ts',

@@ -25,7 +25,6 @@
     "db:generate": "drizzle-kit generate",
     "user:create": "tsx src/cli/user-create.ts",
     "user:password": "tsx src/cli/user-password.ts",
-    "site:create": "tsx src/cli/site-create.ts",
     "member:add": "tsx src/cli/member-add.ts",
     "member:invite": "tsx src/cli/member-invite.ts",
     "token:create": "tsx src/cli/token-create.ts",

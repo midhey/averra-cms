@@ -28,7 +28,7 @@ test('без входа ведёт на вход и возвращает туд�
   page,
   demoSite,
 }) => {
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   await expect(page).toHaveURL(/\/login\?redirect=/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Вход в админку')
   // Без входа нет и шапки с пользователем
@@ -39,7 +39,7 @@ test('без входа ведёт на вход и возвращает туд�
   await login.password.fill(e2eOwner.password)
   await login.submit.click()
 
-  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   // Кто вошёл — внизу боковой панели
   await expect(page.getByText(e2eOwner.name)).toBeVisible()
@@ -109,10 +109,8 @@ test('сессия кончилась посреди работы — вход �
   await login.email.fill(e2eOwner.email)
   await login.password.fill(e2eOwner.password)
   await login.submit.click()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
-
-  await page.getByRole('link', { name: demoSite.name }).click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}`)
+  // После входа — сразу обзор сайта: сайт у установки один
+  await expect(page).toHaveURL('/')
   // Экран загрузился целиком: адрес меняется раньше, чем загрузчик получит все данные
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   // Сессию отозвали (или она истекла): cookie больше нет, а админка ещё открыта
@@ -126,7 +124,7 @@ test('сессия кончилась посреди работы — вход �
   await login.email.fill(e2eOwner.email)
   await login.password.fill(e2eOwner.password)
   await login.submit.click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/pages/index`)
+  await expect(page).toHaveURL('/pages/index')
   await expect(page.getByLabel('Заголовок страницы')).toHaveValue('Ремонт квартир под ключ')
 })
 

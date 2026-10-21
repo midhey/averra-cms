@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { roleName, seesInstallation, siteSections, switcherExpandable } from './sidebar-model'
+import { roleName, seesInstallation, siteSections } from './sidebar-model'
 
 const ids = (site: Parameters<typeof siteSections>[0]) => siteSections(site).map(({ id }) => id)
 
@@ -31,7 +31,7 @@ describe('разделы сайта в панели', () => {
   })
 })
 
-describe('установка, роль и переключатель сайта', () => {
+describe('установка и роль', () => {
   it('почта и состояние — только владельцу', () => {
     expect(seesInstallation('owner')).toBe(true)
     expect(seesInstallation('member')).toBe(false)
@@ -43,11 +43,5 @@ describe('установка, роль и переключатель сайта'
     expect(roleName('member', 'editor')).toBe('Редактор')
     expect(roleName('member', 'client')).toBe('Клиент')
     expect(roleName('member')).toBe('Участник')
-  })
-
-  it('переключатель раскрывается, когда есть куда переключиться', () => {
-    expect(switcherExpandable('member', 1)).toBe(false)
-    expect(switcherExpandable('member', 2)).toBe(true)
-    expect(switcherExpandable('owner', 1)).toBe(true)
   })
 })

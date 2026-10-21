@@ -102,8 +102,7 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
       queryClient.removeQueries({ queryKey: queryKeys.lead(siteId, leadId) })
       await refresh()
       await navigate({
-        to: '/sites/$siteId/leads',
-        params: { siteId },
+        to: '/leads',
         search: status ? { status } : {},
       })
       onDeleted?.()
@@ -121,12 +120,7 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
   return (
     <article aria-labelledby={headingId} className={cx(cardClassName(), styles.card)}>
       {/* На телефоне карточка открыта вместо списка: путь назад к нему */}
-      <Link
-        to="/sites/$siteId/leads"
-        params={{ siteId }}
-        search={status ? { status } : {}}
-        className={styles.back}
-      >
+      <Link to="/leads" search={status ? { status } : {}} className={styles.back}>
         <Icon name="chevron-left" size={16} />
         Все заявки
       </Link>

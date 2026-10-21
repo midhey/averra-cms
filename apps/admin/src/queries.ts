@@ -7,7 +7,7 @@ import { apiRequestError } from './errors'
 // заодно сбрасывает и каждую страницу этого сайта
 export const queryKeys = {
   me: ['me'] as const,
-  sites: ['sites'] as const,
+  currentSite: ['current-site'] as const,
   site: (siteId: string) => ['sites', siteId] as const,
   pages: (siteId: string) => ['sites', siteId, 'pages'] as const,
   page: (siteId: string, slug: string) => ['sites', siteId, 'pages', slug] as const,
@@ -33,15 +33,26 @@ export const queryKeys = {
   status: ['status'] as const,
 }
 
-export const sitesQuery = () =>
+/**
+ * Сайт установки: одна установка — один сайт, и в адресах админки id сайта нет. Отсюда админка
+ * узнаёт id, а дальше ходит в /api/sites/:siteId/… как раньше. Ещё здесь название и адрес
+ * сайта для боковой панели. Не устаревает сам: сайт у установки не меняется, а при смене
+ * пользователя кеш сбрасывает switchUser
+ */
+export const currentSiteQuery = () =>
   queryOptions({
-    queryKey: queryKeys.sites,
+    queryKey: queryKeys.currentSite,
     queryFn: async () => {
-      const res = await api.sites.$get()
-      if (!res.ok) throw await apiRequestError(res)
+      const res = await api.site.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
+    staleTime: Number.POSITIVE_INFINITY,
   })
+
+/** Id сайта установки для загрузчиков маршрутов: из кеша или одним запросом */
+export const siteIdOf = async (queryClient: QueryClient) =>
+  (await queryClient.ensureQueryData(currentSiteQuery())).id
 
 export const siteQuery = (siteId: string) =>
   queryOptions({

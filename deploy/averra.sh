@@ -408,9 +408,9 @@ do_backup() {
     db_bytes="$(wc -c <"$tmp/db.dump" | tr -d ' ')"
     media_bytes="$(wc -c <"$tmp/media.tar.gz" | tr -d ' ')"
     if ! (cd "$tmp" && sha256sum db.dump media.tar.gz >SHA256SUMS) ||
-      ! printf '{"name":%s,"kind":%s,"version":%s,"siteId":%s,"createdAt":%s,"migrations":%s,"tables":%s,"dbBytes":%s,"mediaBytes":%s,"verified":true}\n' \
+      ! printf '{"name":%s,"kind":%s,"version":%s,"createdAt":%s,"migrations":%s,"tables":%s,"dbBytes":%s,"mediaBytes":%s,"verified":true}\n' \
         "$(json_str "$name")" "$(json_str "$kind")" "$(json_str "$(env_get AVERRA_VERSION)")" \
-        "$(json_or_null "$(env_get SITE_ID)")" "$(json_str "$started")" "$migrations" "$tables" \
+        "$(json_str "$started")" "$migrations" "$tables" \
         "$db_bytes" "$media_bytes" >"$tmp/manifest.json" ||
       ! mv "$tmp" "$BACKUP_DIR/$name"; then
       error='файлы бэкапа не записались: нет места на диске?'
@@ -704,16 +704,10 @@ cmd_restore() {
   fi
   step 'Очищаю собранные сайты: API соберёт их заново из восстановленных базы и медиатеки'
   clear_sites
-  # Сайт на домене сайта — тот, что в бэкапе: на новом сервере установщик завёл бы свой SITE_ID
-  previous_site="$(env_get SITE_ID)"
-  site="$(grep -oE '"siteId":"[0-9a-f-]{36}"' "$dir/manifest.json" | cut -d'"' -f4 || true)"
-  if [[ -n "$site" && "$site" != "$previous_site" ]]; then
-    env_set SITE_ID "$site"
-    say "SITE_ID в .env теперь $site, как в бэкапе: этот сайт Caddy отдаёт на домене сайта"
-  fi
+  # Сайт на домене сайта — сайт установки из восстановленной базы: ссылку main на него ставит
+  # API при старте, Caddy отдаёт main/current. Править .env не нужно, даже если id у сайта другой
   compose up -d
   if ! wait_ready; then
-    [[ "$(env_get SITE_ID)" == "$previous_site" ]] || env_set SITE_ID "$previous_site"
     # undo_restore_database сначала останавливает API: медиатека и сайты возвращаются без него
     undo_restore_database averra_before_restore "$failed" ||
       fail "API не поднялся, и прежнюю базу вернуть не вышло: на сервере базы $failed (или averra) и averra_before_restore, разберитесь руками. Прежние картинки — в томе медиатеки, папка $MEDIA_BEFORE"

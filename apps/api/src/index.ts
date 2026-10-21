@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { setupZodMessages } from '@averra/schema'
+import { defaultTheme } from '@averra/tokens'
 import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { createAuth } from './auth/auth'
@@ -22,7 +23,8 @@ import { diskStorage } from './media/disk-storage'
 import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
-import { sitesRepo } from './modules/sites/repo'
+import { defaultSiteName, sitesRepo } from './modules/sites/repo'
+import { linkInstallationSite } from './publish/installation-link'
 import { publishedSite } from './publish/published-site'
 import { createPublishQueue } from './publish/queue'
 import { defaultRendererDir, rendererProcess } from './publish/renderer'
@@ -146,6 +148,25 @@ if (config.devSeed) {
   }
 }
 
+// Одна установка — один сайт. Его нет (первый запуск на пустой базе) — API создаёт его сам:
+// название из SITE_NAME (его пишет install.sh), иначе домен сайта. В учебном режиме выше уже лёг
+// демо-сайт — он и есть сайт установки. Лишние сайты старых баз не трогаем: они целы и доступны
+// по id через API, но админка работает с сайтом установки (modules/sites/repo.ts)
+const sites = sitesRepo(db)
+const { site: installationSite, created: siteCreated } = await sites.ensureInstallationSite(
+  config.SITE_NAME ?? defaultSiteName(config.SITE_URL),
+  defaultTheme,
+)
+if (siteCreated) console.log(`Создан сайт установки «${installationSite.name}»`)
+const siteCount = await sites.count()
+if (siteCount > 1) {
+  console.log(
+    `В базе ${siteCount} сайтов. Averra работает с одним — «${installationSite.name}» ` +
+      `(${installationSite.id}), созданным первым. Остальные сохранены и доступны по id через API, ` +
+      'но в админке не видны (https://midhey.github.io/averra-cms/decisions/single-site/)',
+  )
+}
+
 // Публикация на сервере: после «Опубликовать» API собирает сайт отдельным процессом
 // Astro в новую папку релиза в PUBLISH_DIR и подменяет ею текущую. Без PUBLISH_DIR — выключена
 const storage = diskStorage(config.MEDIA_DIR)
@@ -174,6 +195,9 @@ const publishQueue = config.PUBLISH_DIR
 // Сборки, прерванные прошлым перезапуском, помечаются до serve(): иначе публикация, пришедшая
 // раньше этой пометки, начала бы сборку, которую сочли бы прерванной (publish/queue.ts)
 const interruptedSites = publishQueue ? await publishQueue.markInterrupted() : []
+// Caddy отдаёт на домене сайта PUBLISH_DIR/main/current: ссылка main ведёт на папку сайта
+// установки. Ставится при каждом старте — после восстановления из бэкапа сайт может быть другим
+if (config.PUBLISH_DIR) await linkInstallationSite(config.PUBLISH_DIR, installationSite.id)
 
 const app = createApp({
   db,
@@ -185,6 +209,7 @@ const app = createApp({
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
   mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
   adminUrl: config.ADMIN_URL,
+  siteUrl: config.SITE_URL,
   publisher: publishQueue,
   published: config.PUBLISH_DIR ? publishedSite(config.PUBLISH_DIR) : undefined,
   version: config.AVERRA_VERSION,
@@ -206,7 +231,7 @@ const server = serve(
       // Прерванные перезапуском сборки и опубликованные сайты без текущей версии на диске
       // (свежая установка, потерянный том) собираются заново
       void (async () => {
-        const published = await sitesRepo(db).sitesWithPublishedPages()
+        const published = await sites.sitesWithPublishedPages()
         const missing: string[] = []
         for (const siteId of published) {
           if (!(await hasCurrentRelease(publishDir, siteId))) missing.push(siteId)

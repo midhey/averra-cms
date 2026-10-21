@@ -8,25 +8,16 @@ import { demo, editor, expect, sidebar, test } from './fixtures'
 const overflowOf = (page: Page) =>
   page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
 
-test('на 375 px ни один экран не прокручивается вбок', async ({ page, demoSite }) => {
+test('на 375 px ни один экран не прокручивается вбок', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  const screens = [
-    '/',
-    `/sites/${demoSite.id}`,
-    `/sites/${demoSite.id}/pages`,
-    `/sites/${demoSite.id}/media`,
-    `/sites/${demoSite.id}/leads`,
-    `/sites/${demoSite.id}/settings`,
-    '/mail',
-    '/status',
-  ]
+  const screens = ['/', '/', '/pages', '/media', '/leads', '/settings', '/mail', '/status']
   for (const path of screens) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     expect(Number(await overflowOf(page)), path).toBeLessThanOrEqual(0)
   }
   // У редактора h1 только для диктора: на виду поле заголовка страницы
-  await page.goto(`/sites/${demoSite.id}/pages/index`)
+  await page.goto('/pages/index')
   await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
   await expect(page.getByLabel('Заголовок страницы')).toBeVisible()
   expect(Number(await overflowOf(page)), 'редактор').toBeLessThanOrEqual(0)
@@ -34,10 +25,9 @@ test('на 375 px ни один экран не прокручивается в�
 
 test('на телефоне панель — меню: кнопка, Esc закрывает и возвращает фокус, переход закрывает', async ({
   page,
-  demoSite,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const panel = sidebar(page)
   await expect(panel.sections).toBeHidden()
   const menu = page.getByRole('button', { name: 'Меню' })
@@ -56,7 +46,7 @@ test('на телефоне панель — меню: кнопка, Esc зак�
   await menu.click()
   await panel.section('Страницы').focus()
   await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/pages`)
+  await expect(page).toHaveURL('/pages')
   await expect(panel.sections).toBeHidden()
   await expect(page.locator('#content')).toBeFocused()
   await page.keyboard.press('Tab')
@@ -86,7 +76,7 @@ test('вход и другие экраны без входа на 375 px — ф
   }
 })
 
-test('редактору сайта панель не показывает заявки и установку', async ({ page, demoSite }) => {
+test('редактору сайта панель не показывает заявки и установку', async ({ page }) => {
   await page.route(/\/api\/me$/, async (route) => {
     const response = await route.fetch()
     const body = await response.json()
@@ -100,7 +90,7 @@ test('редактору сайта панель не показывает за�
       json: { ...(await response.json()), access: 'editor', newLeads: null },
     })
   })
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const panel = sidebar(page)
   await expect(panel.section('Обзор')).toBeVisible()
   await expect(panel.section('Страницы')).toBeVisible()

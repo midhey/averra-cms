@@ -4,9 +4,11 @@ import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
 import { pages as pagesTable } from '../../db/schema'
 import { createTestApi } from '../../testing'
+import { sitesRepo } from './repo'
 
-// Создание сайтов, список, создание и удаление страниц.
-// Каждый тест заводит свой сайт: тесты не зависят ни от демо-сайта, ни друг от друга
+// Новый сайт в базе, список, создание и удаление страниц.
+// Каждый тест заводит свой сайт: тесты не зависят ни от демо-сайта, ни друг от друга. API сайтов
+// не создаёт (одна установка — один сайт), поэтому сайт кладётся в базу напрямую
 
 const { app, db, close, loginAs } = await createTestApi()
 // Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
@@ -29,11 +31,7 @@ const otherContent: PageContentInput = {
   ],
 }
 
-async function newSite(name = 'Тестовый сайт') {
-  const res = await sites.$post({ json: { name } })
-  if (res.status !== 201) throw new Error(`Ожидали 201, пришёл ${res.status}`)
-  return res.json()
-}
+const newSite = (name = 'Тестовый сайт') => sitesRepo(db).createSite(name, defaultTheme)
 
 async function listPages(siteId: string) {
   const res = await sites[':siteId'].pages.$get({ param: { siteId } })
@@ -72,15 +70,15 @@ const sendJson = (method: 'POST' | 'PUT', path: string, body: unknown) =>
     body: JSON.stringify(body),
   })
 
-describe('создание сайта', () => {
-  it('создаёт сайт с темой по умолчанию и пустой неопубликованной главной', async () => {
-    const created = await newSite('  Студия йоги  ')
+describe('новый сайт', () => {
+  it('появляется с темой по умолчанию и пустой неопубликованной главной', async () => {
+    const created = await newSite('Студия йоги')
     expect(created.name).toBe('Студия йоги')
     expect(created.theme).toEqual(defaultTheme)
 
     const all = await (await sites.$get()).json()
     expect(all).toContainEqual({ id: created.id, name: 'Студия йоги' })
-    // Новый сайт не встаёт перед демо: рендерер без CMS_SITE_ID берёт первый
+    // Новый сайт не встаёт перед демо: сайт установки — созданный первым
     expect(all[0]?.id).toBe(demo.id)
 
     expect(await listPages(created.id)).toEqual([
@@ -93,21 +91,6 @@ describe('создание сайта', () => {
     ])
     expect((await getPage(created.id, 'index')).draft).toEqual({ blocks: [] })
     expect(await publishedSlugs(created.id)).toEqual([])
-  })
-
-  it('не создаёт сайт без названия или с лишними полями', async () => {
-    const before = (await (await sites.$get()).json()).length
-
-    const empty = await sites.$post({ json: { name: '   ' } })
-    expect(empty.status).toBe(400)
-    expect(await empty.json()).toMatchObject({
-      error: { code: 'validation', issues: [{ path: 'name' }] },
-    })
-
-    const extra = await sendJson('POST', '/api/sites', { name: 'Сайт', theme: {} })
-    expect(extra.status).toBe(400)
-
-    expect((await (await sites.$get()).json()).length).toBe(before)
   })
 })
 

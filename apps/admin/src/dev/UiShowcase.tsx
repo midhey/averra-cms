@@ -1,4 +1,5 @@
 import { type ReactNode, useId, useState } from 'react'
+import { SiteHeader } from '../shell/SiteHeader'
 import {
   AppShell,
   NavLinkContent,
@@ -91,14 +92,8 @@ export function UiShowcase() {
 
   const sidebar = (
     <>
-      <button type="button" className={styles.siteSwitch}>
-        <span className={styles.siteSwitchText}>
-          <span className={styles.siteName}>Ремонт у Ивана</span>
-          <span className={styles.siteDomain}>remont-ivana.ru</span>
-        </span>
-        <Icon name="chevron-down" />
-        <span className="visually-hidden">: выбрать сайт</span>
-      </button>
+      {/* Заголовок панели — тот же, что в оболочке админки: сайт у установки один */}
+      <SiteHeader name="Ремонт у Ивана" url="https://remont-ivana.ru" />
       <NavList label="Разделы витрины">
         {sections.map((section) => (
           <li key={section.id}>

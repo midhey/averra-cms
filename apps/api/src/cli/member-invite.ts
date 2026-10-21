@@ -2,17 +2,27 @@ import { MemberRole, UserEmail, Uuid } from '@averra/schema'
 import { z } from 'zod'
 import { createInvitation } from '../modules/invitations/service'
 import { usersRepo } from '../modules/users/repo'
-import { args, CliError, check, inviteLinkNotice, openDb, queuedMailTransport, run } from './common'
+import {
+  args,
+  CliError,
+  check,
+  inviteLinkNotice,
+  openDb,
+  queuedMailTransport,
+  resolveSite,
+  run,
+} from './common'
 
-const usage = `Пригласить участника на сайт письмом:
-  pnpm member:invite --email anna@example.ru --site <id сайта> --role editor|client [--by <почта владельца>]
+const usage = `Пригласить участника на сайт установки письмом:
+  pnpm member:invite --email anna@example.ru --role editor|client [--by <почта владельца>] [--site <id сайта>]
 
 Человек получит письмо со ссылкой (действует 7 дней) и сам задаст имя и пароль. Письмо уйдёт,
-когда запустится API (pnpm dev или start). --by нужен, только если владельцев несколько.`
+когда запустится API (pnpm dev или start). --by нужен, только если владельцев несколько.
+--site не нужен: в установке один сайт. Он только для старых баз, где сайтов несколько.`
 
 const Args = z.object({
   email: UserEmail,
-  site: Uuid('Нужен id сайта'),
+  site: Uuid('Нужен id сайта').optional(),
   role: MemberRole,
   by: UserEmail.optional(),
 })
@@ -48,24 +58,25 @@ await run(async () => {
     }
     if (!inviter) throw new CliError('Сначала создай владельца: pnpm user:create')
 
+    const target = await resolveSite(db, site)
     const result = await createInvitation(db, {
-      siteId: site,
+      siteId: target.id,
       email,
       role,
       inviter,
       adminUrl: config.ADMIN_URL,
     })
     if (!result.ok) {
-      if (result.problem === 'site_not_found') throw new CliError(`Нет сайта ${site}`)
+      if (result.problem === 'site_not_found') throw new CliError(`Нет сайта ${target.id}`)
       if (result.problem === 'owner') {
-        throw new CliError(`${email} — владелец, ему и так открыты все сайты`)
+        throw new CliError(`${email} — владелец, ему и так открыт сайт`)
       }
       throw new CliError(
         `${email} уже участник этого сайта (${result.role}). Сменить роль: pnpm member:add`,
       )
     }
     console.log(
-      `Приглашение для ${email} (${role}) в очереди писем. Ссылка действует до ` +
+      `Приглашение для ${email} (${role}) на сайт «${target.name}» в очереди писем. Ссылка действует до ` +
         `${result.invitation.expiresAt.toLocaleString('ru-RU')}.`,
     )
     console.log(

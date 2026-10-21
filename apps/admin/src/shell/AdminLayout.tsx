@@ -1,9 +1,15 @@
-import { Uuid } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Outlet, useNavigate, useParams } from '@tanstack/react-router'
+import { Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { signOut } from '../auth'
 import { messageOf } from '../errors'
-import { mailQuery, meQuery, siteQuery, sitesQuery, statusQuery, switchUser } from '../queries'
+import {
+  currentSiteQuery,
+  mailQuery,
+  meQuery,
+  siteQuery,
+  statusQuery,
+  switchUser,
+} from '../queries'
 import {
   AppShell,
   NavLinkContent,
@@ -15,14 +21,8 @@ import {
 import { IconButton } from '../ui/Button'
 import { StatusPill } from '../ui/StatusPill'
 import styles from './Shell.module.scss'
-import { SiteSwitcher } from './SiteSwitcher'
-import {
-  roleName,
-  type SiteSectionId,
-  seesInstallation,
-  siteSections,
-  switcherExpandable,
-} from './sidebar-model'
+import { SiteHeader } from './SiteHeader'
+import { roleName, type SiteSectionId, seesInstallation, siteSections } from './sidebar-model'
 
 /**
  * Оболочка закрытых экранов (кроме редактора): боковая панель по концепту и экран справа.
@@ -37,72 +37,61 @@ export function AdminLayout() {
 }
 
 const siteLinks = {
-  overview: { to: '/sites/$siteId', exact: true },
-  pages: { to: '/sites/$siteId/pages', exact: false },
-  media: { to: '/sites/$siteId/media', exact: false },
-  leads: { to: '/sites/$siteId/leads', exact: false },
-  settings: { to: '/sites/$siteId/settings', exact: false },
+  overview: { to: '/', exact: true },
+  pages: { to: '/pages', exact: false },
+  media: { to: '/media', exact: false },
+  leads: { to: '/leads', exact: false },
+  settings: { to: '/settings', exact: false },
 } as const satisfies Record<SiteSectionId, { to: string; exact: boolean }>
 
+/**
+ * Одна установка — один сайт: сверху его название и домен, под ними разделы сайта. Сайт не
+ * загрузился (у участника нет к нему доступа) — панель без него: экран сам скажет почему
+ */
 function AdminSidebar() {
   const { data: me } = useQuery(meQuery())
-  const { siteId } = useParams({ strict: false })
-  // Кривой id в адресе — экран «Сайт не найден», а панель просто без сайта
-  const validSiteId = siteId !== undefined && Uuid().safeParse(siteId).success ? siteId : undefined
+  const { data: installation } = useQuery({ ...currentSiteQuery(), retryOnMount: false })
   const site = useQuery({
-    ...siteQuery(validSiteId ?? ''),
-    enabled: validSiteId !== undefined,
+    ...siteQuery(installation?.id ?? ''),
+    enabled: installation !== undefined,
     retryOnMount: false,
   })
-  const sites = useQuery({ ...sitesQuery(), retryOnMount: false })
   if (!me) return null
-  const current = validSiteId !== undefined ? site.data : undefined
+  const current = installation && site.data
 
   return (
     <>
-      {current ? (
-        <>
-          <SiteSwitcher
-            current={current}
-            sites={sites.data ?? [current]}
-            expandable={switcherExpandable(me.role, sites.data?.length ?? 1)}
-          />
-          <NavList label="Разделы сайта">
-            {siteSections(current).map((section) => (
-              <li key={section.id}>
-                <Link
-                  to={siteLinks[section.id].to}
-                  params={{ siteId: current.id }}
-                  activeOptions={{ exact: siteLinks[section.id].exact }}
-                  className={navLinkClassName}
-                >
-                  <NavLinkContent
-                    icon={section.icon}
-                    label={section.label}
-                    badge={
-                      section.badge === undefined
-                        ? undefined
-                        : { value: section.badge, label: `новых: ${section.badge}` }
-                    }
-                  />
-                </Link>
-              </li>
-            ))}
-          </NavList>
-        </>
-      ) : (
-        <NavList label="Разделы">
-          <li>
-            <Link to="/" activeOptions={{ exact: true }} className={navLinkClassName}>
-              <NavLinkContent icon="overview" label="Все сайты" />
-            </Link>
-          </li>
+      {installation && <SiteHeader name={installation.name} url={installation.url} />}
+      {current && (
+        <NavList label="Разделы сайта">
+          {siteSections(current).map((section) => (
+            <li key={section.id}>
+              <Link
+                to={siteLinks[section.id].to}
+                activeOptions={{ exact: siteLinks[section.id].exact }}
+                className={navLinkClassName}
+              >
+                <NavLinkContent
+                  icon={section.icon}
+                  label={section.label}
+                  badge={
+                    section.badge === undefined
+                      ? undefined
+                      : { value: section.badge, label: `новых: ${section.badge}` }
+                  }
+                />
+              </Link>
+            </li>
+          ))}
         </NavList>
       )}
 
       <SidebarSection title={seesInstallation(me.role) ? 'Установка' : undefined} bottom>
         {seesInstallation(me.role) && <InstallationLinks />}
-        <UserBlock name={me.name} roleName={roleName(me.role, current?.access)} />
+        <UserBlock
+          name={me.name}
+          roleName={roleName(me.role, current ? current.access : undefined)}
+        />
       </SidebarSection>
     </>
   )

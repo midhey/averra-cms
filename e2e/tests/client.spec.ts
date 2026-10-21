@@ -20,7 +20,7 @@ async function actAsClient(page: Page) {
   })
 }
 
-test('клиенту не видны «Новый сайт», «Новая страница», «Удалить» и «Опубликовать»', async ({
+test('клиенту не видны «Новая страница», «Удалить» и «Опубликовать»', async ({
   page,
   demoSite,
 }) => {
@@ -46,17 +46,13 @@ test('клиенту не видны «Новый сайт», «Новая ст�
   })
   expect(saved.status).toBe(200)
   // Владелец кнопку видит: значит, клиенту её прячет именно роль
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   await expect(page.getByRole('button', { name: 'Опубликовать правки' })).toBeVisible()
 
   await actAsClient(page)
 
+  // Обзор — первый экран, как у всех: ни «Новой страницы», ни «Опубликовать правки», хотя правки есть
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
-  await expect(page.getByRole('form', { name: 'Новый сайт' })).toHaveCount(0)
-
-  // Обзор: ни «Новой страницы», ни «Опубликовать правки», хотя правки есть
-  await page.goto(`/sites/${demoSite.id}`)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByRole('link', { name: 'Новая страница' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Опубликовать правки' })).toHaveCount(0)

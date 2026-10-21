@@ -56,7 +56,8 @@ describe('полоса редактора', () => {
   it('«Назад к сайту» ведёт на обзор, название сайта и заголовок страницы на виду', async () => {
     await renderWithRouter(<Editor site={site} page={published} />)
     const back = screen.getByRole('link', { name: 'Назад к сайту' })
-    expect(back.getAttribute('href')).toBe(`/sites/${site.id}`)
+    // Сайт у установки один: обзор — первый экран админки, без id в адресе
+    expect(back.getAttribute('href')).toBe('/')
     expect(screen.getByRole('region', { name: 'Страница' }).textContent).toContain(site.name)
     expect((screen.getByLabelText('Заголовок страницы') as HTMLInputElement).value).toBe(
       demoPageTitle,

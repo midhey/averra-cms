@@ -26,7 +26,6 @@
     "db:generate": "pnpm --filter @averra/api db:generate",
     "user:create": "pnpm --filter @averra/api user:create",
     "user:password": "pnpm --filter @averra/api user:password",
-    "site:create": "pnpm --filter @averra/api site:create",
     "member:add": "pnpm --filter @averra/api member:add",
     "member:invite": "pnpm --filter @averra/api member:invite",
     "token:create": "pnpm --filter @averra/api token:create",

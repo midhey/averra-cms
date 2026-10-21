@@ -1,12 +1,13 @@
 import { randomInt } from 'node:crypto'
 import type { Browser } from '@playwright/test'
 import { urls } from '../urls'
-import { answerDialogs, expect, lineCount, sites, test } from './fixtures'
+import { answerDialogs, expect, lineCount, sidebar, test } from './fixtures'
 import { linkFrom, waitForMail } from './mailbox'
 
-// Приглашение по-настоящему: владелец приглашает клиента с экрана сайта, письмо ложится
-// в файловый ящик e2e, клиент открывает ссылку в чистом браузере, задаёт имя и пароль
-// и видит только сайт, на который его пригласили
+// Приглашение по-настоящему: владелец приглашает клиента в настройках сайта, письмо ложится
+// в файловый ящик e2e, клиент открывает ссылку в чистом браузере, задаёт имя и пароль и сразу
+// работает с сайтом установки. Сайт у установки один, поэтому приглашения всех тестов — на нём:
+// тесты различают их по своей почте
 
 /** Браузер приглашённого: без сессии владельца и со своим «IP» для лимита входа */
 const guestContext = (browser: Browser) =>
@@ -17,22 +18,14 @@ const guestContext = (browser: Browser) =>
     extraHTTPHeaders: { 'x-forwarded-for': `10.20.${randomInt(256)}.${randomInt(1, 255)}` },
   })
 
-/** Свой сайт на тест: приглашения разных тестов не пересекаются */
-async function newSite(prefix: string) {
-  const name = `${prefix} ${Date.now()}-${randomInt(1000)}`
-  const created = await sites.$post({ json: { name } })
-  if (created.status !== 201) throw new Error(`Сайт не создался: ${created.status}`)
-  return created.json()
-}
-
-test('владелец приглашает клиента → клиент по ссылке задаёт пароль и видит только свой сайт', async ({
+test('владелец приглашает клиента → клиент по ссылке задаёт пароль и сразу работает с сайтом', async ({
   page,
   browser,
+  demoSite: site,
 }) => {
-  const site = await newSite('Сайт для клиента')
   const email = `client-${Date.now()}-${randomInt(1000)}@e2e.test`
 
-  await page.goto(`/sites/${site.id}/settings`)
+  await page.goto('/settings')
   const members = page.getByRole('region', { name: 'Участники' })
   const form = members.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
@@ -73,7 +66,7 @@ test('владелец приглашает клиента → клиент по
     await signUp.getByLabel('Пароль ещё раз').fill('maria-e2e-password')
     await signUp.getByRole('button', { name: 'Принять приглашение' }).click()
 
-    await expect(guest).toHaveURL(`${urls.admin}/sites/${site.id}`)
+    await expect(guest).toHaveURL(`${urls.admin}/`)
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText(site.name)
     await expect(guest.getByText('Мария Клиентова')).toBeVisible()
     await expect(guest.getByText('Клиент', { exact: true })).toBeVisible()
@@ -83,10 +76,11 @@ test('владелец приглашает клиента → клиент по
     await expect(guest.getByRole('region', { name: 'Заявки' })).toBeVisible()
     await expect(guest.getByRole('region', { name: 'Участники' })).toHaveCount(0)
 
+    // Выбирать сайт не из чего: в установке он один, его название — заголовок панели
     await guest.goto('/')
-    const list = guest.getByRole('region', { name: 'Список сайтов' })
-    await expect(list.getByRole('link')).toHaveCount(1)
-    await expect(list.getByRole('link')).toContainText(site.name)
+    await expect(guest.getByRole('heading', { level: 1 })).toHaveText(site.name)
+    await expect(sidebar(guest).siteLink).toBeVisible()
+    await expect(guest.getByRole('link', { name: 'Все сайты' })).toHaveCount(0)
 
     // Ссылка одноразовая: второй раз — понятный отказ, а не форма
     await guest.goto(link)
@@ -112,11 +106,10 @@ test('владелец приглашает клиента → клиент по
   expect(await lineCount(queued.getByRole('rowheader').getByText(email))).toBe(1)
 })
 
-test('отозванное приглашение больше не открывается', async ({ page, browser }) => {
-  const site = await newSite('Сайт для отзыва')
+test('отозванное приглашение больше не открывается', async ({ page, browser, demoSite: site }) => {
   const email = `revoked-${Date.now()}-${randomInt(1000)}@e2e.test`
 
-  await page.goto(`/sites/${site.id}/settings`)
+  await page.goto('/settings')
   const members = page.getByRole('region', { name: 'Участники' })
   const form = members.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
@@ -162,7 +155,6 @@ test('отозванное приглашение больше не открыв
 test('сбой приглашений и почты не прячет сайт: ошибка — внутри раздела «Участники»', async ({
   page,
 }) => {
-  const site = await newSite('Сайт со сбоем приглашений')
   const failure = { error: { code: 'internal', message: 'Внутренняя ошибка сервера' } }
   const fail = (url: RegExp) =>
     page.route(url, (route) =>
@@ -173,7 +165,7 @@ test('сбой приглашений и почты не прячет сайт: 
   await fail(/\/api\/sites\/[^/]+\/invitations$/)
   await fail(/\/api\/mail$/)
 
-  await page.goto(`/sites/${site.id}/settings`)
+  await page.goto('/settings')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Настройки сайта')
   const members = page.getByRole('region', { name: 'Участники' })
   await expect(members.getByRole('alert')).toContainText(
@@ -185,7 +177,12 @@ test('сбой приглашений и почты не прячет сайт: 
 
   await page.unrouteAll()
   await members.getByRole('button', { name: 'Повторить' }).click()
-  await expect(members.getByText('Приглашений пока нет')).toBeVisible()
+  // Список загрузился: пустой или с приглашениями других тестов (сайт у установки один)
+  await expect(
+    members
+      .getByText('Приглашений пока нет')
+      .or(members.getByRole('table', { name: 'Приглашения' })),
+  ).toBeVisible()
   await expect(members.getByRole('alert')).toHaveCount(0)
   await expect(members).not.toContainText('Не удалось узнать')
 })

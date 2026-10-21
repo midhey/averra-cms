@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { demoSiteId, setupZodMessages } from '@averra/schema'
+import { defaultTheme } from '@averra/tokens'
 import { createApp } from './app'
 import type { MemberRole } from './auth/access'
 import { createAuth } from './auth/auth'
@@ -22,6 +23,7 @@ import type { ImageProcessor } from './media/processor'
 import { sharpProcessor } from './media/sharp-processor'
 import type { PublishedSite } from './modules/export/routes'
 import type { LeadLimits } from './modules/leads/public-routes'
+import { sitesRepo } from './modules/sites/repo'
 import type { HostStatus } from './modules/status/service'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
@@ -75,7 +77,10 @@ export async function createTestApi({
   // Версия установки и сведения с сервера для GET /api/status
   version,
   host,
+  // Адрес опубликованного сайта (SITE_URL) для GET /api/site
+  siteUrl,
 }: {
+  siteUrl?: string
   published?: PublishedSite
   version?: string
   host?: HostStatus
@@ -153,6 +158,7 @@ export async function createTestApi({
     mediaMaxBytes,
     mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
     adminUrl: testOrigins.admin,
+    siteUrl,
     resetResponseMs,
     leadLimits,
     publisher,
@@ -162,6 +168,7 @@ export async function createTestApi({
   })
   const users = usersRepo(db, auth)
   const tokens = tokensRepo(db)
+  const sites = sitesRepo(db)
   let userCount = 0
 
   /** Пользователь с паролем TEST_PASSWORD. Почта уникальна в пределах этого API */
@@ -226,6 +233,11 @@ export async function createTestApi({
     createToken: (siteId: string = demoSiteId, name = 'тест') => tokens.create({ siteId, name }),
     revokeToken: (id: string) => tokens.revoke(id),
     addMember: users.addMember,
+    /**
+     * Ещё один сайт в базе (с главной), как в старых базах разработки. В установке сайт один, и
+     * API их не создаёт, но данные по-прежнему разделены по site_id — это проверяют тесты изоляции
+     */
+    createSite: async (name = 'Другой сайт') => (await sites.createSite(name, defaultTheme)).id,
   }
 }
 

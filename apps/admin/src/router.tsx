@@ -9,6 +9,7 @@ import {
   Outlet,
   redirect,
 } from '@tanstack/react-router'
+import { legacySiteTarget } from './legacy-paths'
 import { canInvite, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
@@ -25,8 +26,8 @@ import {
   pagesQuery,
   passwordResetQuery,
   recentLeadsQuery,
+  siteIdOf,
   siteQuery,
-  sitesQuery,
   statusQuery,
 } from './queries'
 import { EditorScreen } from './screens/EditorScreen'
@@ -42,7 +43,6 @@ import { OverviewScreen } from './screens/OverviewScreen'
 import { PagesScreen } from './screens/PagesScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
-import { SitesScreen } from './screens/SitesScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { AdminLayout } from './shell/AdminLayout'
 
@@ -114,22 +114,33 @@ const inviteRoute = createRoute({
 })
 
 /**
- * Кривой id сайта или адрес страницы в ссылке — это «не найдено», а не «данные не прошли
- * проверку» от API. Проверяем теми же схемами, что API: страницы со старыми адресами открываются
+ * Старые адреса /sites/<id>/… — на те же экраны без id: одна установка — один сайт, а закладки
+ * и ссылки из старых писем должны работать (legacy-paths.ts). Без входа корень сначала ведёт
+ * на вход, а после него человек вернётся сюда и попадёт на новый адрес
  */
-function checkSiteId(siteId: string) {
-  if (!Uuid().safeParse(siteId).success) throw notFound({ data: 'Сайт не найден' })
-}
+const legacySitesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sites/$',
+  beforeLoad: ({ location }) => {
+    const target = legacySiteTarget(location.pathname, location.searchStr, location.hash)
+    throw redirect({ href: target ?? '/', replace: true })
+  },
+})
 
+/**
+ * Кривой адрес страницы в ссылке — это «не найдено», а не «данные не прошли проверку» от API.
+ * Проверяем той же схемой, что API: страницы со старыми адресами открываются
+ */
 function checkSlug(slug: string) {
   if (!ExistingPageSlug.safeParse(slug).success) throw notFound({ data: 'Страница не найдена' })
 }
 
 /**
  * Оболочка закрытых экранов: боковая панель и экран (AdminLayout). Её загрузчик берёт то, что
- * панель показывает сразу: кто вошёл и список сайтов (переключатель). Почта и состояние
- * установки — только владельцу и второстепенные: их сбой не прячет экран (allSettled), панель
- * просто без них. Редактор в оболочку не входит: у него своя полноэкранная раскладка
+ * панель показывает сразу: кто вошёл, сайт установки (название, домен) и роль на нём (разделы,
+ * счётчик заявок). Их сбой (участник без доступа к сайту) не прячет оболочку (allSettled): экран
+ * покажет ошибку своим загрузчиком, а «Выйти» в панели останется. Почта и состояние установки —
+ * только владельцу и второстепенные. Редактор в оболочку не входит: у него своя раскладка
  */
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -137,7 +148,9 @@ const appRoute = createRoute({
   loader: async ({ context: { queryClient } }) => {
     const me = await queryClient.ensureQueryData(meQuery())
     await Promise.all([
-      queryClient.ensureQueryData(sitesQuery()),
+      Promise.allSettled([
+        siteIdOf(queryClient).then((siteId) => queryClient.ensureQueryData(siteQuery(siteId))),
+      ]),
       me?.role === 'owner' &&
         Promise.allSettled([
           queryClient.ensureQueryData(mailQuery()),
@@ -148,26 +161,21 @@ const appRoute = createRoute({
   component: AdminLayout,
 })
 
-const sitesRoute = createRoute({
+/** Сайт установки и роль на нём: от роли зависит, что ещё грузить экрану */
+const loadSite = async (queryClient: QueryClient) => {
+  const siteId = await siteIdOf(queryClient)
+  return { siteId, site: await queryClient.ensureQueryData(siteQuery(siteId)) }
+}
+
+// Обзор сайта — первый экран админки: состояние публикации и сборки, карточки, страницы и
+// последние заявки. Сборка и заявки — второстепенное: их сбой виден в своей карточке (allSettled)
+const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(sitesQuery()),
-  component: SitesScreen,
-})
-
-/** Сайт и роль на нём: от роли зависит, что ещё грузить экрану */
-const loadSite = (queryClient: QueryClient, siteId: string) =>
-  queryClient.ensureQueryData(siteQuery(siteId))
-
-// Обзор сайта: состояние публикации и сборки, карточки, страницы и последние заявки.
-// Сборка и заявки — второстепенное: их сбой показывается в своей карточке (allSettled)
-const siteRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/sites/$siteId',
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: async ({ context: { queryClient }, params: { siteId } }) => {
+  loader: async ({ context: { queryClient } }) => {
+    const siteId = await siteIdOf(queryClient)
     const [site] = await Promise.all([
-      loadSite(queryClient, siteId),
+      queryClient.ensureQueryData(siteQuery(siteId)),
       queryClient.ensureQueryData(pagesQuery(siteId)),
       Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
     ])
@@ -180,19 +188,21 @@ const siteRoute = createRoute({
 
 const pagesRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/sites/$siteId/pages',
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: ({ context: { queryClient }, params: { siteId } }) =>
-    Promise.all([loadSite(queryClient, siteId), queryClient.ensureQueryData(pagesQuery(siteId))]),
+  path: '/pages',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await queryClient.ensureQueryData(pagesQuery(siteId))
+  },
   component: PagesScreen,
 })
 
 const mediaRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/sites/$siteId/media',
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: ({ context: { queryClient }, params: { siteId } }) =>
-    Promise.all([loadSite(queryClient, siteId), queryClient.ensureQueryData(mediaQuery(siteId))]),
+  path: '/media',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await queryClient.ensureQueryData(mediaQuery(siteId))
+  },
   component: MediaScreen,
 })
 
@@ -201,22 +211,22 @@ const mediaRoute = createRoute({
 // не пересоздаётся, и фокус остаётся там, где был
 const leadsRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/sites/$siteId/leads',
+  path: '/leads',
   // ?status=new | processed — вкладка списка; без него — все заявки
   validateSearch: (search: Record<string, unknown>): { status?: LeadStatus } => {
     const status = LeadStatus.safeParse(search.status)
     return status.success ? { status: status.data } : {}
   },
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
   loaderDeps: ({ search }) => ({ status: search.status }),
-  loader: ({ context: { queryClient }, params: { siteId }, deps: { status } }) =>
-    Promise.all([
-      loadSite(queryClient, siteId),
+  loader: async ({ context: { queryClient }, deps: { status } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await Promise.all([
       queryClient.ensureQueryData(leadsQuery(siteId, status)),
       queryClient.ensureQueryData(leadSettingsQuery(siteId)),
       // Заголовки страниц — подписать, откуда заявка («Главная · форма «Замер»»)
       queryClient.ensureQueryData(pagesQuery(siteId)),
-    ]),
+    ])
+  },
   component: LeadsScreen,
 })
 
@@ -232,8 +242,8 @@ const leadRoute = createRoute({
   beforeLoad: ({ params }) => {
     if (!Uuid().safeParse(params.leadId).success) throw notFound({ data: 'Заявка не найдена' })
   },
-  loader: ({ context: { queryClient }, params: { siteId, leadId } }) =>
-    queryClient.ensureQueryData(leadQuery(siteId, leadId)),
+  loader: async ({ context: { queryClient }, params: { leadId } }) =>
+    queryClient.ensureQueryData(leadQuery(await siteIdOf(queryClient), leadId)),
   component: LeadScreen,
   // Ошибка заявки — внутри колонки карточки, список рядом остаётся
   errorComponent: LeadError,
@@ -245,10 +255,9 @@ const leadRoute = createRoute({
 // второстепенное (allSettled): сбой показывается внутри своего раздела
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/sites/$siteId/settings',
-  beforeLoad: ({ params }) => checkSiteId(params.siteId),
-  loader: async ({ context: { queryClient }, params: { siteId } }) => {
-    const site = await loadSite(queryClient, siteId)
+  path: '/settings',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId, site } = await loadSite(queryClient)
     await Promise.all([
       canSeeLeads(site.access) && queryClient.ensureQueryData(leadSettingsQuery(siteId)),
       Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
@@ -287,14 +296,12 @@ const statusRoute = createRoute({
 // Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/sites/$siteId/pages/$slug',
-  beforeLoad: ({ params }) => {
-    checkSiteId(params.siteId)
-    checkSlug(params.slug)
-  },
+  path: '/pages/$slug',
+  beforeLoad: ({ params }) => checkSlug(params.slug),
   // Страница — всегда свежая из API, не из кеша: редактор берёт её в своё состояние один раз,
   // и устаревший черновик (например, после правки через MCP) при сохранении затёр бы новый
-  loader: async ({ context: { queryClient }, params: { siteId, slug } }) => {
+  loader: async ({ context: { queryClient }, params: { slug } }) => {
+    const siteId = await siteIdOf(queryClient)
     const [site, page] = await Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
       queryClient.fetchQuery(pageQuery(siteId, slug)),
@@ -322,9 +329,9 @@ const routeTree = rootRoute.addChildren([
   forgotPasswordRoute,
   resetPasswordRoute,
   inviteRoute,
+  legacySitesRoute,
   appRoute.addChildren([
-    sitesRoute,
-    siteRoute,
+    overviewRoute,
     pagesRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),

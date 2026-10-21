@@ -195,7 +195,8 @@ export async function acceptLead(db: Db, input: AcceptInput) {
               value: displayValue(field),
             })),
             createdAt: now.toISOString(),
-            url: `${adminUrl}/sites/${site.id}/leads/${lead.id}`,
+            // Админка без id сайта в адресе: в установке один сайт
+            url: `${adminUrl}/leads/${lead.id}`,
             ...(email === undefined ? {} : { replyTo: email }),
           },
           to,

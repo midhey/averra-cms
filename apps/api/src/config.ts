@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
-import { MailAddress, MailSenderName } from '@averra/schema'
+import { MailAddress, MailSenderName, SITE_NAME_MAX, SiteName } from '@averra/schema'
 import { z } from 'zod'
 import { isLoopbackHost } from './loopback'
 import { MAIL_OFF_EFFECT } from './mail/mailer'
@@ -90,6 +90,10 @@ const Origin = z
   .refine((url) => !URL.canParse(url) || new URL(url).origin === url, {
     error: 'Нужен адрес без пути и косой черты в конце, например https://admin.example.ru',
   })
+
+/** Пустая строка или одни пробелы в переменной — как не задана */
+const emptyToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value
 
 const isLoopbackUrl = (url: string) => URL.canParse(url) && isLoopbackHost(new URL(url).hostname)
 
@@ -285,6 +289,22 @@ const envSchema = (options: ConfigOptions) =>
       ADMIN_URL: Origin.optional(),
       // Адрес самого API снаружи (baseURL для Better Auth)
       API_URL: Origin.optional(),
+      // Адрес опубликованного сайта, например https://example.ru. Его домен админка показывает
+      // в заголовке боковой панели, а без SITE_NAME он же — название нового сайта. На сервере его
+      // собирает compose.yaml из SITE_DOMAIN. Пустая строка — как не задан (так «снимают»
+      // переменную в compose)
+      SITE_URL: z.preprocess(emptyToUndefined, Origin.optional()),
+      // Название сайта, который API создаёт при первом запуске в пустой базе (install.sh пишет его
+      // из --site-name). Дальше название живёт в базе, и эта переменная его не меняет. Длиннее
+      // 80 символов — обрезается, а не роняет API: нужно оно один раз, а запуск важнее
+      SITE_NAME: z.preprocess(
+        emptyToUndefined,
+        z
+          .string()
+          .transform((name) => name.trim().slice(0, SITE_NAME_MAX))
+          .pipe(SiteName)
+          .optional(),
+      ),
       // true — API стоит за прокси (Caddy), который сам ставит X-Forwarded-For. Иначе заголовок
       // перезаписывается адресом соединения: подставив его, нельзя обойти лимит попыток входа
       TRUST_PROXY: z.stringbool().default(false),
@@ -396,15 +416,18 @@ const envSchema = (options: ConfigOptions) =>
     .transform((env) => {
       const AUTH_SECRET = env.AUTH_SECRET ?? DEV_AUTH_SECRET
       const { ADMIN_URL, API_URL } = urlsOf(env)
+      const localDev = isLocalDev(env, options)
       // Демо-сайт и владелец для разработки — по тому же правилу, что и учебный секрет, а не
       // по одному NODE_ENV: иначе в пустую продовую базу лёг бы опубликованный демо-сайт
-      const devSeed = env.NODE_ENV === 'development' && isLocalDev(env, options)
-      const mailKey = mailKeyOf(env.MAIL_ENCRYPTION_KEY, isLocalDev(env, options))
+      const devSeed = env.NODE_ENV === 'development' && localDev
+      const mailKey = mailKeyOf(env.MAIL_ENCRYPTION_KEY, localDev)
       return {
         ...env,
         AUTH_SECRET,
         ADMIN_URL,
         API_URL,
+        // В учебном режиме сайт показывает рендерер из pnpm dev
+        SITE_URL: env.SITE_URL ?? (localDev ? 'http://localhost:4321' : undefined),
         // Учебный секрет публичный, поэтому такой API отвечает только запросам к localhost
         // с этого компьютера. Это добавочная защита, а не главная: прокси на том же сервере,
         // который шлёт апстриму его Host (nginx по умолчанию), её обходит (см. client-ip.ts)
@@ -424,7 +447,7 @@ const envSchema = (options: ConfigOptions) =>
         // env — свой ключ, dev — учебный из репозитория (только pnpm dev): админка предупредит
         mailKeyKind: mailKey.kind,
         // Куда подключается SMTP из админки вместо 465 и 587 — только в учебном режиме (e2e)
-        smtpConnectPort: isLocalDev(env, options) ? env.DEV_SMTP_CONNECT_PORT : undefined,
+        smtpConnectPort: localDev ? env.DEV_SMTP_CONNECT_PORT : undefined,
       }
     })
 

@@ -29,6 +29,7 @@ export const notFound = (message: string) => ({ error: { code: 'not_found', mess
 const publicRoutes = [
   /^\/api\/health(\/ready)?$/,
   /^\/api\/sites\/[^/]+\/snapshot$/,
+  /^\/api\/site\/snapshot$/,
   /^\/api\/media\/[^/]+\/[^/]+$/,
   /^\/api\/password-reset$/,
 ]
@@ -124,7 +125,7 @@ export function requireSite(db: Db, permission: Permission) {
   })
 }
 
-/** Только владелец админки: создание сайтов */
+/** Только владелец установки: почта, состояние установки */
 export const requireOwner = (message: string) =>
   createMiddleware<AuthEnv>(async (c, next) => {
     const { actor } = c.var

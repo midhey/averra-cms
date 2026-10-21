@@ -20,7 +20,7 @@ export function PendingScreen() {
 
 const backHome = (
   <Link to="/" className={buttonClassName()}>
-    К списку сайтов
+    К обзору сайта
   </Link>
 )
 
@@ -37,7 +37,7 @@ export function ErrorScreen({ error }: ErrorComponentProps) {
 }
 
 /**
- * Нет такого адреса в админке — или адрес есть, но сайта или страницы с таким id нет.
+ * Нет такого адреса в админке — или адрес есть, но страницы или заявки с таким адресом нет.
  * Что именно не нашлось, маршрут передаёт в notFound({ data })
  */
 export function NotFoundScreen({ data }: { data?: unknown }) {
@@ -46,7 +46,7 @@ export function NotFoundScreen({ data }: { data?: unknown }) {
   return (
     <main className={styles.notFound}>
       <EmptyState title={heading} icon="search" headingLevel={1} action={backHome}>
-        Проверьте адрес или вернитесь к списку сайтов.
+        Проверьте адрес или вернитесь к обзору сайта.
       </EmptyState>
     </main>
   )

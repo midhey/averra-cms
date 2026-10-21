@@ -1,6 +1,5 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { demoSiteId } from '@averra/schema'
 import { defineConfig, devices } from '@playwright/test'
 import { e2eOwner, ownerStateFile, ports, publishDir, smtpTest, urls } from './urls'
 
@@ -70,6 +69,8 @@ export default defineConfig({
         // Публикация собирает сайт на «сервере», как в установке на VPS: настоящий Astro в папку
         // релиза (tests/server-build.spec.ts). Сборки идут в фоне и по одной, тестам не мешают
         PUBLISH_DIR: publishDir,
+        // Адрес сайта — рендерер e2e: его домен админка показывает в боковой панели
+        SITE_URL: urls.renderer,
       },
     },
     {
@@ -88,8 +89,8 @@ export default defineConfig({
       command: `pnpm --filter @averra/renderer exec astro dev --port ${ports.renderer} --ignore-lock`,
       url: urls.renderer,
       reuseExistingServer: false,
-      // Демо-сайт свежей базы всегда с этим id: список сайтов без входа не получить
-      env: { CMS_API_URL: urls.api, CMS_SITE_ID: demoSiteId, ASTRO_TELEMETRY_DISABLED: '1' },
+      // Без CMS_SITE_ID: рендерер показывает сайт установки (одна установка — один сайт)
+      env: { CMS_API_URL: urls.api, ASTRO_TELEMETRY_DISABLED: '1' },
     },
   ],
 })

@@ -102,14 +102,20 @@ async function acceptInvitation(token: string) {
   return res.json()
 }
 
-/** После принятия — на обзор сайта: список сайтов и права надо загрузить заново */
+/**
+ * После принятия — на обзор сайта. Сайт у установки один, поэтому id не нужен, а вот доступ к нему
+ * и роль надо загрузить заново: до принятия их не было
+ */
 function useOpenSite() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  return async (siteId: string, signedIn: boolean) => {
+  return async (signedIn: boolean) => {
     if (signedIn) await switchUser(queryClient, true)
-    else await queryClient.invalidateQueries({ queryKey: queryKeys.sites })
-    await navigate({ to: '/sites/$siteId', params: { siteId }, replace: true })
+    else {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.currentSite })
+      await queryClient.invalidateQueries({ queryKey: ['sites'] })
+    }
+    await navigate({ to: '/', replace: true })
   }
 }
 
@@ -132,12 +138,10 @@ function NewUserForm({ token, invitation }: { token: string; invitation: Invitat
     mutationFn: async (body: { name: string; password: string }) => {
       const res = await api.invitations.register.$post({ json: { token, ...body } })
       if (res.status !== 201) throw await apiRequestError(res)
-      const { siteId } = await res.json()
       // Пароль человек только что задал сам: входим им, чтобы не набирать его второй раз
       await signIn({ email: invitation.email, password: body.password })
-      return siteId
     },
-    onSuccess: (siteId) => openSite(siteId, true),
+    onSuccess: () => openSite(true),
     onError: async (error) => {
       // Вход у адреса появился, пока экран был открыт: покажем вход вместо формы
       if (error instanceof ApiRequestError && error.code === 'user_exists') {
@@ -215,7 +219,7 @@ function AcceptAsMe({ token }: { token: string }) {
   const openSite = useOpenSite()
   const accept = useMutation({
     mutationFn: () => acceptInvitation(token),
-    onSuccess: ({ siteId }) => openSite(siteId, false),
+    onSuccess: () => openSite(false),
   })
   return (
     <div className={styles.stack}>
@@ -268,7 +272,7 @@ function SignInAndAccept({ token, invitation }: { token: string; invitation: Inv
       await signIn({ email: invitation.email, password })
       return acceptInvitation(token)
     },
-    onSuccess: ({ siteId }) => openSite(siteId, true),
+    onSuccess: () => openSite(true),
     onError: (error) => {
       setFormError(messageOf(error))
       setPassword('')

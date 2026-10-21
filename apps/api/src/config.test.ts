@@ -46,6 +46,28 @@ describe('конфиг', () => {
     expect(issuePaths({ MEDIA_MAX_BYTES: '0' })).toEqual(['MEDIA_MAX_BYTES'])
   })
 
+  it('сайт установки: SITE_URL — только origin, SITE_NAME — название, пустые — как не заданы', () => {
+    const site = (env: Record<string, string>, options: ConfigOptions = {}) => {
+      const data = parseConfig(env, options).data
+      return { url: data?.SITE_URL, name: data?.SITE_NAME }
+    }
+    expect(site(prodEnv)).toEqual({ url: undefined, name: undefined })
+    // В учебном режиме сайт показывает рендерер pnpm dev
+    expect(site({}, dev).url).toBe('http://localhost:4321')
+    expect(site({ ...prodEnv, SITE_URL: 'https://example.ru', SITE_NAME: '  Ремонт  ' })).toEqual({
+      url: 'https://example.ru',
+      name: 'Ремонт',
+    })
+    // compose.yaml передаёт ${SITE_NAME:-}: у установок без строки в .env это пустая строка
+    expect(site({ ...prodEnv, SITE_URL: '', SITE_NAME: ' ' })).toEqual({
+      url: undefined,
+      name: undefined,
+    })
+    expect(issuePaths({ ...prodEnv, SITE_URL: 'https://example.ru/' })).toEqual(['SITE_URL'])
+    // Длинное название обрезается: оно нужно один раз, и ронять из-за него API незачем
+    expect(site({ ...prodEnv, SITE_NAME: 'я'.repeat(100) }).name).toBe('я'.repeat(80))
+  })
+
   it('адрес API по умолчанию следует за PORT', () => {
     expect(parseConfig({ PORT: '4100' }, dev).data?.API_URL).toBe('http://localhost:4100')
   })

@@ -15,7 +15,7 @@ test('обзор: что опубликовано, карточки и табл�
   })
   expect(created.status).toBe(201)
 
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const screen = siteScreen(page)
   await expect(screen.heading).toHaveText(demoSite.name)
   await expect(page.getByText(/^Опубликован /)).toBeVisible()
@@ -28,7 +28,7 @@ test('обзор: что опубликовано, карточки и табл�
   await expect(stats).toContainText('1 опубликована, 1 черновик')
   await expect(stats.getByRole('link', { name: /Новые заявки/ })).toHaveAttribute(
     'href',
-    `/sites/${demoSite.id}/leads?status=new`,
+    '/leads?status=new',
   )
 
   await expect(screen.row('/ceny')).toContainText('Черновик')
@@ -63,7 +63,7 @@ test('«Опубликовать правки» публикует изменё�
   })
   expect(draft.status).toBe(201)
 
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const screen = siteScreen(page)
   await expect(page.getByText('Неопубликованные правки на 1 странице')).toBeVisible()
   await expect(screen.row(demo.pageTitle)).toContainText('Есть правки')
@@ -91,40 +91,31 @@ test('«Опубликовать правки» публикует изменё�
   expect(missing.status()).toBe(404)
 })
 
-test('панель: выбранный раздел отмечен, переключатель сайта раскрывается и закрывается Esc', async ({
+test('панель: название и домен сайта вместо выбора сайта, выбранный раздел отмечен', async ({
   page,
   demoSite,
 }) => {
-  const other = await sites.$post({ json: { name: `Сайт для панели ${Date.now()}` } })
-  if (other.status !== 201) throw new Error(`Второй сайт: ${other.status}`)
-  const second = await other.json()
-
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const panel = sidebar(page)
+  // Одна установка — один сайт: в заголовке панели его название и домен, раскрывать нечего
+  await expect(panel.siteLink.locator('xpath=..')).toContainText(demoSite.name)
+  await expect(page.getByRole('button', { name: /выбрать другой сайт/ })).toHaveCount(0)
+  await expect(page.getByRole('list', { name: 'Сайты' })).toHaveCount(0)
+
   await expect(panel.section('Обзор')).toHaveAttribute('aria-current', 'page')
   await expect(panel.section('Медиатека')).not.toHaveAttribute('aria-current')
 
   await panel.section('Медиатека').click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/media`)
+  await expect(page).toHaveURL('/media')
   await expect(panel.section('Медиатека')).toHaveAttribute('aria-current', 'page')
   await expect(panel.section('Обзор')).not.toHaveAttribute('aria-current')
 
-  await expect(panel.switcher).toHaveAttribute('aria-expanded', 'false')
-  await panel.switcher.click()
-  await expect(panel.switcher).toHaveAttribute('aria-expanded', 'true')
-  await expect(panel.sitesList.getByRole('link', { name: demoSite.name })).toHaveAttribute(
-    'aria-current',
-    'true',
-  )
-  await page.keyboard.press('Escape')
-  await expect(panel.sitesList).toHaveCount(0)
-  await expect(panel.switcher).toBeFocused()
-
-  await panel.switcher.click()
-  await panel.sitesList.getByRole('link', { name: second.name }).click()
-  await expect(page).toHaveURL(`/sites/${second.id}`)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.name)
-  await expect(panel.sitesList).toHaveCount(0)
+  // Домен открывает опубликованный сайт в новой вкладке, админка остаётся на месте
+  const [site] = await Promise.all([page.context().waitForEvent('page'), panel.siteLink.click()])
+  await site.waitForLoadState()
+  await expect(site.getByRole('heading', { level: 1 })).toHaveText(demo.heroTitle)
+  await site.close()
+  await expect(page).toHaveURL('/media')
 })
 
 test('сборка не загрузилась — обзор открыт, карточка говорит это и даёт «Повторить»', async ({
@@ -140,7 +131,7 @@ test('сборка не загрузилась — обзор открыт, ка
         })
       : route.continue(),
   )
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   const stats = page.getByRole('region', { name: 'Коротко' })
   await expect(stats).toContainText('Не загрузилась')

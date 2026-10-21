@@ -173,13 +173,8 @@ describe('состояние сборки и «Собрать заново»', (
         ).status,
       ).toBe(202)
       // Чужой сайт — 404, как везде: редактор другого сайта демо-сайта не видит
-      const owner = await api.loginAs('owner')
-      const other = await api.app.request('/api/sites', {
-        method: 'POST',
-        headers: json(owner.headers),
-        body: JSON.stringify({ name: 'Чужой' }),
-      })
-      const { id: otherId } = (await other.json()) as { id: string }
+      // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+      const otherId = await api.createSite('Чужой')
       const stranger = await api.loginAs('editor', otherId)
       expect((await api.app.request(url, { headers: stranger.headers })).status).toBe(404)
       expect(recorder.requested).toEqual([api.demoSiteId, api.demoSiteId])

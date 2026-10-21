@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { defaultTheme } from '@averra/tokens'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { aesGcmSecretBox, KEY_BYTES } from '../crypto/aes-gcm'
@@ -8,8 +9,9 @@ import { mailSettings } from '../db/schema'
 import { memoryMailer } from '../mail/memory-mailer'
 import { createMailRuntime } from '../mail/runtime'
 import { MAIL_PASSWORD_CONTEXT } from '../mail/settings'
+import { sitesRepo } from '../modules/sites/repo'
 import { MemberRole, NewUser } from '../modules/users/repo'
-import { CliError, check, inviteLinkNotice, queuedMailTransport, run } from './common'
+import { CliError, check, inviteLinkNotice, queuedMailTransport, resolveSite, run } from './common'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -136,6 +138,28 @@ describe('почта для писем команд', () => {
       expect(
         await queuedMailTransport(db, { mail: off, mailEncryptionKey: randomBytes(KEY_BYTES) }),
       ).toMatchObject({ reason: expect.stringContaining('MAIL_ENCRYPTION_KEY сменился') })
+    } finally {
+      await close()
+    }
+  })
+})
+
+describe('сайт команды (--site)', () => {
+  it('без --site — сайт установки, с --site — указанный, неизвестный — понятная ошибка', async () => {
+    const { db, close } = createDb()
+    try {
+      await migrateDb(db)
+      await expect(resolveSite(db, undefined)).rejects.toThrow(
+        'В базе нет сайта: его создаёт API при первом запуске',
+      )
+      const repo = sitesRepo(db)
+      const first = await repo.createSite('Первый', defaultTheme)
+      const second = await repo.createSite('Второй', defaultTheme)
+      // В старой базе сайтов несколько: без --site — созданный первым, как у админки
+      expect(await resolveSite(db, undefined)).toEqual({ id: first.id, name: 'Первый' })
+      expect(await resolveSite(db, second.id)).toEqual({ id: second.id, name: 'Второй' })
+      const missing = '00000000-0000-4000-8000-000000000000'
+      await expect(resolveSite(db, missing)).rejects.toThrow(new CliError(`Нет сайта ${missing}`))
     } finally {
       await close()
     }

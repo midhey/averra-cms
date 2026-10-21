@@ -21,7 +21,7 @@ test('владелец видит состояние установки с ве�
   await expect(section).toContainText('Почта')
 })
 
-test('участнику блока нет: API ему его не отдаст', async ({ page }) => {
+test('участнику блока нет: API ему его не отдаст', async ({ page, demoSite }) => {
   await page.route(/\/api\/me$/, async (route) => {
     const response = await route.fetch()
     const body = await response.json()
@@ -33,7 +33,7 @@ test('участнику блока нет: API ему его не отдаст'
     await route.continue()
   })
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByRole('navigation', { name: 'Установка' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /^Состояние/ })).toHaveCount(0)
   expect(asked).toBe(false)

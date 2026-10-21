@@ -14,7 +14,6 @@ export type PageRow = {
 }
 
 type PagesTableProps = {
-  siteId: string
   pages: readonly PageRow[]
   /** Колонка действий («Удалить»): только тем, кто управляет страницами */
   actions?: (page: PageRow) => ReactNode
@@ -36,14 +35,14 @@ export function RelativeTime({ iso }: { iso: string }) {
  * Таблица страниц сайта, как в концепте: страница (ссылка в редактор), адрес, состояние
  * и когда менялась. Подпись «Страницы» — по ней таблицу находит диктор (и e2e)
  */
-export function PagesTable({ siteId, pages, actions, empty }: PagesTableProps) {
+export function PagesTable({ pages, actions, empty }: PagesTableProps) {
   const columns: Column<PageRow>[] = [
     {
       key: 'title',
       header: 'Страница',
       wrap: 'anywhere',
       cell: (page) => (
-        <Link to="/sites/$siteId/pages/$slug" params={{ siteId, slug: page.slug }}>
+        <Link to="/pages/$slug" params={{ slug: page.slug }}>
           {page.title}
         </Link>
       ),

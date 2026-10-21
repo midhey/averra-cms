@@ -1127,21 +1127,20 @@ describe('восстановление', () => {
     expect(srv.media()).toEqual(['site/original.jpg'])
   })
 
-  it('на новом сервере SITE_ID берётся из бэкапа: Caddy отдаёт восстановленный сайт', () => {
-    const old = 'c6026fd5-5af8-4af9-a36e-1e08b05210a8'
-    const srv = server({ env: [`SITE_ID=${old}`] })
+  it('восстановление не трогает .env: сайт на домене выбирает API по восстановленной базе', () => {
+    // SITE_ID в .env прежних версий: восстановление его больше не переписывает — Caddy берёт
+    // сайт по ссылке main, которую API ставит при старте на сайт установки из базы
+    const other = '11111111-1111-4111-8111-111111111111'
+    const srv = server({ env: [`SITE_ID=${other}`] })
     expect(srv.run(['backup']).status).toBe(0)
     const [name] = srv.backups()
-    // Новый сервер: установщик завёл свой сайт и записал его id
-    writeFileSync(
-      join(srv.dir, '.env'),
-      srv.env().replace(`SITE_ID=${old}`, 'SITE_ID=11111111-1111-4111-8111-111111111111'),
-    )
+    const manifest = readFileSync(join(srv.dir, 'backups', name ?? '', 'manifest.json'), 'utf8')
+    expect(manifest).not.toContain('siteId')
+    const before = srv.env()
     const run = srv.run(['restore', name ?? '', '--yes'])
     expect(run.status, run.output).toBe(0)
-    expect(srv.env()).toMatch(new RegExp(`^SITE_ID=${old}$`, 'm'))
-    expect(srv.env().match(/^SITE_ID=/gm)).toHaveLength(1)
-    expect(run.stdout).toContain(`SITE_ID в .env теперь ${old}`)
+    expect(srv.env()).toBe(before)
+    expect(run.stdout).not.toContain('SITE_ID')
   })
 
   it('дамп не встал — рабочие база и медиатека не тронуты, API не останавливался', () => {

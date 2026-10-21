@@ -49,7 +49,7 @@ test('список и карточка рядом: вкладки, «Ответ�
     comment: 'Нужен ремонт ванной, 4 м²',
   })
 
-  await page.goto(`/sites/${demoSite.id}/leads?status=new`)
+  await page.goto('/leads?status=new')
   await expect(page.getByRole('heading', { level: 1, name: 'Заявки' })).toBeVisible()
   const tabs = page.getByRole('tablist', { name: 'Фильтр заявок' })
   await expect(tabs.getByRole('tab', { name: /^Новые · \d+/ })).toHaveAttribute(
@@ -68,9 +68,7 @@ test('список и карточка рядом: вкладки, «Ответ�
   // Список остаётся рядом, выбранная заявка в нём отмечена
   await expect(list).toBeVisible()
   await expect(item).toHaveAttribute('aria-current', 'page')
-  await expect(page).toHaveURL(
-    new RegExp(`/sites/${demoSite.id}/leads/[0-9a-f-]{36}\\?status=new$`),
-  )
+  await expect(page).toHaveURL(/\/leads\/[0-9a-f-]{36}\?status=new$/)
   // Телефон и почта — ссылками: позвонить и написать в одно касание
   await expect(card.getByRole('link', { name: '+7 912 000-00-00' })).toHaveAttribute(
     'href',
@@ -96,14 +94,14 @@ test('список и карточка рядом: вкладки, «Ответ�
   // Во вкладке «Новые» её больше нет, в «Обработанных» — есть. Вкладки — стрелками
   await tabs.getByRole('tab', { selected: true }).focus()
   await page.keyboard.press('ArrowRight')
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads?status=processed`)
+  await expect(page).toHaveURL('/leads?status=processed')
   await expect(tabs.getByRole('tab', { name: 'Обработанные' })).toBeFocused()
   await expect(list.getByRole('link').filter({ hasText: name })).toBeVisible()
   await page.keyboard.press('ArrowLeft')
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads?status=new`)
+  await expect(page).toHaveURL('/leads?status=new')
   await expect(list.getByRole('link').filter({ hasText: name })).toHaveCount(0)
   await page.keyboard.press('End')
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads`)
+  await expect(page).toHaveURL('/leads')
 
   // Удаление: «Отмена» оставляет, «ОК» удаляет и возвращает к списку, фокус — на вкладку
   await list.getByRole('link').filter({ hasText: name }).click()
@@ -113,7 +111,7 @@ test('список и карточка рядом: вкладки, «Ответ�
   expect(dialogs[0]).toContain(`Удалить заявку «${name}»`)
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: 'Удалить' }).click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads`)
+  await expect(page).toHaveURL('/leads')
   await expect(list.getByRole('link').filter({ hasText: name })).toHaveCount(0)
   await expect(tabs.getByRole('tab', { name: 'Все' })).toBeFocused()
 })
@@ -134,7 +132,7 @@ test('обзор берёт только последние заявки и то
   const recent = page.waitForResponse((response) =>
     response.url().includes(`/api/sites/${demoSite.id}/leads/recent`),
   )
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const body = (await (await recent).json()) as { items: Record<string, unknown>[] }
   const section = page.getByRole('region', { name: 'Последние заявки' })
   await expect(section.getByRole('link').filter({ hasText: name })).toBeVisible()
@@ -147,16 +145,13 @@ test('обзор берёт только последние заявки и то
   for (const url of requests) expect(url).toBe(`/api/sites/${demoSite.id}/leads/recent`)
 })
 
-test('пустая вкладка: панель — остановка Tab, фокус не уходит со страницы', async ({
-  page,
-  demoSite,
-}) => {
+test('пустая вкладка: панель — остановка Tab, фокус не уходит со страницы', async ({ page }) => {
   // Обработанных заявок нет: ответ API подменён пустым списком
   await page.route(/\/api\/sites\/[^/]+\/leads\?status=processed$/u, async (route) => {
     const response = await route.fetch()
     await route.fulfill({ response, json: { ...(await response.json()), items: [] } })
   })
-  await page.goto(`/sites/${demoSite.id}/leads?status=processed`)
+  await page.goto('/leads?status=processed')
   await expect(page.getByRole('heading', { name: 'Таких заявок нет' })).toBeVisible()
   const tabs = page.getByRole('tablist', { name: 'Фильтр заявок' })
   await tabs.getByRole('tab', { name: 'Обработанные' }).focus()
@@ -167,7 +162,7 @@ test('пустая вкладка: панель — остановка Tab, фо
 test('без почты посетителя «Ответить письмом» нет', async ({ page, demoSite }) => {
   const name = `Анна ${Date.now()}`
   await createLead(demoSite.id, { name, phone: '+7 900 555-44-33', email: '', comment: '' })
-  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page.goto('/leads')
   await page
     .getByRole('list', { name: 'Список заявок' })
     .getByRole('link')
@@ -185,7 +180,7 @@ test('на телефоне — по очереди: список, потом к
   const name = `Олег ${Date.now()}`
   await createLead(demoSite.id, { name, phone: '+7 921 111-22-33', email: '', comment: '' })
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page.goto('/leads')
   const list = page.getByRole('list', { name: 'Список заявок' })
   await expect(list).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Выберите заявку' })).toBeHidden()
@@ -201,7 +196,7 @@ test('на телефоне — по очереди: список, потом к
   expect(Number(overflow)).toBeLessThanOrEqual(0)
 
   await card.getByRole('link', { name: 'Все заявки' }).click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads`)
+  await expect(page).toHaveURL('/leads')
   await expect(list).toBeVisible()
 })
 
@@ -213,7 +208,7 @@ test('длинное имя на телефоне: плашка уходит п�
   const name = `${word} ${Date.now()}`
   await createLead(demoSite.id, { name, phone: '+7 921 333-44-55', email: '', comment: '' })
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page.goto('/leads')
   await page
     .getByRole('list', { name: 'Список заявок' })
     .getByRole('link')
@@ -264,7 +259,7 @@ test('принудительные цвета: выбранная заявка �
   await createLead(demoSite.id, { name: first, phone: '+7 921 444-55-66', email: '', comment: '' })
   await createLead(demoSite.id, { name: second, phone: '+7 921 555-66-77', email: '', comment: '' })
   await page.emulateMedia({ forcedColors: 'active' })
-  await page.goto(`/sites/${demoSite.id}/leads?status=new`)
+  await page.goto('/leads?status=new')
   const list = page.getByRole('list', { name: 'Список заявок' })
   const selected = list.getByRole('link').filter({ hasText: first })
   const other = list.getByRole('link').filter({ hasText: second })
@@ -307,13 +302,12 @@ test('принудительные цвета: выбранная заявка �
 
 test('заявки с таким id нет — сообщение в колонке карточки, список и заголовок экрана на месте', async ({
   page,
-  demoSite,
 }) => {
-  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page.goto('/leads')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   const title = await page.title()
 
-  await page.goto(`/sites/${demoSite.id}/leads/00000000-0000-4000-8000-000000000000?status=new`)
+  await page.goto('/leads/00000000-0000-4000-8000-000000000000?status=new')
   const back = page.getByRole('link', { name: 'Все заявки' })
   await expect(back).toBeVisible()
   // Один main и один h1: ошибка не рисует второй экран внутри экрана заявок
@@ -324,10 +318,10 @@ test('заявки с таким id нет — сообщение в колон�
   await expect(page).toHaveTitle(title)
 
   await back.click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/leads?status=new`)
+  await expect(page).toHaveURL('/leads?status=new')
 
   // Кривой id в адресе — «не найдена», в той же колонке
-  await page.goto(`/sites/${demoSite.id}/leads/not-a-uuid`)
+  await page.goto('/leads/not-a-uuid')
   await expect(page.getByRole('heading', { name: 'Заявка не найдена' })).toBeVisible()
   await expect(page.getByRole('main')).toHaveCount(1)
 })

@@ -45,7 +45,8 @@ const statusTones: Record<InvitationStatus, StatusTone> = {
 }
 
 /**
- * Участники сайта у владельца: пригласить по почте и список приглашений с отзывом.
+ * Участники — пользователи установки, у владельца: пригласить по почте и список приглашений
+ * с отзывом. Сайт у установки один, поэтому участник установки — это участник её сайта.
  * Письмо уходит через очередь; без почты API ответит 503, а раздел скажет это заранее
  */
 export function InvitationsSection({ siteId, id }: { siteId: string; id?: string }) {
@@ -147,7 +148,7 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
     <Section
       id={id}
       title="Участники"
-      description="Доступ к сайту по приглашению: человек получит письмо и сам задаст пароль."
+      description="Пользователи этой установки. Редактор и клиент работают с сайтом по приглашению: человек получит письмо и сам задаст пароль."
     >
       {mailOff && <InlineAlert tone="danger">Приглашения не уйдут: {mailOff}</InlineAlert>}
       {mail.error && (

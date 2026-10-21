@@ -22,12 +22,8 @@ const SITE = 'https://remont.example.ru'
 /** Адрес контейнера Caddy в сети Docker Compose: для API это адрес сокета */
 const CADDY_SOCKET = '172.18.0.3'
 
-const created = await api.app.request('/api/sites', {
-  method: 'POST',
-  headers: { ...owner.headers, 'content-type': 'application/json' },
-  body: JSON.stringify({ name: 'Ремонт' }),
-})
-const { id: siteId } = (await created.json()) as { id: string }
+// API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+const siteId = await api.createSite('Ремонт')
 for (const slug of ['index', 'o-nas']) {
   await api.app.request(`/api/sites/${siteId}/pages/${slug}`, {
     method: 'PUT',

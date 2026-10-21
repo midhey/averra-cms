@@ -1,12 +1,60 @@
-import { collectMediaRefs, MAIN_PAGE_SLUG, type PageContent, type Theme } from '@averra/schema'
-import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm'
+import {
+  collectMediaRefs,
+  MAIN_PAGE_SLUG,
+  type PageContent,
+  SITE_NAME_MAX,
+  type Theme,
+} from '@averra/schema'
+import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
 
+/**
+ * Название сайта установки, когда SITE_NAME не задан: домен сайта (из SITE_URL), а без него —
+ * «Мой сайт». Дальше название живёт в базе: SITE_NAME и SITE_URL его не меняют
+ */
+export function defaultSiteName(siteUrl: string | undefined) {
+  // Название — до 80 символов (SiteName), а домен бывает длиннее
+  return siteUrl ? new URL(siteUrl).hostname.slice(0, SITE_NAME_MAX) : 'Мой сайт'
+}
+
 export function sitesRepo(db: Db) {
   const pageIs = (siteId: string, slug: string) =>
     and(eq(pages.siteId, siteId), eq(pages.slug, slug))
+
+  /**
+   * Сайт установки: одна установка — один сайт. Если сайтов в базе несколько (старые базы
+   * разработки), это созданный первым, при равном времени — с меньшим id. Правило, а не
+   * признак в базе: почему — в документации, «Решения → Одна установка — один сайт».
+   * undefined — сайтов нет (API создаёт сайт при старте, см. ensureInstallationSite)
+   */
+  async function installationSite() {
+    const [site] = await db
+      .select()
+      .from(sites)
+      .orderBy(asc(sites.createdAt), asc(sites.id))
+      .limit(1)
+    return site
+  }
+
+  /**
+   * Сайт создаётся сразу с главной: пустой черновик под названием сайта, не опубликован.
+   * Без главной у сайта нет корня, а её же запрещено удалять — пусть она будет всегда
+   */
+  function createSite(name: string, theme: Theme) {
+    return db.transaction(async (tx) => {
+      const [site] = await tx
+        .insert(sites)
+        .values({ name, theme })
+        .returning({ id: sites.id, name: sites.name, theme: sites.theme })
+      if (!site) throw new Error('База не вернула созданный сайт')
+      await tx
+        .insert(pages)
+        .values({ siteId: site.id, slug: MAIN_PAGE_SLUG, title: name, draft: { blocks: [] } })
+      return site
+    })
+  }
 
   return {
     /** Сайты, которые видит пришедший: владелец — все, участник — свои, токен — один свой */
@@ -30,23 +78,28 @@ export function sitesRepo(db: Db) {
       return site
     },
 
-    /**
-     * Сайт создаётся сразу с главной: пустой черновик под названием сайта, не опубликован.
-     * Без главной у сайта нет корня, а её же запрещено удалять — пусть она будет всегда
-     */
-    createSite(name: string, theme: Theme) {
-      return db.transaction(async (tx) => {
-        const [site] = await tx
-          .insert(sites)
-          .values({ name, theme })
-          .returning({ id: sites.id, name: sites.name, theme: sites.theme })
-        if (!site) throw new Error('База не вернула созданный сайт')
-        await tx
-          .insert(pages)
-          .values({ siteId: site.id, slug: MAIN_PAGE_SLUG, title: name, draft: { blocks: [] } })
-        return site
-      })
+    installationSite,
+
+    /** Сколько сайтов в базе: больше одного бывает только в старых базах разработки */
+    async count() {
+      const [row] = await db.select({ n: count() }).from(sites)
+      return row?.n ?? 0
     },
+
+    /**
+     * Сайт установки, а если в базе нет ни одного — создаёт его (с главной). Так сайт появляется
+     * при первом запуске API, без отдельного шага установки. created — создан ли он сейчас
+     */
+    async ensureInstallationSite(name: string, theme: Theme) {
+      const existing = await installationSite()
+      if (existing) return { site: existing, created: false }
+      await createSite(name, theme)
+      const site = await installationSite()
+      if (!site) throw new Error('База не вернула созданный сайт')
+      return { site, created: true }
+    },
+
+    createSite,
 
     /** Страницы для списка в админке: главная первой, остальные по адресу */
     listPages(siteId: string) {

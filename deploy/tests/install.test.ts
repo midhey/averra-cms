@@ -36,8 +36,6 @@ type Fakes = {
   failEnvMove?: boolean
 }
 
-const SITE_ID = 'c6026fd5-5af8-4af9-a36e-1e08b05210a8'
-
 /** Папка с подделками команд: каждая пишет свой вызов (и окружение docker) в журнал */
 function fakeBin(root: string, fakes: Fakes) {
   const bin = join(root, 'bin')
@@ -92,7 +90,6 @@ case "$*" in
   "info") ${fakes.dockerDenied ? 'exit 1' : 'exit 0'} ;;
   "compose version") exit 0 ;;
   *" ps --status running -q caddy") ${fakes.caddyRunning ? 'echo abc123' : 'true'} ;;
-  *"site-create.js"*) printf '${SITE_ID}\\r\\n' ;;
   *"user-create.js"*) echo "Создан владелец" ;;
   *) exit 0 ;;
 esac`,
@@ -184,6 +181,10 @@ describe('флаги', () => {
       [['--email', 'нет-почты'], 'не адрес почты'],
       [['--version', '1.0 ; rm -rf /'], 'не тег образа'],
       [['--api-image', 'Registry/IMG'], 'не имя образа'],
+      // Название идёт в .env, который читает docker compose: $ и # там меняют значение
+      [['--site-name', 'Цены от $100'], 'название сайта «Цены от $100» — одной строкой'],
+      [['--site-name', 'Ремонт #1'], 'без кавычек и знаков'],
+      [['--site-name', 'Ремонт "Иван"'], 'без кавычек и знаков'],
     ]
     for (const [override, message] of cases) {
       const args = [...required, ...override, '--dir', dir, '--dry-run']
@@ -282,8 +283,10 @@ describe('.env установки', () => {
       ADMIN_DOMAIN: 'admin.example.ru',
       ACME_EMAIL: 'studio@example.com',
       OWNER_EMAIL: '',
-      SITE_ID: '',
+      // Название сайта для первого запуска API: по умолчанию — домен сайта
+      SITE_NAME: 'example.ru',
     })
+    expect(env).not.toHaveProperty('SITE_ID')
     // Пароль Postgres — hex (стоит в DATABASE_URL), ключи — 32 байта в base64
     expect(env.POSTGRES_PASSWORD).toMatch(/^[0-9a-f]{48}$/)
     expect(Buffer.from(env.AUTH_SECRET ?? '', 'base64')).toHaveLength(32)
@@ -362,6 +365,29 @@ describe('.env установки', () => {
     }
   })
 
+  it('название сайта: из --site-name, потом из .env; SITE_ID прежней версии остаётся своей строкой', () => {
+    const dir = join(tempDir(), 'inst')
+    const first = install([
+      ...required,
+      '--dir',
+      posix(dir),
+      '--env-only',
+      '--site-name',
+      'Ремонт квартир',
+    ])
+    expect(first.status, first.output).toBe(0)
+    expect(readEnv(dir).SITE_NAME).toBe('Ремонт квартир')
+    // Установка прежней версии: в .env есть SITE_ID, его читал прежний Caddyfile
+    const old = 'c6026fd5-5af8-4af9-a36e-1e08b05210a8'
+    writeFileSync(join(dir, '.env'), `${readFileSync(join(dir, '.env'), 'utf8')}SITE_ID=${old}\n`)
+
+    const again = install(['--dir', posix(dir), '--env-only', '--yes'])
+    expect(again.status, again.output).toBe(0)
+    // Новая версия SITE_ID не ведёт, но и не стирает: откат обновления вернёт прежний Caddyfile
+    expect(readEnv(dir)).toMatchObject({ SITE_NAME: 'Ремонт квартир', SITE_ID: old })
+    expect(readFileSync(join(dir, '.env'), 'utf8').match(/^SITE_ID=/gm)).toHaveLength(1)
+  })
+
   it('без флагов повторный запуск берёт всё из .env', () => {
     const dir = join(tempDir(), 'inst')
     expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
@@ -397,7 +423,7 @@ describe('полная установка (подделки docker и сети)'
       'docker compose up -d postgres api',
       expect.stringMatching(/^docker compose exec -T api node -e fetch/),
       'docker compose exec -T -e CMS_USER_PASSWORD api node dist/server/user-create.js --email studio@example.com --name Владелец --if-missing',
-      'docker compose exec -T api node dist/server/site-create.js --name example.ru --print-id',
+      // Сайт установки создаёт сам API при первом запуске: отдельной команды и SITE_ID нет
       'docker compose up -d',
     ])
     // Пароль владельца и токен GHCR — не в аргументах команд: пароль приходит переменной окружения
@@ -406,7 +432,11 @@ describe('полная установка (подделки docker и сети)'
     expect(calls.find((line) => line.includes('user-create'))).toContain(
       'CMS_USER_PASSWORD=очень-секретный-пароль',
     )
-    expect(readEnv(dir)).toMatchObject({ OWNER_EMAIL: 'studio@example.com', SITE_ID })
+    expect(readEnv(dir)).toMatchObject({
+      OWNER_EMAIL: 'studio@example.com',
+      SITE_NAME: 'example.ru',
+    })
+    expect(readEnv(dir)).not.toHaveProperty('SITE_ID')
     expect(run.stdout).toContain('Админка: https://admin.example.ru')
     // Скрипт управления и папки бэкапов и состояния — в папке установки, таймер бэкапов — в systemd
     expect(readFileSync(join(dir, 'averra.sh'), 'utf8')).toBe(
@@ -447,7 +477,7 @@ describe('полная установка (подделки docker и сети)'
     expect(noToken.calls()).not.toContain('compose pull')
   })
 
-  it('повторный запуск владельца и сайт второй раз не создаёт, порты занятые своим Caddy — не помеха', () => {
+  it('повторный запуск владельца второй раз не создаёт, порты занятые своим Caddy — не помеха', () => {
     const dir = join(tempDir(), 'inst')
     const options = { fakes: { dns: dnsOk }, env: { AVERRA_OWNER_PASSWORD: 'пароль-владельца' } }
     expect(install([...required, '--dir', posix(dir), '--yes'], options).status).toBe(0)
@@ -578,6 +608,15 @@ describe('образ и compose не включают учебный режим'
     expect(`${dockerfile}\n${compose}`).not.toMatch(/--dev\b/)
     expect(dockerfile).toMatch(/^USER node$/m)
     expect(dockerfile).toContain('CMD ["node", "--enable-source-maps", "dist/server/index.js"]')
+  })
+
+  it('сайт установки: API получает адрес и название сайта, Caddy — без SITE_ID', () => {
+    const api = /\n {2}api:\n([\s\S]*?)\n {2}caddy:/.exec(compose)?.[1] ?? ''
+    const caddy = /\n {2}caddy:\n([\s\S]*?)\nvolumes:/.exec(compose)?.[1] ?? ''
+    expect(api).toMatch(/SITE_URL: https:\/\/\$\{SITE_DOMAIN:\?/)
+    // У прежних установок строки SITE_NAME в .env нет: пусто — API возьмёт домен сайта
+    expect(api).toMatch(/SITE_NAME: \$\{SITE_NAME:-\}/)
+    expect(caddy).not.toContain('SITE_ID')
   })
 
   it('секреты compose берёт из .env и без них не стартует', () => {
@@ -741,6 +780,12 @@ describe('Caddyfile: кеш', () => {
     expect(assets?.body).toContain('immutable')
     expect(assets?.body).not.toContain('try_files')
     expect(assets?.body).toContain('file_server')
+  })
+
+  it('сайт: отдаётся сайт установки по ссылке main, которую ставит API, — id сайта не нужен', () => {
+    const site = siteBlock('{$SITE_DOMAIN}')
+    expect(site).toMatch(/^\t\troot \* \/srv\/sites\/main\/current$/m)
+    expect(caddyfile).not.toContain('SITE_ID')
   })
 
   it('сайт: immutable только у файлов Astro и картинок /media/<uuid>/, страница media — no-cache', () => {

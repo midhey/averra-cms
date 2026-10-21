@@ -1,20 +1,17 @@
 import {
-  collectMediaRefs,
   ExistingPageSlug,
   MAIN_PAGE_SLUG,
   NewPage,
-  NewSite,
   PageContent,
   PageSlug,
   PageTitle,
   pageTemplateContent,
   Uuid,
 } from '@averra/schema'
-import { defaultTheme } from '@averra/tokens'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { can } from '../../auth/access'
-import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/middleware'
+import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
@@ -24,6 +21,7 @@ import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from './repo'
+import { siteSnapshot } from './snapshot'
 
 const SiteParams = z.object({ siteId: Uuid() })
 
@@ -65,17 +63,10 @@ export function sitesRoutes({
 
   return (
     new Hono<AuthEnv>()
+      // Список сайтов пришедшего — для совместимости (MCP list_sites). В установке сайт один:
+      // админка берёт его из GET /api/site. Создания сайтов в API нет: сайт установки создаёт
+      // API при первом запуске (modules/site)
       .get('/', async (c) => c.json(await repo.list(c.var.actor)))
-
-      .post(
-        '/',
-        requireOwner('Создавать сайты может только владелец'),
-        validate('json', NewSite),
-        async (c) => {
-          const { name } = c.req.valid('json')
-          return c.json(await repo.createSite(name, defaultTheme), 201)
-        },
-      )
 
       // Роль на сайте (access) нужна админке, чтобы не показывать то, что этой роли нельзя.
       // newLeads — сколько новых заявок (счётчик в навигации сайта); null — заявки этой роли
@@ -94,23 +85,11 @@ export function sitesRoutes({
         })
       })
 
-      // Всё, что нужно рендереру для сборки: тема и опубликованные страницы. Открыт без входа
-      // (список открытых маршрутов — в auth/middleware.ts): опубликованное и так публично
+      // Снимок для рендерера (sites/snapshot.ts). Открыт без входа (auth/middleware.ts)
       .get('/:siteId/snapshot', validate('param', SiteParams), async (c) => {
-        const { siteId } = c.req.valid('param')
-        const found = await repo.find(siteId)
-        if (!found) return c.json(notFound('Сайт не найден'), 404)
-        const pages = await repo.publishedPages(siteId)
-        // Справочник картинок — только тех, что стоят на опубликованных страницах: рендереру
-        // нужны их варианты, а остальная медиатека снаружи не видна
-        const mediaIds = pages.flatMap((page) =>
-          collectMediaRefs(page.content).map((ref) => ref.mediaId),
-        )
-        return c.json({
-          site: { id: found.id, name: found.name, theme: found.theme },
-          pages,
-          media: await media.files(siteId, mediaIds),
-        })
+        const snapshot = await siteSnapshot(db, c.req.valid('param').siteId)
+        if (!snapshot) return c.json(notFound('Сайт не найден'), 404)
+        return c.json(snapshot)
       })
 
       .get('/:siteId/pages', validate('param', SiteParams), site('site.read'), async (c) => {

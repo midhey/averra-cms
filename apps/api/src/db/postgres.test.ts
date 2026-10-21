@@ -66,13 +66,8 @@ describe('API на драйвере node-postgres (DATABASE_URL)', () => {
   })
 
   it('сайт, черновик, публикация с историей (транзакция) и снимок для рендерера', async () => {
-    const created = await api.app.request('/api/sites', {
-      method: 'POST',
-      headers: json,
-      body: JSON.stringify({ name: 'Сайт на Postgres' }),
-    })
-    expect(created.status).toBe(201)
-    const { id: siteId } = (await created.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const siteId = await api.createSite('Сайт на Postgres')
 
     const blocks = [
       {

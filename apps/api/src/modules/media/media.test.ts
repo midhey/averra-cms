@@ -278,12 +278,8 @@ describe('отказ в загрузке', () => {
 
   it('медиатека чужого или несуществующего сайта не видна: 404', async () => {
     const editor = await loginAs('editor')
-    const site = await app.request('/api/sites', {
-      method: 'POST',
-      headers: { ...owner.headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Чужой сайт' }),
-    })
-    const { id: foreignSiteId } = (await site.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const foreignSiteId = await api.createSite('Чужой сайт')
     const data = await picture(100, 100, 'png')
 
     expect((await upload(editor.headers, data, 'a.png', foreignSiteId)).status).toBe(404)
@@ -593,12 +589,8 @@ describe('удаление', () => {
     const media = await uploaded(
       await upload(owner.headers, await picture(100, 100, 'png'), 'x.png'),
     )
-    const site = await app.request('/api/sites', {
-      method: 'POST',
-      headers: json,
-      body: JSON.stringify({ name: 'Другой сайт' }),
-    })
-    const { id: otherSiteId } = (await site.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const otherSiteId = await api.createSite('Другой сайт')
     expect((await remove(owner.headers, media.id, otherSiteId)).status).toBe(404)
     expect((await app.request(media.variants[0]?.url ?? '')).status).toBe(200)
   })

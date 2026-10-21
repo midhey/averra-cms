@@ -45,6 +45,10 @@ services:
       # Админка и API — один источник (Caddyfile): cookie без CORS
       ADMIN_URL: https://${ADMIN_DOMAIN:?задайте ADMIN_DOMAIN в .env}
       API_URL: https://${ADMIN_DOMAIN}
+      # Одна установка — один сайт: при первом запуске API создаёт его сам с названием SITE_NAME
+      # (без него — домен сайта). SITE_URL — адрес сайта, его домен админка показывает в панели
+      SITE_URL: https://${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
+      SITE_NAME: ${SITE_NAME:-}
       # Перед API только Caddy, и X-Forwarded-For ставит он сам
       TRUST_PROXY: 'true'
       PUBLISH_DIR: /data/sites
@@ -81,8 +85,6 @@ services:
       SITE_DOMAIN: ${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}
-      # Какой сайт установки отдаётся на SITE_DOMAIN (его заводит install.sh)
-      SITE_ID: ${SITE_ID:-}
     # Caddy в образе не от root (USER caddy). Ему нужно только занять порты 80 и 443: порты ниже
     # 1024 открыты непривилегированным внутри контейнера, а capability оставлена для бинарника с
     # file capability (без неё в ограничивающем наборе exec падает). no-new-privileges здесь нет:

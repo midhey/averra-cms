@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hero } from './blocks'
 import { NewPage, PageContent, PageSlug, pageTemplateContent } from './page'
-import { NewSite } from './site'
+import { SiteName } from './site'
 
 describe('PageSlug', () => {
   it.each(['index', 'o-nas', 'price-2026', 'a', '404', 'a'.repeat(64)])(
@@ -64,9 +64,9 @@ describe('pageTemplateContent', () => {
   })
 })
 
-describe('NewSite', () => {
+describe('SiteName', () => {
   it('обрезает пробелы в названии', () => {
-    expect(NewSite.parse({ name: '  Студия  ' })).toEqual({ name: 'Студия' })
+    expect(SiteName.parse('  Студия  ')).toBe('Студия')
   })
 
   it.each([
@@ -74,10 +74,6 @@ describe('NewSite', () => {
     ['из пробелов', '   '],
     ['длиннее 80', 'я'.repeat(81)],
   ])('не принимает название: %s', (_, name) => {
-    expect(NewSite.safeParse({ name }).success).toBe(false)
-  })
-
-  it('не принимает лишние поля: тему пока не выбирают', () => {
-    expect(NewSite.safeParse({ name: 'Сайт', theme: {} }).success).toBe(false)
+    expect(SiteName.safeParse(name).success).toBe(false)
   })
 })

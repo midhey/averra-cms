@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { getRouteApi, Link } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../api'
 import { messageOf } from '../errors'
@@ -30,15 +30,13 @@ import { PageHeader } from '../ui/PageHeader'
 import { mutedClassName, Screen, Section } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
 import { usePageTitle } from '../ui/use-page-title'
+import { useCurrentSite, useSiteId } from '../use-site'
 import styles from './OverviewScreen.module.scss'
-
-const route = getRouteApi('/_app/sites/$siteId')
 
 /** Обзор сайта по концепту: что опубликовано и собрано, карточки, страницы, последние заявки */
 export function OverviewScreen() {
-  const { siteId } = route.useParams()
-  // Другой сайт — другой экран: сообщения одного сайта не переезжают на другой по «Назад»
-  return <Overview key={siteId} siteId={siteId} />
+  // Сайт у установки один: id нужен только запросам в API
+  return <Overview siteId={useSiteId()} />
 }
 
 function Overview({ siteId }: { siteId: string }) {
@@ -102,12 +100,7 @@ function Overview({ siteId }: { siteId: string }) {
         actions={
           <>
             {managePages && (
-              <Link
-                to="/sites/$siteId/pages"
-                params={{ siteId }}
-                hash="new-page"
-                className={buttonClassName()}
-              >
+              <Link to="/pages" hash="new-page" className={buttonClassName()}>
                 <Icon name="plus" />
                 Новая страница
               </Link>
@@ -125,11 +118,12 @@ function Overview({ siteId }: { siteId: string }) {
 
       <BuildFailure siteId={siteId} />
 
+      <OtherSitesNote />
+
       <section aria-label="Коротко" className={styles.stats}>
         {canSeeLeads(site.access) && site.newLeads !== null && (
           <Link
-            to="/sites/$siteId/leads"
-            params={{ siteId }}
+            to="/leads"
             search={{ status: 'new' }}
             className={cardClassName({ interactive: true })}
           >
@@ -165,7 +159,6 @@ function Overview({ siteId }: { siteId: string }) {
         }
       >
         <PagesTable
-          siteId={siteId}
           pages={shown}
           empty={
             <EmptyState title="Ничего не нашлось" icon="search" headingLevel={3}>
@@ -201,12 +194,7 @@ function BuildFailure({ siteId }: { siteId: string }) {
       tone="danger"
       title="Последняя сборка упала"
       action={
-        <Link
-          to="/sites/$siteId/settings"
-          params={{ siteId }}
-          hash="build"
-          className={buttonClassName({ size: 'small' })}
-        >
+        <Link to="/settings" hash="build" className={buttonClassName({ size: 'small' })}>
           Подробнее
         </Link>
       }
@@ -278,7 +266,7 @@ function RecentLeads({ siteId }: { siteId: string }) {
     <Section
       title="Последние заявки"
       actions={
-        <Link to="/sites/$siteId/leads" params={{ siteId }} className={styles.sectionLink}>
+        <Link to="/leads" className={styles.sectionLink}>
           Все заявки
         </Link>
       }
@@ -303,8 +291,8 @@ function RecentLeads({ siteId }: { siteId: string }) {
             return (
               <li key={lead.id}>
                 <Link
-                  to="/sites/$siteId/leads/$leadId"
-                  params={{ siteId, leadId: lead.id }}
+                  to="/leads/$leadId"
+                  params={{ leadId: lead.id }}
                   className={cardClassName({ padding: 'compact', interactive: true })}
                 >
                   <span className={styles.leadMeta}>
@@ -323,5 +311,20 @@ function RecentLeads({ siteId }: { siteId: string }) {
         </ul>
       )}
     </Section>
+  )
+}
+
+/**
+ * Старая база с несколькими сайтами (так бывало до «одна установка — один сайт»): владелец видит,
+ * что админка работает с одним, а остальные сайты целы. Только владельцу: API отдаёт число лишь ему
+ */
+function OtherSitesNote() {
+  const { otherSites } = useCurrentSite()
+  if (!otherSites) return null
+  return (
+    <InlineAlert tone="info" title="В базе есть и другие сайты">
+      В базе ещё {otherSites} {pluralRu(otherSites, ['сайт', 'сайта', 'сайтов'])}: они сохранены, но
+      в админке не видны. Одна установка — один сайт, и админка работает с созданным первым.
+    </InlineAlert>
   )
 }

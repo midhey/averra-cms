@@ -49,12 +49,8 @@ describe('сайт статическим архивом', () => {
   it('до первой сборки — 409, после — ZIP текущей версии целиком и только её', async () => {
     const { headers } = await api.loginAs('owner')
     // Свой сайт: папки версий других тестов файла его не задевают
-    const created = await api.app.request('/api/sites', {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Выгрузка статикой' }),
-    })
-    const { id: siteId } = (await created.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const siteId = await api.createSite('Выгрузка статикой')
     const before = await api.app.request(url('static', siteId), { headers })
     expect(before.status).toBe(409)
     expect(await before.json()).toMatchObject({ error: { code: 'not_built' } })
@@ -186,13 +182,8 @@ describe('все данные сайта', () => {
   })
 
   it('site.json потоком: заявки порциями с курсором — все, по одному разу; пустой сайт — валидный JSON', async () => {
-    const { headers } = await api.loginAs('owner')
-    const created = await api.app.request('/api/sites', {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Выгрузка порциями' }),
-    })
-    const { id: siteId } = (await created.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const siteId = await api.createSite('Выгрузка порциями')
     // Время повторяется парами: граница порции попадает внутрь одинакового времени
     const base = Date.parse('2026-10-16T10:00:00Z')
     await api.db.insert(leads).values(
@@ -236,12 +227,8 @@ describe('все данные сайта', () => {
     expect(json.pages.length).toBeGreaterThan(0)
 
     // Сайт без заявок, страниц и картинок — тот же формат, валидный JSON
-    const bare = await api.app.request('/api/sites', {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Пустой' }),
-    })
-    const { id: bareId } = (await bare.json()) as { id: string }
+    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    const bareId = await api.createSite('Пустой')
     await api.db.delete(pages).where(eq(pages.siteId, bareId))
     const empty = await read(bareId, 2)
     expect(empty.json).toMatchObject({ pages: [], media: [], leads: [], missingFiles: [] })

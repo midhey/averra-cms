@@ -24,11 +24,8 @@ const contentWith = (title: string): PageContentInput => ({
   blocks: [{ id: 'hero', type: 'hero', props: { title } }],
 })
 
-async function newSite(name = 'Сайт с историей') {
-  const res = await asOwner.$post({ json: { name } })
-  if (res.status !== 201) throw new Error(`Ожидали 201, пришёл ${res.status}`)
-  return (await res.json()).id
-}
+/** Свой сайт в базе на тест: API сайтов не создаёт, сайт кладётся напрямую (testing.ts) */
+const newSite = (name = 'Сайт с историей') => api.createSite(name)
 
 type Sites = ReturnType<typeof client>
 

@@ -18,6 +18,7 @@ import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
+import { siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
@@ -45,6 +46,8 @@ export type AppDeps = {
   mail: MailDeps
   /** Адрес админки: из него собираются ссылки в письмах (приглашение, сброс пароля) */
   adminUrl: string
+  /** Адрес опубликованного сайта (SITE_URL): его домен админка показывает в панели. Нет — не знаем */
+  siteUrl?: string
   /**
    * Через сколько миллисекунд, не раньше, отвечать на «Забыли пароль?»: по времени ответа
    * не должно быть видно, есть ли такой адрес. По умолчанию 300
@@ -114,6 +117,8 @@ export function createApp(deps: AppDeps) {
         resetResponseMs: deps.resetResponseMs ?? 300,
       }),
     )
+    // Сайт установки без id в адресе: одна установка — один сайт (modules/site)
+    .route('/site', siteRoutes({ db, siteUrl: deps.siteUrl }))
     .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log }))
     .route('/sites/:siteId/build', buildsRoutes({ db, publisher: deps.publisher }))
     .route('/sites/:siteId/pages/:slug/revisions', revisionsRoutes({ db }))

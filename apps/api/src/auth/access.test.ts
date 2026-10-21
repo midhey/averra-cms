@@ -41,15 +41,18 @@ const request = {
       headers: json(headers),
       body: JSON.stringify({ name }),
     }),
+  installation: (headers: Headers) => app.request('/api/site', { headers }),
 }
 
 const owner = await api.loginAs('owner')
 
-/** Сайт, созданный владельцем, со страницей extra — чужой для участников демо-сайта */
+/**
+ * Ещё один сайт в базе со страницей extra — чужой для участников демо-сайта. API сайтов не
+ * создаёт (одна установка — один сайт), но так бывает в старых базах, и изоляция по site_id
+ * должна держаться
+ */
 async function otherSite(name: string) {
-  const res = await request.createSite(owner.headers, name)
-  if (res.status !== 201) throw new Error(`Сайт не создался: ${res.status}`)
-  const { id } = (await res.json()) as { id: string }
+  const id = await api.createSite(name)
   await request.create(owner.headers, 'extra', id)
   return id
 }
@@ -121,14 +124,15 @@ describe('редактор', () => {
     expect((await request.publish(headers, 'editor-page')).status).toBe(200)
     expect((await request.remove(headers, 'editor-page')).status).toBe(204)
   })
+})
 
-  it('не создаёт сайты — это только владелец', async () => {
+describe('создание сайтов', () => {
+  it('в API его нет ни у кого: сайт установки создаёт API при первом запуске', async () => {
     const { headers } = await api.loginAs('editor')
-    const res = await request.createSite(headers, 'Свой сайт')
-    expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({
-      error: { code: 'forbidden', message: 'Создавать сайты может только владелец' },
-    })
+    const { token } = await api.createToken()
+    for (const who of [owner.headers, headers, { authorization: `Bearer ${token}` }]) {
+      expect((await request.createSite(who, 'Свой сайт')).status).toBe(404)
+    }
   })
 })
 
@@ -228,11 +232,6 @@ describe('токен API', () => {
     const { token } = await api.createToken(foreign)
     expect((await request.get(bearer(token), 'index', foreign)).status).toBe(200)
     expect((await request.get(bearer(token))).status).toBe(404)
-  })
-
-  it('не создаёт сайты', async () => {
-    const { token } = await api.createToken()
-    expect((await request.createSite(bearer(token), 'Сайт токена')).status).toBe(403)
   })
 
   it('отозванный — 401, хотя только что работал', async () => {

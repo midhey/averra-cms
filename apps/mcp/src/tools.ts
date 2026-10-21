@@ -7,7 +7,10 @@ import { z } from 'zod'
 export type Api = ReturnType<typeof hc<AppType>>
 
 const PageRef = z.object({
-  siteId: Uuid().describe('Id сайта из list_sites'),
+  // Одна установка — один сайт, и токен выпущен на него: id указывать не нужно
+  siteId: Uuid()
+    .optional()
+    .describe('Id сайта. Не нужен: по умолчанию — сайт, на который выпущен токен'),
   slug: PageSlug.default('index').describe(
     'Адрес страницы: латиница в нижнем регистре, цифры, дефис между ними. Главная — index',
   ),
@@ -48,8 +51,8 @@ export function blockCatalog() {
 }
 
 const createTokenHint =
-  'Создай токен: pnpm token:create --site <id сайта> --name mcp (id сайта виден в адресе админки ' +
-  '/sites/<id>) и положи строку CMS_API_TOKEN=… из вывода в apps/mcp/.env. Потом перезапусти MCP-сервер'
+  'Создай токен: pnpm token:create --name mcp (на сайт установки) и положи строку ' +
+  'CMS_API_TOKEN=… из вывода в apps/mcp/.env. Потом перезапусти MCP-сервер'
 
 export const missingTokenMessage = `Нужен токен API: без него MCP не пускают в Averra CMS. ${createTokenHint}`
 
@@ -81,13 +84,33 @@ export function cmsTools(client: Api | undefined) {
   }
   const sites = client.api.sites
   const page = sites[':siteId'].pages[':slug']
+  // Сайт токена (GET /api/site) — один раз на сервер: токен выпущен на один сайт и не меняется
+  let tokenSite: Promise<string> | undefined
+  const siteOf = (siteId: string | undefined) => {
+    if (siteId) return Promise.resolve(siteId)
+    tokenSite ??= unwrap(() => client.api.site.$get()).then(
+      (site) => z.object({ id: z.string() }).parse(site).id,
+    )
+    // Сбой (API не отвечает) не запоминается: следующий вызов спросит снова
+    tokenSite.catch(() => {
+      tokenSite = undefined
+    })
+    return tokenSite
+  }
   return {
     listSites: () => unwrap(() => sites.$get()),
-    getPage: ({ siteId, slug }: PageRef) => unwrap(() => page.$get({ param: { siteId, slug } })),
-    saveDraft: ({ siteId, slug, title, content }: SaveDraftInput) =>
-      unwrap(() => page.$put({ param: { siteId, slug }, json: { title, content } })),
-    publishPage: ({ siteId, slug }: PageRef) =>
-      unwrap(() => page.publish.$post({ param: { siteId, slug } })),
+    getPage: async ({ siteId, slug }: PageRef) => {
+      const param = { siteId: await siteOf(siteId), slug }
+      return unwrap(() => page.$get({ param }))
+    },
+    saveDraft: async ({ siteId, slug, title, content }: SaveDraftInput) => {
+      const param = { siteId: await siteOf(siteId), slug }
+      return unwrap(() => page.$put({ param, json: { title, content } }))
+    },
+    publishPage: async ({ siteId, slug }: PageRef) => {
+      const param = { siteId: await siteOf(siteId), slug }
+      return unwrap(() => page.publish.$post({ param }))
+    },
   }
 }
 
@@ -113,7 +136,8 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     'list_sites',
     {
       title: 'Сайты',
-      description: 'Сайты, к которым есть доступ у токена MCP: id и название.',
+      description:
+        'Сайт, на который выпущен токен MCP: id и название. В установке сайт один, и остальным инструментам id не нужен.',
       annotations: { readOnlyHint: true },
     },
     async () => asText(await tools.listSites()),

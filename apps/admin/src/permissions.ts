@@ -11,7 +11,7 @@ export const canDeleteMedia = (access: SiteAccess) => access !== 'client'
 
 /**
  * Куда вернуть после входа. Только адрес внутри админки: ссылка вида /login?redirect=https://…
- * не должна уводить на чужой сайт. Всё остальное — на список сайтов
+ * не должна уводить на чужой сайт. Всё остальное — на обзор сайта
  */
 export function safeRedirect(target: unknown) {
   if (typeof target !== 'string' || !target.startsWith('/')) return '/'

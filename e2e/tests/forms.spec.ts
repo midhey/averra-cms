@@ -34,7 +34,6 @@ async function visitor(browser: Browser, path = '') {
 test('форма без JavaScript: посетитель отправляет — видит «Спасибо», заявка в админке, письма ушли', async ({
   page,
   browser,
-  demoSite,
 }) => {
   // Владелец ставит форму из каталога и публикует: пример блока готов к работе
   const ed = editor(page)
@@ -73,7 +72,7 @@ test('форма без JavaScript: посетитель отправляет �
   expect(confirmation.text).not.toContain('Анна')
 
   // Заявка в админке: счётчик новых в панели, список, карточка рядом, «обработана»
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const leadsLink = page
     .getByRole('navigation', { name: 'Разделы сайта' })
     .getByRole('link', { name: /^Заявки/ })
@@ -195,7 +194,7 @@ test('«Скачать CSV» в разделе «Заявки» скачивае
     await site.context.close()
   }
 
-  await page.goto(`/sites/${demoSite.id}/leads`)
+  await page.goto('/leads')
   await expect(page.getByRole('heading', { level: 1, name: 'Заявки' })).toBeVisible()
   const downloading = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать CSV' }).click()

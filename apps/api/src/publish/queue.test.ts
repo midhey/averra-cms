@@ -16,13 +16,8 @@ afterEach(async () => {
 async function setup() {
   const api = await createTestApi()
   apis.push(api)
-  const owner = await api.loginAs('owner')
-  const created = await api.app.request('/api/sites', {
-    method: 'POST',
-    headers: { ...owner.headers, 'content-type': 'application/json' },
-    body: JSON.stringify({ name: 'Второй' }),
-  })
-  const { id: secondSiteId } = (await created.json()) as { id: string }
+  // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+  const secondSiteId = await api.createSite('Второй')
   return { api, siteId: api.demoSiteId, secondSiteId }
 }
 

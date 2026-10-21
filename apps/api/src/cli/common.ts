@@ -11,6 +11,7 @@ import { migrateDb } from '../db/migrate'
 import { isLocalAdminUrl } from '../mail/link-warning'
 import { readStoredPassword, unreadablePasswordReason } from '../mail/runtime'
 import { mailSettingsRepo } from '../mail/settings'
+import { sitesRepo } from '../modules/sites/repo'
 
 // Общее для команд терминала (pnpm user:create, token:create…): аргументы, скрытый ввод
 // пароля и открытие базы. Команды работают с базой напрямую, как API, а не через HTTP:
@@ -82,6 +83,24 @@ export async function openDb({ migrate = true }: { migrate?: boolean } = {}) {
     quiet: true,
   })
   return { db, auth, config, close: closeAll }
+}
+
+/**
+ * Сайт, с которым работает команда (--site). Не указан — сайт установки: одна установка —
+ * один сайт, и id искать не нужно. Указан — этот сайт (старые базы, где сайтов несколько).
+ * Возвращает и строку для вывода: человек должен видеть, какому сайту команда что-то выдала
+ */
+export async function resolveSite(db: Db, siteId: string | undefined) {
+  const repo = sitesRepo(db)
+  const site = siteId ? await repo.find(siteId) : await repo.installationSite()
+  if (!site) {
+    throw new CliError(
+      siteId
+        ? `Нет сайта ${siteId}`
+        : 'В базе нет сайта: его создаёт API при первом запуске (pnpm dev или start)',
+    )
+  }
+  return { id: site.id, name: site.name }
 }
 
 /** Запускает команду: CliError — короткое сообщение и код 1, остальное — со стеком */

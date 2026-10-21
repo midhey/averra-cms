@@ -5,10 +5,11 @@
 #
 # Что делает: проверяет окружение (Docker, свободные порты 80 и 443, DNS доменов указывает на этот
 # сервер), пишет папку установки (compose.yaml и .env с секретами, права 600), поднимает
-# PostgreSQL и API, ждёт /api/health/ready, создаёт владельца и сайт, поднимает Caddy (SSL сам).
+# PostgreSQL и API, ждёт /api/health/ready, создаёт владельца, поднимает Caddy (SSL сам). Сайт
+# установки (одна установка — один сайт) API создаёт сам при первом запуске: название — SITE_NAME.
 #
-# Повторный запуск безопасен: секреты из .env не перегенерируются, владелец и сайт не создаются
-# второй раз, а новые домены, почта или версия из флагов записываются в .env и применяются.
+# Повторный запуск безопасен: секреты из .env не перегенерируются, владелец не создаётся второй
+# раз, а новые домены, почта или версия из флагов записываются в .env и применяются.
 # Учебного режима на сервере нет: API в образе запускается без --dev и с NODE_ENV=production.
 #
 # Полный список флагов: ./install.sh --help.
@@ -32,7 +33,7 @@ usage() {
 Необязательные:
   --admin-domain <домен>  поддомен админки, по умолчанию admin.<домен сайта>
   --owner-name <имя>      имя владельца в админке, по умолчанию «Владелец»
-  --site-name <название>  название сайта в админке, по умолчанию домен сайта
+  --site-name <название>  название сайта при первом запуске, по умолчанию домен сайта
   --dir <папка>           папка установки, по умолчанию /opt/averra
   --api-image <образ>     образ API без тега, по умолчанию ghcr.io/midhey/averra-api
   --web-image <образ>     образ Caddy с админкой, по умолчанию ghcr.io/midhey/averra-web
@@ -71,7 +72,7 @@ ADMIN_DOMAIN_ARG=''
 EMAIL_ARG=''
 VERSION_ARG=''
 OWNER_NAME='Владелец'
-SITE_NAME=''
+SITE_NAME_ARG=''
 INSTALL_DIR='/opt/averra'
 API_IMAGE_ARG=''
 WEB_IMAGE_ARG=''
@@ -95,7 +96,7 @@ while [[ $# -gt 0 ]]; do
     --email) need_value "$@"; EMAIL_ARG="$2"; shift 2 ;;
     --version) need_value "$@"; VERSION_ARG="$2"; shift 2 ;;
     --owner-name) need_value "$@"; OWNER_NAME="$2"; shift 2 ;;
-    --site-name) need_value "$@"; SITE_NAME="$2"; shift 2 ;;
+    --site-name) need_value "$@"; SITE_NAME_ARG="$2"; shift 2 ;;
     --dir) need_value "$@"; INSTALL_DIR="$2"; shift 2 ;;
     --api-image) need_value "$@"; API_IMAGE_ARG="$2"; shift 2 ;;
     --web-image) need_value "$@"; WEB_IMAGE_ARG="$2"; shift 2 ;;
@@ -127,8 +128,10 @@ env_get() {
 # Ключи, которые ведёт установщик. Остальные строки .env (свои добавки) переносятся как есть
 MANAGED_KEYS=(
   AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN ACME_EMAIL
-  OWNER_EMAIL SITE_ID POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
+  SITE_NAME OWNER_EMAIL POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
 )
+# SITE_ID в .env прежних версий не ведётся: Caddy берёт сайт по ссылке main, которую ставит API.
+# Строка остаётся как своя — она нужна прежнему Caddyfile, если обновление откатят
 
 # ── Значения: флаг → .env → вопрос ─────────────────────────────────────────────────────────
 
@@ -163,7 +166,9 @@ AVERRA_API_IMAGE="$(pick "$API_IMAGE_ARG" AVERRA_API_IMAGE '')"
 AVERRA_WEB_IMAGE="$(pick "$WEB_IMAGE_ARG" AVERRA_WEB_IMAGE '')"
 [[ -n "$AVERRA_WEB_IMAGE" ]] || AVERRA_WEB_IMAGE='ghcr.io/midhey/averra-web'
 OWNER_EMAIL="$(env_get OWNER_EMAIL)"
-SITE_ID="$(env_get SITE_ID)"
+# Название сайта нужно API один раз — при первом запуске, когда сайта ещё нет. Потом оно живёт
+# в базе, и новое значение здесь его не меняет
+SITE_NAME="$(pick "$SITE_NAME_ARG" SITE_NAME '')"
 [[ -n "$SITE_NAME" ]] || SITE_NAME="$SITE_DOMAIN"
 
 # Проверка формата: значения попадают в Caddyfile и .env — без пробелов, кавычек и переводов строк
@@ -182,8 +187,10 @@ done
 for image in "$AVERRA_API_IMAGE" "$AVERRA_WEB_IMAGE"; do
   [[ "$image" =~ ^[a-z0-9]([a-z0-9._/:-]*[a-z0-9])?$ ]] || fail "«$image» — не имя образа"
 done
-[[ -z "$SITE_ID" || "$SITE_ID" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]] ||
-  fail "SITE_ID в $ENV_FILE — не id сайта"
+# Название уходит в .env, который читает docker compose: кавычки, $ (подстановка), # (комментарий)
+# и \ там меняют значение, а перевод строки рвёт файл. Длиннее 80 символов API его обрежет
+[[ "$SITE_NAME" != *[$'\n\r'\"\'\$#\\]* ]] ||
+  fail "название сайта «$SITE_NAME» — одной строкой, без кавычек и знаков \$ # \\"
 
 # ── Секреты ────────────────────────────────────────────────────────────────────────────────
 # Из /dev/urandom, без openssl. Пароль Postgres — hex: он стоит в DATABASE_URL, и знаки
@@ -354,7 +361,7 @@ if [[ $DRY_RUN -eq 1 ]]; then
     say 'Новые секреты:     нет (берутся из .env)'
   fi
   [[ -n "$OWNER_EMAIL" ]] && say "Владелец:          уже создан ($OWNER_EMAIL)" || say "Владелец:          будет создан ($ACME_EMAIL)"
-  [[ -n "$SITE_ID" ]] && say "Сайт в админке:    уже есть ($SITE_ID)" || say "Сайт в админке:    будет создан («$SITE_NAME»)"
+  say "Сайт в админке:    «$SITE_NAME» (API создаст его при первом запуске, если сайта ещё нет)"
   [[ -n "$GHCR_USER" ]] && say "Вход в ghcr.io:    $GHCR_USER" || say 'Вход в ghcr.io:    нет (образы публичные или вход уже есть)'
   # Проверки только читают: Docker, порты и DNS — те же, что перед настоящей установкой
   say ''
@@ -484,7 +491,7 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 [[ $ready -eq 1 ]] || fail "API не поднялся за 3 минуты. Лог: docker compose --project-directory $INSTALL_DIR logs api"
-say 'API работает, миграции применены'
+say 'API работает, миграции применены, сайт установки на месте'
 
 set_env() {
   # Записать одно значение в .env (тем же write_env: права и чужие строки сохраняются)
@@ -511,14 +518,6 @@ if [[ -z "$OWNER_EMAIL" ]]; then
       fail 'владелец не создан (сообщение выше). Запустите установщик ещё раз'
   fi
   set_env OWNER_EMAIL "$ACME_EMAIL"
-fi
-
-if [[ -z "$SITE_ID" ]]; then
-  step "Создаю сайт «$SITE_NAME»"
-  created="$(compose exec -T api node dist/server/site-create.js --name "$SITE_NAME" --print-id)"
-  created="$(tr -d '\r\n' <<<"$created")"
-  [[ "$created" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]] || fail "сайт не создан: $created"
-  set_env SITE_ID "$created"
 fi
 
 step 'Поднимаю Caddy (сертификаты он выпустит сам)'

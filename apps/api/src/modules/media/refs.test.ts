@@ -29,14 +29,8 @@ async function uploadTo(siteId: string) {
   return (await res.json()) as { id: string; width: number; height: number }
 }
 
-async function createSite(name: string) {
-  const res = await app.request('/api/sites', {
-    method: 'POST',
-    headers: json,
-    body: JSON.stringify({ name }),
-  })
-  return ((await res.json()) as { id: string }).id
-}
+/** Ещё один сайт в базе: API сайтов не создаёт, сайт кладётся напрямую (testing.ts) */
+const createSite = (name: string) => api.createSite(name)
 
 const withImage = (mediaId: string, extra: PageContentInput['blocks'] = []): PageContentInput => ({
   blocks: [

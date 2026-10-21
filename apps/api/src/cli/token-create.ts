@@ -1,18 +1,17 @@
 import { Uuid } from '@averra/schema'
-import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { sites } from '../db/schema'
 import { tokensRepo } from '../modules/tokens/repo'
 import { UserEmail, usersRepo } from '../modules/users/repo'
-import { args, CliError, check, openDb, run } from './common'
+import { args, CliError, check, openDb, resolveSite, run } from './common'
 
-const usage = `Выпустить токен API (права редактора на одном сайте), например для MCP:
-  pnpm token:create --site <id сайта> --name mcp [--by <почта владельца>]
+const usage = `Выпустить токен API (права редактора на сайте установки), например для MCP:
+  pnpm token:create --name mcp [--by <почта владельца>] [--site <id сайта>]
 
-Токен показывается один раз. --by нужен, только если владельцев несколько.`
+Токен показывается один раз. --by нужен, только если владельцев несколько. --site не нужен:
+в установке один сайт. Он только для старых баз, где сайтов несколько.`
 
 const Args = z.object({
-  site: Uuid('Нужен id сайта'),
+  site: Uuid('Нужен id сайта').optional(),
   name: z.string().trim().min(1).max(80),
   by: UserEmail.optional(),
 })
@@ -25,14 +24,17 @@ await run(async () => {
   )
   const { db, auth, close } = await openDb()
   try {
-    const [found] = await db.select({ name: sites.name }).from(sites).where(eq(sites.id, site))
-    if (!found) throw new CliError(`Нет сайта ${site}`)
+    const found = await resolveSite(db, site)
 
     const users = usersRepo(db, auth)
     const author = by ? await users.findByEmail(by) : await soleOwner(users)
     if (!author) throw new CliError(`Нет пользователя ${by}`)
 
-    const { id, token } = await tokensRepo(db).create({ siteId: site, name, createdBy: author.id })
+    const { id, token } = await tokensRepo(db).create({
+      siteId: found.id,
+      name,
+      createdBy: author.id,
+    })
     console.log(`Токен «${name}» для сайта «${found.name}», id токена ${id}.`)
     console.log('Он показывается один раз: в базе остаётся только его хеш.')
     console.log('Для MCP положи эту строку в apps/mcp/.env:\n')

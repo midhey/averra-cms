@@ -24,11 +24,17 @@ export const sites = ownerApi.sites
 
 type DemoSite = { id: string; name: string }
 
-/** Демо-сайт — первый в базе: его кладёт API при старте, новые сайты встают после него */
+/**
+ * Демо-сайт — сайт установки: его кладёт API при старте в пустую базу (--dev). Одна установка —
+ * один сайт, поэтому id берётся так же, как его берёт админка, — без id в адресе
+ */
 async function findDemoSite(): Promise<DemoSite> {
-  const [site] = await (await sites.$get()).json()
-  if (!site) throw new Error('В базе e2e нет демо-сайта: API должен был положить его при старте')
-  return site
+  const res = await ownerApi.site.$get()
+  if (res.status !== 200) {
+    throw new Error(`В базе e2e нет сайта установки: API ответил ${res.status}`)
+  }
+  const { id, name } = await res.json()
+  return { id, name }
 }
 
 /**
@@ -84,8 +90,7 @@ export function editor(page: Page) {
   return {
     /** Редактор страницы по прямому адресу. По умолчанию — главная демо-сайта */
     open: async (slug: string = MAIN_PAGE_SLUG) => {
-      const site = await findDemoSite()
-      await page.goto(`/sites/${site.id}/pages/${slug}`)
+      await page.goto(`/pages/${slug}`)
       await expect(page.getByLabel('Заголовок страницы')).toBeVisible()
     },
     pageTitle: page.getByLabel('Заголовок страницы'),
@@ -177,7 +182,7 @@ export async function openSite(page: Page, path = '/') {
 }
 
 /**
- * Обзор сайта (/sites/:id) и экран страниц (/sites/:id/pages) так, как их видит человек:
+ * Обзор сайта (/) и экран страниц (/pages) так, как их видит человек:
  * на обоих таблица «Страницы», форма «Новая страница» — только на экране страниц
  */
 export function siteScreen(page: Page) {
@@ -199,7 +204,7 @@ export function siteScreen(page: Page) {
 }
 
 /**
- * Боковая панель оболочки: переключатель сайта, разделы сайта, установка и кто вошёл.
+ * Боковая панель оболочки: название и домен сайта, разделы сайта, установка и кто вошёл.
  * На десктопе она видна всегда (e2e — окно 1280 px)
  */
 export function sidebar(page: Page) {
@@ -208,16 +213,9 @@ export function sidebar(page: Page) {
     sections,
     section: (name: string) => sections.getByRole('link', { name: new RegExp(`^${name}`) }),
     installation: page.getByRole('navigation', { name: 'Установка' }),
-    switcher: page.getByRole('button', { name: /выбрать другой сайт/ }),
-    sitesList: page.getByRole('list', { name: 'Сайты' }),
+    /** Домен сайта в заголовке панели — ссылка на опубликованный сайт (рендерер e2e) */
+    siteLink: page.getByRole('link', { name: new URL(urls.renderer).host }),
     logout: page.getByRole('button', { name: 'Выйти' }),
-    /** К списку сайтов: из сайта — через переключатель, вне сайта — пунктом «Все сайты» */
-    toAllSites: async () => {
-      const all = page.getByRole('link', { name: 'Все сайты' })
-      if (!(await all.isVisible()))
-        await page.getByRole('button', { name: /выбрать другой сайт/ }).click()
-      await all.click()
-    },
   }
 }
 
@@ -250,8 +248,7 @@ export function mediaScreen(page: Page) {
   const grid = page.getByRole('list', { name: 'Картинки сайта' })
   return {
     open: async () => {
-      const site = await findDemoSite()
-      await page.goto(`/sites/${site.id}/media`)
+      await page.goto('/media')
       await expect(page.getByRole('heading', { level: 1, name: 'Медиатека' })).toBeVisible()
     },
     fileInput: page.getByLabel('Загрузить картинку'),

@@ -48,7 +48,7 @@ export const leadNewTemplate = defineMailTemplate({
       { label: 'Комментарий', value: 'Нужен ремонт ванной.\nУдобно звонить после 18:00.' },
     ],
     createdAt: '2026-10-15T09:30:00.000Z',
-    url: 'https://admin.example.ru/sites/d0000000-0000-4000-8000-000000000001/leads/example',
+    url: 'https://admin.example.ru/leads/example',
     replyTo: 'anna@example.ru',
   },
   render({ siteName, formTitle, pagePath, fields, createdAt, url, replyTo }) {

@@ -61,7 +61,7 @@ describe('LeadCard', () => {
     const onDeleted = vi.fn()
     const { router } = await renderWithRouter(
       <LeadCard site={site} lead={lead('')} status="new" onDeleted={onDeleted} />,
-      `/sites/${site.id}/leads/a0000000-0000-4000-8000-000000000001`,
+      '/leads/a0000000-0000-4000-8000-000000000001',
     )
 
     await user.click(screen.getByRole('button', { name: 'Удалить' }))
@@ -77,7 +77,7 @@ describe('LeadCard', () => {
     )
     expect(init.method).toBe('DELETE')
     // Вернулись к списку на ту же вкладку
-    expect(router.state.location.pathname).toBe(`/sites/${site.id}/leads`)
+    expect(router.state.location.pathname).toBe('/leads')
     expect(router.state.location.search).toEqual({ status: 'new' })
   })
 

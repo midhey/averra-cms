@@ -75,7 +75,8 @@ test('забыл пароль → письмо → новый пароль → �
   await login.getByLabel('Почта').fill(email)
   await login.getByLabel('Пароль').fill('new-e2e-password')
   await login.getByRole('button', { name: 'Войти' }).click()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
+  // Редактор сайта установки сразу на его обзоре
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByText('Редактор Сброса')).toBeVisible()
 
   // Та же ссылка второй раз не работает

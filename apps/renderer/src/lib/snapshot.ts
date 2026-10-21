@@ -1,46 +1,31 @@
 import { CMS_API_URL, CMS_LINKS, CMS_SITE_ID } from 'astro:env/server'
 import type { AppType } from '@averra/api'
-import { demoSiteId, type MediaMap } from '@averra/schema'
+import type { MediaMap } from '@averra/schema'
 import { hc } from 'hono/client'
 
-const sites = hc<AppType>(CMS_API_URL).api.sites
+const api = hc<AppType>(CMS_API_URL).api
 
-/** Опубликованный сайт из API: тема и страницы. Без запущенного API сборка падает с понятной ошибкой */
+/**
+ * Опубликованный сайт из API: тема и страницы. Какой сайт — CMS_SITE_ID (его ставит API сборщику
+ * публикации), а без него — сайт установки: одна установка — один сайт, и id искать не нужно.
+ * Без запущенного API сборка падает с понятной ошибкой
+ */
 export async function loadSnapshot() {
-  const siteId = resolveSiteId()
-  const res = await request(() => sites[':siteId'].snapshot.$get({ param: { siteId } }))
+  const res = await request(() =>
+    CMS_SITE_ID
+      ? api.sites[':siteId'].snapshot.$get({ param: { siteId: CMS_SITE_ID } })
+      : api.site.snapshot.$get(),
+  )
   if (res.status === 404) {
     throw new Error(
       CMS_SITE_ID
-        ? `В API нет сайта ${siteId} (CMS_SITE_ID)`
-        : `В API нет демо-сайта ${siteId}. ${setSiteIdHint}`,
+        ? `В API нет сайта ${CMS_SITE_ID} (CMS_SITE_ID)`
+        : 'В API ещё нет сайта: его создаёт API при первом запуске (pnpm dev)',
     )
   }
-  if (res.status !== 200) throw new Error(`API ответил ${res.status} на сайт ${siteId}`)
+  if (res.status !== 200) throw new Error(`API ответил ${res.status} на снимок сайта`)
   const snapshot = await res.json()
   return { ...snapshot, media: withSiteUrls(snapshot.media) }
-}
-
-const setSiteIdHint =
-  'Скопируй apps/renderer/.env.example в .env и впиши CMS_SITE_ID: id сайта виден в адресе ' +
-  'админки /sites/<id>'
-
-let warnedAboutDemo = false
-
-/**
- * Какой сайт собирать. Без id не обойтись: снимок сайта открыт, а список сайтов — только после
- * входа. В pnpm dev без CMS_SITE_ID берём демо-сайт: у свежей базы его id известен заранее,
- * и рендерер работает сразу после клонирования. Сборка же должна явно знать, что собирает
- */
-function resolveSiteId() {
-  if (CMS_SITE_ID) return CMS_SITE_ID
-  if (!import.meta.env.DEV)
-    throw new Error(`Не задан CMS_SITE_ID — какой сайт собирать. ${setSiteIdHint}`)
-  if (!warnedAboutDemo) {
-    warnedAboutDemo = true
-    console.warn(`CMS_SITE_ID не задан: в dev показываю демо-сайт ${demoSiteId}. ${setSiteIdHint}`)
-  }
-  return demoSiteId
 }
 
 /** Путь файла картинки в API: /api/media/<id картинки>/<файл> */

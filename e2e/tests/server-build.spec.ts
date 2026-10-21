@@ -21,10 +21,16 @@ test('публикация собирает сайт в новую версию 
   demoSite,
 }) => {
   // Фикстура только что опубликовала демо-страницу: сборка уже в очереди или идёт
-  await page.goto(`/sites/${demoSite.id}/settings`)
+  await page.goto('/settings')
   const section = page.getByRole('region', { name: 'Сайт на сервере' })
   await expect(section.getByText(/версия, собранная/)).toBeVisible({ timeout: 60_000 })
   await expect.poll(() => servedHtml(demoSite.id), { timeout: 60_000 }).toContain(demo.heroTitle)
+  // Caddy отдаёт PUBLISH_DIR/main/current: ссылку main на сайт установки API ставит при старте,
+  // поэтому id сайта в настройках сервера не нужен
+  expect(basename(await readlink(join(publishDir, 'main')))).toBe(demoSite.id)
+  expect(await readFile(join(publishDir, 'main', 'current', 'index.html'), 'utf8')).toContain(
+    demo.heroTitle,
+  )
 
   // Новая публикация — новая папка релиза: сайт меняется, прежняя версия остаётся на диске
   const releasesDir = join(publishDir, demoSite.id, 'releases')
@@ -62,7 +68,7 @@ test('публикация собирает сайт в новую версию 
   })
 
   // Обзор: карточка последней сборки и состояние в строке сведений
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   await expect(page.getByRole('region', { name: 'Коротко' })).toContainText('Последняя сборка')
   await expect(page.getByRole('region', { name: 'Коротко' })).toContainText('Успешно', {
     timeout: 60_000,
@@ -72,7 +78,6 @@ test('публикация собирает сайт в новую версию 
 
 test('упавшая сборка видна на экране сайта с причиной, а на сайте прежняя версия', async ({
   page,
-  demoSite,
 }) => {
   // Уронить настоящий Astro на демо-сайте нечем (схемы не пустят сломанную страницу), поэтому
   // ответ API о сборке подменяется. Что упавшая сборка не трогает сайт — тесты API (src/publish)
@@ -104,13 +109,13 @@ test('упавшая сборка видна на экране сайта с п�
     })
   })
   // Обзор говорит о поломке сразу и ведёт к подробностям в настройки
-  await page.goto(`/sites/${demoSite.id}`)
+  await page.goto('/')
   const overviewAlert = page.getByRole('alert')
   await expect(overviewAlert).toContainText('Последняя сборка упала')
   await expect(overviewAlert).toContainText('На сайте осталась прежняя версия')
   await expect(page.getByText(/^Сборка: упала/)).toBeVisible()
   await overviewAlert.getByRole('link', { name: 'Подробнее' }).click()
-  await expect(page).toHaveURL(`/sites/${demoSite.id}/settings#build`)
+  await expect(page).toHaveURL('/settings#build')
 
   const section = page.getByRole('region', { name: 'Сайт на сервере' })
   const alert = section.getByRole('alert')
@@ -122,7 +127,6 @@ test('упавшая сборка видна на экране сайта с п�
 
 test('первая сборка сайта упала — экран не обещает «прежнюю версию», которой нет', async ({
   page,
-  demoSite,
 }) => {
   await page.route(/\/api\/sites\/[^/]+\/build$/, async (route) => {
     if (route.request().method() !== 'GET') return route.continue()
@@ -143,7 +147,7 @@ test('первая сборка сайта упала — экран не обе
       },
     })
   })
-  await page.goto(`/sites/${demoSite.id}/settings`)
+  await page.goto('/settings')
   const section = page.getByRole('region', { name: 'Сайт на сервере' })
   await expect(section).toContainText('Сайт ещё не собран')
   const alert = section.getByRole('alert')
@@ -154,9 +158,8 @@ test('первая сборка сайта упала — экран не обе
 
 test('сайт выгружается статическим архивом, а все данные — архивом с site.json', async ({
   page,
-  demoSite,
 }) => {
-  await page.goto(`/sites/${demoSite.id}/settings`)
+  await page.goto('/settings')
   // Архив сайта — текущая версия на сервере: дожидаемся, пока фикстурная публикация соберётся
   await expect(
     page.getByRole('region', { name: 'Сайт на сервере' }).getByText(/версия, собранная/),

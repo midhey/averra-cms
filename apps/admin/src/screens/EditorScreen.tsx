@@ -1,7 +1,7 @@
 import { getRouteApi } from '@tanstack/react-router'
 import { Editor } from '../editor/Editor'
 
-const route = getRouteApi('/sites/$siteId/pages/$slug')
+const route = getRouteApi('/pages/$slug')
 
 export function EditorScreen() {
   const { site, page } = route.useLoaderData()

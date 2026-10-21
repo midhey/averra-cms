@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { getRouteApi, useLocation } from '@tanstack/react-router'
+import { useLocation } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { ExportSection } from '../export/ExportSection'
 import { InvitationsSection } from '../invitations/InvitationsSection'
@@ -10,17 +10,14 @@ import { siteQuery } from '../queries'
 import { PageHeader } from '../ui/PageHeader'
 import { Screen } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
-
-const route = getRouteApi('/_app/sites/$siteId/settings')
+import { useSiteId } from '../use-site'
 
 /**
  * Настройки сайта: заявки (владелец и клиент), участники (владелец), сайт на сервере и выгрузка.
  * Что роль не может, не показываем — решает всё равно API
  */
 export function SiteSettingsScreen() {
-  const { siteId } = route.useParams()
-  // Формы и сообщения одного сайта не переезжают на другой по «Назад»
-  return <SiteSettings key={siteId} siteId={siteId} />
+  return <SiteSettings siteId={useSiteId()} />
 }
 
 function SiteSettings({ siteId }: { siteId: string }) {

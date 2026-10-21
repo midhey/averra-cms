@@ -23,16 +23,13 @@ const editor = await api.loginAs('editor')
 const client = await api.loginAs('client')
 
 let siteCount = 0
-/** Новый сайт владельца: у каждого теста свой, чтобы приглашения не пересекались */
-async function newSite(testApi: TestApi = api, headers: Headers = owner.headers) {
+/**
+ * Свой сайт в базе на каждый тест, чтобы приглашения не пересекались. API сайтов не создаёт
+ * (одна установка — один сайт), сайт кладётся напрямую (testing.ts)
+ */
+async function newSite(testApi: TestApi = api) {
   siteCount += 1
-  const res = await testApi.app.request('/api/sites', {
-    method: 'POST',
-    headers: json(headers),
-    body: JSON.stringify({ name: `Сайт ${siteCount}` }),
-  })
-  if (res.status !== 201) throw new Error(`Сайт не создался: ${res.status}`)
-  return ((await res.json()) as { id: string; name: string }).id
+  return testApi.createSite(`Сайт ${siteCount}`)
 }
 
 const invitationsUrl = (siteId: string) => `/api/sites/${siteId}/invitations`
@@ -250,7 +247,7 @@ describe('приглашение', () => {
     const off = await createTestApi({ mail: 'off' })
     try {
       const offOwner = await off.loginAs('owner')
-      const siteId = await newSite(off, offOwner.headers)
+      const siteId = await newSite(off)
       const res = await invite(
         siteId,
         { email: freshEmail(), role: 'client' },
@@ -495,7 +492,7 @@ describe('лимиты приглашений', () => {
 
   it('от одного владельца — не больше 50 в час', async () => {
     const busy = await api.loginAs('owner')
-    const siteId = await newSite(api, busy.headers)
+    const siteId = await newSite(api)
     for (let i = 0; i < INVITES_PER_INVITER.max; i++) {
       const res = await invite(siteId, { email: freshEmail(), role: 'client' }, busy.headers)
       expect(res.status).toBe(201)

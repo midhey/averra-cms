@@ -23,9 +23,10 @@ import { PageHeader } from '../ui/PageHeader'
 import { Screen } from '../ui/Screen'
 import { Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
+import { useSiteId } from '../use-site'
 import styles from './LeadsScreen.module.scss'
 
-const route = getRouteApi('/_app/sites/$siteId/leads')
+const route = getRouteApi('/_app/leads')
 
 const LEADS_LIST_HEADING_ID = 'leads-list-heading'
 const LEADS_TABS_ID = 'leads-tabs'
@@ -47,9 +48,7 @@ type Notice = { kind: 'done' | 'error'; text: string }
 
 /** Заявки с форм сайта: вкладки, список и карточка выбранной заявки рядом (ребёнок маршрута) */
 export function LeadsScreen() {
-  const { siteId } = route.useParams()
-  // Как у других экранов сайта: сообщения одного сайта не переезжают на другой
-  return <SiteLeads key={siteId} siteId={siteId} />
+  return <SiteLeads siteId={useSiteId()} />
 }
 
 function SiteLeads({ siteId }: { siteId: string }) {
@@ -87,7 +86,7 @@ function SiteLeads({ siteId }: { siteId: string }) {
         meta={
           <>
             <span>{notificationsLine(settings, notifications.enabled)}</span>
-            <Link to="/sites/$siteId/settings" params={{ siteId }} hash="leads">
+            <Link to="/settings" hash="leads">
               Настроить
             </Link>
           </>
@@ -118,8 +117,7 @@ function SiteLeads({ siteId }: { siteId: string }) {
           value={status ?? 'all'}
           onChange={(next: Filter) =>
             navigate({
-              to: '/sites/$siteId/leads',
-              params: { siteId },
+              to: '/leads',
               search: next === 'all' ? {} : { status: next },
             })
           }
@@ -150,8 +148,8 @@ function SiteLeads({ siteId }: { siteId: string }) {
                     return (
                       <li key={lead.id}>
                         <Link
-                          to="/sites/$siteId/leads/$leadId"
-                          params={{ siteId, leadId: lead.id }}
+                          to="/leads/$leadId"
+                          params={{ leadId: lead.id }}
                           search={status ? { status } : {}}
                           className={cardClassName({ padding: 'compact', interactive: true })}
                         >

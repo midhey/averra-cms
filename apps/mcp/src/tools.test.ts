@@ -46,6 +46,17 @@ describe('каталог блоков', () => {
 })
 
 describe('инструменты', () => {
+  it('без siteId работают на сайте токена: в установке сайт один, id искать не нужно', async () => {
+    const ref = { slug: 'bez-id' }
+    await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Без id', content: demoPage }))
+    await tools.publishPage(ref)
+    const page = z
+      .object({ siteId: z.string(), published: PageContent.nullable() })
+      .parse(await tools.getPage(ref))
+    expect(page.siteId).toBe(api.demoSiteId)
+    expect(page.published?.blocks).toHaveLength(3)
+  })
+
   it('проводят страницу от черновика до публикации', async () => {
     const ref = { siteId: site.id, slug: 'coffee' }
     await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Кофейня', content: demoPage }))
@@ -76,8 +87,9 @@ describe('токен', () => {
     const noToken = cmsTools(undefined)
     await expect(noToken.listSites()).rejects.toThrow(missingTokenMessage)
     await expect(noToken.getPage({ siteId: site.id, slug: 'index' })).rejects.toThrow(
-      'pnpm token:create --site <id сайта> --name mcp',
+      'pnpm token:create --name mcp',
     )
+    await expect(noToken.getPage({ slug: 'index' })).rejects.toThrow(missingTokenMessage)
   })
 
   it('отозванный токен — понятная ошибка, а не «API ответил 401»', async () => {
@@ -88,18 +100,14 @@ describe('токен', () => {
   })
 
   it('токен другого сайта не видит этот сайт', async () => {
-    const created = await api.app.request('/api/sites', {
-      method: 'POST',
-      headers: {
-        ...(await api.loginAs('owner')).headers,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ name: 'Другой сайт' }),
-    })
-    const other = z.object({ id: z.string() }).parse(await created.json())
-    const otherTools = cmsTools(clientWith((await api.createToken(other.id)).token))
+    // Так бывает только в старых базах: API сайтов не создаёт, сайт кладётся напрямую
+    const other = await api.createSite('Другой сайт')
+    const otherTools = cmsTools(clientWith((await api.createToken(other)).token))
     await expect(otherTools.getPage({ siteId: site.id, slug: 'index' })).rejects.toThrow(
       'Сайт не найден',
     )
+    // Без siteId — свой сайт токена, а не сайт установки
+    const own = z.object({ siteId: z.string() }).parse(await otherTools.getPage({ slug: 'index' }))
+    expect(own.siteId).toBe(other)
   })
 })

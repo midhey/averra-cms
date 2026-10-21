@@ -95,7 +95,7 @@ export {
   pageTemplateContent,
 } from './page'
 export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
-export { NewSite, SiteName } from './site'
+export { SITE_NAME_MAX, SiteName } from './site'
 export {
   BackupKind,
   BackupRemote,

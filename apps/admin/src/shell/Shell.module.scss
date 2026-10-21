@@ -1,123 +1,56 @@
 @use "@averra/ui" as ui;
 
-// Части боковой панели админки: переключатель сайта, версия, ошибка выхода
+// Части боковой панели админки: заголовок сайта, версия, ошибка выхода
 
-.switcher {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
+// Заголовок панели: название сайта и его домен. Одна установка — один сайт, выбирать нечего
 .site {
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: var(--size-control);
+  flex-direction: column;
+  gap: ui.rem(2);
+  min-width: 0;
   padding: ui.rem(10) ui.rem(12);
-  font: inherit;
-  color: var(--color-text);
-  text-align: start;
   background: var(--color-surface);
   border: ui.rem(1) solid var(--color-border);
   border-radius: var(--radius-control);
-}
-
-.siteButton {
-  cursor: pointer;
-  transition: border-color var(--duration-fast) ease;
-
-  &:hover {
-    border-color: var(--color-border-strong);
-  }
-
-  @include ui.reduced-motion {
-    transition: none;
-  }
-}
-
-.siteText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-// Без переключателя (один сайт у участника) — просто название сайта колонкой
-.siteStatic {
-  flex-direction: column;
-  gap: 0;
-  align-items: stretch;
-}
-
-.siteCaption {
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
 }
 
 .siteName {
   overflow: hidden;
   font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.siteChevron {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: transform var(--duration-fast) ease;
-
-  [aria-expanded="true"] > & {
-    transform: rotate(180deg);
-  }
-
-  @include ui.reduced-motion {
-    transition: none;
-  }
-}
-
-.siteList {
-  display: flex;
-  flex-direction: column;
-  gap: ui.rem(2);
-  padding: ui.rem(6);
-  list-style: none;
-  background: var(--color-surface);
-  border: ui.rem(1) solid var(--color-border);
-  border-radius: var(--radius-control);
-  box-shadow: var(--shadow-raised);
-}
-
-.siteLink {
-  display: flex;
-  gap: var(--space-2);
+// Домен — ссылка на опубликованный сайт: подчёркнута, как любая ссылка, а не только цветом
+.siteDomain {
+  display: inline-flex;
+  gap: ui.rem(4);
   align-items: center;
-  min-height: var(--size-control-small);
-  padding: ui.rem(8) ui.rem(10);
-  font-size: var(--font-size-body);
-  color: var(--color-text);
-  text-decoration: none;
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  text-underline-offset: ui.rem(2);
   border-radius: var(--radius-item);
 
   &:hover {
-    background: var(--color-surface-muted);
+    color: var(--color-text);
   }
 
-  &[aria-current] {
-    font-weight: var(--font-weight-semibold);
+  &:focus-visible {
+    @include ui.focus-ring;
   }
 
   svg {
     flex-shrink: 0;
-    color: var(--color-action);
   }
 }
 
-.siteLinkName {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
+.siteDomainText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .version {

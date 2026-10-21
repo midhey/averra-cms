@@ -1,6 +1,6 @@
 import { MAIN_PAGE_SLUG, NewPage, type PageTemplate } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { getRouteApi, useLocation, useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
@@ -19,9 +19,8 @@ import { PageHeader } from '../ui/PageHeader'
 import { formClassName, mutedClassName, Screen, Section } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { usePageTitle } from '../ui/use-page-title'
+import { useSiteId } from '../use-site'
 import styles from './PagesScreen.module.scss'
-
-const route = getRouteApi('/_app/sites/$siteId/pages')
 
 /** Якорь формы «Новая страница»: на него ведёт кнопка с обзора */
 const NEW_PAGE_ANCHOR = 'new-page'
@@ -29,10 +28,7 @@ const NEW_PAGE_ANCHOR = 'new-page'
 type Notice = { kind: 'done' | 'error'; text: string }
 
 export function PagesScreen() {
-  const { siteId } = route.useParams()
-  // Другой сайт — другой экран: без key форма «Новая страница» и сообщение об удалении
-  // переехали бы с сайта на сайт (переход «Назад» между сайтами экран не пересоздаёт)
-  return <SitePages key={siteId} siteId={siteId} />
+  return <SitePages siteId={useSiteId()} />
 }
 
 function SitePages({ siteId }: { siteId: string }) {
@@ -109,7 +105,6 @@ function SitePages({ siteId }: { siteId: string }) {
         }
       >
         <PagesTable
-          siteId={siteId}
           pages={filterPages(pages, search)}
           // Клиенту действия недоступны: пустая колонка только сбивала бы с толку
           actions={managePages ? deleteAction : undefined}
@@ -172,7 +167,7 @@ function NewPageForm({ siteId }: { siteId: string }) {
     },
     onSuccess: async (page) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.pages(siteId), exact: true })
-      await navigate({ to: '/sites/$siteId/pages/$slug', params: { siteId, slug: page.slug } })
+      await navigate({ to: '/pages/$slug', params: { slug: page.slug } })
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.issues.length > 0) {

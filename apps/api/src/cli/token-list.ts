@@ -8,7 +8,7 @@ await run(async () => {
   try {
     const tokens = await tokensRepo(db).list()
     if (tokens.length === 0) {
-      console.log('Токенов нет. Выпустить: pnpm token:create --site <id> --name <имя>')
+      console.log('Токенов нет. Выпустить: pnpm token:create --name <имя>')
       return
     }
     console.table(

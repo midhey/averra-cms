@@ -15,7 +15,7 @@ export type SiteSection = {
 }
 
 /**
- * Разделы открытого сайта. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
+ * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
  * (у редактора и токена newLeads — null)
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
@@ -31,7 +31,7 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
   return sections
 }
 
-/** Почта и состояние установки общие для всех сайтов и только у владельца админки */
+/** Почта и состояние установки — только у владельца установки */
 export const seesInstallation = (role: 'owner' | 'member') => role === 'owner'
 
 const siteRoleNames: Record<SiteAccess, string> = {
@@ -40,15 +40,8 @@ const siteRoleNames: Record<SiteAccess, string> = {
   client: 'Клиент',
 }
 
-/** Подпись роли под именем: владелец — всегда владелец, участник — его роль на открытом сайте */
+/** Подпись роли под именем: владелец — всегда владелец, участник — его роль на сайте установки */
 export function roleName(role: 'owner' | 'member', siteAccess?: SiteAccess) {
   if (role === 'owner') return 'Владелец'
   return siteAccess ? siteRoleNames[siteAccess] : 'Участник'
 }
-
-/**
- * Переключатель сайта — раскрывающийся, когда есть куда переключиться: сайтов несколько,
- * или вошёл владелец (ему нужен список сайтов, чтобы создать новый)
- */
-export const switcherExpandable = (role: 'owner' | 'member', sitesCount: number) =>
-  role === 'owner' || sitesCount > 1

@@ -220,10 +220,13 @@ async function actAsMember(page: Page) {
   )
 }
 
-test('участнику ссылки на почту нет, а по прямому адресу — понятный отказ', async ({ page }) => {
+test('участнику ссылки на почту нет, а по прямому адресу — понятный отказ', async ({
+  page,
+  demoSite,
+}) => {
   await actAsMember(page)
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сайты')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByRole('navigation', { name: 'Установка' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /^Почта/ })).toHaveCount(0)
 
