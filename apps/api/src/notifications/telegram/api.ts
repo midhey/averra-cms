@@ -74,7 +74,7 @@ export class TelegramApiError extends Error {
   }
 }
 
-/** Адрес прокси, который схема и URL читают одинаково: части раскодированы, протокол — для агента */
+/** Адрес прокси, который схема и URL читают одинаково: части раскодированы, протокол для агента */
 export type ParsedProxy = ProxyParts & { protocol: string }
 
 const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 }

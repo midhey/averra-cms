@@ -101,9 +101,20 @@ export const PROXY_MESSAGES = {
   format:
     'Адрес прокси вида socks5://логин:пароль@host:1080 или http://host:3128 — со схемой и портом',
   host: 'Хост прокси — имя вроде proxy.example.ru или адрес вроде 10.0.0.1 или [::1]',
+  login:
+    'Логин прокси пустой: впишите его перед двоеточием или уберите «@», если прокси без логина',
   userinfo:
-    'Спецсимволы в логине и пароле прокси — %-кодами: # → %23, ? → %3F, @ → %40, / → %2F, % → %25, двоеточие в логине → %3A',
+    'Спецсимволы в логине и пароле прокси — %-кодами: # → %23, ? → %3F, @ → %40, / → %2F, ' +
+    '% → %25, \\ → %5C, пробел → %20, двоеточие в логине → %3A',
 } as const
+
+/**
+ * Схема адрес пропустила, а URL его не принял. Чаще всего виноват хост (IPv6 без скобок или
+ * с неверной записью), реже — логин и пароль: текст называет оба, а не уводит к одному
+ */
+export const PROXY_UNPARSED =
+  'Адрес прокси не разобрать: проверьте хост (IPv6 — в квадратных скобках) и порт; ' +
+  'спецсимволы в логине и пароле — %-кодами'
 
 /** Прокси по частям: логин и пароль раскодированы (пустые — их нет), порт — число */
 export type ProxyParts = {
@@ -167,6 +178,7 @@ export function splitProxyUrl(value: string): ProxyParts | { error: keyof typeof
   const colon = userinfo.indexOf(':')
   const login = colon === -1 ? userinfo : userinfo.slice(0, colon)
   const secret = colon === -1 ? '' : userinfo.slice(colon + 1)
+  if (login === '') return { error: 'login' }
   if (!LOGIN.test(login) || !PASSWORD.test(secret)) return { error: 'userinfo' }
   const username = decoded(login)
   const password = decoded(secret)

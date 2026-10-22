@@ -52,7 +52,7 @@ export const emailChannel: NotificationChannel = {
     }
   },
   async enqueue({ tx, now, siteId, leadId }, { event, data }, targets) {
-    // У события может быть своё письмо (заявка — с Reply-To посетителя), иначе — общее «Уведомление»
+    // У события бывает своё письмо (заявка — с Reply-To посетителя), иначе — общее «Уведомление»
     const mail = mailOverrideOf(event, data) ?? {
       template: 'notification' as const,
       data: renderNotification(event, data),

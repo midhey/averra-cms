@@ -1,7 +1,7 @@
 import {
   NOTIFICATION_EVENT_TITLES,
   type NotificationChannelKind,
-  PROXY_MESSAGES,
+  PROXY_UNPARSED,
   SERVICE_EVENT_HINTS,
   ServiceEventId,
 } from '@averra/schema'
@@ -405,9 +405,6 @@ export async function chatsLeft(db: Db, siteId: AudienceSite, max: number) {
     )
   return max - rows.length
 }
-
-/** Прокси, который схема пропустила, а URL читает иначе: что сказать у поля */
-const PROXY_UNPARSED = `Адрес прокси не разобрать. ${PROXY_MESSAGES.userinfo}`
 
 /** Сохранить бота: что не так (у какого поля) или кто бот и сколько чатов прежнего бота отвязано */
 export type SaveTelegramResult =

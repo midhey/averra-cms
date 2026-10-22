@@ -23,10 +23,12 @@ import { escapeTelegramHtml } from './format'
 // коды, API опрашивает getUpdates (длинный опрос), а когда их нет — не опрашивает вовсе. Webhook
 // не нужен: ни входящего адреса в Caddy, ни секрета webhook, и работает через исходящий прокси.
 //
-// offset getUpdates живёт только в пределах сеанса привязки и одного бота. После недели без
-// обновлений Telegram выбирает следующий update_id случайно, а у другого бота id свои: старый
-// offset оказался бы больше нового id, и Telegram счёл бы «Старт» подтверждённым — молча выбросил.
-// Поэтому сеанс кончился — обработанное подтверждается и offset забывается, сменился бот — тоже
+// offset getUpdates живёт только в пределах сеанса привязки и одного бота. Это защита, а не
+// поведение Telegram: после недели без обновлений он выбирает следующий update_id случайно, у
+// другого бота id свои, и старый offset окажется выше хвоста очереди. Настоящий Bot API тогда
+// читает очередь с начала, но свой сервер Bot API или зеркало (TELEGRAM_API_URL) может счесть
+// «Старт» подтверждённым и выбросить. Поэтому сеанс кончился — обработанное подтверждается
+// и offset забывается, сменился бот — тоже
 
 /** Срок кода привязки */
 export const LINK_TTL_MS = TELEGRAM_LINK_TTL_MINUTES * 60 * 1000
@@ -308,12 +310,18 @@ export function telegramBinder({
   let running: Promise<void> | undefined
   let stopped = false
   let abort: AbortController | undefined
+  // Выдан код, пока цикл уже шёл. Круг мог решить, что кодов нет, и подтверждать конец сеанса
+  // по сети (медленный Telegram, прокси): без флага этот wake() пропал бы, и код никто не
+  // опрашивал бы до конца его срока
+  let woken = false
 
   async function loop() {
     while (!stopped) {
+      woken = false
       abort = new AbortController()
       try {
-        if ((await pollOnce(abort.signal)) === 'idle') return
+        // Круг заново сам перепроверит живые коды
+        if ((await pollOnce(abort.signal)) === 'idle' && !woken) return
       } catch (error) {
         if (stopped) return
         log(
@@ -324,7 +332,7 @@ export function telegramBinder({
     }
   }
 
-  return {
+  const binder = {
     bind,
     handle,
     pollOnce,
@@ -332,9 +340,13 @@ export function telegramBinder({
     problem: () => problem,
     /** Выдан код: начать опрос, если он не идёт */
     wake() {
-      if (stopped || running) return
+      if (stopped) return
+      woken = true
+      if (running) return
       running = loop().finally(() => {
         running = undefined
+        // wake() между концом цикла и этой строкой застал running и только поднял флаг
+        if (woken) binder.wake()
       })
     },
     async stop() {
@@ -343,6 +355,7 @@ export function telegramBinder({
       await running?.catch(() => {})
     },
   }
+  return binder
 }
 
 export type TelegramBinder = ReturnType<typeof telegramBinder>

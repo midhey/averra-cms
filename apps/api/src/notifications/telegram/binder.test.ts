@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { notificationLinkCodes, notificationRecipients } from '../../db/schema'
 import { sha256 } from '../../secrets'
 import { createTestApi } from '../../testing'
@@ -318,6 +318,59 @@ describe('опрос между сеансами привязки', async () => 
     expect(await chatsOf2(9302)).toHaveLength(1)
     expect(fake2.messagesTo('9301')).toHaveLength(1)
     expect(fake2.messagesTo('9301')[0]?.text).toContain('Готово')
+  })
+
+  it('код выдан, пока конец сеанса подтверждался по сети, — его опрашивают без нового wake', async () => {
+    await api2.db.update(notificationLinkCodes).set({ usedAt: new Date() })
+    expect((await saveBot(api2, owner2.headers)).status).toBe(200)
+    // Подтверждение конца сеанса (getUpdates с timeout 0) висит, пока тест его не отпустит:
+    // так ведёт себя медленный Telegram или прокси
+    let confirming!: () => void
+    const confirmStarted = new Promise<void>((resolve) => {
+      confirming = resolve
+    })
+    let release!: () => void
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let hold = true
+    const slow = telegramBinder({
+      db: api2.db,
+      deps: api2.notifyDeps,
+      telegram: (connection) => {
+        const real = api2.notifications.telegram(connection)
+        return {
+          ...real,
+          async getUpdates(options) {
+            if (hold && options.timeoutSec === 0) {
+              hold = false
+              confirming()
+              await released
+            }
+            return real.getUpdates(options)
+          },
+        }
+      },
+      pollTimeoutSec: 1,
+    })
+    try {
+      const first = await link()
+      fake2.pushStart(first.code, { id: 9401, type: 'private' })
+      slow.wake()
+      await vi.waitFor(async () => expect(await chatsOf2(9401)).toHaveLength(1))
+      // Кодов не осталось: цикл подтверждает конец сеанса — и тут выдают новый код
+      await confirmStarted
+      const second = await link()
+      slow.wake()
+      fake2.pushStart(second.code, { id: 9402, type: 'private' })
+      release()
+      await vi.waitFor(async () => expect(await chatsOf2(9402)).toHaveLength(1), {
+        timeout: 5000,
+      })
+    } finally {
+      release()
+      await slow.stop()
+    }
   })
 })
 

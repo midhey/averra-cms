@@ -1,4 +1,5 @@
 import { inspect } from 'node:util'
+import { PROXY_UNPARSED } from '@averra/schema'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -118,6 +119,11 @@ describe('бот Telegram: токен только на запись', () => {
         expect(body, proxy).toContain('%-кодами')
         expect(body, proxy).not.toContain(secret)
       }
+      // Виноват хост, а не пароль: текст называет и хост, а не только %-коды логина и пароля
+      const res = await saveBot(api, owner.headers, { proxy: 'http://user:pass@[1:2]:3128' })
+      const body = (await res.json()) as { error: { issues: { message: string }[] } }
+      expect(body.error.issues[0]?.message).toBe(PROXY_UNPARSED)
+      expect(PROXY_UNPARSED).toContain('IPv6 — в квадратных скобках')
     } finally {
       for (const spy of spies) spy.mockRestore()
     }

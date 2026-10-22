@@ -1,3 +1,4 @@
+import { PROXY_UNPARSED } from '@averra/schema'
 import { Agent, type Dispatcher, ProxyAgent, request, Socks5ProxyAgent } from 'undici'
 import { maskSecrets } from '../../mail/mailer'
 import {
@@ -80,10 +81,7 @@ function proxySecrets(proxy: string, parsed: ParsedProxy | undefined) {
 
 /** Адрес прокси не разобрать: undici его не примет. Сам адрес в текст не идёт — в нём пароль */
 const unparsedProxy = () =>
-  new TelegramApiError(
-    'Адрес прокси не разобрать: спецсимволы в логине и пароле запишите %-кодами (# → %23, ? → %3F, @ → %40) и сохраните прокси заново',
-    'network',
-  )
+  new TelegramApiError(`${PROXY_UNPARSED}. Поправьте адрес и сохраните прокси заново`, 'network')
 
 /**
  * Клиент через прокси. SOCKS5 — своим агентом undici: он сам раскодирует логин и пароль из адреса

@@ -80,12 +80,30 @@ describe('уведомления: схемы', () => {
       'socks5://user:p/ss@proxy.example.ru:1080',
       'socks5://user:p@ss@proxy.example.ru:1080',
       'socks5://us er:pass@proxy.example.ru:1080',
+      'socks5://user:pa ss@proxy.example.ru:1080',
+      'http://user:pa\\ss@proxy.example.ru:3128',
     ]) {
       const result = TelegramProxy.safeParse(bad)
       expect(result.success, bad).toBe(false)
       expect(result.error?.issues[0]?.message, bad).toBe(PROXY_MESSAGES.userinfo)
     }
-    expect(PROXY_MESSAGES.userinfo).toContain('# → %23')
+    // Каждому отклонённому знаку — его код в тексте ошибки
+    for (const code of ['# → %23', '? → %3F', '@ → %40', '/ → %2F', '% → %25', '\\ → %5C']) {
+      expect(PROXY_MESSAGES.userinfo).toContain(code)
+    }
+    expect(PROXY_MESSAGES.userinfo).toContain('пробел → %20')
+  })
+
+  it('прокси: пустой логин — своя ошибка, а не про спецсимволы', () => {
+    for (const bad of [
+      'http://:pass@proxy.example.ru:3128',
+      'http://@proxy.example.ru:3128',
+      'socks5://:@proxy.example.ru:1080',
+    ]) {
+      const result = TelegramProxy.safeParse(bad)
+      expect(result.error?.issues[0]?.message, bad).toBe(PROXY_MESSAGES.login)
+    }
+    expect(PROXY_MESSAGES.login).not.toContain('%-код')
   })
 
   it('прокси: %-коды раскодируются, двоеточие в пароле — можно', () => {
