@@ -27,7 +27,7 @@ import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
-import type { NotificationDeps } from './notifications/deps'
+import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
 import type { OgCardRenderers } from './og/card'
 import type { SitePublisher } from './publish/queue'
 import { createRateLimiter } from './rate-limit'
@@ -162,6 +162,7 @@ export function createApp(deps: AppDeps) {
         log,
         storage: deps.storage,
         icons: deps.icons,
+        notify: () => notifyDepsOf(mail, notifications),
       }),
     )
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))

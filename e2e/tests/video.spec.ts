@@ -49,6 +49,8 @@ test('видео: добавить в редакторе, опубликоват
 
   // Чужая ссылка — ошибка у поля, сохранить нельзя
   const url = ed.field('Ссылка на ролик')
+  // Ссылка — однострочное поле, как другие ссылки: Enter не вставит в адрес перенос строки
+  await expect(url).toHaveJSProperty('tagName', 'INPUT')
   await url.fill('https://example.com/video.mp4')
   await expect(url).toHaveAttribute('aria-invalid', 'true')
   await expect(ed.inspector).toContainText(VIDEO_URL_MESSAGE)
@@ -93,6 +95,10 @@ test('видео: добавить в редакторе, опубликоват
   await expect(player).toHaveAttribute('title', TITLE)
   await expect(player).toHaveAttribute('sandbox', /allow-scripts/)
   await expect(cover).toHaveCount(0)
+  // Под плеером — ссылка на ролик: если площадка в iframe не откроется, выход есть
+  await expect(
+    site.getByRole('link', { name: 'Ролик не запускается? Откройте его на YouTube' }),
+  ).toHaveAttribute('href', `https://www.youtube.com/watch?v=${YT}`)
   await expect
     .poll(() => viewer.requested)
     .toContain(`https://www.youtube-nocookie.com/embed/${YT}?autoplay=1`)

@@ -1,5 +1,6 @@
 // Плеер видео по клику на обложку: маленькое улучшение поверх рабочего HTML. Без скрипта обложка —
-// обычная ссылка на страницу ролика. Со скриптом клик ставит на место обложки iframe площадки.
+// обычная ссылка на страницу ролика. Со скриптом клик ставит на место обложки iframe площадки, а
+// под ним — ссылку на ролик на площадке.
 // Модуль без зависимостей: Astro собирает его в /_astro/… только на страницы с блоком «Видео»
 
 /**
@@ -53,6 +54,10 @@ export function startVideoPlayers(doc: Document = document) {
     if (!link || !isEmbedUrl(src)) return
     event.preventDefault()
     const frame = playerFrame(doc, src, link.getAttribute('data-video-title') ?? '')
+    // Ссылка на ролик под плеером: если площадка в iframe не откроется, посетитель не останется
+    // перед пустым прямоугольником
+    const fallback = link.closest('figure')?.querySelector<HTMLElement>('[data-video-fallback]')
+    if (fallback) fallback.hidden = false
     link.replaceWith(frame)
     // Фокус — в плеер: с клавиатуры можно сразу управлять роликом
     frame.focus()

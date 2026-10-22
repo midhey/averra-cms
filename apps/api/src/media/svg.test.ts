@@ -289,7 +289,7 @@ describe('sanitizeSvg: что остаётся', () => {
   it('ссылка <a> и <switch> разворачиваются: рисунок внутри остаётся', () => {
     const svg = `<svg ${NS} viewBox="0 0 10 10"><switch><foreignObject><p/></foreignObject><g><a href="https://example.com"><circle r="5"/></a></g></switch></svg>`
     expect(clean(svg)).toBe(
-      `<svg ${NS} width="10" height="10" viewBox="0 0 10 10"><g><circle r="5"/></g></svg>`,
+      `<svg ${NS} width="100" height="100" viewBox="0 0 10 10"><g><circle r="5"/></g></svg>`,
     )
   })
 
@@ -311,7 +311,7 @@ describe('sanitizeSvg: что остаётся', () => {
   it('чужие атрибуты редакторов и пространства имён выбрасываются', () => {
     const svg = `<svg ${NS} xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" viewBox="0 0 10 10" inkscape:version="1.3"><sodipodi:namedview/><g inkscape:label="Слой 1" data-x="1"><path d="M0 0"/></g></svg>`
     expect(clean(svg)).toBe(
-      `<svg ${NS} width="10" height="10" viewBox="0 0 10 10"><g><path d="M0 0"/></g></svg>`,
+      `<svg ${NS} width="100" height="100" viewBox="0 0 10 10"><g><path d="M0 0"/></g></svg>`,
     )
   })
 })
@@ -328,19 +328,70 @@ describe('sanitizeSvg: размеры', () => {
   })
 
   it('без viewBox — по width и height в px, viewBox добавляется', () => {
+    expect(clean(`<svg ${NS} width="640px" height="320"/>`)).toBe(
+      `<svg ${NS} width="640" height="320" viewBox="0 0 640 320"/>`,
+    )
+    // Маленький — дотягивается до 100 по длинной стороне, viewBox — в исходных единицах
     expect(clean(`<svg ${NS} width="64px" height="32"/>`)).toBe(
-      `<svg ${NS} width="64" height="32" viewBox="0 0 64 32"/>`,
+      `<svg ${NS} width="100" height="50" viewBox="0 0 64 32"/>`,
     )
   })
 
-  it('без размеров или в других единицах без viewBox — отказ', () => {
+  it.each([
+    // viewBox, сохранённые width и height в файле, в базе
+    ['крошечный viewBox: не обнуляется', '0 0 0.0004 0.0004', ['100', '100'], [100, 100]],
+    ['маленький viewBox: пропорции не искажаются', '0 0 1.5 1', ['100', '66.667'], [100, 67]],
+    ['обычный — как есть', '0 0 240 80', ['240', '80'], [240, 80]],
+    ['вытянутый: меньшая сторона не «0»', '0 0 100000 0.01', ['100000', '0.01'], [100000, 1]],
+  ])('%s', (_, viewBox, [width, height], [dbWidth, dbHeight]) => {
+    const svg = `<svg ${NS} viewBox="${viewBox}"><rect width="1" height="1"/></svg>`
+    expect(clean(svg)).toContain(` width="${width}" height="${height}" viewBox="${viewBox}"`)
+    expect(sanitizeSvg(bytes(svg))).toMatchObject({
+      ok: true,
+      svg: { width: dbWidth, height: dbHeight },
+    })
+  })
+
+  it('размер в миллиметрах (Inkscape) — в пикселях, а не в единицах viewBox', () => {
+    // 52,92 мм — 200 px: файл показывается того размера, что задумал автор
+    const inkscape = `<svg ${NS} width="52.917mm" height="26.458mm" viewBox="0 0 52.917 26.458"/>`
+    expect(clean(inkscape)).toBe(
+      `<svg ${NS} width="200.001" height="99.999" viewBox="0 0 52.917 26.458"/>`,
+    )
+    expect(clean(`<svg ${NS} width="1in" height="0.5in"/>`)).toBe(
+      `<svg ${NS} width="100" height="50" viewBox="0 0 96 48"/>`,
+    )
+  })
+
+  it('без размеров или в относительных единицах без viewBox — отказ', () => {
     expect(failure(`<svg ${NS}><rect/></svg>`)).toBe('no_size')
-    expect(failure(`<svg ${NS} width="10mm" height="5mm"/>`)).toBe('no_size')
+    expect(failure(`<svg ${NS} width="10em" height="5em"/>`)).toBe('no_size')
     expect(failure(`<svg ${NS} viewBox="0 0 0 10"/>`)).toBe('no_size')
+    // Без viewBox крошечные размеры обнулили бы дописанный viewBox — картинку не видно
+    expect(failure(`<svg ${NS} width="0.0001" height="0.0001"/>`)).toBe('no_size')
   })
 
   it('сторона больше 100 000 — отказ', () => {
     expect(failure(`<svg ${NS} viewBox="0 0 1000000 10"/>`)).toBe('bad_size')
+  })
+
+  it('длинная строка цифр с мусором в размере разбирается быстро', () => {
+    // Регулярка с перекрытием «\d*\.?\d+» разбирала такой атрибут квадратичное время: файл
+    // меньше лимита загрузки занимал процесс API на минуту
+    const digits = '1'.repeat(60_000)
+    const started = performance.now()
+    const svg = `<svg ${NS} width="${digits}x" height="${digits}x" viewBox="0 0 2 1"/>`
+    expect(clean(svg)).toBe(`<svg ${NS} width="100" height="50" viewBox="0 0 2 1"/>`)
+    expect(failure(`<svg ${NS} width="${digits}x" height="1"/>`)).toBe('no_size')
+    const raster = svgForRaster(bytes(`<svg ${NS} width="${digits}x" height="1"/>`), 16)
+    expect(raster.length).toBeGreaterThan(digits.length)
+    expect(performance.now() - started).toBeLessThan(1000)
+  })
+
+  it('длина: дробная, с экспонентой, с точкой в конце', () => {
+    expect(clean(`<svg ${NS} width=".5in" height="1.e2"/>`)).toBe(
+      `<svg ${NS} width="48" height="100" viewBox="0 0 48 100"/>`,
+    )
   })
 })
 

@@ -20,6 +20,13 @@ export const MAX_SVG_DEPTH = 64
 /** Сторона в единицах SVG: больше — ошибка в файле, а растеризация иконки ушла бы в гигапиксели */
 export const MAX_SVG_SIDE = 100_000
 
+/**
+ * Длинная сторона очищенного файла — не меньше: с крошечным viewBox (0 0 0.0004 0.0004) округлённые
+ * размеры обнулились бы (картинка не рисуется), а с маленьким исказились бы пропорции (1.5 × 1 → 2
+ * × 1). Показ на сайте всё равно задаёт CSS — размеры в файле нужны ради пропорций
+ */
+export const MIN_SVG_SIDE = 100
+
 /** Статическая графика SVG: фигуры, текст, градиенты, маски, фильтры. Ни скриптов, ни анимаций */
 const ELEMENTS = new Set([
   'svg',
@@ -339,10 +346,47 @@ export function looksLikeSvg(data: Uint8Array) {
   return false
 }
 
+/**
+ * Длина атрибута: число и единица. Части числа не перекрываются (у «\d*\.?\d+» перекрываются,
+ * и строка цифр с мусором в конце разбиралась за квадратичное время — атрибут на 250 КБ занимал
+ * процесс API на минуту). Длиннее MAX_LENGTH_CHARS знаков длина не бывает — до регулярки не доходит
+ */
+const LENGTH = /^((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(px|pt|pc|mm|cm|in)?$/i
+const MAX_LENGTH_CHARS = 32
+
+/** Число и единица (в нижнем регистре, '' — без единицы) или undefined */
+function parseLength(value: string | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed || trimmed.length > MAX_LENGTH_CHARS) return undefined
+  const match = LENGTH.exec(trimmed)
+  return match ? { number: Number(match[1]), unit: (match[2] ?? '').toLowerCase() } : undefined
+}
+
 /** Число без единиц или в px: «120», «120.5px». Остальные единицы (mm, em, %) — не размер */
 function plainLength(value: string | undefined) {
-  const match = value?.trim().match(/^(\d*\.?\d+(?:e[+-]?\d+)?)(px)?$/i)
-  const number = match ? Number(match[1]) : Number.NaN
+  const length = parseLength(value)
+  const number = length && (length.unit === '' || length.unit === 'px') ? length.number : 0
+  return Number.isFinite(number) && number > 0 ? number : undefined
+}
+
+/** CSS-пикселей в абсолютной единице длины: так их переводит браузер */
+const UNIT_PX: Record<string, number> = {
+  px: 1,
+  pt: 4 / 3,
+  pc: 16,
+  mm: 96 / 25.4,
+  cm: 96 / 2.54,
+  in: 96,
+}
+
+/**
+ * Длина в CSS-пикселях: число, px или абсолютные единицы (Inkscape пишет миллиметры). Проценты,
+ * em и прочие относительные единицы — undefined: размера сами по себе они не задают
+ */
+function absoluteLength(value: string | undefined) {
+  const length = parseLength(value)
+  const perUnit = length && UNIT_PX[length.unit || 'px']
+  const number = length && perUnit ? length.number * perUnit : 0
   return Number.isFinite(number) && number > 0 ? number : undefined
 }
 
@@ -419,29 +463,39 @@ function serialize(node: Node | string, out: string[]) {
   out.push(`</${node.name}>`)
 }
 
-/** Корень: размеры числами (и viewBox, если его не было): пропорции знает любой показ файла */
+/**
+ * Корень: размеры в пикселях (и viewBox, если его не было): пропорции знает любой показ файла.
+ * Пропорции — по viewBox, размер — из width и height в абсолютных единицах, а без них — по
+ * viewBox. Длинная сторона — от MIN_SVG_SIDE до MAX_SVG_SIDE, меньшая — не меньше 0,001: «0» в
+ * атрибуте спрятал бы картинку
+ */
 function sizeRoot(root: Node) {
   const get = (name: string) => root.attributes.find(([key]) => key === name)?.[1]
   const viewBox = viewBoxSize(get('viewBox'))
-  const width = plainLength(get('width'))
-  const height = plainLength(get('height'))
-  const size = viewBox ?? (width && height ? { width, height } : undefined)
-  if (!size) throw new Rejected('no_size')
-  if (size.width > MAX_SVG_SIDE || size.height > MAX_SVG_SIDE) throw new Rejected('bad_size')
+  const width = absoluteLength(get('width'))
+  const height = absoluteLength(get('height'))
+  const given = width && height ? { width, height } : undefined
+  const shape = viewBox ?? given
+  if (!shape) throw new Rejected('no_size')
+  if (shape.width > MAX_SVG_SIDE || shape.height > MAX_SVG_SIDE) throw new Rejected('bad_size')
+  const long = given ? Math.max(given.width, given.height) : Math.max(shape.width, shape.height)
+  const scale =
+    Math.min(MAX_SVG_SIDE, Math.max(MIN_SVG_SIDE, long)) / Math.max(shape.width, shape.height)
+  const size = {
+    width: Math.max(0.001, shape.width * scale),
+    height: Math.max(0.001, shape.height * scale),
+  }
+  // Дописанный viewBox — в координатах рисунка, их не масштабировать. Сторона, которая
+  // округлилась до нуля (width="0.0001"), спрятала бы картинку целиком
+  const added = viewBox ? undefined : [formatNumber(shape.width), formatNumber(shape.height)]
+  if (added?.includes('0')) throw new Rejected('no_size')
   const rest = root.attributes.filter(
     ([key]) => key !== 'width' && key !== 'height' && (viewBox || key !== 'viewBox'),
   )
   root.attributes = [
     ['width', formatNumber(size.width)],
     ['height', formatNumber(size.height)],
-    ...(viewBox
-      ? []
-      : [
-          ['viewBox', `0 0 ${formatNumber(size.width)} ${formatNumber(size.height)}`] as [
-            string,
-            string,
-          ],
-        ]),
+    ...(added ? [['viewBox', `0 0 ${added.join(' ')}`] as [string, string]] : []),
     ...rest,
   ]
   return {

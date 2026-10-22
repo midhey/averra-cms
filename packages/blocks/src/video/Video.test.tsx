@@ -136,6 +136,16 @@ describe('плеер по клику', () => {
     expect(iframe?.getAttribute('allow')).toBe(PLAYER_ALLOW)
     expect(iframe?.getAttribute('referrerpolicy')).toBe('strict-origin-when-cross-origin')
     expect(iframe?.hasAttribute('allowfullscreen')).toBe(true)
+    // Под плеером — ссылка на ролик: вдруг площадка в iframe не откроется
+    const fallback = document.querySelector<HTMLAnchorElement>('a[data-video-fallback]')
+    expect(fallback?.hidden).toBe(false)
+    expect(fallback?.getAttribute('href')).toBe(`https://www.youtube.com/watch?v=${YT}`)
+    expect(fallback?.textContent).toBe('Ролик не запускается? Откройте его на YouTube')
+  })
+
+  it('до клика запасная ссылка скрыта: без JS ссылка — сама обложка', () => {
+    mount()
+    expect(document.querySelector<HTMLAnchorElement>('a[data-video-fallback]')?.hidden).toBe(true)
   })
 
   it.each([

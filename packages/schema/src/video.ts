@@ -175,10 +175,16 @@ export function videoEmbedUrl(ref: VideoRef) {
 export const VIDEO_URL_MESSAGE =
   'Нужна ссылка на ролик YouTube, Rutube или VK Видео: например https://youtu.be/…, https://rutube.ru/video/… или https://vkvideo.ru/video-…'
 
-/** Поле «ссылка на ролик»: строка, которую можно разобрать в ролик одной из трёх площадок */
+/**
+ * Поле «ссылка на ролик»: строка, которую можно разобрать в ролик одной из трёх площадок. Шаблон
+ * адреса попадает в JSON Schema как pattern — по нему редактор делает поле однострочным, как у
+ * других ссылок (Enter не вставит перенос). abort — чтобы человек в админке увидел одну
+ * ошибку, а не две одинаковых
+ */
 export const VideoUrl = z
   .string()
   .trim()
-  .min(1, VIDEO_URL_MESSAGE)
+  .min(1, { message: VIDEO_URL_MESSAGE, abort: true })
   .max(500)
+  .regex(/^https?:\/\//i, { message: VIDEO_URL_MESSAGE, abort: true })
   .refine((value) => parseVideoUrl(value) !== undefined, VIDEO_URL_MESSAGE)

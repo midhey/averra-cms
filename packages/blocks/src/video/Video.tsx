@@ -11,7 +11,8 @@ const COVER_SIZES = '(min-width: 72rem) 72rem, 100vw'
  * Ролик с площадки. На странице — только обложка и ссылка «Смотреть на …» на страницу ролика:
  * без JavaScript она просто открывает площадку в новой вкладке. Плеер (iframe площадки) ставит
  * скрипт player-dom.ts по клику, адрес плеера — в data-video-embed. До клика страница к площадке
- * не обращается: ни iframe, ни обложки площадки, ни preconnect. Рамка 16:9 держит место заранее
+ * не обращается: ни iframe, ни обложки площадки, ни preconnect. Рамка 16:9 держит место заранее.
+ * Под плеером скрипт показывает ссылку на ролик — на случай, если плеер площадки не загрузится
  */
 export function Video({ id, data, headingLevel, media, priority }: BlockComponentProps<'video'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
@@ -62,6 +63,20 @@ export function Video({ id, data, headingLevel, media, priority }: BlockComponen
               <span className={styles.placeholder} />
             )}
           </div>
+          {ref && (
+            // Запасная ссылка: площадка может не открыться в iframe (сеть, блокировка) — тогда на
+            // месте ролика пустой плеер, а обложки-ссылки уже нет. Показывает её скрипт плеера
+            <a
+              className={styles.fallback}
+              href={videoWatchUrl(ref)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-video-fallback=""
+              hidden
+            >
+              Ролик не запускается? Откройте его на {provider}
+            </a>
+          )}
           {data.caption && <figcaption className={styles.caption}>{data.caption}</figcaption>}
         </figure>
       </div>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { video } from './blocks'
 import { PageContent } from './page'
-import { parseVideoUrl, VIDEO_URL_MESSAGE, videoEmbedUrl, videoWatchUrl } from './video'
+import { parseVideoUrl, VIDEO_URL_MESSAGE, VideoUrl, videoEmbedUrl, videoWatchUrl } from './video'
 
 const YT = 'aqz-KE-bpKQ'
 const RT = '0123456789abcdef0123456789abcdef'
@@ -132,6 +133,20 @@ describe('блок «Видео»', () => {
       path: ['blocks', 0, 'props', 'url'],
       message: VIDEO_URL_MESSAGE,
     })
+  })
+
+  it('ссылка — с шаблоном адреса: в редакторе однострочное поле, ошибка одна', () => {
+    const schema = z.toJSONSchema(VideoUrl) as { pattern?: string; maxLength?: number }
+    expect(schema.pattern).toBeDefined()
+    expect(new RegExp(schema.pattern ?? '').test('https://youtu.be/x')).toBe(true)
+    for (const url of ['', 'youtu.be/aqz-KE-bpKQ', 'https://example.com/v.mp4']) {
+      const result = VideoUrl.safeParse(url)
+      expect(
+        result.error?.issues.map((issue) => issue.message),
+        url,
+      ).toEqual([VIDEO_URL_MESSAGE])
+    }
+    expect(VideoUrl.parse(` HTTPS://youtu.be/${YT} `)).toBe(`HTTPS://youtu.be/${YT}`)
   })
 
   it('заголовок обязателен, лишних полей нет', () => {

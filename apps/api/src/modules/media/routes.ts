@@ -90,7 +90,7 @@ const svgRejected: Record<SvgFailure | 'embedded' | 'embedded_pixels' | 'too_lar
   ),
   encoding: unsupported('SVG должен быть в кодировке UTF-8: пересохраните файл'),
   no_size: unsupported(
-    'У SVG нет размеров: нужен viewBox или width и height числами. Экспортируйте файл заново',
+    'У SVG нет размеров: нужен viewBox или width и height в пикселях, мм, см или дюймах. Экспортируйте файл заново',
   ),
   bad_size: unsupported(
     `Размеры SVG слишком большие: не больше ${MAX_SVG_SIDE.toLocaleString('ru-RU')} по стороне`,

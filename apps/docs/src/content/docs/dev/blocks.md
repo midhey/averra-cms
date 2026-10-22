@@ -108,22 +108,30 @@ export const cta = defineBlock({
 - **Разметка** — `CookieNotice` и `LegalFooter` в `packages/blocks/src/cookie/`. Что показать,
   решает `cookieNoticeView(settings, опубликованные адреса)`: нет счётчика — уведомления нет;
   страница политики не опубликована — ссылки нет. Корень `[data-cookie-consent]` отрисован с
-  `hidden`: без JS уведомления не видно. Стили — CSS-модуль на переменных темы сайта.
+  `hidden`: без JS уведомления не видно. Подвал, в котором без политики осталась одна кнопка
+  «Настройки cookie», тоже `hidden` (`data-legal-footer`) — его показывает скрипт. Стили —
+  CSS-модуль на переменных темы сайта.
 - **Логика** — `consent.ts`: чистый контроллер `createConsent(config, ports)` без DOM. Читает
-  выбор из cookie `averra_consent` (`analytics`, `necessary`, `notice`), решает, показать ли
+  выбор из cookie `averra_consent` (`necessary`, `analytics.ym.ga`, `notice.ym` — у согласия и
+  «Понятно» набор сервисов: `ym` — Метрика, `ga` — GA4). Набор не покрывает счётчики сайта сейчас
+  (добавили GA4) — выбора нет, как и у старого значения без набора. Дальше решает, показать ли
   уведомление, и просит порт вставить счётчики — в режиме согласия только при выборе `analytics`
   и только один раз. В режиме уведомления ответом считаются `notice` и `analytics`: отказ
   `necessary`, данный ещё в режиме согласия, снова показывает уведомление. Отзыв после загрузки —
   порт `forgetAnalytics`: стереть cookie и ключи localStorage и sessionStorage `_ym*`, `_ga*`,
   `_gid`, `_gat*`, `_gcl*` (cookie — на хосте и родительских доменах) и перезагрузить страницу.
   Тесты — `consent.test.ts`.
-- **DOM** — `consent-dom.ts` (`startCookieConsent`, экспорт `@averra/blocks/cookie-consent`):
-  кнопки по `data-consent-action`, «Настройки cookie» по `data-consent-open`, номера счётчиков из
-  `data-metrika` и `data-ga4` (ещё раз проверяются шаблоном). Окна — `<dialog>`: `showModal()`, а
-  где его нет (iOS до 15.4) — атрибут `open`; ловушка фокуса, Esc и возврат фокуса — свои, одни
-  для обоих путей. В таких браузерах нет и глобального `HTMLDialogElement`: окно узнаём по тегу,
-  а не `instanceof`, методы `<dialog>` проверяем перед вызовом. Пока открыто окно настроек, у
-  корня атрибут `data-settings-open` — уведомление под окном приглушено. Счётчики вставляются теми
+- **DOM** — `consent-dom.ts` (`startCookieConsent`, экспорт `@averra/blocks/cookie-consent`): кнопки
+  по `data-consent-action`, «Настройки cookie» по `data-consent-open`, номера счётчиков из
+  `data-metrika` и `data-ga4` (ещё раз проверяются шаблоном). Они есть в обоих режимах: в режиме
+  уведомления скрипт счётчики не грузит, а только пишет их набор в cookie. Окна — `<dialog>`:
+  `showModal()`, а где его нет (iOS до 15.4) — атрибут `open` и `aria-modal="true"`; ловушка фокуса,
+  Esc и возврат фокуса — свои, одни для обоих путей. Tab и Esc слушает `document`, а не окно: без
+  `showModal` фон не инертен, и клик по затемнению уводит фокус на body. Открытые окна — стопкой,
+  клавиши — у верхнего. «Окно по центру» при открытии фокусирует само себя (`tabindex="-1"`): первое
+  Enter не уводит на политику. В таких браузерах нет и глобального `HTMLDialogElement`: окно узнаём
+  по тегу, а не `instanceof`, методы `<dialog>` проверяем перед вызовом. Пока открыто окно настроек,
+  у корня атрибут `data-settings-open` — уведомление под окном приглушено. Счётчики вставляются теми
   же вызовами, что в их официальных кодах (очереди `ym.a` и `dataLayer` — объекты `arguments`), без
   вебвизора. Тесты — `consent-dom.test.tsx` в happy-dom, в том числе без `HTMLDialogElement`,
   `showModal` и `close`.
@@ -143,11 +151,13 @@ export const cta = defineBlock({
 
 - **Разбор ссылки** — `parseVideoUrl` в `packages/schema/src/video.ts`: строго по домену, пути и
   виду id (YouTube — 11 символов, Rutube — 32 hex, VK — `owner_id`), без логина и порта в адресе.
-  Схема поля — `VideoUrl` (`refine` с примером в сообщении). Ссылки на сайт строятся из разобранного
-  id: `videoWatchUrl` (страница ролика; у VK — с ключом `list=ln-…` ролика с доступом по ссылке) и
-  `videoEmbedUrl` (плеер с автозапуском; YouTube — `youtube-nocookie.com`, у Rutube `autoplay=true`
-  площадка не гарантирует). Новая площадка — ветка в `parseVideoUrl` и обеих функциях, префикс плеера в
-  `isEmbedUrl` и образцы в `video.test.ts`.
+  Схема поля — `VideoUrl`: шаблон `^https?://` (в JSON Schema — `pattern`, поэтому поле в
+  редакторе однострочное) и `refine` с примером в сообщении. Ссылки на сайт строятся из
+  разобранного id: `videoWatchUrl` (страница ролика; у VK — с ключом `list=ln-…` ролика с
+  доступом по ссылке) и `videoEmbedUrl` (плеер с автозапуском; YouTube — `youtube-nocookie.com`, у
+  Rutube `autoplay=true` площадка не гарантирует). Новая площадка — ветка в `parseVideoUrl` и обеих
+  функциях, префикс плеера в `isEmbedUrl`, образцы в `video.test.ts` и строка получателя в шаблоне
+  политики (`VIDEO_RECIPIENTS` в `packages/schema/src/legal.ts`).
 - **Разметка** — `Video.tsx`: рамка 16 : 9 через `padding-top: 56.25%` (`aspect-ratio` нет в Safari
   до iOS 15), в ней ссылка на страницу ролика (`target="_blank"`, `rel="noopener noreferrer"`) с
   обложкой (`Picture`) или заглушкой из переменных темы. Адрес плеера — в `data-video-embed`. До
@@ -155,7 +165,10 @@ export const cta = defineBlock({
 - **Скрипт** — `player-dom.ts` (`startVideoPlayers`, экспорт `@averra/blocks/video-player`): один
   слушатель на документ, клик без модификаторов заменяет ссылку iframe с `sandbox`, `allow` и
   `referrerpolicy="strict-origin-when-cross-origin"` (без Referer YouTube не играет) и переводит
-  фокус в плеер. Ctrl/⌘/Shift-клик и средняя кнопка остаются ссылкой. Сборка —
+  фокус в плеер. Под плеером он показывает скрытую ссылку на ролик (`data-video-fallback`): если
+  площадка недоступна, посетитель не останется перед пустым плеером. Ctrl/⌘/Shift-клик и средняя
+  кнопка остаются ссылкой. Права песочницы проверены вживую на Rutube и VK — см.
+  [решение](/averra-cms/decisions/svg-and-video/#чем-платим). Сборка —
   `apps/renderer/src/components/VideoPlayer.astro`, рендерится только при блоке `video`.
 - Тесты — `Video.test.tsx` в happy-dom: до клика нет iframe и внешних загрузок, клик ставит плеер,
   модификаторы и чужой адрес — нет. В браузере — `e2e/tests/video.spec.ts`.
