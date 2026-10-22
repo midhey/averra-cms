@@ -7,8 +7,9 @@
 export function legacySiteTarget(pathname: string, searchStr = '', hash = '') {
   const match = /^\/sites(?:\/[^/]+)?(\/.*)?$/.exec(pathname)
   if (!match) return undefined
-  const rest = match[1] ?? ''
-  const path = rest === '' ? '/' : rest
+  // Начальные / и \ схлопываются в одну /: //evil.example или /\evil.example браузер прочёл бы как
+  // адрес другого сайта. Роутер такие перенаправления и сам не пускает, но защита — здесь
+  const path = (match[1] ?? '').replace(/^[\\/]*/, '/')
   const anchor = hash === '' || hash.startsWith('#') ? hash : `#${hash}`
   return `${path}${searchStr}${anchor}`
 }

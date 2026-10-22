@@ -79,6 +79,13 @@ describe('<head> страницы', () => {
     expect(head(s, page('ceny'))).toContain('<title>Цены — Ремонт &amp; Ко</title>')
   })
 
+  it('знак доллара в заголовке страницы не ломает шаблон: $& и $$ — как есть', () => {
+    const s = site({ titleTemplate: '%s — Ремонт у Ивана' })
+    const dollar = page('kurs', { title: 'Курс $& доллара и $$' })
+    expect(documentTitle(s, dollar)).toBe('Курс $& доллара и $$ — Ремонт у Ивана')
+    expect(head(s, dollar)).toContain('<title>Курс $&amp; доллара и $$ — Ремонт у Ивана</title>')
+  })
+
   it('описание страницы главнее описания сайта; пустого нет вовсе', () => {
     const s = site({ description: 'Ремонт квартир в Твери' })
     expect(head(s, page('ceny'))).toContain(
@@ -328,6 +335,9 @@ describe('robots.txt и sitemap.xml', () => {
       page('svoya', {
         content: { blocks: [], seo: { canonical: 'https://remont.example/svoya/' } },
       }),
+      // Служебные адреса из старой базы: /api/ закрыт в robots.txt, /500/ на сервере нет
+      page('api'),
+      page('500'),
     ])
     expect(xml).toBe(
       [

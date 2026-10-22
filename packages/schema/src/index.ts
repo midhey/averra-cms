@@ -109,6 +109,7 @@ export {
 export {
   defaultNotFoundContent,
   ExistingPageSlug,
+  isServicePageSlug,
   MAIN_PAGE_SLUG,
   NewPage,
   NOT_FOUND_PAGE_SLUG,
@@ -122,10 +123,12 @@ export {
   PageTemplate,
   PageTitle,
   pageTemplateContent,
+  RESERVED_PAGE_SLUGS,
   SEO_DESCRIPTION_MAX,
   SEO_DESCRIPTION_RECOMMENDED,
   SEO_TITLE_MAX,
 } from './page'
+export { countRu, pluralRu } from './plural'
 export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
 export {
   canonicalElsewhere,
@@ -170,6 +173,7 @@ export {
   readSiteSettings,
   redirectLocation,
   redirectTableIssues,
+  type SameSitePath,
   SeoDescription,
   SITE_ROOT_FILES,
   SiteLanguage,

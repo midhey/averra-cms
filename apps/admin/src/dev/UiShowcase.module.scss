@@ -111,3 +111,19 @@
 .pickName {
   font-weight: var(--font-weight-semibold);
 }
+
+// Сведения в широкой и узкой карточке рядом: раскладка по ширине списка, а не окна
+.factsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+
+  > * {
+    flex: 1 1 ui.rem(420);
+  }
+
+  > .narrowCard {
+    flex: 0 1 ui.rem(256);
+  }
+}

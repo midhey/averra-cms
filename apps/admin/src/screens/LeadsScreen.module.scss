@@ -11,8 +11,10 @@
   gap: var(--space-5);
   align-items: start;
 
+  // Карточке — не уже 360 px: на 1024 px список уступает ей место, иначе кнопки карточки не
+  // помещались в колонку в 256 px. На широком экране список, как и раньше, до 400 px
   @include ui.breakpoint(medium) {
-    grid-template-columns: minmax(ui.rem(280), ui.rem(400)) minmax(0, 1fr);
+    grid-template-columns: minmax(ui.rem(260), ui.rem(400)) minmax(ui.rem(360), 1fr);
   }
 }
 

@@ -59,16 +59,21 @@
   gap: var(--space-5);
 }
 
+// Сведения в две колонки (название и значение), когда на это хватает ширины самого списка, а не
+// окна: в узкой колонке на широком экране (карточка заявки рядом со списком на 1024 px) значение
+// иначе сжималось до буквы в строку. Без поддержки container queries — столбиком, как на телефоне
 .facts {
   display: grid;
   gap: var(--space-3);
+  container-type: inline-size;
 }
 
 .fact {
   display: grid;
   gap: var(--space-1) var(--space-4);
 
-  @include ui.breakpoint(small) {
+  // 180 px названия, отступ и не меньше 220 px значения
+  @container (min-width: 26rem) {
     grid-template-columns: ui.rem(180) minmax(0, 1fr);
   }
 }

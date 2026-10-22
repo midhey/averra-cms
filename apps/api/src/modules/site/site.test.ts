@@ -7,7 +7,7 @@ import { migrateDb } from '../../db/migrate'
 import { pages, sites } from '../../db/schema'
 import { createTestApi } from '../../testing'
 import { defaultSiteName, sitesRepo } from '../sites/repo'
-import { NO_INSTALLATION_SITE_ACCESS } from './routes'
+import { NO_INSTALLATION_SITE_ACCESS, NO_SITE_ACCESS_CODE } from './routes'
 
 // Одна установка — один сайт: какой сайт у установки, как он появляется и что видит пришедший
 // без id сайта в адресе (GET /api/site)
@@ -120,7 +120,7 @@ describe('GET /api/site', () => {
     const res = await installation(headers)
     expect(res.status).toBe(403)
     expect(await res.json()).toEqual({
-      error: { code: 'forbidden', message: NO_INSTALLATION_SITE_ACCESS },
+      error: { code: NO_SITE_ACCESS_CODE, message: NO_INSTALLATION_SITE_ACCESS },
     })
   })
 

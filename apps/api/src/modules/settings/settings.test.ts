@@ -6,6 +6,7 @@ import { pages, sites } from '../../db/schema'
 import { cachedIcons, ICO_SIZES, ICON_FILES, icoFromPngs } from '../../media/favicon'
 import type { SitePublisher } from '../../publish/queue'
 import { createTestApi } from '../../testing'
+import { sameSitePathOf } from './same-site'
 
 // Раздел «SEO»: настройки сайта целиком (GET), по частям (PATCH), права, проверки, которым нужна
 // база, и всё, что из настроек выходит наружу: снимок для рендерера, иконки, редиректы и 404
@@ -174,6 +175,43 @@ describe('чтение и сохранение', () => {
     ])
     expect((await saved(await read())).settings.url).toBe('')
     await saved(await patch({ redirects: [] }))
+  })
+
+  it('петлю видно и через порт по умолчанию, и через домен в punycode', async () => {
+    // Порт :443 — тот же сайт https://example.ru (адрес установки)
+    const viaPort = await patch({
+      redirects: [
+        { from: '/a', to: 'https://example.ru:443/b' },
+        { from: '/b', to: '/a' },
+      ],
+    })
+    expect(viaPort.status).toBe(409)
+    expect((await issues(viaPort)).map((issue) => issue.path)).toEqual([
+      'redirects.0.to',
+      'redirects.1.to',
+    ])
+    // Другой порт — уже другой адрес: не петля
+    await saved(await patch({ redirects: [{ from: '/a', to: 'https://example.ru:8443/a' }] }))
+
+    // Кириллический домен и та же ссылка в punycode
+    await saved(await patch({ redirects: [], url: 'https://пример.рф' }))
+    const viaPunycode = await patch({
+      redirects: [{ from: '/a', to: 'https://xn--e1afmkfd.xn--p1ai/a/' }],
+    })
+    expect(viaPunycode.status).toBe(409)
+    expect(await issues(viaPunycode)).toEqual([
+      { path: 'redirects.0.to', message: 'Редирект ведёт сам на себя' },
+    ])
+    await saved(await patch({ redirects: [], url: '' }))
+  })
+
+  it('разбор адреса для петель: хост целиком, путь — как в адресе', () => {
+    const path = sameSitePathOf('https://пример.рф')
+    expect(path('https://ПРИМЕР.рф/цены?x=1')).toBe('/%D1%86%D0%B5%D0%BD%D1%8B')
+    expect(path('https://xn--e1afmkfd.xn--p1ai')).toBe('/')
+    expect(path('https://пример.рф.evil.example/a')).toBeUndefined()
+    expect(path('http://пример.рф/a')).toBeUndefined()
+    expect(path('not a url')).toBeUndefined()
   })
 
   it('поле, которое эта версия не понимает (после отката), читается по умолчанию и не затирается', async () => {

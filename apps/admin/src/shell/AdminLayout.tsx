@@ -1,15 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import { signOut } from '../auth'
+import { useQuery } from '@tanstack/react-query'
+import { Link, Outlet } from '@tanstack/react-router'
 import { messageOf } from '../errors'
-import {
-  currentSiteQuery,
-  mailQuery,
-  meQuery,
-  siteQuery,
-  statusQuery,
-  switchUser,
-} from '../queries'
+import { currentSiteQuery, mailQuery, meQuery, siteQuery, statusQuery } from '../queries'
 import {
   AppShell,
   NavLinkContent,
@@ -23,6 +15,7 @@ import { StatusPill } from '../ui/StatusPill'
 import styles from './Shell.module.scss'
 import { SiteHeader } from './SiteHeader'
 import { roleName, type SiteSectionId, seesInstallation, siteSections } from './sidebar-model'
+import { useLogout } from './use-logout'
 
 /**
  * Оболочка закрытых экранов (кроме редактора): боковая панель по концепту и экран справа.
@@ -147,15 +140,7 @@ function VersionAside({ status }: { status: { version: string; problems: readonl
 }
 
 function UserBlock({ name, roleName }: { name: string; roleName: string }) {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const logout = useMutation({
-    mutationFn: signOut,
-    onSuccess: async () => {
-      await switchUser(queryClient, false)
-      await navigate({ to: '/login', search: {} })
-    },
-  })
+  const logout = useLogout()
   return (
     <>
       <SidebarUser

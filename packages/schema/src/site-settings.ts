@@ -21,9 +21,13 @@ export const TitleTemplate = z
     'Шаблон должен содержать %s ровно один раз: на его место встанет заголовок страницы',
   )
 
-/** Заголовок страницы по шаблону сайта. На главной шаблон не применяется (решает рендерер) */
+/**
+ * Заголовок страницы по шаблону сайта. На главной шаблон не применяется (решает рендерер).
+ * Подстановка функцией: строку замены replace разбирает, и заголовок «Курс $& доллара» иначе
+ * превратился бы в «Курс %s доллара»
+ */
 export function applyTitleTemplate(template: string, title: string) {
-  return template === '' ? title : template.replace(TITLE_PLACEHOLDER, title)
+  return template === '' ? title : template.replace(TITLE_PLACEHOLDER, () => title)
 }
 
 /** Описание сайта по умолчанию: тот же предел, что у описания страницы */
@@ -273,17 +277,17 @@ export const Redirect = z.strictObject({ from: RedirectFrom, to: RedirectTo })
 export type Redirect = z.infer<typeof Redirect>
 
 /**
- * Путь, куда ведёт ссылка «куда» на этом сайте (без ?… и #…), или undefined — ссылка на другой
- * сайт. siteUrl — адрес сайта (https://домен): ссылка https на него — тоже на этот сайт
+ * Путь ссылки https на этот сайт (как в адресе, можно закодированный) или undefined — ссылка на
+ * другой сайт. Даёт тот, кто знает адрес сайта и умеет разбирать URL (API): у схемы нет API среды,
+ * а сравнивать надо хост целиком — с портом по умолчанию (:443) и доменом в punycode
  */
-function targetPath(to: string, siteUrl: string | undefined) {
+export type SameSitePath = (href: string) => string | undefined
+
+/** Путь, куда ведёт ссылка «куда» на этом сайте (без ?… и #…), или undefined — на другой сайт */
+function targetPath(to: string, sameSitePath: SameSitePath | undefined) {
   if (isInternalPath(to)) return normalizeRedirectPath(pathOf(to))
-  if (!siteUrl) return undefined
-  const origin = siteUrl.toLowerCase().replace(/\/$/, '')
-  if (!to.toLowerCase().startsWith(origin)) return undefined
-  const rest = to.slice(origin.length)
-  if (rest !== '' && !/^[/?#]/.test(rest)) return undefined
-  return normalizeRedirectPath(pathOf(rest.startsWith('/') ? rest : `/${rest}`))
+  const path = sameSitePath?.(to)
+  return path === undefined ? undefined : normalizeRedirectPath(pathOf(path))
 }
 
 export type RedirectIssue = { index: number; field: 'from' | 'to'; message: string }
@@ -291,12 +295,12 @@ export type RedirectIssue = { index: number; field: 'from' | 'to'; message: stri
 /**
  * Ошибки таблицы редиректов: повтор «откуда», редирект на себя и петли — цепочка по адресам
  * этого сайта не должна вернуться туда, откуда начала (браузер показал бы «слишком много
- * перенаправлений»). Цепочки без петель допустимы. siteUrl — адрес сайта: без него ссылка
- * https на свой же домен считается внешней, и петлю через неё найдёт только API
+ * перенаправлений»). Цепочки без петель допустимы. sameSitePath узнаёт ссылки https на свой
+ * сайт: без него они считаются внешними, и петлю через них найдёт только API
  */
 export function redirectTableIssues(
   redirects: readonly Redirect[],
-  siteUrl?: string,
+  sameSitePath?: SameSitePath,
 ): RedirectIssue[] {
   const issues: RedirectIssue[] = []
   const seen = new Set<string>()
@@ -309,10 +313,10 @@ export function redirectTableIssues(
   const byFrom = new Map(redirects.map(({ from, to }) => [from, to]))
   const next = (path: string) => {
     const to = byFrom.get(path)
-    return to === undefined ? undefined : targetPath(to, siteUrl)
+    return to === undefined ? undefined : targetPath(to, sameSitePath)
   }
   redirects.forEach(({ from, to }, index) => {
-    if (targetPath(to, siteUrl) === from) {
+    if (targetPath(to, sameSitePath) === from) {
       issues.push({ index, field: 'to', message: 'Редирект ведёт сам на себя' })
       return
     }

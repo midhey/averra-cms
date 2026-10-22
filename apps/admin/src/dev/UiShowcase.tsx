@@ -25,6 +25,7 @@ import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
 import { Icon, iconNames } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
+import { Facts } from '../ui/Screen'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
 import { TabList, Tabs } from '../ui/Tabs'
@@ -47,6 +48,12 @@ const sections = [
   { id: 'dialog', label: 'Окно', icon: 'mail' },
   { id: 'seo', label: 'SEO', icon: 'search' },
   { id: 'icons', label: 'Иконки', icon: 'settings' },
+] as const
+
+const leadFacts = [
+  ['Имя', 'Мария Иванова'],
+  ['Телефон', '+7 921 777-88-99'],
+  ['Комментарий', 'Нужен ремонт ванной, 4 м²'],
 ] as const
 
 type Page = { title: string; slug: string; tone: StatusTone; state: string; updated: string }
@@ -474,6 +481,16 @@ export function UiShowcase() {
               </a>
             </li>
           </ul>
+          {/* Сведения раскладываются по ширине своего списка, а не окна: в широкой карточке —
+              в две колонки, в узкой (карточка заявки рядом со списком на 1024 px) — столбиком */}
+          <div className={styles.factsRow}>
+            <Card>
+              <Facts label="Сведения в широкой карточке" items={leadFacts} />
+            </Card>
+            <Card className={styles.narrowCard}>
+              <Facts label="Сведения в узкой карточке" items={leadFacts} />
+            </Card>
+          </div>
           <DataTable
             caption="Страницы сайта"
             columns={[

@@ -130,6 +130,13 @@ describe('шаблон заголовка', () => {
     expect(applyTitleTemplate('%s — Ремонт', 'Цены')).toBe('Цены — Ремонт')
     expect(applyTitleTemplate('', 'Цены')).toBe('Цены')
   })
+
+  it('заголовок со знаком доллара подставляется как есть: $& и $` — не шаблоны замены', () => {
+    const template = '%s — Ремонт у Ивана'
+    expect(applyTitleTemplate(template, 'Курс $& доллара')).toBe('Курс $& доллара — Ремонт у Ивана')
+    expect(applyTitleTemplate(template, "Тариф $' B")).toBe("Тариф $' B — Ремонт у Ивана")
+    expect(applyTitleTemplate(template, 'Цена $$ и $`')).toBe('Цена $$ и $` — Ремонт у Ивана')
+  })
 })
 
 describe('адрес сайта', () => {
@@ -253,7 +260,7 @@ describe('редиректы', () => {
     expect(issuesOf(parse([{ from, to: '/new' }]))[0]?.message).toMatch(/служебный файл/)
   })
 
-  it('ссылка https на свой же домен — тоже петля, если известен адрес сайта', () => {
+  it('ссылка https на свой же домен — тоже петля, если её узнаёт sameSitePath', () => {
     const redirects = Redirects.parse([
       { from: '/a', to: 'https://Example.ru/b?x=1' },
       { from: '/b', to: '/a' },
@@ -263,7 +270,14 @@ describe('редиректы', () => {
     ])
     // Без адреса сайта такие ссылки внешние: схема их пропускает
     expect(redirectTableIssues(redirects)).toEqual([])
-    expect(redirectTableIssues(redirects, 'https://example.ru')).toEqual([
+    // Подставной разбор адреса: настоящий, на URL, — у API (modules/settings/same-site.ts)
+    const sameSitePath = (href: string) => {
+      const match = /^https:\/\/example\.ru(?=[/?#]|$)(.*)$/i.exec(href)
+      if (!match) return undefined
+      const rest = match[1] ?? ''
+      return rest.startsWith('/') ? rest : `/${rest}`
+    }
+    expect(redirectTableIssues(redirects, sameSitePath)).toEqual([
       { index: 0, field: 'to', message: 'Петля: цепочка редиректов от /a возвращается на /a' },
       { index: 1, field: 'to', message: 'Петля: цепочка редиректов от /b возвращается на /b' },
       { index: 2, field: 'to', message: 'Редирект ведёт сам на себя' },

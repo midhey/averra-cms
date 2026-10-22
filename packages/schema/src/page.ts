@@ -89,6 +89,18 @@ export const MAIN_PAGE_SLUG = 'index'
 export const NOT_FOUND_PAGE_SLUG = '404'
 
 /**
+ * Адреса, которые заняты не страницами. /api/ — приём форм на домене сайта, он закрыт в
+ * robots.txt, и страница там попала бы в карту сайта вопреки ему. 500 Astro собирает в 500.html,
+ * а не в 500/index.html: на сервере по /500/ такой страницы нет. Уже созданные страницы с этими
+ * адресами (ExistingPageSlug их пускает) не индексируются — см. isServicePageSlug
+ */
+export const RESERVED_PAGE_SLUGS = ['api', '500'] as const
+
+/** Страница со служебным адресом из старой базы: её нет в карте сайта, у неё noindex */
+export const isServicePageSlug = (slug: string) =>
+  (RESERVED_PAGE_SLUGS as readonly string[]).includes(slug)
+
+/**
  * Адрес страницы — часть URL сайта: латиница в нижнем регистре и цифры, дефис только между
  * ними. Без пробелов, кириллицы и висящих дефисов: такой адрес не надо кодировать в ссылке
  */
@@ -101,6 +113,10 @@ export const PageSlug = z
     /^[a-z0-9]+(-[a-z0-9]+)*$/,
     'Только латиница в нижнем регистре, цифры и дефис между ними, например o-nas',
   )
+  .refine((slug) => !isServicePageSlug(slug), {
+    error: (issue) =>
+      `Адрес /${String(issue.input)}/ занят служебной частью сайта: выберите другой`,
+  })
 
 /**
  * Адрес уже существующей страницы — мягче, чем PageSlug. До строгой схемы адресов API принимал

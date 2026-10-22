@@ -17,6 +17,7 @@ import { validate } from '../../validate'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
 import { effectiveSiteUrl, settingsRepo } from './repo'
+import { sameSitePathOf } from './same-site'
 
 const SiteParams = z.object({ siteId: Uuid() })
 
@@ -111,7 +112,7 @@ export function settingsRoutes({ db, siteUrl, publisher, log }: SettingsDeps) {
     const url = effectiveSiteUrl({ url: patch.url ?? stored.url }, siteUrl)
     if (!url) return []
     const redirects = patch.redirects ?? stored.redirects
-    return redirectTableIssues(redirects, url).map((issue) => {
+    return redirectTableIssues(redirects, sameSitePathOf(url)).map((issue) => {
       if (patch.redirects) {
         return { path: `redirects.${issue.index}.${issue.field}`, message: issue.message }
       }

@@ -143,6 +143,19 @@ describe('canonical', () => {
   })
 
   it.each([
+    ['/uslugi', 'https://remont.example/uslugi/'],
+    ['/uslugi?utm=1#tseny', 'https://remont.example/uslugi/?utm=1#tseny'],
+    ['https://remont.example/uslugi', 'https://remont.example/uslugi/'],
+    ['https://Remont.example/uslugi/', 'https://remont.example/uslugi/'],
+    ['/uslugi/', 'https://remont.example/uslugi/'],
+    ['/ceny-i-uslugi/price.pdf', 'https://remont.example/ceny-i-uslugi/price.pdf'],
+    ['/цены', 'https://remont.example/%D1%86%D0%B5%D0%BD%D1%8B/'],
+    ['https://other.example/uslugi', 'https://other.example/uslugi'],
+  ])('другая страница своего сайта «%s» — как в карте сайта: %s', (canonical, url) => {
+    expect(pageCanonicalUrl({ slug: 'ceny', seo: { canonical } }, site.url)).toBe(url)
+  })
+
+  it.each([
     [undefined, false],
     ['/ceny/', false],
     ['/ceny', false],

@@ -480,13 +480,14 @@ describe('полная установка (подделки docker и сети)'
     expect(noToken.calls()).not.toContain('compose pull')
   })
 
-  it('образы не скачались — подсказка различает закрытый пакет и несуществующую версию', () => {
-    const dir = posix(join(tempDir(), 'inst'))
+  it('образы не скачались — подсказка называет оба случая: закрытый пакет и нет версии', () => {
     // Так отвечает GHCR: публичный пакет без такого тега и закрытый пакет без входа
     for (const pullError of [
       'Error response from daemon: manifest unknown',
       'Error response from daemon: denied',
     ]) {
+      // Своя папка на каждый ответ: вторая установка не идёт поверх .env первой
+      const dir = posix(join(tempDir(), 'inst'))
       const run = install([...required, '--dir', dir, '--yes'], {
         fakes: { dns: dnsOk, pullError },
         env: { AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
@@ -791,8 +792,7 @@ describe('Caddyfile: кеш', () => {
   it('админка: index.html и экраны SPA — no-cache на всю ветку, а не только на /index.html', () => {
     const admin = handles(siteBlock('{$ADMIN_DOMAIN}'))
     const spa = admin.find((branch) => branch.matcher === '')
-    // header выполняется раньше try_files и видит
-    // исходный путь: матчер по /index.html не сработал бы
+    // header выполняется раньше try_files и видит исходный путь: матчер по /index.html не сработает
     expect(spa?.body).toMatch(/^\t\theader Cache-Control "no-cache"$/m)
     expect(spa?.body).toContain('try_files {path} /index.html')
     expect(siteBlock('{$ADMIN_DOMAIN}')).not.toMatch(/header \/index\.html/)
@@ -837,10 +837,10 @@ describe('Caddyfile: кеш', () => {
     const site = siteBlock('{$SITE_DOMAIN}')
     const errors = /^\thandle_errors 404 \{\n([\s\S]*?)^\t\}/m.exec(site)?.[1] ?? ''
     expect(errors).toContain('reverse_proxy api:4000')
-    // Путь — исходный, до перезаписей: API ищет по нему редирект (GET /api/site/fallback/*)
-    expect(errors).toMatch(
-      /^\t\t\trewrite \/api\/site\/fallback\{http\.request\.orig_uri\.path\}$/m,
-    )
+    // Путь — исходный и экранированный: API ищет по нему редирект (GET /api/site/fallback/*), а
+    // %3F в пути не становится строкой запроса. Раскодированный orig_uri.path здесь нельзя
+    expect(errors).toMatch(/^\t\t\trewrite \/api\/site\/fallback\{http\.request\.uri\.path\}$/m)
+    expect(errors).not.toContain('orig_uri')
     expect(errors).toContain('import security')
     // Своего текста 404 у Caddy больше нет: страницу 404 отдаёт API из релиза
     expect(errors).not.toContain('respond')

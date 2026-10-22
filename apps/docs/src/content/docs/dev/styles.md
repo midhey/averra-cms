@@ -49,6 +49,9 @@ sidebar:
 - Размеры — `ui.rem()`; медиазапросы — `ui.breakpoint()` (от ширины) и `ui.breakpoint-down()`
   (уже неё), без сырых `@media` по ширине; кольцо фокуса — `ui.focus-ring`; анимации — с
   `ui.reduced-motion`.
+- Раскладка части экрана, которая живёт и в широкой колонке, и в узкой, — по ширине своего
+  контейнера: `container-type: inline-size` и `@container (min-width: …)`, как у списка сведений
+  (`Facts`). Без поддержки container queries должна остаться рабочая узкая раскладка.
 - Классы CSS-модулей — `camelCase`; в пакете `ui` — kebab-case и BEM.
 - **Глобальный слой** (preset, тема, шрифты) — только в `apps/admin/src/styles/global.scss`. Он
   ставится отдельным `<style data-admin-global>` и **не попадает в предпросмотр**: сброс и токены

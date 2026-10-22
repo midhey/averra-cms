@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hero } from './blocks'
-import { NewPage, PageContent, PageSlug, pageTemplateContent } from './page'
+import { isServicePageSlug, NewPage, PageContent, PageSlug, pageTemplateContent } from './page'
 import { SiteName } from './site'
 
 describe('PageSlug', () => {
@@ -28,6 +28,18 @@ describe('PageSlug', () => {
 
   it('объясняет человеку, какой адрес нужен', () => {
     expect(PageSlug.safeParse('O nas').error?.issues[0]?.message).toMatch(/латиница/)
+  })
+
+  it.each(['api', '500'])('служебный адрес «%s» новой странице не дать', (slug) => {
+    expect(PageSlug.safeParse(slug).error?.issues).toEqual([
+      expect.objectContaining({
+        message: `Адрес /${slug}/ занят служебной частью сайта: выберите другой`,
+      }),
+    ])
+    // Похожие адреса — обычные
+    expect(PageSlug.safeParse(`${slug}-docs`).success).toBe(true)
+    expect(isServicePageSlug(slug)).toBe(true)
+    expect(isServicePageSlug('apis')).toBe(false)
   })
 
   it('на пустой и слишком длинный адрес — одна ошибка, без лишней «не та латиница»', () => {

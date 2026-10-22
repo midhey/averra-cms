@@ -1,6 +1,7 @@
 import { type ErrorComponentProps, Link } from '@tanstack/react-router'
-import { screenErrorOf } from '../errors'
-import { buttonClassName, Spinner } from '../ui/Button'
+import { ApiRequestError, messageOf, screenErrorOf } from '../errors'
+import { useLogout } from '../shell/use-logout'
+import { Button, buttonClassName, Spinner } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -24,15 +25,38 @@ const backHome = (
   </Link>
 )
 
+/**
+ * Нет доступа к сайту установки (участник другого сайта старой базы): обзор ответил бы той же
+ * ошибкой, поэтому вместо «К обзору сайта» — выйти и войти под другим пользователем
+ */
+const isNoSiteAccess = (error: unknown) =>
+  error instanceof ApiRequestError && error.code === 'no_site_access'
+
 /** Не загрузился сайт или страница (или экран сломался): что случилось и куда вернуться */
-export function ErrorScreen({ error }: ErrorComponentProps) {
+export function ErrorScreen({ error }: Pick<ErrorComponentProps, 'error'>) {
   usePageTitle('Ошибка')
   return (
     <Screen narrow>
       <PageHeader title="Не получилось открыть" />
       <InlineAlert tone="danger">{screenErrorOf(error)}</InlineAlert>
-      <div>{backHome}</div>
+      {isNoSiteAccess(error) ? <LogoutAction /> : <div>{backHome}</div>}
     </Screen>
+  )
+}
+
+function LogoutAction() {
+  const logout = useLogout()
+  return (
+    <>
+      {logout.isError && (
+        <InlineAlert tone="danger">Не вышло выйти: {messageOf(logout.error)}</InlineAlert>
+      )}
+      <div>
+        <Button loading={logout.isPending} onClick={() => logout.mutate()}>
+          Выйти
+        </Button>
+      </div>
+    </>
   )
 }
 

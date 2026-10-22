@@ -24,8 +24,8 @@ const jpegFile: MediaFile = {
 const lowerAttributes = (html: string) =>
   html.replace(/ ([a-zA-Z]+)=/g, (_, name: string) => ` ${name.toLowerCase()}=`)
 
-// Имена атрибутов HTML не зависят от регистра, а React
-// пишет их как в JSX (srcSet): сравниваем в нижнем
+// Имена атрибутов HTML не зависят от регистра, а React пишет их как в JSX (srcSet): сравниваем в
+// нижнем
 const render = (media: MediaMap, priority = false) =>
   lowerAttributes(
     renderToStaticMarkup(

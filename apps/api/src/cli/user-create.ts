@@ -40,9 +40,7 @@ await run(async () => {
     const who = user.role === 'owner' ? 'владелец' : 'участник'
     console.log(`Создан ${who} ${user.name} <${user.email}>. Вход: ${config.ADMIN_URL}/login`)
     if (user.role === 'member') {
-      console.log(
-        `Дай доступ к сайту: pnpm member:add --email ${user.email} --site <id> --role editor`,
-      )
+      console.log(`Дай доступ к сайту: pnpm member:add --email ${user.email} --role editor|client`)
     }
   } finally {
     await close()

@@ -297,16 +297,25 @@ export function lineCount(locator: Locator) {
 
 /**
  * Элемент виден глазами, а не только диктору. toBeVisible считает видимым и `visually-hidden`
- * (1 × 1 px с clip-path), поэтому смотрим размер и обрезку у самого элемента и у всех предков
+ * (1 × 1 px с clip-path), и прозрачное, и уведённое за край страницы. Поэтому у самого элемента и
+ * у всех предков смотрим: размер не меньше 2 px (обрезка clip-path без крошечного размера —
+ * украшение, а не скрытие), непрозрачность и положение. Узел с display: contents своей рамки не
+ * имеет (0 × 0) — его пропускаем
  */
 export async function expectSeenByEye(locator: Locator) {
   await expect(locator).toBeVisible()
   const hidden = await locator.evaluate((element) => {
+    const view = element.ownerDocument.defaultView
     for (let node = element; node; node = node.parentElement) {
+      const style = view.getComputedStyle(node)
+      if (style.display === 'contents') continue
       const rect = node.getBoundingClientRect()
-      const style = node.ownerDocument.defaultView.getComputedStyle(node)
-      if (rect.width <= 1 || rect.height <= 1 || style.clipPath !== 'none') {
-        return `${node.tagName.toLowerCase()}.${node.className}`
+      const name = `${node.tagName.toLowerCase()}.${node.className}`
+      if (rect.width <= 1 || rect.height <= 1) return `${name}: размер ${rect.width}×${rect.height}`
+      if (Number(style.opacity) === 0) return `${name}: opacity 0`
+      // За левый или верхний край документа не прокрутить: left: -9999px и подобное
+      if (rect.right + view.scrollX <= 0 || rect.bottom + view.scrollY <= 0) {
+        return `${name}: за краем страницы`
       }
     }
     return null

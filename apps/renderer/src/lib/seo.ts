@@ -2,6 +2,7 @@ import {
   canonicalElsewhere,
   canonicalPath,
   Ga4Id,
+  isServicePageSlug,
   MAIN_PAGE_SLUG,
   type MediaFile,
   type MediaMap,
@@ -57,14 +58,16 @@ export const documentTitle = (site: SeoSite, page: SeoPage) =>
   pageDocumentTitle({ ...page, seo: page.content.seo }, site.settings.titleTemplate)
 
 /**
- * Попадает ли страница в индекс: сайт не скрыт, у страницы нет noindex, и это не страница 404
- * (её показывают на чужих адресах, в поиске ей не место)
+ * Попадает ли страница в индекс: сайт не скрыт, у страницы нет noindex, это не страница 404 (её
+ * показывают на чужих адресах, в поиске ей не место) и не страница со служебным адресом из старой
+ * базы (/api/ закрыт в robots.txt, /500/ на сервере не открывается — RESERVED_PAGE_SLUGS)
  */
 export function isIndexable(site: SeoSite, page: SeoPage) {
   return (
     !site.settings.hideFromSearch &&
     page.content.seo?.noindex !== true &&
-    page.slug !== NOT_FOUND_PAGE_SLUG
+    page.slug !== NOT_FOUND_PAGE_SLUG &&
+    !isServicePageSlug(page.slug)
   )
 }
 

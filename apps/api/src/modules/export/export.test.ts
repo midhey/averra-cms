@@ -48,8 +48,8 @@ async function buildRelease(siteId: string, name: string, files: Record<string, 
 describe('сайт статическим архивом', () => {
   it('до первой сборки — 409, после — ZIP текущей версии целиком и только её', async () => {
     const { headers } = await api.loginAs('owner')
-    // Свой сайт: папки версий других тестов файла его не задевают
-    // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
+    // Свой сайт: папки версий других тестов файла его не задевают. API сайтов не создаёт (одна
+    // установка — один сайт): сайт кладётся в базу напрямую
     const siteId = await api.createSite('Выгрузка статикой')
     const before = await api.app.request(url('static', siteId), { headers })
     expect(before.status).toBe(409)

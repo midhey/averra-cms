@@ -12,7 +12,9 @@ sidebar:
 
 - **pnpm 12.** Node под проект ставить не нужно: версия закреплена в `devEngines.runtime`
   (Node 24 LTS), pnpm скачает её сам и запускает на ней все скрипты, какая бы Node ни стояла
-  глобально. Чтобы запустить сам pnpm, хватит любой Node ≥ 18 с corepack: `corepack pnpm …`.
+  глобально. Чтобы запустить сам pnpm, хватит Node 18–24 с corepack: `corepack pnpm …`. В Node 25
+  и новее corepack не входит: поставьте его отдельно (`npm i -g corepack`) или возьмите
+  автономный pnpm.
 - Docker и PostgreSQL не нужны: база в разработке — встроенный PGlite.
 
 ```bash

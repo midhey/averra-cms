@@ -19,6 +19,11 @@ async function served(siteId: string, file: string) {
 
 /** Картинка в медиатеке демо-сайта через API: квадрат для иконки или баннер для соцсетей */
 async function uploadImage(siteId: string, width: number, height: number) {
+  return (await uploadMedia(siteId, width, height)).name
+}
+
+/** То же, но с id картинки — для SEO страницы, которую сохраняют через API */
+async function uploadMedia(siteId: string, width: number, height: number) {
   const name = `seo-${randomUUID().slice(0, 8)}.png`
   const data = await sharp({ create: { width, height, channels: 4, background: '#2f5bea' } })
     .png()
@@ -28,7 +33,8 @@ async function uploadImage(siteId: string, width: number, height: number) {
     form: { file: new File([new Uint8Array(data)], name, { type: 'image/png' }) },
   })
   expect(res.status, 'загрузка картинки').toBe(201)
-  return name
+  const created = res.status === 201 ? await res.json() : undefined
+  return { name, id: created?.id ?? '' }
 }
 
 /** Карточка раздела «SEO» по заголовку и её «Сохранить» */
@@ -453,4 +459,37 @@ test('SEO страницы в редакторе: советы до публик
   const devMissing = await fetch(`${urls.renderer}/og/net-takoy.png`)
   expect(devMissing.status).toBe(404)
   expect(await devMissing.text()).toContain('Страница не найдена')
+
+  // Вторая страница с canonical на первую (без косой черты, как часто пишут руками) и своей
+  // картинкой: на собранном сайте canonical и og:url — адрес первой в виде карты сайта, og:image —
+  // картинка медиатеки, а саму страницу карта сайта не знает
+  const photo = await uploadMedia(demoSite.id, 1200, 630)
+  const param = { siteId: demoSite.id, slug: 'ceny-2025' }
+  const copy = sites[':siteId'].pages[':slug']
+  const seo = { canonical: '/ceny', image: { mediaId: photo.id } }
+  const draft = { title: 'Цены 2025', content: { blocks: [], seo } }
+  expect((await copy.$put({ param, json: draft })).status).toBe(200)
+  expect((await copy.publish.$post({ param })).status).toBe(200)
+  let next = ''
+  await expect
+    .poll(
+      async () => {
+        next = await realpath(join(publishDir, demoSite.id, 'current')).catch(() => '')
+        return next !== '' && existsSync(join(next, 'ceny-2025', 'index.html'))
+      },
+      { timeout: 90_000 },
+    )
+    .toBe(true)
+  const copyHtml = await readFile(join(next, 'ceny-2025', 'index.html'), 'utf8')
+  expect(copyHtml).toContain(`<link rel="canonical" href="${urls.renderer}/ceny/">`)
+  expect(copyHtml).toContain(`<meta property="og:url" content="${urls.renderer}/ceny/">`)
+  expect(copyHtml).toMatch(
+    new RegExp(
+      `<meta property="og:image" content="${urls.renderer}/media/${photo.id}/1200[.]png">`,
+    ),
+  )
+  expect(existsSync(join(next, 'og', 'ceny-2025.png'))).toBe(false)
+  const nextSitemap = await readFile(join(next, 'sitemap.xml'), 'utf8')
+  expect(nextSitemap).toContain(`<loc>${urls.renderer}/ceny/</loc>`)
+  expect(nextSitemap).not.toContain('ceny-2025')
 })

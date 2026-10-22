@@ -5,6 +5,7 @@ import {
   type PageSeo,
   SEO_DESCRIPTION_RECOMMENDED,
 } from './page'
+import { pluralRu } from './plural'
 import { applyTitleTemplate, normalizeRedirectPath } from './site-settings'
 import type { Theme } from './theme'
 import { isInternalPath } from './url'
@@ -69,14 +70,39 @@ export function pageCanonicalUrl(
   // каноническим адресом: /ceny Caddy перенаправляет на /ceny/, и canonical разошёлся бы с картой
   // сайта, где лежит /ceny/
   const own = canonicalElsewhere(page, siteUrl) ? page.seo?.canonical?.trim() : undefined
-  if (own && !isInternalPath(own)) return own
+  // Другая страница своего сайта (путь или https://сайт/…) пишется так же, как в карте сайта:
+  // /ceny → /ceny/, иначе canonical вёл бы на адрес с редиректом Caddy
+  const ownPath = own && (isInternalPath(own) ? own : sameSiteRest(own, siteUrl))
+  if (own && !ownPath) return own
   if (!siteUrl) return undefined
   // Склейка, а не URL: у схемы нет API среды. Адрес сайта — https://домен без косой черты в
   // конце, путь — с / в начале. Не-ASCII в пути (/цены) кодируется, как сделал бы URL
-  const path = (own || canonicalPath(page.slug)).replace(/[^\p{ASCII}]+/gu, (chunk) =>
-    encodeURIComponent(chunk),
+  const path = (ownPath ? withPageSlash(ownPath) : canonicalPath(page.slug)).replace(
+    /[^\p{ASCII}]+/gu,
+    (chunk) => encodeURIComponent(chunk),
   )
   return `${siteUrl.replace(/\/+$/, '')}${path}`
+}
+
+/** Путь ссылки https на этот сайт (/… с ?… и #…), или undefined — ссылка на другой сайт */
+function sameSiteRest(href: string, siteUrl: string | null) {
+  if (!siteUrl) return undefined
+  const origin = siteUrl.toLowerCase().replace(/\/$/, '')
+  const lower = href.toLowerCase()
+  if (lower !== origin && !lower.startsWith(`${origin}/`)) return undefined
+  return href.slice(origin.length) || '/'
+}
+
+/**
+ * Путь страницы в том виде, в каком его отдаёт сервер: /ceny → /ceny/ (папка с index.html). Путь
+ * с расширением (/price.pdf) — файл, он остаётся как есть; ?… и #… сохраняются
+ */
+function withPageSlash(href: string) {
+  const split = href.search(/[?#]/)
+  const path = split === -1 ? href : href.slice(0, split)
+  const tail = split === -1 ? '' : href.slice(split)
+  if (path.endsWith('/') || /\.[^/]*$/.test(path)) return href
+  return `${path}/${tail}`
 }
 
 /**
@@ -91,10 +117,8 @@ export function canonicalElsewhere(
   if (!own) return false
   const ownPath = normalizeRedirectPath(canonicalPath(page.slug))
   if (isInternalPath(own)) return normalizeRedirectPath(own.split('?')[0] ?? own) !== ownPath
-  if (!siteUrl) return true
-  const origin = siteUrl.toLowerCase().replace(/\/$/, '')
-  if (!own.toLowerCase().startsWith(`${origin}/`) && own.toLowerCase() !== origin) return true
-  const rest = own.slice(origin.length) || '/'
+  const rest = sameSiteRest(own, siteUrl)
+  if (rest === undefined) return true
   return normalizeRedirectPath(rest.split('?')[0] ?? rest) !== ownPath
 }
 
@@ -178,15 +202,7 @@ export type SeoCheckPage = {
   seo?: PageSeo | undefined
 }
 
-function plural(count: number, [one, few, many]: readonly [string, string, string]) {
-  const mod10 = count % 10
-  const mod100 = count % 100
-  if (mod10 === 1 && mod100 !== 11) return one
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
-  return many
-}
-
-const chars = (count: number) => `${count} ${plural(count, ['символ', 'символа', 'символов'])}`
+const chars = (count: number) => `${count} ${pluralRu(count, ['символ', 'символа', 'символов'])}`
 
 /** Длина так, как её видит человек: «ё» и эмодзи — по одному символу */
 const lengthOf = (text: string) => [...text].length

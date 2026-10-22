@@ -30,6 +30,15 @@ describe('старые адреса /sites/<id>/…', () => {
     expect(legacySiteTarget(`/sites/${id}/pages`, '?q=1', '#new-page')).toBe('/pages?q=1#new-page')
   })
 
+  it.each([
+    [`/sites/${id}//evil.example`, '/evil.example'],
+    [`/sites/${id}/\\evil.example/a`, '/evil.example/a'],
+    [`/sites/${id}/\\/\\evil.example`, '/evil.example'],
+    ['/sites/x//evil.com', '/evil.com'],
+  ])('%s — путь на этом сайте, а не адрес другого: %s', (from, to) => {
+    expect(legacySiteTarget(from)).toBe(to)
+  })
+
   it.each(['/', '/pages', '/sitesmap', '/mail', '/status'])('%s — не старый адрес', (path) => {
     expect(legacySiteTarget(path)).toBeUndefined()
   })

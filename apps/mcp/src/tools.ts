@@ -229,7 +229,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Страница',
       description:
-        'Черновик и опубликованная версия страницы, с SEO (content.seo) и советами по SEO черновика (seoChecks).',
+        'Черновик и опубликованная версия страницы: SEO — в draft.seo и published.seo; советы по SEO черновика — в seoChecks.',
       inputSchema: PageRef,
       annotations: { readOnlyHint: true },
     },
@@ -241,7 +241,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Сохранить черновик',
       description:
-        'Сохраняет черновик страницы целиком: заголовок, все блоки и SEO (content.seo). Опубликованная версия не меняется. Возвращает советы по SEO (seoChecks).',
+        'Сохраняет черновик страницы целиком: заголовок, все блоки и SEO (content.seo; в ответе get_page оно в draft.seo). Опубликованная версия не меняется. Возвращает советы по SEO (seoChecks).',
       inputSchema: SaveDraftInput,
       annotations: { idempotentHint: true },
     },

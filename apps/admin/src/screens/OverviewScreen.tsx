@@ -31,6 +31,7 @@ import { mutedClassName, Screen, Section } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
 import { usePageTitle } from '../ui/use-page-title'
 import { useCurrentSite, useSiteId } from '../use-site'
+import { OtherSitesNote } from './OtherSitesNote'
 import styles from './OverviewScreen.module.scss'
 
 /** Обзор сайта по концепту: что опубликовано и собрано, карточки, страницы, последние заявки */
@@ -42,6 +43,7 @@ export function OverviewScreen() {
 function Overview({ siteId }: { siteId: string }) {
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
+  const { otherSites } = useCurrentSite()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   usePageTitle(site.name, 'обзор')
@@ -120,7 +122,7 @@ function Overview({ siteId }: { siteId: string }) {
 
       {site.hiddenFromSearch && canEditSeo(site.access) && <HiddenFromSearchNote />}
 
-      <OtherSitesNote />
+      <OtherSitesNote otherSites={otherSites} />
 
       <section aria-label="Коротко" className={styles.stats}>
         {canSeeLeads(site.access) && site.newLeads !== null && (
@@ -334,21 +336,6 @@ function HiddenFromSearchNote() {
     >
       Так и задумано, пока сайт делают. Перед запуском снимите флажок «Скрыть сайт от поисковиков» в
       разделе SEO — иначе сайт не появится в поиске.
-    </InlineAlert>
-  )
-}
-
-/**
- * Старая база с несколькими сайтами (так бывало до «одна установка — один сайт»): владелец видит,
- * что админка работает с одним, а остальные сайты целы. Только владельцу: API отдаёт число лишь ему
- */
-function OtherSitesNote() {
-  const { otherSites } = useCurrentSite()
-  if (!otherSites) return null
-  return (
-    <InlineAlert tone="info" title="В базе есть и другие сайты">
-      В базе ещё {otherSites} {pluralRu(otherSites, ['сайт', 'сайта', 'сайтов'])}: они сохранены, но
-      в админке не видны. Одна установка — один сайт, и админка работает с созданным первым.
     </InlineAlert>
   )
 }

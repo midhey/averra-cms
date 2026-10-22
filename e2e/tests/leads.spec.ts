@@ -277,6 +277,41 @@ test('длинное имя на десктопе: переносится в д�
   expect(pillBox.y).toBeLessThan(nameBox.y + nameBox.height)
 })
 
+test('1024 px: карточка рядом со списком узкая — поля заявки столбиком, значения не рвутся', async ({
+  page,
+  demoSite,
+}) => {
+  const name = `Ольга ${Date.now()}`
+  await createLead(demoSite.id, { name, phone: '+7 921 777-88-99', email: '', comment: '' })
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('/leads')
+  await page
+    .getByRole('list', { name: 'Список заявок' })
+    .getByRole('link')
+    .filter({ hasText: name })
+    .click()
+  const card = page.getByRole('article', { name })
+  // Список и карточка рядом
+  await expect(page.getByRole('list', { name: 'Список заявок' })).toBeVisible()
+  const fields = card.getByRole('definition')
+  await expect(fields.first()).toBeVisible()
+  // Каждое значение — в одну строку: колонка узкая, и название встаёт над значением, а не сбоку
+  for (const value of await fields.all()) expect(await lineCount(value)).toBe(1)
+  const phone = card.getByRole('link', { name: '+7 921 777-88-99' })
+  const term = card.getByRole('term').filter({ hasText: 'Телефон' })
+  const termBox = await term.boundingBox()
+  const phoneBox = await phone.boundingBox()
+  expect(termBox && phoneBox).toBeTruthy()
+  if (!termBox || !phoneBox) return
+  expect(phoneBox.y).toBeGreaterThanOrEqual(termBox.y + termBox.height - 1)
+  // Кнопки карточки не вылезают за её край
+  const cardBox = await card.boundingBox()
+  const doneBox = await card.getByRole('button', { name: 'Отметить обработанной' }).boundingBox()
+  expect(cardBox && doneBox).toBeTruthy()
+  if (!cardBox || !doneBox) return
+  expect(doneBox.x + doneBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width)
+})
+
 test('принудительные цвета: выбранная заявка — обводкой, точка новой заявки видна', async ({
   page,
   demoSite,

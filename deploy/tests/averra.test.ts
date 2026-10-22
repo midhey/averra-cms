@@ -941,8 +941,8 @@ describe('обновление', () => {
         killOn: 'averra_restore RENAME TO averra',
       })
       expect(killed.status, killed.output).toBe(3)
-      // Брошено между переименованиями: базы averra нет,
-      // рабочая (16 миграций) — под отложенным именем
+      // Брошено между переименованиями: базы averra нет, рабочая (16 миграций) — под отложенным
+      // именем
       expect(existsSync(join(srv.fake, 'db-averra'))).toBe(false)
       const kept = (
         readdirSync(srv.fake).find((file) => file.startsWith('db-averra_rolled_back_')) ?? ''

@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { setupZodMessages } from '@averra/schema'
-import { defaultTheme } from '@averra/tokens'
 import { serve } from '@hono/node-server'
 import { createApp } from './app'
 import { createAuth } from './auth/auth'
@@ -11,7 +10,8 @@ import { aesGcmSecretBox } from './crypto/aes-gcm'
 import { createDb, dbTargetOf } from './db/client'
 import { DbLockedError, lockDb } from './db/lock'
 import { migrateDb } from './db/migrate'
-import { seedDemo, seedDevOwner } from './db/seed'
+import { seedDevOwner } from './db/seed'
+import { prepareInstallationSite } from './installation-site'
 import { errorForLog } from './log-error'
 import { mailSources } from './mail/create-mailer'
 import { localLinkWarning } from './mail/link-warning'
@@ -24,7 +24,7 @@ import { sharpIcons } from './media/sharp-favicon'
 import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
-import { defaultSiteName, sitesRepo } from './modules/sites/repo'
+import { sitesRepo } from './modules/sites/repo'
 import { collectStatus } from './modules/status/service'
 import { createChannels } from './notifications/channels'
 import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
@@ -40,7 +40,7 @@ import {
 } from './notifications/watch'
 import { startNotificationWorker } from './notifications/worker'
 import { sharpOgCards } from './og/sharp-og'
-import { installationNotFoundPage, linkInstallationSite } from './publish/installation-link'
+import { installationNotFoundPage } from './publish/installation-link'
 import { publishedSite } from './publish/published-site'
 import { createPublishQueue } from './publish/queue'
 import { defaultRendererDir, rendererProcess } from './publish/renderer'
@@ -153,7 +153,6 @@ const auth = createAuth({
 })
 
 if (config.devSeed) {
-  await seedDemo(db)
   const owner = await seedDevOwner(db, auth, config.devOwner)
   if (owner === 'created') console.log(`Создан владелец для разработки: ${config.devOwner?.email}`)
   if (owner === 'missing') {
@@ -164,24 +163,17 @@ if (config.devSeed) {
   }
 }
 
-// Одна установка — один сайт. Его нет (первый запуск на пустой базе) — API создаёт его сам:
-// название из SITE_NAME (его пишет install.sh), иначе домен сайта. В учебном режиме выше уже лёг
-// демо-сайт — он и есть сайт установки. Лишние сайты старых баз не трогаем: они целы и доступны
-// по id через API, но админка работает с сайтом установки (modules/sites/repo.ts)
+// Одна установка — один сайт: при первом запуске API создаёт его сам, в учебном режиме это
+// демо-сайт; ссылка main в PUBLISH_DIR ведёт на него (installation-site.ts)
 const sites = sitesRepo(db)
-const { site: installationSite, created: siteCreated } = await sites.ensureInstallationSite(
-  config.SITE_NAME ?? defaultSiteName(config.SITE_URL),
-  defaultTheme,
-)
-if (siteCreated) console.log(`Создан сайт установки «${installationSite.name}»`)
-const siteCount = await sites.count()
-if (siteCount > 1) {
-  console.log(
-    `В базе ${siteCount} сайтов. Averra работает с одним — «${installationSite.name}» ` +
-      `(${installationSite.id}), созданным первым. Остальные сохранены и доступны по id через API, ` +
-      'но в админке не видны (https://midhey.github.io/averra-cms/decisions/single-site/)',
-  )
-}
+const { site: installationSite, lines: siteLines } = await prepareInstallationSite({
+  db,
+  siteName: config.SITE_NAME,
+  siteUrl: config.SITE_URL,
+  demo: config.devSeed,
+  publishDir: config.PUBLISH_DIR,
+})
+for (const line of siteLines) console.log(line)
 
 // Публикация на сервере: после «Опубликовать» API собирает сайт отдельным процессом
 // Astro в новую папку релиза в PUBLISH_DIR и подменяет ею текущую. Без PUBLISH_DIR — выключена
@@ -211,9 +203,6 @@ const publishQueue = config.PUBLISH_DIR
 // Сборки, прерванные прошлым перезапуском, помечаются до serve(): иначе публикация, пришедшая
 // раньше этой пометки, начала бы сборку, которую сочли бы прерванной (publish/queue.ts)
 const interruptedSites = publishQueue ? await publishQueue.markInterrupted() : []
-// Caddy отдаёт на домене сайта PUBLISH_DIR/main/current: ссылка main ведёт на папку сайта
-// установки. Ставится при каждом старте — после восстановления из бэкапа сайт может быть другим
-if (config.PUBLISH_DIR) await linkInstallationSite(config.PUBLISH_DIR, installationSite.id)
 
 // Уведомления (src/notifications): каналы «Почта» (поверх очереди писем) и «Telegram» (Bot API
 // напрямую или через прокси). Обработчик очереди уведомлений — в этом же процессе, как у писем;

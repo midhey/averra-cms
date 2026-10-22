@@ -1,3 +1,4 @@
+import { pluralRu } from '@averra/schema'
 import type { z } from 'zod'
 import type { SafeHtml } from '../html'
 
@@ -43,22 +44,13 @@ export type MailTemplate<S extends z.ZodType = z.ZodType> = {
 
 export const defineMailTemplate = <S extends z.ZodType>(template: MailTemplate<S>) => template
 
-/** Склонение по числу: plural(5, ['минуту', 'минуты', 'минут']) → «минут» */
-function plural(count: number, [one, few, many]: readonly [string, string, string]) {
-  const mod10 = count % 10
-  const mod100 = count % 100
-  if (mod10 === 1 && mod100 !== 11) return one
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
-  return many
-}
-
 /** Срок в минутах по-человечески: «30 минут», «1 час», «2 часа» */
 export function formatMinutes(minutes: number) {
   if (minutes % 60 === 0) {
     const hours = minutes / 60
-    return `${hours} ${plural(hours, ['час', 'часа', 'часов'])}`
+    return `${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`
   }
-  return `${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])}`
+  return `${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`
 }
 
-export const formatDays = (days: number) => `${days} ${plural(days, ['день', 'дня', 'дней'])}`
+export const formatDays = (days: number) => `${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`
