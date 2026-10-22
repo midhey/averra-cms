@@ -10,8 +10,9 @@ sidebar:
 ## Решение
 
 TypeScript везде. API — Hono, база — PostgreSQL через Drizzle, схемы — Zod, админка — React и Vite,
-сборка сайтов — Astro, картинки — sharp, вход — Better Auth, MCP — официальный TypeScript SDK, линт —
-Biome, тесты — Vitest и Playwright. Сами пишем только то, что и есть CMS.
+сборка сайтов — Astro, картинки — sharp (SVG — строгий XML-парсер saxes), вход — Better Auth,
+MCP — официальный TypeScript SDK, линт — Biome, тесты — Vitest и Playwright. Сами пишем только то,
+что и есть CMS.
 
 ## Почему
 

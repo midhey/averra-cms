@@ -24,6 +24,7 @@ sidebar:
 - [SEO и настройки сайта](/averra-cms/decisions/seo-settings/)
 - [Cookie-уведомление](/averra-cms/decisions/cookie-consent/)
 - [Карточка из заголовка для соцсетей](/averra-cms/decisions/og-card/)
+- [SVG-логотипы и блок видео](/averra-cms/decisions/svg-and-video/)
 
 ## Стек
 
