@@ -8,6 +8,8 @@ export type SegmentedOption<T extends string> = {
   label: string
   /** Миниатюра варианта (вид «карточки»): схема блока над подписью */
   thumbnail?: ReactNode
+  /** Пояснение под подписью (вид «список»): чем вариант отличается от соседних */
+  description?: ReactNode
 }
 
 type SegmentedControlProps<T extends string> = {
@@ -17,9 +19,14 @@ type SegmentedControlProps<T extends string> = {
   options: ReadonlyArray<SegmentedOption<T>>
   value: T
   onChange: (value: T) => void
-  /** segments — плотная дорожка (ширина предпросмотра), cards — карточки с миниатюрами */
-  appearance?: 'segments' | 'cards'
+  /**
+   * segments — плотная дорожка (ширина предпросмотра), cards — карточки с миниатюрами,
+   * list — карточки в столбик с пояснением (режим cookie-уведомления)
+   */
+  appearance?: 'segments' | 'cards' | 'list'
   disabled?: boolean
+  /** Карточки растягиваются на всю ширину: вариантов мало, подписи длинные (вид cookie) */
+  fill?: boolean
   /** Имя радиокнопок в форме: по нему focusField ставит фокус на группу с ошибкой */
   name?: string
   /** Описания группы (ошибка, подсказка рядом): диктор прочитает их, войдя в группу */
@@ -38,6 +45,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   appearance = 'segments',
   disabled,
+  fill,
   name: formName,
   'aria-describedby': describedBy,
 }: SegmentedControlProps<T>) {
@@ -45,7 +53,7 @@ export function SegmentedControl<T extends string>({
   const name = formName ?? ownName
   return (
     <fieldset
-      className={cx(styles.group, styles[appearance])}
+      className={cx(styles.group, styles[appearance], fill && styles.fill)}
       disabled={disabled}
       aria-describedby={describedBy}
     >
@@ -67,6 +75,7 @@ export function SegmentedControl<T extends string>({
               </span>
             )}
             <span className={styles.label}>{option.label}</span>
+            {option.description && <span className={styles.description}>{option.description}</span>}
           </label>
         ))}
       </div>

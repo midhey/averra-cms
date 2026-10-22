@@ -94,10 +94,11 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | Запрос | Что делает |
 |---|---|
 | `GET /api/sites/:siteId/settings` | `{ settings, installationUrl, url }`: настройки (`SiteSettings`), адрес установки (`SITE_URL`) и адрес сайта, который из них выходит |
-| `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`) — целиком. Ставит сборку. Картинка не из медиатеки и редирект с адреса страницы — 409 с путём до поля |
+| `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`, `cookies`) — целиком. Ставит сборку. Картинка не из медиатеки, редирект с адреса страницы и страница политики (`cookies.policyPage`), которой нет на сайте, — 409 с путём до поля |
+| `POST /api/sites/:siteId/settings/legal-pages` | `{ document: 'privacy' \| 'consent' }` — черновик страницы `/privacy` или `/consent` из шаблона (`legalPageContent`) с реквизитами организации и включёнными сервисами; 201 со страницей. Адрес занят — 409, страница не перезаписывается |
 
-Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/) и
-[решение](/averra-cms/decisions/seo-settings/).
+Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/),
+[Cookie и согласие](/averra-cms/admin/cookies/) и [решение](/averra-cms/decisions/seo-settings/).
 
 ## Иконки и карточки для соцсетей
 

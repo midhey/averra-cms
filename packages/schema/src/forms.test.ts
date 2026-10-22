@@ -286,6 +286,14 @@ describe('блок «Форма»', () => {
     expect(form.props.safeParse({ ...valid, policyUrl: 'javascript:alert(1)' }).success).toBe(false)
   })
 
+  it('ссылка на текст согласия необязательна, но только безопасная', () => {
+    const { consentUrl: _, ...withoutConsent } = valid
+    expect(form.props.safeParse(withoutConsent).success).toBe(true)
+    expect(form.props.safeParse({ ...valid, consentUrl: 'javascript:alert(1)' }).success).toBe(
+      false,
+    )
+  })
+
   it('ключи полей уникальны, служебные заняты', () => {
     const twice = { ...valid, fields: [valid.fields[0], valid.fields[0]] }
     const result = form.props.safeParse(twice)

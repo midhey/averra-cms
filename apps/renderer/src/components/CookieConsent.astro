@@ -1,0 +1,17 @@
+---
+import { CookieNotice, type CookieNoticeProps } from '@averra/blocks'
+
+// Cookie-уведомление: разметка из @averra/blocks и скрипт, который её оживляет. Компонент
+// рендерится, только если на сайте есть счётчик: тогда и скрипт попадает на страницу. Сайт без
+// счётчиков остаётся без единой строки JS. Скрипт — свой модуль без зависимостей, Astro кладёт его
+// в сборку сайта (/_astro/…): внешних загрузок нет, счётчики он вставляет сам после согласия
+type Props = { notice: CookieNoticeProps }
+const { notice } = Astro.props
+---
+
+<CookieNotice {...notice} />
+<script>
+  import { startCookieConsent } from '@averra/blocks/cookie-consent'
+
+  startCookieConsent()
+</script>

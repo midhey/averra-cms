@@ -8,6 +8,10 @@
   }
 }
 
+.section[data-density="compact"] {
+  padding-block: var(--space-6);
+}
+
 .section[data-tone="muted"] {
   background: var(--color-surface);
 }

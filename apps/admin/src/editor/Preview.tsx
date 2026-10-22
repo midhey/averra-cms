@@ -64,6 +64,10 @@ type PreviewProps = {
   onSelectBlock?: ((id: string) => void) | undefined
   /** Над предпросмотром: переключатель ширины на узком экране */
   toolbar?: ReactNode
+  /** После страницы в iframe: cookie-уведомление и подвал на экране «Cookie и согласие» */
+  extra?: ReactNode
+  /** Подпись iframe для диктора */
+  title?: string
 }
 
 /** Роли темы админки для подсветки: их значения читаем из её документа */
@@ -82,7 +86,7 @@ function readSelectionColors(): SelectionColors {
  * и обработчик в iframe: в блоках и на опубликованном сайте их нет
  */
 export function Preview(props: PreviewProps) {
-  const { content, theme, media, device, note, selectedId, onSelectBlock, toolbar } = props
+  const { content, theme, media, device, note, selectedId, onSelectBlock, toolbar, extra } = props
   const [frameDocument, setFrameDocument] = useState<Document | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
@@ -182,7 +186,7 @@ export function Preview(props: PreviewProps) {
       <div ref={stageRef} className={styles.stage}>
         <div className={styles.frameBox} style={{ width: width * scale }}>
           <iframe
-            title="Предпросмотр страницы"
+            title={props.title ?? 'Предпросмотр страницы'}
             className={styles.frame}
             srcDoc={EMPTY_DOCUMENT}
             sandbox="allow-same-origin"
@@ -195,6 +199,7 @@ export function Preview(props: PreviewProps) {
         createPortal(
           <PreviewBoundary content={content}>
             <Page content={content} media={media} />
+            {extra}
           </PreviewBoundary>,
           frameDocument.body,
         )}

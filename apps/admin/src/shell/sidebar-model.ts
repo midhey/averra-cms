@@ -23,7 +23,8 @@ export type SiteSection = {
 
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
- * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO» — только владельцу
+ * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO и аналитика» — только
+ * владельцу
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [
@@ -37,7 +38,8 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
   if (canSeeNotifications(site.access)) {
     sections.push({ id: 'notifications', label: 'Уведомления', icon: 'bell' })
   }
-  if (canEditSeo(site.access)) sections.push({ id: 'seo', label: 'SEO', icon: 'search' })
+  if (canEditSeo(site.access))
+    sections.push({ id: 'seo', label: 'SEO и аналитика', icon: 'search' })
   sections.push({ id: 'settings', label: 'Настройки сайта', icon: 'settings' })
   return sections
 }

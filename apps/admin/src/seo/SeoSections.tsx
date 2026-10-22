@@ -1,4 +1,5 @@
 import {
+  cookieModeTitles,
   OrganizationType,
   organizationTypeTitles,
   SEO_DESCRIPTION_MAX,
@@ -8,8 +9,10 @@ import {
   type SiteSettings,
   siteLanguages,
 } from '@averra/schema'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { MediaPickField } from '../media/MediaPickField'
+import { buttonClassName } from '../ui/Button'
 import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { SearchSnippet } from './SearchSnippet'
@@ -283,9 +286,22 @@ export function AnalyticsSection({ siteId, view }: SectionProps) {
     <SettingsCard
       id="analytics"
       title="Аналитика"
-      description="Сайт работает без JavaScript. Счётчик — единственный скрипт, который на него попадёт, и только если вы его задали."
+      description="Сайт работает без JavaScript. Счётчик и cookie-уведомление к нему — единственные скрипты, которые на него попадут, и только если вы задали номер."
       form={form}
     >
+      <InlineAlert
+        tone="info"
+        title={`Cookie: ${cookieModeTitles[view.settings.cookies.mode].toLowerCase()}`}
+        action={
+          <Link to="/seo/cookies" className={buttonClassName({ size: 'small' })}>
+            Cookie и согласие
+          </Link>
+        }
+      >
+        {view.settings.cookies.mode === 'consent'
+          ? 'Счётчики загрузятся только у посетителей, которые согласились на аналитику в уведомлении о cookie.'
+          : 'Счётчики работают сразу, посетитель видит уведомление о cookie.'}
+      </InlineAlert>
       <TextInput
         label="Номер счётчика Яндекс Метрики"
         name="analytics.metrika"
@@ -307,8 +323,7 @@ export function AnalyticsSection({ siteId, view }: SectionProps) {
       />
       <InlineAlert tone="info" title="Цель «Заявка с формы»">
         После отправки формы посетитель возвращается на ту же страницу с параметром sent в адресе. В
-        Метрике создайте цель «Посещение страниц» с условием «URL: содержит» — sent=. Счётчики
-        ставят cookie: упомяните их в политике конфиденциальности.
+        Метрике создайте цель «Посещение страниц» с условием «URL: содержит» — sent=.
       </InlineAlert>
     </SettingsCard>
   )

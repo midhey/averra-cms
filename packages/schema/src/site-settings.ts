@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CookieSettings } from './cookies'
 import { MAIL_ADDRESS_PATTERN } from './mail'
 import { MediaId } from './media'
 import { SEO_DESCRIPTION_MAX } from './page'
@@ -398,6 +399,7 @@ const settingsFields = {
   analytics: Analytics,
   organization: Organization,
   redirects: Redirects,
+  cookies: CookieSettings,
 }
 
 /** Настройки в базе: каждого поля может не быть — тогда значение по умолчанию */
@@ -415,6 +417,7 @@ const StoredSiteSettings = z.strictObject({
   analytics: settingsFields.analytics.prefault({}),
   organization: settingsFields.organization.prefault({}),
   redirects: settingsFields.redirects.default([]),
+  cookies: settingsFields.cookies.prefault({}),
 })
 export type StoredSiteSettings = z.infer<typeof StoredSiteSettings>
 

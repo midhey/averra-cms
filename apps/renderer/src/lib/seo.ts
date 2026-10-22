@@ -216,19 +216,23 @@ export function headTags({
 }
 
 /**
- * Счётчики аналитики в <head>: единственный JS на сайте, и только если владелец задал номер.
+ * Счётчики аналитики в <head> — только в режиме «только уведомление» (cookie-уведомление).
+ * В режиме согласия их здесь нет: их вставляет скрипт уведомления после согласия посетителя
+ * (@averra/blocks/cookie-consent), без согласия на странице нет ни одного script счётчика.
  * Номера ещё раз проверяются схемой: в скрипт попадают только цифры (Метрика) и G-… (GA4).
- * Вебвизор Метрики выключен: он записывает, что посетитель вводит в форму
+ * Вебвизор Метрики выключен: он записывает, что посетитель вводит в форму. Запасного пикселя
+ * в <noscript> нет: без JS посетитель не видит уведомление и не может согласиться
  */
 export function analyticsHead(settings: StoredSiteSettings): string[] {
   const scripts: string[] = []
   const metrika = MetrikaId.parse(settings.analytics.metrika)
+  const ga4 = Ga4Id.parse(settings.analytics.ga4)
+  if (settings.cookies.mode !== 'notice') return scripts
   if (metrika) {
     scripts.push(
       `<script>(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})(window,document,"script","https://mc.yandex.ru/metrika/tag.js","ym");ym(${metrika},"init",{clickmap:true,trackLinks:true,accurateTrackBounce:true});</script>`,
     )
   }
-  const ga4 = Ga4Id.parse(settings.analytics.ga4)
   if (ga4) {
     scripts.push(
       `<script async src="https://www.googletagmanager.com/gtag/js?id=${ga4}"></script>`,
@@ -236,16 +240,6 @@ export function analyticsHead(settings: StoredSiteSettings): string[] {
     )
   }
   return scripts
-}
-
-/** Запасной пиксель Метрики для браузеров без JS — в начале <body> */
-export function analyticsBody(settings: StoredSiteSettings): string[] {
-  const metrika = MetrikaId.parse(settings.analytics.metrika)
-  return metrika
-    ? [
-        `<noscript><div><img src="https://mc.yandex.ru/watch/${metrika}" style="position:absolute;left:-9999px" alt=""></div></noscript>`,
-      ]
-    : []
 }
 
 /**

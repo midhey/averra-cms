@@ -1,0 +1,83 @@
+@use "@averra/ui" as ui;
+
+// Миниатюра — рисунок страницы в масштабе: размеры и скругления — часть рисунка, а не формы
+// интерфейса, поэтому свои величины компонента
+.sketch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(4);
+  width: 100%;
+  height: ui.rem(64);
+  padding: ui.rem(10);
+  overflow: hidden;
+
+  // Рисунок поверх радиокнопки (он позиционирован), но нажатие должно доставаться ей
+  pointer-events: none;
+  background: var(--color-background);
+  border-radius: var(--radius-inner);
+
+  @media (forced-colors: active) {
+    background: Canvas;
+    border: ui.rem(1) solid GrayText;
+    forced-color-adjust: none;
+  }
+}
+
+// Окно по центру: страница за затемнением
+.dimmed {
+  background: var(--color-border);
+}
+
+.line {
+  width: 70%;
+  height: ui.rem(5);
+  background: var(--color-border-strong);
+  border-radius: ui.rem(2);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
+}
+
+.short {
+  width: 45%;
+}
+
+.bar,
+.card,
+.modal {
+  position: absolute;
+  background: var(--color-text-muted);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+  }
+}
+
+.bar {
+  inset: auto 0 0;
+  height: ui.rem(14);
+}
+
+.card {
+  inset: auto auto ui.rem(6) ui.rem(6);
+  width: ui.rem(40);
+  height: ui.rem(26);
+  border-radius: ui.rem(3);
+}
+
+.modal {
+  inset: 0;
+  width: ui.rem(44);
+  height: ui.rem(30);
+  margin: auto;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-radius: ui.rem(3);
+
+  @media (forced-colors: active) {
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}

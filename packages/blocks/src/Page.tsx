@@ -8,6 +8,7 @@ import { Cta } from './cta/Cta'
 import { Features } from './features/Features'
 import { Form } from './form/Form'
 import { Hero } from './hero/Hero'
+import { Text } from './text/Text'
 
 type PageProps = {
   content: PageContent
@@ -52,6 +53,8 @@ function Block({ block, ...common }: BlockProps) {
       return <Hero id={block.id} data={block.props} {...common} />
     case 'features':
       return <Features id={block.id} data={block.props} {...common} />
+    case 'text':
+      return <Text id={block.id} data={block.props} {...common} />
     case 'cta':
       return <Cta id={block.id} data={block.props} {...common} />
     case 'form':

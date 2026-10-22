@@ -7,7 +7,9 @@ import { FORM_MAX_FIELDS, FormField } from '../forms'
  * Форма заявки. Работает без JavaScript: обычная HTML-форма уходит в API, а после приёма браузер
  * возвращается на страницу с якорем #<id>-sent, и CSS показывает текст успеха. Проверка полей
  * в браузере и на сервере — по одной схеме (forms.ts). Ссылка на политику — поле блока и
- * обязательна: без неё форму с персональными данными не сохранить и не опубликовать
+ * обязательна: без неё форму с персональными данными не сохранить и не опубликовать. Ссылка на
+ * текст согласия необязательна: старые формы без неё остаются верными. Пример ссылается на
+ * /privacy и /consent — эти адреса создают шаблоны документов (legal.ts)
  */
 export const form = defineBlock({
   type: 'form',
@@ -47,6 +49,11 @@ export const form = defineBlock({
         title: 'Ссылка на политику конфиденциальности',
         description: 'Страница политики обработки персональных данных: /privacy или https://…',
       }),
+      consentUrl: Href.optional().meta({
+        title: 'Ссылка на текст согласия',
+        description:
+          'Согласие на обработку персональных данных — отдельный документ (152-ФЗ): /consent или https://…',
+      }),
     })
     .superRefine((props, ctx) => {
       const seen = new Set<string>()
@@ -77,5 +84,6 @@ export const form = defineBlock({
       { name: 'comment', type: 'textarea', label: 'Комментарий' },
     ],
     policyUrl: '/privacy',
+    consentUrl: '/consent',
   },
 })

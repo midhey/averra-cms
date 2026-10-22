@@ -1,0 +1,22 @@
+/* Строка текста — до 70 знаков: длиннее читать тяжело */
+.text {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 44rem;
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-6);
+}

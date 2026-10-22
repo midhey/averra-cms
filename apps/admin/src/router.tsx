@@ -34,6 +34,7 @@ import {
   siteSettingsQuery,
   statusQuery,
 } from './queries'
+import { CookiesScreen } from './screens/CookiesScreen'
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { InstallationScreen } from './screens/InstallationScreen'
@@ -312,6 +313,22 @@ const seoRoute = createRoute({
   component: SeoScreen,
 })
 
+// «SEO и аналитика» → «Cookie и согласие»: тоже только владельцу. Страницы — для выбора страницы
+// политики и шаблонов документов, сайт — тема для предпросмотра
+const cookiesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/seo/cookies',
+  loader: async ({ context: { queryClient } }) => {
+    const siteId = await siteIdOf(queryClient)
+    await Promise.all([
+      queryClient.ensureQueryData(siteSettingsQuery(siteId)),
+      queryClient.ensureQueryData(pagesQuery(siteId)),
+      queryClient.ensureQueryData(siteQuery(siteId)),
+    ])
+  },
+  component: CookiesScreen,
+})
+
 // Почта — только владельцу: участнику API ответит 403, и экран ошибки скажет почему
 const mailRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -378,6 +395,7 @@ const routeTree = rootRoute.addChildren([
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
     notificationsRoute,
     seoRoute,
+    cookiesRoute,
     settingsRoute,
     mailRoute,
     statusRoute,

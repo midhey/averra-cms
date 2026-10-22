@@ -15,8 +15,24 @@ export {
   UserEmail,
   UserName,
 } from './auth'
-export { BlockInstance, type BlockType, blocks, cta, features, form, hero } from './blocks'
+export { BlockInstance, type BlockType, blocks, cta, features, form, hero, text } from './blocks'
+export { TEXT_BODY_MAX } from './blocks/text'
 export { Button, Href } from './common'
+export {
+  type AnalyticsIds,
+  analyticsDescription,
+  analyticsServices,
+  COOKIE_TEXT_MAX,
+  CookieLook,
+  CookieMode,
+  CookieSettings,
+  cookieLookTitles,
+  cookieModeTitles,
+  cookieNoticeShown,
+  cookieNoticeText,
+  defaultCookieText,
+  PolicyPage,
+} from './cookies'
 export { BlockId, defineBlock, ENUM_SKETCHES, type EnumSketch } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export {
@@ -43,6 +59,13 @@ export {
   UpdateLead,
 } from './forms'
 export { Uuid } from './id'
+export {
+  LEGAL_NOTE_BLOCK_ID,
+  LegalDocument,
+  type LegalFacts,
+  legalPageContent,
+  legalPages,
+} from './legal'
 export {
   hasHeaderBreak,
   MAIL_ADDRESS_PATTERN,
@@ -207,5 +230,6 @@ export {
   UpdateRun,
   updateResultText,
 } from './status'
+export { parseTextBody, plainTextValue, type TextPart } from './text-body'
 export { Theme } from './theme'
 export { setupZodMessages } from './zod-messages'

@@ -68,9 +68,23 @@ export function Form({ id, data, headingLevel, formAction }: BlockComponentProps
             />
             <label htmlFor={fieldId(CONSENT_FIELD)}>
               {data.consentText}{' '}
-              <a href={data.policyUrl} className={styles.link}>
-                (политика конфиденциальности)
-              </a>
+              {data.consentUrl ? (
+                <>
+                  (
+                  <a href={data.consentUrl} className={styles.link}>
+                    текст согласия
+                  </a>
+                  ,{' '}
+                  <a href={data.policyUrl} className={styles.link}>
+                    политика конфиденциальности
+                  </a>
+                  )
+                </>
+              ) : (
+                <a href={data.policyUrl} className={styles.link}>
+                  (политика конфиденциальности)
+                </a>
+              )}
             </label>
           </div>
           <button type="submit" className={styles.submit}>

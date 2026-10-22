@@ -8,7 +8,6 @@ import {
 import { defaultTheme } from '@averra/tokens'
 import { describe, expect, it } from 'vitest'
 import {
-  analyticsBody,
   analyticsHead,
   canonicalPath,
   documentTitle,
@@ -229,22 +228,30 @@ describe('<head> страницы', () => {
 })
 
 describe('аналитика', () => {
+  const counters = { metrika: '98765432', ga4: 'G-ABC123DEF4' }
+  const notice = { mode: 'notice', look: 'bar', text: '', policyPage: '' } as const
+
   it('без счётчиков на сайте нет ни одного скрипта', () => {
     const s = site().settings
     expect(analyticsHead(s)).toEqual([])
-    expect(analyticsBody(s)).toEqual([])
     expect(head(site(), page('index'))).not.toContain('<script')
   })
 
-  it('Метрика и GA4 — только с проверенными номерами', () => {
-    const s = site({ analytics: { metrika: '98765432', ga4: 'G-ABC123DEF4' } }).settings
+  it('режим согласия (по умолчанию): в HTML нет скриптов счётчиков — их грузит уведомление', () => {
+    const s = site({ analytics: counters }).settings
+    expect(s.cookies.mode).toBe('consent')
+    expect(analyticsHead(s)).toEqual([])
+  })
+
+  it('режим уведомления: Метрика и GA4 — только с проверенными номерами', () => {
+    const s = site({ analytics: counters, cookies: notice }).settings
     const scripts = analyticsHead(s).join('\n')
     expect(scripts).toContain('ym(98765432,"init"')
     expect(scripts).toContain('https://mc.yandex.ru/metrika/tag.js')
     expect(scripts).not.toContain('webvisor')
     expect(scripts).toContain('https://www.googletagmanager.com/gtag/js?id=G-ABC123DEF4')
     expect(scripts).toContain('gtag("config","G-ABC123DEF4")')
-    expect(analyticsBody(s).join('')).toContain('https://mc.yandex.ru/watch/98765432')
+    expect(scripts).not.toContain('noscript')
   })
 
   it('подложенный в обход схемы номер не попадает в скрипт', () => {

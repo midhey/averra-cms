@@ -2,7 +2,7 @@ import { demoSiteId, SITE_ROOT_FILES, type SiteSettings } from '@averra/schema'
 import { and, eq } from 'drizzle-orm'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
-import { pages, sites } from '../../db/schema'
+import { notificationChannels, notificationRecipients, pages, sites } from '../../db/schema'
 import { cachedIcons, ICO_SIZES, ICON_FILES, icoFromPngs } from '../../media/favicon'
 import type { SitePublisher } from '../../publish/queue'
 import { createTestApi } from '../../testing'
@@ -484,5 +484,152 @@ describe('набор иконок', () => {
     expect(renders).toBe(1)
     await expect(icons({ ...key, mediaId: 'b' }, async () => undefined)).rejects.toThrow()
     expect(await icons({ ...key, mediaId: 'b' }, original)).toEqual(new Uint8Array([2]))
+  })
+})
+
+describe('cookie и согласие', () => {
+  const legal = (document: string, headers: Headers = owner.headers) =>
+    app.request(`${url}/legal-pages`, {
+      method: 'POST',
+      headers: json(headers),
+      body: JSON.stringify({ document }),
+    })
+  const removePage = (slug: string) =>
+    api.db.delete(pages).where(and(eq(pages.siteId, demoSiteId), eq(pages.slug, slug)))
+
+  it('по умолчанию — согласие до аналитики; страница политики — только страница сайта', async () => {
+    expect((await saved(await read())).settings.cookies).toEqual({
+      mode: 'consent',
+      look: 'card',
+      text: '',
+      policyPage: '',
+    })
+    const missing = await patch({ cookies: { policyPage: 'privacy' } })
+    expect(missing.status).toBe(409)
+    expect((await issues(missing)).map((issue) => issue.path)).toEqual(['cookies.policyPage'])
+
+    requested.length = 0
+    const view = await saved(await patch({ cookies: { look: 'bar', policyPage: 'index' } }))
+    expect(view.settings.cookies).toMatchObject({ look: 'bar', policyPage: 'index' })
+    expect(requested).toEqual([demoSiteId])
+    await saved(await patch({ cookies: {} }))
+  })
+
+  it('политика из шаблона: черновик с реквизитами и включёнными сервисами, второй раз — 409', async () => {
+    await saved(
+      await patch({
+        organization: { name: 'ИП Иванов', inn: '123456789012', email: 'info@example.ru' },
+        analytics: { metrika: '98765432', ga4: '' },
+      }),
+    )
+    try {
+      const res = await legal('privacy')
+      expect(res.status, await res.clone().text()).toBe(201)
+      const page = (await res.json()) as {
+        slug: string
+        title: string
+        draft: { blocks: { type: string; props: Record<string, string> }[] }
+        published: unknown
+      }
+      expect(page).toMatchObject({ slug: 'privacy', title: 'Политика конфиденциальности' })
+      expect(page.published).toBeNull()
+      const text = JSON.stringify(page.draft)
+      expect(text).toContain('проверьте с юристом')
+      expect(text).toContain('ИП Иванов')
+      expect(text).toContain('ИНН: 123456789012')
+      expect(text).toContain('Яндекс Метрика')
+      expect(text).not.toContain('Google Analytics')
+      // На демо-сайте нет формы: про заявки политика не пишет
+      expect(text).not.toContain('Заявки хранятся')
+
+      const again = await legal('privacy')
+      expect(again.status).toBe(409)
+      expect(
+        (await saved(await patch({ cookies: { policyPage: 'privacy' } }))).settings.cookies,
+      ).toMatchObject({ policyPage: 'privacy' })
+    } finally {
+      await removePage('privacy')
+      await saved(await patch({ organization: {}, analytics: {}, cookies: {} }))
+    }
+  })
+
+  it('шаблоны знают про форму в черновике и Telegram; выключенный канал — не упоминают', async () => {
+    const formPage = {
+      blocks: [
+        {
+          id: 'lead',
+          type: 'form',
+          props: {
+            title: 'Заявка',
+            fields: [{ name: 'name', type: 'name', label: 'Имя' }],
+            policyUrl: '/privacy',
+          },
+        },
+      ],
+    }
+    const put = await app.request(`/api/sites/${demoSiteId}/pages/contacts`, {
+      method: 'PUT',
+      headers: json(owner.headers),
+      body: JSON.stringify({ title: 'Контакты', content: formPage }),
+    })
+    expect(put.status, await put.clone().text()).toBe(200)
+    const [recipient] = await api.db
+      .insert(notificationRecipients)
+      .values({ siteId: demoSiteId, channel: 'telegram', address: '-100123', events: ['lead.new'] })
+      .returning()
+    const draftOf = async (document: string) => {
+      const res = await legal(document)
+      expect(res.status, await res.clone().text()).toBe(201)
+      return JSON.stringify(((await res.json()) as { draft: unknown }).draft)
+    }
+    try {
+      const text = await draftOf('consent')
+      expect(text).toContain('Согласие на обработку персональных данных')
+      expect(text).toContain('Срок: 180 дней')
+      expect(text).toContain('трансграничную передачу')
+      // Форма пока только в черновике страницы — политика всё равно пишет про заявки
+      const policy = await draftOf('privacy')
+      expect(policy).toContain('Заявки хранятся на сервере Оператора')
+      expect(policy).toContain('180 дней с момента получения заявки')
+      expect(policy).toContain('Telegram (Telegram FZ-LLC, ОАЭ)')
+      await removePage('consent')
+      await removePage('privacy')
+
+      // Канал Telegram выключен в «Уведомлениях»: заявки туда не уходят, документы о нём молчат
+      await api.db.insert(notificationChannels).values({ kind: 'telegram', enabled: false })
+      expect(await draftOf('consent')).not.toContain('Telegram')
+      expect(await draftOf('privacy')).not.toContain('Telegram')
+    } finally {
+      await api.db.delete(notificationChannels).where(eq(notificationChannels.kind, 'telegram'))
+      await removePage('consent')
+      await removePage('privacy')
+      await removePage('contacts')
+      if (recipient) {
+        await api.db
+          .delete(notificationRecipients)
+          .where(eq(notificationRecipients.id, recipient.id))
+      }
+    }
+  })
+
+  it('шаблоны — только владельцу, токену API — 403; неизвестный документ — 400', async () => {
+    for (const role of ['editor', 'client'] as const) {
+      const { headers } = await api.loginAs(role)
+      expect((await legal('privacy', headers)).status, role).toBe(403)
+    }
+    const { token } = await api.createToken()
+    expect((await legal('privacy', { authorization: `Bearer ${token}` })).status).toBe(403)
+    expect((await legal('terms')).status).toBe(400)
+  })
+
+  it('в снимке для рендерера — настройки уведомления', async () => {
+    await saved(await patch({ cookies: { mode: 'notice', look: 'modal' } }))
+    try {
+      const res = await app.request('/api/site/snapshot')
+      const snapshot = (await res.json()) as { site: { settings: SiteSettings } }
+      expect(snapshot.site.settings.cookies).toMatchObject({ mode: 'notice', look: 'modal' })
+    } finally {
+      await saved(await patch({ cookies: {} }))
+    }
   })
 })

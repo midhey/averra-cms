@@ -1,3 +1,5 @@
+export { CookieNotice, type CookieNoticeProps, LegalFooter } from './cookie/CookieNotice'
+export { cookieNoticeView, policyHref } from './cookie/view'
 export { sentAnchor } from './form/Form'
 export { Page } from './Page'
 export type { BlockComponentProps, BlockData } from './types'

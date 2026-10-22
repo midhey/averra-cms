@@ -123,7 +123,7 @@ test('владелец заполняет SEO, сайт пересобирает
   // Версия на «сервере»: последняя сборка — со всеми настройками
   await expect
     .poll(() => served(demoSite.id, 'index.html'), { timeout: 90_000 })
-    .toContain('ym(98765432,"init"')
+    .toContain('data-metrika="98765432"')
   await expect
     .poll(() => served(demoSite.id, 'index.html'), { timeout: 90_000 })
     .not.toContain('noindex')
@@ -135,7 +135,9 @@ test('владелец заполняет SEO, сайт пересобирает
   expect(index).toMatch(/<meta property="og:image" content="[^"]+\/media\/[0-9a-f-]+\/1200\.png">/)
   expect(index).toContain('<link rel="icon" href="/favicon.ico"')
   expect(index).toContain('"@type":"Organization","name":"ООО «Ремонт у Ивана»"')
-  expect(index).toContain('https://mc.yandex.ru/watch/98765432')
+  // Режим согласия по умолчанию: счётчика в HTML нет, его вставит уведомление после согласия
+  // (cookies.spec.ts), запасного пикселя без JS тоже нет
+  expect(index).not.toContain('mc.yandex.ru')
 
   const robots = await served(demoSite.id, 'robots.txt')
   expect(robots).toContain('Disallow: /api/')

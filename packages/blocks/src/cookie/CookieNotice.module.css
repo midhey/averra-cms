@@ -1,0 +1,386 @@
+/* Cookie-уведомление: только переменные темы сайта — цвета, шрифт и скругление. Тень и фон
+   под окном — от цвета текста темы, без своих цветов */
+
+/* Фон под открытым окном: и при showModal, и в старых браузерах, где окно открывает атрибут open */
+.root[data-modal-open]::before {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  background: var(--color-text);
+  content: "";
+  opacity: 0.45;
+}
+
+/* Окно настроек открыто поверх уведомления: уведомление приглушено, как и страница за фоном.
+   Слоем внутри него, а не z-index: окно «по центру» в верхнем слое браузера, z-index там не
+   действует. Клики по приглушённому уведомлению попадают в слой, а не в кнопки */
+.root[data-settings-open] .notice::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-text);
+  content: "";
+  opacity: 0.45;
+}
+
+.notice,
+.settings {
+  z-index: 1001;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.notice {
+  position: fixed;
+  display: grid;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--color-surface);
+  padding: var(--space-6);
+  background: var(--color-background);
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--color-text) 16%, transparent);
+}
+
+/* Плашка снизу на всю ширину: на широком экране текст и кнопки в одну строку */
+.notice[data-look="bar"] {
+  inset: auto 0 0;
+  padding: var(--space-4);
+  border-width: 1px 0 0;
+}
+
+@media (min-width: 48rem) {
+  .notice[data-look="bar"] {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-4) var(--space-8);
+  }
+
+  /* В режиме уведомления «Настроить» нет: три колонки, «Понятно» прижата вправо */
+  .root[data-mode="notice"] .notice[data-look="bar"] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+}
+
+/* Карточка в углу; на телефоне — по ширине экрана с полями */
+.notice[data-look="card"] {
+  inset: auto var(--space-3) var(--space-3);
+  border-radius: calc(var(--radius) * 2);
+}
+
+@media (min-width: 40rem) {
+  .notice[data-look="card"] {
+    inset: auto auto var(--space-6) var(--space-6);
+    width: 25rem;
+  }
+}
+
+/* Окно по центру: строгий вид — до выбора сайт за фоном */
+.notice[data-look="modal"],
+.settings {
+  inset: 0;
+  width: min(32.5rem, calc(100% - 2rem));
+  max-width: none;
+  height: fit-content;
+  max-height: calc(100% - 2rem);
+  margin: auto;
+  overflow: auto;
+  border-radius: calc(var(--radius) * 2);
+}
+
+.notice[data-look="modal"]:not([open]),
+.settings:not([open]) {
+  display: none;
+}
+
+.notice::backdrop,
+.settings::backdrop {
+  background: transparent;
+}
+
+.settings {
+  position: fixed;
+  display: grid;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  border: 1px solid var(--color-surface);
+  padding: var(--space-6);
+  background: var(--color-background);
+}
+
+/* На телефоне окна — шторкой снизу: до кнопок дотянуться большим пальцем */
+@media (max-width: 39.99rem) {
+  .notice[data-look="modal"],
+  .settings {
+    width: 100%;
+    max-height: calc(100% - var(--space-8));
+    margin: auto 0 0;
+    border-radius: calc(var(--radius) * 2) calc(var(--radius) * 2) 0 0;
+  }
+}
+
+.icon {
+  display: none;
+  color: var(--color-accent);
+}
+
+@media (min-width: 48rem) {
+  .icon {
+    display: block;
+  }
+}
+
+.body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.title,
+.settingsTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  line-height: 1.3;
+}
+
+.settingsTitle {
+  font-size: var(--text-xl);
+}
+
+.hiddenTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.text {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.notice[data-look="bar"] .text {
+  font-size: var(--text-base);
+}
+
+.link {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+}
+
+/* Кнопки одного вида: «Принять все» не заметнее «Только необходимых» */
+.button {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.linkButton {
+  justify-self: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.notice[data-look="bar"] .actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.notice[data-look="bar"] .button {
+  flex: 1 1 10rem;
+}
+
+/* На широком экране кнопки плашки — в строку рядом с текстом, по ширине подписи */
+@media (min-width: 48rem) {
+  .notice[data-look="bar"] .actions {
+    flex-wrap: nowrap;
+  }
+
+  .notice[data-look="bar"] .button {
+    flex: 0 0 auto;
+    padding-inline: var(--space-6);
+  }
+}
+
+.settingsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-surface);
+}
+
+.options {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+label.option {
+  cursor: pointer;
+}
+
+.optionText {
+  display: grid;
+  flex: 1;
+  gap: var(--space-1);
+}
+
+.optionTitle {
+  font-weight: 600;
+}
+
+.optionHint,
+.always {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.always {
+  flex: none;
+}
+
+/* Переключатель — настоящий флажок с role="switch" в виде тумблера. Состояние видно не только
+   цветом: ползунок уезжает вправо и становится крупнее. Префикс appearance — для iOS до 15.4 */
+.switch {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 2.5rem;
+  height: 1.375rem;
+  margin: 0.125rem 0 0;
+  border: 2px solid var(--color-muted);
+  border-radius: 1rem;
+  background: var(--color-background);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.switch::before {
+  position: absolute;
+  top: 50%;
+  left: 0.1875rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--color-muted);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.switch:checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.switch:checked::before {
+  left: calc(100% - 1rem);
+  width: 0.8125rem;
+  height: 0.8125rem;
+  background: var(--color-on-accent);
+}
+
+/* Режим высокой контрастности: фон и цвет ползунка браузер заменит, обводка остаётся */
+@media (forced-colors: active) {
+  .switch::before {
+    background: CanvasText;
+  }
+}
+
+.footer {
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  max-width: var(--container);
+  margin-inline: auto;
+}
+
+.footer .linkButton {
+  min-height: 2.75rem;
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition: filter 0.15s;
+  }
+
+  .switch::before {
+    transition:
+      left 0.15s,
+      width 0.15s,
+      height 0.15s;
+  }
+}
+
+/* Атрибут hidden главнее display у классов выше (правило в конце файла и не слабее их): без JS и
+   до выбора элементы скрыты */
+.root[hidden],
+.root [hidden],
+.footer [hidden] {
+  display: none;
+}

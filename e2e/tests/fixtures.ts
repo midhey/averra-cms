@@ -63,6 +63,7 @@ async function resetDemoSite() {
       analytics: {},
       organization: {},
       redirects: [],
+      cookies: {},
     },
   })
   expect(settings.status, 'сброс настроек SEO демо-сайта').toBe(200)

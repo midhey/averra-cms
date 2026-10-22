@@ -1,0 +1,62 @@
+@use "@averra/ui" as ui;
+
+// Две колонки по концепту: настройки слева, предпросмотр справа. Колонки переносятся сами, когда
+// места на обе не хватает (широкая панель, узкое окно): предпросмотр тогда под формой
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.form {
+  flex: 999 1 ui.rem(520);
+  min-width: 0;
+}
+
+.aside {
+  flex: 1 1 ui.rem(320);
+  min-width: 0;
+  max-width: ui.rem(440);
+
+  @include ui.breakpoint-down(small) {
+    max-width: none;
+  }
+}
+
+.preview {
+  height: ui.rem(420);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.policyRow {
+  display: grid;
+}
+
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.template {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-control);
+}
+
+.templateTitle {
+  font-weight: var(--font-weight-semibold);
+}

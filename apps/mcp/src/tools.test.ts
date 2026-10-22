@@ -26,7 +26,13 @@ afterAll(api.close)
 describe('каталог блоков', () => {
   it('отдаёт все блоки с JSON Schema и подписями полей', () => {
     const catalog = blockCatalog()
-    expect(catalog.blocks.map((block) => block.type)).toEqual(['hero', 'features', 'cta', 'form'])
+    expect(catalog.blocks.map((block) => block.type)).toEqual([
+      'hero',
+      'features',
+      'text',
+      'cta',
+      'form',
+    ])
     expect(catalog.blocks[0]?.props).toMatchObject({
       properties: { title: { title: 'Заголовок' } },
     })

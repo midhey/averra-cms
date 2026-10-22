@@ -91,6 +91,7 @@ describe('блок «Форма»', () => {
       expect(consent).toContain(part)
     }
     expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/consent"')
     expect(html).toContain('Я согласен на обработку персональных данных')
   })
 

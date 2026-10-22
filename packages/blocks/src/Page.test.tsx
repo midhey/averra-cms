@@ -1,7 +1,9 @@
 import {
   demoPage,
+  legalPageContent,
   type MediaMap,
   mainHeadingBlock,
+  Organization,
   PageContent,
   pageSeoChecks,
 } from '@averra/schema'
@@ -103,5 +105,46 @@ describe('Page', () => {
     const html = render({ blocks: [splitHero('a', 'Фото')] })
     expect(html).toContain('Блок a')
     expect(html).not.toContain('<picture')
+  })
+})
+
+describe('блок «Текст»', () => {
+  const textPage = (body: string, title?: string) => ({
+    blocks: [{ id: 'about', type: 'text', props: title ? { title, body } : { body } }],
+  })
+
+  it('абзацы, список и подзаголовок — своими тегами', () => {
+    const html = render(textPage('Абзац\n\n## Подробнее\n- раз\n- два', 'О нас'))
+    expect(html).toContain('<h2 class=')
+    expect(html).toContain('>О нас</h2>')
+    expect(html).toMatch(/<h3[^>]*>Подробнее<\/h3>/)
+    expect(html).toContain('<li>раз</li><li>два</li>')
+    expect(html).toMatch(/<p>Абзац<\/p>/)
+  })
+
+  it('HTML в тексте — текст, а не разметка', () => {
+    const html = render(textPage('<img src=x onerror=alert(1)>'))
+    expect(html).not.toContain('<img')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+  })
+
+  it('политика из шаблона: один h1 и реквизиты экранированы', () => {
+    const content = legalPageContent('privacy', {
+      siteName: 'Сайт',
+      siteUrl: null,
+      organization: Organization.parse({ name: 'ООО «<script>alert(1)</script>»' }),
+      metrika: true,
+      ga4: false,
+      cookieMode: 'consent',
+      forms: true,
+      telegram: false,
+      leadRetentionDays: 180,
+      policyPage: '',
+      date: '2026-10-22',
+    })
+    const html = render(content)
+    expect(countH1(html)).toBe(1)
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('ООО «&lt;script&gt;alert(1)&lt;/script&gt;»')
   })
 })

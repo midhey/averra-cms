@@ -1,5 +1,6 @@
 import { type ReactNode, useId, useState } from 'react'
 import { MediaCard } from '../media/MediaCard'
+import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { RedirectRows } from '../seo/RedirectRows'
 import { SearchSnippet } from '../seo/SearchSnippet'
 import { SeoChecks } from '../seo/SeoChecks'
@@ -96,6 +97,8 @@ export function UiShowcase() {
   const [device, setDevice] = useState<'phone' | 'tablet' | 'desktop'>('desktop')
   const [variant, setVariant] = useState<'center' | 'left' | 'split'>('split')
   const [tab, setTab] = useState<'new' | 'done' | 'all'>('new')
+  const [cookieMode, setCookieMode] = useState<'consent' | 'notice'>('consent')
+  const [cookieLook, setCookieLook] = useState<'bar' | 'card' | 'modal'>('card')
   const [title, setTitle] = useState('Ремонт квартир под ключ — с фиксированной сметой')
   const [slug, setSlug] = useState('ceny')
   const [consent, setConsent] = useState(true)
@@ -348,6 +351,42 @@ export function UiShowcase() {
               ]}
               value={variant}
               onChange={setVariant}
+            />
+          </div>
+          <div className={styles.narrow}>
+            <SegmentedControl
+              legend="Режим cookie-уведомления"
+              appearance="list"
+              options={[
+                {
+                  value: 'consent',
+                  label: 'Согласие до аналитики · рекомендуем',
+                  description: 'Метрика и GA подключаются только после «Принять все».',
+                },
+                {
+                  value: 'notice',
+                  label: 'Только уведомление',
+                  description: 'Аналитика работает сразу, посетитель видит «Понятно».',
+                },
+              ]}
+              value={cookieMode}
+              onChange={setCookieMode}
+            />
+          </div>
+          <div className={styles.narrow}>
+            <SegmentedControl
+              legend="Вид уведомления"
+              appearance="cards"
+              fill
+              options={(['bar', 'card', 'modal'] as const).map((look) => ({
+                value: look,
+                label: { bar: 'Плашка снизу', card: 'Карточка в углу', modal: 'Окно по центру' }[
+                  look
+                ],
+                thumbnail: <CookieLookSketch look={look} />,
+              }))}
+              value={cookieLook}
+              onChange={setCookieLook}
             />
           </div>
         </Section>

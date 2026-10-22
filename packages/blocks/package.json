@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./base.css": "./src/base.css"
+    "./base.css": "./src/base.css",
+    "./cookie-consent": "./src/cookie/consent-dom.ts"
   },
   "devEngines": {
     "runtime": {
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "happy-dom": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:",
