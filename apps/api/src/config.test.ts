@@ -529,6 +529,44 @@ describe('порт тестового SMTP (DEV_SMTP_CONNECT_PORT)', () => {
   })
 })
 
+describe('адрес Bot API Telegram (TELEGRAM_API_URL)', () => {
+  it('по умолчанию — настоящий Telegram; свой https-адрес — без косой черты в конце', () => {
+    expect(parseConfig(prodEnv).data?.telegramApiUrl).toBe('https://api.telegram.org')
+    expect(
+      parseConfig({ ...prodEnv, TELEGRAM_API_URL: 'https://tg.example.ru/bot-api/' }).data
+        ?.telegramApiUrl,
+    ).toBe('https://tg.example.ru/bot-api')
+  })
+
+  it('http:// — только в учебном режиме: в адресе запроса идёт токен бота', () => {
+    expect(
+      parseConfig({ TELEGRAM_API_URL: 'http://127.0.0.1:2445' }, dev).data?.telegramApiUrl,
+    ).toBe('http://127.0.0.1:2445')
+    const result = parseConfig({ ...prodEnv, TELEGRAM_API_URL: 'http://tg.example.ru' })
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({
+        path: ['TELEGRAM_API_URL'],
+        message: expect.stringContaining('только https://'),
+      }),
+    ])
+    expect(issuePaths({ TELEGRAM_API_URL: 'ftp://tg.example.ru' })).toEqual(['TELEGRAM_API_URL'])
+  })
+
+  it('http:// — и для своего сервера Bot API на этой машине или в сети docker', () => {
+    for (const url of [
+      'http://127.0.0.1:8081',
+      'http://localhost:8081',
+      'http://telegram-bot-api:8081',
+    ]) {
+      expect(parseConfig({ ...prodEnv, TELEGRAM_API_URL: url }).data?.telegramApiUrl, url).toBe(url)
+    }
+    // Адрес в интернете или во внутренней сети провайдера — только https
+    for (const url of ['http://10.0.0.5:8081', 'http://bot-api.internal']) {
+      expect(parseConfig({ ...prodEnv, TELEGRAM_API_URL: url }).success, url).toBe(false)
+    }
+  })
+})
+
 describe('аргументы API', () => {
   it('без аргументов — обычный запуск, --dev — учебный режим', () => {
     expect(parseApiArgs([])).toEqual({ success: true, dev: false })

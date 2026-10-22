@@ -32,6 +32,12 @@ const icons = {
       <path d="M2.5 10h3.5l1 2h4l1-2h3.5" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M4.5 12.5V8a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5H3z" />
+      <path d="M7.5 15.5a1.5 1.5 0 0 0 3 0" />
+    </>
+  ),
   mail: (
     <>
       <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" />

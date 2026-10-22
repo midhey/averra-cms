@@ -1,10 +1,17 @@
-import { canEditSeo, canSeeLeads, type SiteAccess } from '../permissions'
+import { canEditSeo, canSeeLeads, canSeeNotifications, type SiteAccess } from '../permissions'
 import type { IconName } from '../ui/Icon'
 
 // Что боковая панель показывает роли. Решает всё равно API (apps/api/src/auth/access.ts):
 // скрытый пункт — удобство, а не защита
 
-export type SiteSectionId = 'overview' | 'pages' | 'media' | 'leads' | 'seo' | 'settings'
+export type SiteSectionId =
+  | 'overview'
+  | 'pages'
+  | 'media'
+  | 'leads'
+  | 'notifications'
+  | 'seo'
+  | 'settings'
 
 export type SiteSection = {
   id: SiteSectionId
@@ -16,7 +23,7 @@ export type SiteSection = {
 
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
- * (у редактора и токена newLeads — null). «SEO» — только владельцу
+ * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO» — только владельцу
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [
@@ -26,6 +33,9 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
   ]
   if (canSeeLeads(site.access) && site.newLeads !== null) {
     sections.push({ id: 'leads', label: 'Заявки', icon: 'leads', badge: site.newLeads })
+  }
+  if (canSeeNotifications(site.access)) {
+    sections.push({ id: 'notifications', label: 'Уведомления', icon: 'bell' })
   }
   if (canEditSeo(site.access)) sections.push({ id: 'seo', label: 'SEO', icon: 'search' })
   sections.push({ id: 'settings', label: 'Настройки сайта', icon: 'settings' })

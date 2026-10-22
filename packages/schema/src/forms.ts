@@ -322,13 +322,11 @@ export function leadValuesSchema(fields: readonly FormField[]) {
 /** Срок хранения заявок сайта в днях: по умолчанию полгода */
 export const LEAD_RETENTION_DAYS = { min: 7, max: 1825, default: 180 } as const
 
-/** Настройки заявок сайта: куда слать уведомления, сколько хранить, подтверждать ли посетителю */
+/**
+ * Настройки заявок сайта: сколько хранить и подтверждать ли посетителю. Куда уходят уведомления
+ * о заявках, решает модуль уведомлений (LeadEmailRecipients и чаты Telegram в notifications.ts)
+ */
 export const LeadSettings = z.strictObject({
-  // Пусто — всем владельцам админки
-  recipients: z
-    .array(MailAddress.transform((address) => address.toLowerCase()))
-    .max(10)
-    .refine((list) => new Set(list).size === list.length, 'Адреса повторяются'),
   retentionDays: z.int().min(LEAD_RETENTION_DAYS.min).max(LEAD_RETENTION_DAYS.max),
   confirmToVisitor: z.boolean(),
 })

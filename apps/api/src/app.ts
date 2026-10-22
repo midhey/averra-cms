@@ -18,6 +18,7 @@ import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
+import { notificationsRoutes, siteNotificationsRoutes } from './modules/notifications/routes'
 import { ogRoutes } from './modules/og/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { iconsRoutes } from './modules/settings/icons'
@@ -26,6 +27,7 @@ import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
+import type { NotificationDeps } from './notifications/deps'
 import type { OgCardRenderers } from './og/card'
 import type { SitePublisher } from './publish/queue'
 import { createRateLimiter } from './rate-limit'
@@ -56,6 +58,11 @@ export type AppDeps = {
    * подключения) и очередь. Провайдера берёт обработчик очереди (index.ts)
    */
   mail: MailDeps
+  /**
+   * Уведомления: каналы (почта, Telegram), HTTP-клиент Telegram и как разбудить обработчики
+   * очереди уведомлений и привязки чатов (index.ts)
+   */
+  notifications: NotificationDeps
   /** Адрес админки: из него собираются ссылки в письмах (приглашение, сброс пароля) */
   adminUrl: string
   /**
@@ -97,7 +104,7 @@ export type AppDeps = {
 const RESET_REQUESTS_PER_EMAIL = { max: 3, windowMs: 15 * 60 * 1000 } as const
 
 export function createApp(deps: AppDeps) {
-  const { db, auth, trustedOrigins, log, mail, adminUrl } = deps
+  const { db, auth, trustedOrigins, log, mail, adminUrl, notifications } = deps
   // Свои на каждый экземпляр API: глобального состояния нет, тесты не делят счётчики.
   // По IP — то же правило, что у Better Auth, но проверяется раньше счётчика адресов
   const resetLimits = {
@@ -160,7 +167,13 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
-    .route('/sites/:siteId/leads', leadsRoutes({ db, mail }))
+    .route('/sites/:siteId/leads', leadsRoutes({ db, mail, notifications }))
+    // Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и клиенту
+    .route('/notifications', notificationsRoutes({ db, mail, notifications, passwords, log }))
+    .route(
+      '/sites/:siteId/notifications',
+      siteNotificationsRoutes({ db, mail, notifications, passwords, log }),
+    )
     .route(
       '/sites/:siteId/export',
       exportRoutes({
@@ -188,6 +201,7 @@ export function createApp(deps: AppDeps) {
         db,
         auth,
         mail,
+        notifications,
         adminUrl,
         log,
         ...(deps.leadLimits ? { limits: deps.leadLimits } : {}),

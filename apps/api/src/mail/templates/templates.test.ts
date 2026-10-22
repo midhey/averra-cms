@@ -197,24 +197,65 @@ describe('шаблоны писем', () => {
     ).toBeInstanceOf(MailDataError)
   })
 
-  it('«Адреса уведомлений изменены»: кто, когда и новые адреса; пусто — владельцам', () => {
+  it('«Получатели уведомлений изменены»: кто, когда, адреса и чаты; пусто — владельцам', () => {
     const mail = previewMail('lead-recipients-changed')
-    expect(mail.subject).toBe('Адреса уведомлений о заявках изменены — Ремонт квартир под ключ')
+    expect(mail.subject).toBe('Получатели уведомлений о заявках изменены — Ремонт квартир под ключ')
     expect(mail.text).toContain('Кто: Анна (anna@example.ru)')
-    expect(mail.text).toContain('Теперь заявки приходят: manager@example.ru, sales@example.ru')
+    expect(mail.text).toContain(
+      'Теперь заявки приходят: manager@example.ru, sales@example.ru, Telegram «Отдел продаж»',
+    )
     const owners = renderMail('lead-recipients-changed', {
       ...mailTemplates['lead-recipients-changed'].example,
       changedBy: '<b>Клиент</b>',
-      recipients: [],
+      targets: [],
     })
     expect(owners.text).toContain('Теперь заявки приходят: владельцам админки')
     expect(owners.html).toContain('&lt;b&gt;Клиент&lt;/b&gt;')
+    // Письмо, поставленное в очередь до модуля уведомлений (адреса почты в recipients),
+    // собирается как раньше
+    const { targets: _, ...base } = mailTemplates['lead-recipients-changed'].example
+    expect(
+      renderMail('lead-recipients-changed', {
+        ...base,
+        recipients: ['manager@example.ru', 'sales@example.ru'],
+      }).text,
+    ).toContain('Теперь заявки приходят: manager@example.ru, sales@example.ru')
+    expect(renderMail('lead-recipients-changed', { ...base, recipients: [] }).text).toContain(
+      'Теперь заявки приходят: владельцам админки',
+    )
     expect(
       errorOf(() =>
         renderMail('lead-recipients-changed', {
           ...mailTemplates['lead-recipients-changed'].example,
           recipients: ['a@b.ru\nBcc: x@evil.ru'],
         }),
+      ),
+    ).toBeInstanceOf(MailDataError)
+    expect(
+      errorOf(() =>
+        renderMail('lead-recipients-changed', {
+          ...mailTemplates['lead-recipients-changed'].example,
+          targets: ['Telegram «Чат»\nBcc: x@evil.ru'],
+        }),
+      ),
+    ).toBeInstanceOf(MailDataError)
+  })
+
+  it('«Уведомление»: заголовок — тема, поля таблицей, ссылка кнопкой; данные экранируются', () => {
+    const mail = renderMail('notification', {
+      title: 'Ремонт: бэкап не прошёл',
+      lines: ['Последний бэкап <не удался>'],
+      fields: [{ label: 'Причина', value: 'диск & память' }],
+      link: { label: 'Состояние установки', url: 'https://admin.example.ru/status' },
+    })
+    expect(mail.subject).toBe('Ремонт: бэкап не прошёл')
+    expect(mail.html).toContain('Последний бэкап &lt;не удался&gt;')
+    expect(mail.html).toContain('диск &amp; память')
+    expect(mail.text).toContain('Причина: диск & память')
+    expect(mail.text).toContain('Состояние установки: https://admin.example.ru/status')
+    expect(
+      errorOf(() =>
+        renderMail('notification', { title: 'А\nBcc: x@evil.ru', lines: [], fields: [] }),
       ),
     ).toBeInstanceOf(MailDataError)
   })

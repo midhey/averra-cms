@@ -35,6 +35,16 @@ export const smtpTest = {
 } as const
 
 /**
+ * Фейковый Bot API Telegram e2e (apps/api/src/notifications/testing/fake-telegram.ts): его поднимает
+ * сам тест уведомлений, а API e2e ходит к нему вместо api.telegram.org (TELEGRAM_API_URL: http —
+ * для localhost и 127.x, как здесь, и имени сервиса docker без точки). Токен — учебный, только для e2e
+ */
+export const telegramTest = {
+  port: 2445,
+  token: '7000002:AAE2eFakeTokenOnlyForPlaywrightTests_xyz',
+} as const
+
+/**
  * Куда API e2e собирает сайты при публикации (PUBLISH_DIR): <id сайта>/releases/… и
  * ссылка current. Стирается вместе с базой перед каждым прогоном
  */

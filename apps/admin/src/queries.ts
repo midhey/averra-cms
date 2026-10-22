@@ -27,6 +27,11 @@ export const queryKeys = {
   siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
+  notifications: ['notifications'] as const,
+  notificationOutbox: ['notifications', 'outbox'] as const,
+  siteNotifications: (siteId: string) => ['sites', siteId, 'notifications'] as const,
+  linkState: (siteId: string | null, id: string) =>
+    ['notifications', 'link', siteId ?? 'service', id] as const,
   mail: ['mail'] as const,
   mailOutbox: ['mail', 'outbox'] as const,
   mailSmtp: ['mail', 'smtp'] as const,
@@ -276,6 +281,45 @@ export const statusQuery = () =>
     queryKey: queryKeys.status,
     queryFn: async () => {
       const res = await api.status.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Уведомления установки: каналы (без секретов — у Telegram только «токен задан»), служебные
+ * события и их получатели. Только владельцу: остальным API ответит 403
+ */
+export const notificationsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.notifications,
+    queryFn: async () => {
+      const res = await api.notifications.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Последние сообщения очереди уведомлений (Telegram), новые сверху. Только владельцу */
+export const notificationOutboxQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.notificationOutbox,
+    queryFn: async () => {
+      const res = await api.notifications.outbox.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Получатели уведомлений о заявках сайта, готовность каналов (имя бота для привязки) и куда
+ * уведомления уходят сейчас. Владельцу и клиенту, редактору API ответит 403
+ */
+export const siteNotificationsQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.siteNotifications(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].notifications.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

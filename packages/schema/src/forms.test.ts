@@ -325,20 +325,14 @@ describe('блок «Форма»', () => {
 })
 
 describe('настройки заявок', () => {
-  it('адреса проверяются схемой почты и приводятся к строчным', () => {
-    expect(
-      LeadSettings.parse({
-        recipients: ['Manager@Example.ru'],
-        retentionDays: 180,
-        confirmToVisitor: true,
-      }).recipients,
-    ).toEqual(['manager@example.ru'])
-    const bad = { recipients: ['a@b.ru\nBcc: x@y.ru'], retentionDays: 180, confirmToVisitor: true }
-    expect(LeadSettings.safeParse(bad).success).toBe(false)
+  it('адресов уведомлений в них больше нет: их ведёт модуль уведомлений', () => {
+    const base = { retentionDays: 180, confirmToVisitor: true }
+    expect(LeadSettings.safeParse(base).success).toBe(true)
+    expect(LeadSettings.safeParse({ ...base, recipients: [] }).success).toBe(false)
   })
 
   it('срок — от 7 дней до 5 лет', () => {
-    const base = { recipients: [], confirmToVisitor: false }
+    const base = { confirmToVisitor: false }
     expect(LeadSettings.safeParse({ ...base, retentionDays: 6 }).success).toBe(false)
     expect(LeadSettings.safeParse({ ...base, retentionDays: 1826 }).success).toBe(false)
     expect(LeadSettings.safeParse({ ...base, retentionDays: 30 }).success).toBe(true)

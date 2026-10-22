@@ -33,8 +33,9 @@ export const sites = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     name: text().notNull(),
     theme: jsonb().$type<Theme>().notNull(),
-    // Заявки с форм сайта. Кому слать уведомления: пусто — всем владельцам админки.
-    // Адреса проверены LeadSettings при сохранении
+    // Устарело: адреса уведомлений о заявках живут в notification_recipients (модуль уведомлений,
+    // миграция 0016 перенесла их туда). Колонку пишет модуль, пока прежняя версия API может
+    // читать её при откате; удаляется вторым шагом
     leadRecipients: jsonb().$type<string[]>().notNull().default([]),
     // Сколько дней хранить заявки: в них персональные данные (152-ФЗ)
     leadRetentionDays: integer().notNull().default(180),
@@ -535,3 +536,156 @@ export const siteBuilds = pgTable(
     uniqueIndex('site_builds_one_queued').on(table.siteId).where(sql`${table.status} = 'queued'`),
   ],
 )
+
+/**
+ * Каналы уведомлений установки (src/notifications/channels): включён ли канал, его открытые
+ * настройки (имя бота, адрес прокси без пароля) и секрет — только зашифрованным (SecretBox, формат
+ * держит CHECK). Строки нет — канал по умолчанию: почта включена, Telegram не настроен. Список
+ * каналов не держит CHECK: новый канал — адаптер в коде, без миграции
+ */
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    kind: text().notNull().unique(),
+    enabled: boolean().notNull().default(true),
+    // Открытые настройки по схеме адаптера: их видит админка
+    settings: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    // Секрет канала (у Telegram — токен бота и прокси): v1.<версия ключа>.<iv>.<тег>.<шифротекст>
+    secretEncrypted: text(),
+    updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('notification_channels_settings_object', sql`jsonb_typeof(${table.settings}) = 'object'`),
+    // Секрет только зашифрованным: открытый токен база не примет даже по ошибке в коде
+    check(
+      'notification_channels_secret_sealed',
+      sql`${table.secretEncrypted} IS NULL OR ${table.secretEncrypted} ~ '^v1[.][0-9a-f]{16}[.][A-Za-z0-9_-]{16}[.][A-Za-z0-9_-]{22}[.][A-Za-z0-9_-]+$'`,
+    ),
+  ],
+)
+
+/**
+ * Получатели уведомлений: адрес в канале (почта или chat id Telegram) и на какие события он
+ * подписан. Аудитория — по site_id: сайт — уведомления о его заявках (их меняют владелец и клиент),
+ * NULL — служебные события установки (только владелец). Адрес в канале у аудитории один
+ */
+export const notificationRecipients = pgTable(
+  'notification_recipients',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    channel: text().notNull(),
+    address: text().notNull(),
+    // Как показать получателя: название чата или имя в Telegram. У почты — нет
+    label: text(),
+    // Id событий из src/notifications/events.ts
+    events: jsonb().$type<string[]>().notNull().default([]),
+    createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('notification_recipients_address_unique')
+      .on(table.siteId, table.channel, table.address)
+      .nullsNotDistinct(),
+    check('notification_recipients_events_array', sql`jsonb_typeof(${table.events}) = 'array'`),
+  ],
+)
+
+/**
+ * Одноразовые коды привязки чата Telegram. В ссылке t.me/<бот>?start=<код> — сам код, здесь —
+ * его SHA-256. Код живёт недолго, работает один раз и привязывает чат только к своей аудитории
+ */
+export const notificationLinkCodes = pgTable(
+  'notification_link_codes',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    codeHash: text().notNull().unique(),
+    channel: text().notNull(),
+    // Аудитория, как у notification_recipients: сайт — заявки, NULL — служебные
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    usedAt: timestamp({ withTimezone: true }),
+    // Какой чат привязали этим кодом
+    recipientId: uuid().references(() => notificationRecipients.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    index('notification_link_codes_expires_idx').on(table.expiresAt),
+    check('notification_link_codes_expires_valid', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+)
+
+/** Состояние сообщения в очереди уведомлений — как у писем */
+export type NotificationStatusValue = 'pending' | 'sending' | 'sent' | 'failed'
+
+/**
+ * Очередь уведомлений каналов, кроме почты (у почты своя mail_outbox — туда её адаптер и ставит
+ * письма). Сообщение пишется в той же транзакции, что и событие (заявка), а отправляет его
+ * обработчик с повторами. Данные события (data) живут только до отправки или окончательной
+ * неудачи, строки удаляются через MAIL_RETENTION_DAYS, уведомления о заявке — вместе с ней
+ */
+export const notificationOutbox = pgTable(
+  'notification_outbox',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    leadId: uuid().references(() => leads.id, { onDelete: 'cascade' }),
+    // Получатель из настроек. Отвязали — ждущие сообщения ему удаляются при отвязке
+    recipientId: uuid().references(() => notificationRecipients.id, { onDelete: 'set null' }),
+    channel: text().notNull(),
+    // Куда: chat id. Копия адреса — сообщение о смене получателей уходит и отвязанному чату
+    address: text().notNull(),
+    event: text().notNull(),
+    data: jsonb().$type<unknown>(),
+    status: text().$type<NotificationStatusValue>().notNull().default('pending'),
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lockedUntil: timestamp({ withTimezone: true }),
+    claimId: uuid(),
+    // Текст последней ошибки, без секретов
+    lastError: text(),
+    lastAttemptAt: timestamp({ withTimezone: true }),
+    // Id сообщения, который вернул канал
+    messageId: text(),
+    sentAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('notification_outbox_due_idx').on(table.status, table.nextAttemptAt),
+    index('notification_outbox_lead_id_idx').on(table.leadId),
+    index('notification_outbox_site_id_idx').on(table.siteId),
+    index('notification_outbox_recipient_id_idx').on(table.recipientId),
+    check(
+      'notification_outbox_status_valid',
+      sql`${table.status} IN ('pending', 'sending', 'sent', 'failed')`,
+    ),
+    check('notification_outbox_attempts_valid', sql`${table.attempts} >= 0`),
+    check(
+      'notification_outbox_sent_at_valid',
+      sql`(${table.status} = 'sent') = (${table.sentAt} IS NOT NULL)`,
+    ),
+    // Данные нужны, пока сообщение ждёт; ушло или окончательно не ушло — их нет
+    check(
+      'notification_outbox_data_lifetime',
+      sql`(${table.status} IN ('pending', 'sending')) = (${table.data} IS NOT NULL)`,
+    ),
+  ],
+)
+
+/**
+ * Служебные проблемы, о которых уже уведомили (src/notifications/watch.ts): ключ проблемы
+ * и когда она появилась. Уведомление уходит на переходе «нет → есть» и «есть → нет», а не на
+ * каждом круге — и не повторяется после перезапуска API
+ */
+export const notificationWatch = pgTable('notification_watch', {
+  key: text().primaryKey(),
+  event: text().notNull(),
+  // Данные события на момент появления: из них — сообщение «снова в порядке». Без персональных
+  // данных: имя диска, название сайта, причина сбоя
+  data: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+  raisedAt: timestamp({ withTimezone: true }).notNull(),
+})

@@ -16,6 +16,7 @@ import { z } from 'zod'
 import type { Auth } from '../../auth/auth'
 import type { Db } from '../../db/client'
 import { errorForLog } from '../../log-error'
+import { type NotificationDeps, notifyDepsOf } from '../../notifications/deps'
 import { createRateLimiter } from '../../rate-limit'
 import type { MailDeps } from '../mail/routes'
 import { messagePage, PAGE_HEADERS } from './pages'
@@ -130,6 +131,7 @@ type FormsDeps = {
   db: Db
   auth: Auth
   mail: MailDeps
+  notifications: NotificationDeps
   adminUrl: string
   log: (message: string) => void
   limits?: LeadLimits
@@ -141,7 +143,15 @@ type FormsDeps = {
  * в auth/middleware.ts). Сайт без JavaScript, поэтому ответ — для браузера: 303 обратно на страницу
  * с якорем успеха или понятная HTML-страница ошибки. Кто просит только JSON — ApiError
  */
-export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMITS }: FormsDeps) {
+export function formsRoutes({
+  db,
+  auth,
+  mail,
+  notifications,
+  adminUrl,
+  log,
+  limits = LEAD_LIMITS,
+}: FormsDeps) {
   // Свои на каждый экземпляр API: глобального состояния нет. IP живёт только здесь, в памяти
   const byIp = createRateLimiter(limits.perIp)
   const bySite = createRateLimiter(limits.perSite)
@@ -319,7 +329,7 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
         await acceptLead(db, {
           form: published,
           values: parsed.data,
-          mailEnabled: mail.runtime.status().enabled,
+          notifications: notifyDepsOf(mail, notifications),
           adminUrl,
         })
       } catch (error) {
@@ -334,6 +344,7 @@ export function formsRoutes({ db, auth, mail, adminUrl, log, limits = LEAD_LIMIT
         })
       }
       mail.wake()
+      notifications.wake()
       return success(c, slug, blockId, props.successText)
     },
   )

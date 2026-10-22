@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
 import { type MediaStorage, mediaKey } from '../../media/storage'
+import { notificationSettingsRepo } from '../../notifications/settings'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
 import { readStoredSettings } from '../settings/read'
 import type { ZipEntry } from './zip'
@@ -17,7 +18,10 @@ const README = `Выгрузка сайта из Averra CMS
 ============================
 
 site.json — все данные сайта (формат averra-site-export, версия ${EXPORT_FORMAT_VERSION}):
-  site      — название, тема оформления (цвета, шрифты), настройки заявок и SEO (settings:
+  site      — название, тема оформления (цвета, шрифты), настройки заявок (leadSettings:
+              recipients — адреса почты для заявок, notificationRecipients — все получатели
+              уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
+              и SEO (settings:
               шаблон заголовка, описание, язык, адрес, индексация, иконка, коды проверки,
               счётчики аналитики, организация, редиректы);
   pages     — страницы: адрес (slug), черновик (draft) и опубликованная версия (published)
@@ -70,6 +74,14 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
   const { db, storage, siteId, now } = source
   const [site] = await db.select().from(sites).where(eq(sites.id, siteId))
   if (!site) throw new Error(`Сайт ${siteId} пропал во время выгрузки`)
+  // Получатели — из модуля уведомлений, а не из устаревшей sites.lead_recipients: там только
+  // почта, и колонку удалят. recipients оставлен ради формата версии 1
+  const recipients = (await notificationSettingsRepo(db).recipients(siteId)).map((row) => ({
+    channel: row.channel,
+    address: row.address,
+    label: row.label,
+    events: row.events,
+  }))
   // Строки медиатеки — описания картинок, по сотне байт: их держим, а файлы — по одному
   const mediaRows = await db
     .select()
@@ -113,7 +125,10 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       theme: site.theme,
       createdAt: site.createdAt.toISOString(),
       leadSettings: {
-        recipients: site.leadRecipients,
+        recipients: recipients
+          .filter((row) => row.channel === 'email' && row.events.includes('lead.new'))
+          .map((row) => row.address),
+        notificationRecipients: recipients,
         retentionDays: site.leadRetentionDays,
         confirmToVisitor: site.leadConfirmation,
       },

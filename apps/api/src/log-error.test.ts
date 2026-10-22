@@ -58,4 +58,23 @@ describe('ошибка для лога', () => {
     expect(errorForLog(error)).toBe(error)
     expect(errorForLog('строка')).toBe('строка')
   })
+
+  it('ошибка разбора адреса — без input: в адресе прокси бывает пароль', () => {
+    const address = 'socks5://user:pa#ssw0rd@127.0.0.1:1080'
+    let caught: unknown
+    try {
+      new URL(address)
+    } catch (error) {
+      caught = error
+    }
+    // Как напечатала бы консоль без errorForLog: адрес целиком
+    expect(printed(caught)).toContain('pa#ssw0rd')
+    const text = printed(errorForLog(caught))
+    expect(text).not.toContain('pa#ssw0rd')
+    expect(text).toContain('Invalid URL')
+    expect(text).toContain('ERR_INVALID_URL')
+    expect(printed(errorForLog(new Error('Не сохранилось', { cause: caught })))).not.toContain(
+      'pa#ssw0rd',
+    )
+  })
 })

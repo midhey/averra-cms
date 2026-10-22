@@ -49,10 +49,10 @@ describe('заявки в админке', () => {
   })
 
   it('ошибка адреса называет сам адрес', () => {
-    expect(recipientsError({ 'recipients.1': 'Нужен адрес почты' }, ['a@b.ru', 'плохой'])).toBe(
+    expect(recipientsError({ 'addresses.1': 'Нужен адрес почты' }, ['a@b.ru', 'плохой'])).toBe(
       'плохой: Нужен адрес почты',
     )
-    expect(recipientsError({ recipients: 'Адреса повторяются' }, [])).toBe('Адреса повторяются')
+    expect(recipientsError({ addresses: 'Адреса повторяются' }, [])).toBe('Адреса повторяются')
     expect(recipientsError({ retentionDays: 'Мало' }, [])).toBeUndefined()
   })
 
@@ -128,13 +128,16 @@ describe('карточка и список заявок', () => {
   })
 
   it('куда уходят уведомления и сколько хранятся заявки', () => {
-    expect(notificationsLine({ recipients: [], retentionDays: 180 }, true)).toBe(
+    expect(notificationsLine({ enabled: true, targets: [] }, { retentionDays: 180 })).toBe(
       'Уведомления уходят владельцам админки · хранятся 180 дней',
     )
-    expect(notificationsLine({ recipients: ['a@b.ru', 'c@d.ru'], retentionDays: 31 }, true)).toBe(
-      'Уведомления уходят на a@b.ru, c@d.ru · хранятся 31 день',
-    )
-    expect(notificationsLine({ recipients: ['a@b.ru'], retentionDays: 22 }, false)).toBe(
+    expect(
+      notificationsLine(
+        { enabled: true, targets: ['a@b.ru', 'Telegram «Продажи»'] },
+        { retentionDays: 31 },
+      ),
+    ).toBe('Уведомления уходят: a@b.ru, Telegram «Продажи» · хранятся 31 день')
+    expect(notificationsLine({ enabled: false, targets: ['a@b.ru'] }, { retentionDays: 22 })).toBe(
       'Уведомления не уходят · хранятся 22 дня',
     )
   })

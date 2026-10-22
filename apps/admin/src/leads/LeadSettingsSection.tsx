@@ -1,5 +1,6 @@
 import { LeadSettings } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { type FormEvent, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
@@ -9,26 +10,25 @@ import { leadSettingsQuery, queryKeys } from '../queries'
 import { Button } from '../ui/Button'
 import { Checkbox, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
-import { FormActions, formClassName, Section } from '../ui/Screen'
-import { parseRecipients, recipientsError } from './lead-format'
+import { FormActions, formClassName, mutedClassName, Section } from '../ui/Screen'
 
 type Notice = { kind: 'done' | 'error'; text: string }
 
-const fieldOrder = ['recipients', 'retentionDays']
+const fieldOrder = ['retentionDays']
 
-/** Настройки заявок сайта: куда слать уведомления, сколько хранить и письмо посетителю */
+/**
+ * Настройки заявок сайта: сколько хранить и письмо посетителю. Куда уходят уведомления о заявках —
+ * в разделе «Уведомления» (почта и Telegram)
+ */
 export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: string }) {
   const { data: saved } = useSuspenseQuery(leadSettingsQuery(siteId))
   const queryClient = useQueryClient()
   const formRef = useRef<HTMLFormElement>(null)
-  const [recipients, setRecipients] = useState(saved.recipients.join(', '))
   const [retentionDays, setRetentionDays] = useState(String(saved.retentionDays))
   const [confirmToVisitor, setConfirmToVisitor] = useState(saved.confirmToVisitor)
   const [notice, setNotice] = useState<Notice>()
 
-  const addresses = parseRecipients(recipients)
   const parsed = LeadSettings.safeParse({
-    recipients: addresses,
     retentionDays: Number(retentionDays),
     confirmToVisitor,
   })
@@ -41,7 +41,6 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
       return res.json()
     },
     onSuccess: async (settings) => {
-      setRecipients(settings.recipients.join(', '))
       setRetentionDays(String(settings.retentionDays))
       await queryClient.invalidateQueries({ queryKey: queryKeys.leads(siteId) })
       setNotice({ kind: 'done', text: 'Настройки заявок сохранены' })
@@ -55,19 +54,12 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
     },
   })
 
-  const recipientsMessage = recipientsError(form.errors, addresses)
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     form.attempt()
     setNotice(undefined)
     if (!parsed.success) {
-      // Ошибки адресов приходят по пути recipients.N, а поле одно — recipients
-      const errors = zodFieldErrors(parsed.error)
-      const target = recipientsError(errors, addresses)
-        ? 'recipients'
-        : firstInvalidField(fieldOrder, errors)
-      focusField(formRef.current, target)
+      focusField(formRef.current, firstInvalidField(fieldOrder, zodFieldErrors(parsed.error)))
       return
     }
     save.mutate(parsed.data)
@@ -77,9 +69,13 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
     <Section
       id={id}
       title="Заявки"
-      description="Уведомления о новых заявках и сколько их хранить: в заявках персональные данные посетителей."
+      description="Сколько хранить заявки и подтверждать ли посетителю: в заявках персональные данные посетителей."
       card
     >
+      <p className={mutedClassName}>
+        Куда приходят уведомления о новых заявках — почта и Telegram —{' '}
+        <Link to="/notifications">в разделе «Уведомления»</Link>.
+      </p>
       <form
         ref={formRef}
         aria-label="Настройки заявок"
@@ -87,17 +83,6 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
         onSubmit={submit}
         noValidate
       >
-        <TextInput
-          label="Адреса для уведомлений"
-          name="recipients"
-          value={recipients}
-          onChange={(event) => {
-            setRecipients(event.target.value)
-            form.clearServerError('recipients')
-          }}
-          error={recipientsMessage}
-          hint="Через запятую, до 10 адресов. Пусто — уведомления получают владельцы админки. О смене адресов письмом узнают владельцы и прежние адреса"
-        />
         <TextInput
           label="Хранить заявки, дней"
           name="retentionDays"

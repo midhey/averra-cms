@@ -1,0 +1,193 @@
+@use "@averra/ui" as ui;
+
+// Раздел «Уведомления»: каналы, получатели и привязка чата — столбиком с ритмом концепта
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+// Канал: заголовок с состоянием, сведения, действия
+.channel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+
+  & + & {
+    padding-block-start: var(--space-5);
+    border-top: ui.rem(1) solid var(--color-border);
+  }
+}
+
+.channelHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.channelTitle {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-semibold);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5) 0 0;
+  margin: 0;
+  border: 0;
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.legend {
+  float: inline-start;
+  width: 100%;
+  margin-block-end: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+}
+
+// Получатели: имя и что получает слева, действия справа; на телефоне — под именем
+.recipients {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.recipient {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.recipientText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.recipientName {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.recipientMeta {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+// События служебного получателя: флажки строкой, на узком экране — столбиком
+.events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  inline-size: 100%;
+}
+
+.eventsLegend {
+  margin-block-end: var(--space-2);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+// Ссылка на бота с кодом: что сделать и чего ждём
+.link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-control);
+}
+
+.linkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.waiting {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.stepOk,
+.stepFailed {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.stepIcon {
+  flex-shrink: 0;
+  margin-block-start: ui.rem(2);
+}
+
+.stepOk .stepIcon {
+  color: var(--color-success-text);
+}
+
+.stepFailed .stepIcon {
+  color: var(--color-danger-text);
+}
+
+.error {
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+  overflow-wrap: anywhere;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+// Итог сохранения бота: на него переводится фокус, когда форма собралась заново
+.notice {
+  padding: ui.rem(14) var(--space-4);
+  color: var(--color-success-text);
+  background: var(--color-success-surface);
+  border-radius: var(--radius-control);
+}

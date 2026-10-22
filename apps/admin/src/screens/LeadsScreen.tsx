@@ -85,10 +85,8 @@ function SiteLeads({ siteId }: { siteId: string }) {
         title="Заявки"
         meta={
           <>
-            <span>{notificationsLine(settings, notifications.enabled)}</span>
-            <Link to="/settings" hash="leads">
-              Настроить
-            </Link>
+            <span>{notificationsLine(notifications, settings)}</span>
+            <Link to="/notifications">Настроить</Link>
           </>
         }
         actions={

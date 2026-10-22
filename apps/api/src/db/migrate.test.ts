@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -551,5 +551,39 @@ describe('миграция 0013_lead_data_bytes', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.data_bytes).toBeGreaterThan(40)
     expect(rows[0]?.data_bytes).toBe(rows[0]?.expected)
+  })
+})
+
+describe('миграция 0016_notifications', () => {
+  it('переносит адреса уведомлений о заявках в получателей «Новой заявки», колонку не трогает', async () => {
+    client = new PGlite()
+    const before = readdirSync(new URL('../../drizzle', import.meta.url))
+      .filter((name) => name.endsWith('.sql') && name < '0016')
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort()
+    for (const name of before) await applyMigration(client, name)
+    const withRecipients = '00000000-0000-4000-8000-000000000016'
+    const withoutRecipients = '00000000-0000-4000-8000-000000000017'
+    await client.exec(`
+      INSERT INTO sites (id, name, theme, lead_recipients) VALUES
+        ('${withRecipients}', 'С адресами', '{}', '["boss@example.ru", "Manager@Example.ru"]'),
+        ('${withoutRecipients}', 'Без адресов', '{}', '[]');
+    `)
+
+    await applyMigration(client, '0016_notifications')
+
+    const { rows } = await client.query<{ site_id: string; address: string; events: string[] }>(
+      `SELECT site_id, address, events FROM notification_recipients
+       WHERE channel = 'email' ORDER BY address`,
+    )
+    expect(rows).toEqual([
+      { site_id: withRecipients, address: 'boss@example.ru', events: ['lead.new'] },
+      { site_id: withRecipients, address: 'manager@example.ru', events: ['lead.new'] },
+    ])
+    // Прежняя версия API читает колонку при откате: она на месте и с теми же адресами
+    const { rows: sites } = await client.query<{ lead_recipients: string[] }>(
+      `SELECT lead_recipients FROM sites WHERE id = '${withRecipients}'`,
+    )
+    expect(sites[0]?.lead_recipients).toEqual(['boss@example.ru', 'Manager@Example.ru'])
   })
 })

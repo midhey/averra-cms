@@ -1,29 +1,22 @@
 import {
   type FormField,
   form,
-  type LeadSettings,
   type LeadValue,
   MAIN_PAGE_SLUG,
   type MailAddress,
 } from '@averra/schema'
 import { and, eq, gt, isNotNull, max } from 'drizzle-orm'
-import type { SessionUser } from '../../auth/access'
 import type { Db } from '../../db/client'
-import {
-  mailOutbox,
-  pageRevisions,
-  pages,
-  type StoredLeadField,
-  sites,
-  users,
-} from '../../db/schema'
+import { mailOutbox, pageRevisions, pages, type StoredLeadField, sites } from '../../db/schema'
 import { mailboxKey } from '../../mail/mailbox-key'
 import { type DbOrTx, enqueueMail } from '../../mail/outbox'
 import { toMailLine } from '../../mail/templates/line'
+import { type NotifyDeps, notify } from '../../notifications/notify'
 import { leadsRepo } from './repo'
 
 // Приём заявки: поиск формы в опубликованной версии страницы и запись заявки вместе
-// с письмами о ней. HTTP и антиспам — в public-routes.ts
+// с уведомлениями о ней (модуль уведомлений) и подтверждением посетителю. HTTP и антиспам —
+// в public-routes.ts
 
 /** Подтверждение посетителю — не чаще раза в сутки в один ящик с одного сайта */
 const CONFIRMATION_PERIOD_MS = 24 * 60 * 60 * 1000
@@ -49,7 +42,6 @@ export async function findPublishedForm(
   const [row] = await db
     .select({
       siteName: sites.name,
-      recipients: sites.leadRecipients,
       confirmation: sites.leadConfirmation,
       pageId: pages.id,
       published: pages.published,
@@ -79,7 +71,6 @@ export async function findPublishedForm(
     site: {
       id: siteId,
       name: row.siteName,
-      recipients: row.recipients,
       confirmation: row.confirmation,
     },
     page: { id: row.pageId, slug, version: revision?.version ?? null },
@@ -115,11 +106,6 @@ function visitorEmail(data: readonly StoredLeadField[]): MailAddress | undefined
   return typeof email?.value === 'string' ? email.value : undefined
 }
 
-async function ownerEmails(tx: DbOrTx) {
-  const rows = await tx.select({ email: users.email }).from(users).where(eq(users.role, 'owner'))
-  return rows.map((row) => row.email)
-}
-
 /**
  * Ставили ли подтверждение с этого сайта за последние сутки в этот же ящик. Сравниваем ящики
  * (mailboxKey), а не адреса: иначе vasya+1@…, vasya+2@… и V.asya@gmail.com получали бы каждый
@@ -145,21 +131,22 @@ type AcceptInput = {
   form: PublishedForm
   /** Проверенные значения по leadValuesSchema: только поля формы и согласие */
   values: Record<string, LeadValue>
-  /** Работает ли почта. Нет — заявка сохраняется, письма не ставятся */
-  mailEnabled: boolean
-  /** Адрес админки: ссылка на заявку в письме владельцу */
+  /** Каналы уведомлений и состояние почты: что не готово, туда не ставим */
+  notifications: NotifyDeps
+  /** Адрес админки: ссылка на заявку в уведомлении */
   adminUrl: string
   now?: Date
 }
 
 /**
- * Заявка и письма о ней — одной транзакцией: упадёт запись письма — не будет и заявки, а посетитель
- * увидит ошибку, а не «отправлено», о котором никто не узнает. Письма: уведомление на адреса сайта
- * (пусто — владельцам админки) с Reply-To посетителя и подтверждение посетителю с фиксированным
- * текстом — если он указал почту, подтверждение на сайте включено и сутки ему его не ставили
+ * Заявка и уведомления о ней — одной транзакцией: упадёт запись уведомления — не будет и заявки,
+ * а посетитель увидит ошибку, а не «отправлено», о котором никто не узнает. Уведомление «Новая
+ * заявка» — получателям сайта по готовым каналам (никого — владельцам письмом, notify).
+ * Подтверждение посетителю с фиксированным текстом — письмом, если почта работает, он указал
+ * почту, подтверждение на сайте включено и сутки ему его не ставили
  */
 export async function acceptLead(db: Db, input: AcceptInput) {
-  const { form: published, values, mailEnabled, adminUrl, now = new Date() } = input
+  const { form: published, values, notifications, adminUrl, now = new Date() } = input
   const { site, page, props } = published
   const data = leadSnapshot(props.fields, values)
   const email = visitorEmail(data)
@@ -177,38 +164,34 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       pageVersion: page.version,
       now,
     })
-    if (!mailEnabled) return { id: lead.id, notified: 0, confirmed: false }
-
-    const recipients = site.recipients.length > 0 ? site.recipients : await ownerEmails(tx)
     const siteName = toMailLine(site.name, 80, 'сайт')
-    for (const to of recipients) {
-      await enqueueMail(
-        tx,
-        {
-          template: 'lead-new',
-          data: {
-            siteName,
-            formTitle: toMailLine(props.title, 120, 'Форма'),
-            pagePath: pagePath(page.slug),
-            fields: data.map((field) => ({
-              label: toMailLine(field.label, 80, field.name),
-              value: displayValue(field),
-            })),
-            createdAt: now.toISOString(),
-            // Админка без id сайта в адресе: в установке один сайт
-            url: `${adminUrl}/leads/${lead.id}`,
-            ...(email === undefined ? {} : { replyTo: email }),
-          },
-          to,
-          siteId: site.id,
-          leadId: lead.id,
-        },
-        now,
-      )
-    }
+    const { queued } = await notify(tx, notifications, {
+      event: 'lead.new',
+      data: {
+        siteName,
+        formTitle: toMailLine(props.title, 120, 'Форма'),
+        pagePath: pagePath(page.slug),
+        fields: data.map((field) => ({
+          label: toMailLine(field.label, 80, field.name),
+          value: displayValue(field),
+        })),
+        createdAt: now.toISOString(),
+        // Админка без id сайта в адресе: в установке один сайт
+        url: `${adminUrl}/leads/${lead.id}`,
+        ...(email === undefined ? {} : { replyTo: email }),
+      },
+      siteId: site.id,
+      leadId: lead.id,
+      now,
+    })
 
     let confirmed = false
-    if (email && site.confirmation && !(await confirmedRecently(tx, site.id, email, now))) {
+    if (
+      notifications.readiness.mailEnabled &&
+      email &&
+      site.confirmation &&
+      !(await confirmedRecently(tx, site.id, email, now))
+    ) {
       await enqueueMail(
         tx,
         {
@@ -222,58 +205,6 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       )
       confirmed = true
     }
-    return { id: lead.id, notified: recipients.length, confirmed }
-  })
-}
-
-type SettingsInput = {
-  siteId: string
-  settings: LeadSettings
-  /** Кто меняет: имя и почта уйдут в письмо о смене адресов */
-  user: SessionUser
-  mailEnabled: boolean
-  now?: Date
-}
-
-/**
- * Сохраняет настройки заявок сайта. Сменились адреса уведомлений — в той же транзакции письмо
- * всем владельцам и прежним адресам: клиент может направить заявки (персональные данные) куда
- * угодно, и это не должно пройти молча. undefined — сайта нет
- */
-export async function saveLeadSettings(db: Db, input: SettingsInput) {
-  const { siteId, settings, user, mailEnabled, now = new Date() } = input
-  const repo = leadsRepo(db)
-  return db.transaction(async (tx) => {
-    const [site] = await tx
-      .select({ name: sites.name, recipients: sites.leadRecipients })
-      .from(sites)
-      .where(eq(sites.id, siteId))
-      .for('update')
-    if (!site) return undefined
-    const saved = await repo.saveSettings(siteId, settings, tx)
-    const before = [...site.recipients].sort().join(',')
-    const after = [...settings.recipients].sort().join(',')
-    if (!mailEnabled || before === after) return saved
-
-    const notify = new Set([...(await ownerEmails(tx)), ...site.recipients])
-    for (const to of notify) {
-      await enqueueMail(
-        tx,
-        {
-          template: 'lead-recipients-changed',
-          data: {
-            siteName: toMailLine(site.name, 80, 'сайт'),
-            changedBy: toMailLine(user.name, 100, 'Пользователь'),
-            changedByEmail: user.email,
-            changedAt: now.toISOString(),
-            recipients: settings.recipients,
-          },
-          to,
-          siteId,
-        },
-        now,
-      )
-    }
-    return saved
+    return { id: lead.id, notified: queued, confirmed }
   })
 }

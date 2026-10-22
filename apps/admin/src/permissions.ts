@@ -34,6 +34,13 @@ export function safeRedirect(target: unknown) {
  */
 export const canSeeLeads = (access: SiteAccess) => access !== 'editor'
 
+/**
+ * Раздел «Уведомления»: получателей уведомлений о заявках меняют владелец и клиент (как настройки
+ * заявок), а каналы, бота Telegram и служебные события — только владелец (сопровождение установки)
+ */
+export const canSeeNotifications = canSeeLeads
+export const canManageChannels = (access: SiteAccess) => access === 'owner'
+
 /** Приглашать участников и отзывать приглашения может только владелец */
 export const canInvite = (access: SiteAccess) => access === 'owner'
 

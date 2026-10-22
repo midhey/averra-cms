@@ -593,18 +593,14 @@ describe('письма о заявке', () => {
     expect(sent?.text).toMatch(/http:\/\/localhost:5173\/leads\/[0-9a-f-]{36}/)
   })
 
-  it('адреса уведомлений из настроек сайта вместо владельцев', async () => {
+  it('адреса уведомлений из модуля уведомлений вместо владельцев', async () => {
     const siteId = await siteWithForm()
-    const settings = await api.app.request(`${leadsUrl(siteId)}/settings`, {
+    const emails = await api.app.request(`/api/sites/${siteId}/notifications/email`, {
       method: 'PUT',
       headers: json(owner.headers),
-      body: JSON.stringify({
-        recipients: ['Manager@Example.ru', 'boss@example.ru'],
-        retentionDays: 90,
-        confirmToVisitor: true,
-      }),
+      body: JSON.stringify({ addresses: ['Manager@Example.ru', 'boss@example.ru'] }),
     })
-    expect(settings.status).toBe(200)
+    expect(emails.status).toBe(200)
     await submit(siteId, validFields())
     const recipients = (await outboxOf(api, siteId))
       .filter((mail) => mail.template === 'lead-new')
@@ -616,11 +612,11 @@ describe('письма о заявке', () => {
   it('смена адресов уведомлений: письмо владельцам и прежним адресам; без смены — нет', async () => {
     const siteId = await siteWithForm()
     const client = await api.loginAs('client', siteId)
-    const put = (headers: Headers, recipients: string[]) =>
-      api.app.request(`${leadsUrl(siteId)}/settings`, {
+    const put = (headers: Headers, addresses: string[]) =>
+      api.app.request(`/api/sites/${siteId}/notifications/email`, {
         method: 'PUT',
         headers: json(headers),
-        body: JSON.stringify({ recipients, retentionDays: 180, confirmToVisitor: true }),
+        body: JSON.stringify({ addresses }),
       })
     const notices = async () =>
       (await outboxOf(api, siteId)).filter((mail) => mail.template === 'lead-recipients-changed')
@@ -632,7 +628,7 @@ describe('письма о заявке', () => {
     // узнаём по данным, а не по порядку строк: без ORDER BY база его не обещает
     expect((await put(client.headers, ['new@example.ru'])).status).toBe(200)
     const after = (await notices()).filter(
-      (mail) => (mail.data as { recipients?: string[] }).recipients?.[0] === 'new@example.ru',
+      (mail) => (mail.data as { targets?: string[] }).targets?.[0] === 'new@example.ru',
     )
     expect(after.map((mail) => mail.recipient)).toEqual(
       expect.arrayContaining([owner.user.email, 'old@example.ru']),
@@ -640,7 +636,7 @@ describe('письма о заявке', () => {
     expect(after.map((mail) => mail.recipient)).not.toContain('new@example.ru')
     expect(after[0]?.data).toMatchObject({
       changedByEmail: client.user.email,
-      recipients: ['new@example.ru'],
+      targets: ['new@example.ru'],
     })
 
     // Те же адреса (в другом регистре) — писем нет
@@ -650,7 +646,7 @@ describe('письма о заявке', () => {
 
     await sendAll()
     const mail = mailer.sent.find(
-      (sent) => sent.to === 'old@example.ru' && sent.subject.startsWith('Адреса уведомлений'),
+      (sent) => sent.to === 'old@example.ru' && sent.subject.startsWith('Получатели уведомлений'),
     )
     expect(mail?.text).toContain('Теперь заявки приходят: new@example.ru')
   })
@@ -884,11 +880,7 @@ describe('раздел «Заявки» в админке', () => {
     const stranger = await api.loginAs('client') // клиент демо-сайта: этот сайт ему чужой
     const { token } = await api.createToken(siteId)
     const bearer = { authorization: `Bearer ${token}` }
-    const settingsBody = JSON.stringify({
-      recipients: [],
-      retentionDays: 30,
-      confirmToVisitor: false,
-    })
+    const settingsBody = JSON.stringify({ retentionDays: 30, confirmToVisitor: false })
 
     const requests = (headers: Headers) => [
       api.app.request(leadsUrl(siteId), { headers }),
@@ -1139,17 +1131,14 @@ describe('раздел «Заявки» в админке', () => {
     const siteId = await siteWithForm()
     const url = `${leadsUrl(siteId)}/settings`
     const initial = await api.app.request(url, { headers: owner.headers })
-    expect(await initial.json()).toEqual({
-      recipients: [],
-      retentionDays: 180,
-      confirmToVisitor: true,
-    })
+    expect(await initial.json()).toEqual({ retentionDays: 180, confirmToVisitor: true })
+    // Адресов в настройках заявок больше нет: их ведёт модуль уведомлений
     const bad = await api.app.request(url, {
       method: 'PUT',
       headers: json(owner.headers),
       body: JSON.stringify({
-        recipients: ['a@b.ru\nBcc: x@y.ru'],
-        retentionDays: 3,
+        recipients: ['m@example.ru'],
+        retentionDays: 30,
         confirmToVisitor: true,
       }),
     })
@@ -1157,19 +1146,22 @@ describe('раздел «Заявки» в админке', () => {
     const saved = await api.app.request(url, {
       method: 'PUT',
       headers: json(owner.headers),
-      body: JSON.stringify({
-        recipients: ['m@example.ru'],
-        retentionDays: 30,
-        confirmToVisitor: false,
-      }),
+      body: JSON.stringify({ retentionDays: 30, confirmToVisitor: false }),
     })
-    expect(await saved.json()).toEqual({
-      recipients: ['m@example.ru'],
-      retentionDays: 30,
-      confirmToVisitor: false,
+    expect(await saved.json()).toEqual({ retentionDays: 30, confirmToVisitor: false })
+    const before = await api.app.request(leadsUrl(siteId), { headers: owner.headers })
+    expect(await before.json()).toMatchObject({
+      notifications: { enabled: true, recipients: 'owners', targets: [] },
+    })
+    await api.app.request(`/api/sites/${siteId}/notifications/email`, {
+      method: 'PUT',
+      headers: json(owner.headers),
+      body: JSON.stringify({ addresses: ['m@example.ru'] }),
     })
     const list = await api.app.request(leadsUrl(siteId), { headers: owner.headers })
-    expect(await list.json()).toMatchObject({ notifications: { recipients: 'custom' } })
+    expect(await list.json()).toMatchObject({
+      notifications: { enabled: true, recipients: 'custom', targets: ['m@example.ru'] },
+    })
   })
 })
 

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { unzipSync } from 'fflate'
 import { afterAll, describe, expect, it } from 'vitest'
-import { leads, media, pages } from '../../db/schema'
+import { leads, media, notificationRecipients, pages } from '../../db/schema'
 import { mediaKey } from '../../media/storage'
 import { publishedSite } from '../../publish/published-site'
 import { siteReleases } from '../../publish/releases'
@@ -146,6 +146,23 @@ describe('все данные сайта', () => {
       consentedAt: new Date(),
     })
 
+    // Получатели заявок — из модуля уведомлений: почта и чаты Telegram
+    await api.db.insert(notificationRecipients).values([
+      {
+        siteId: api.demoSiteId,
+        channel: 'email',
+        address: 'sales@client.ru',
+        events: ['lead.new'],
+      },
+      {
+        siteId: api.demoSiteId,
+        channel: 'telegram',
+        address: '-100777',
+        label: 'Отдел продаж',
+        events: ['lead.new'],
+      },
+    ])
+
     // Настройки раздела «SEO» — тоже данные сайта: при переезде их не набирать заново
     const settings = await api.app.request(`/api/sites/${api.demoSiteId}/settings`, {
       method: 'PATCH',
@@ -168,7 +185,18 @@ describe('все данные сайта', () => {
       averraVersion: '0.7.0',
       site: {
         id: api.demoSiteId,
-        leadSettings: { retentionDays: 180 },
+        leadSettings: {
+          retentionDays: 180,
+          recipients: ['sales@client.ru'],
+          notificationRecipients: expect.arrayContaining([
+            {
+              channel: 'telegram',
+              address: '-100777',
+              label: 'Отдел продаж',
+              events: ['lead.new'],
+            },
+          ]),
+        },
         settings: {
           hideFromSearch: false,
           language: 'ru',

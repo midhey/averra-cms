@@ -19,7 +19,9 @@ sidebar:
 2. [Запустить установщик](/averra-cms/install/server/): он проверит сервер, создаст секреты,
    владельца и сайт.
 3. [Проверить домены и SSL](/averra-cms/install/domains/).
-4. [Настроить почту](/averra-cms/install/mail/): SMTP в админке, SPF, DKIM и DMARC.
+4. [Настроить почту](/averra-cms/install/mail/): SMTP в админке, SPF, DKIM и DMARC. По желанию —
+   [Telegram-бот](/averra-cms/install/telegram/) для уведомлений о заявках и служебных: бэкап, диск,
+   сборка, почта.
 5. Сохранить `BACKUP_PASSPHRASE` и, лучше, весь `.env` в менеджер паролей студии, по желанию —
    [внешнее хранилище бэкапов](/averra-cms/install/backups/).
 6. Добавить сервер в [список установок студии](/averra-cms/install/fleet/).

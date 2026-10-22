@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { demoSiteId, setupZodMessages } from '@averra/schema'
+import { demoSiteId, type NotificationChannelKind, setupZodMessages } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { createApp } from './app'
 import type { MemberRole } from './auth/access'
@@ -28,6 +28,13 @@ import { sitesRepo } from './modules/sites/repo'
 import type { HostStatus } from './modules/status/service'
 import { tokensRepo } from './modules/tokens/repo'
 import { usersRepo } from './modules/users/repo'
+import { createChannels } from './notifications/channels'
+import type { NotificationDeps } from './notifications/deps'
+import { notifyDepsOf } from './notifications/deps'
+import type { TelegramApiFactory } from './notifications/telegram/api'
+import { telegramBinder } from './notifications/telegram/binder'
+import { botApi } from './notifications/telegram/bot-api'
+import { processNotifications } from './notifications/worker'
 import type { OgCardRenderers } from './og/card'
 import { sharpOgCards } from './og/sharp-og'
 import type { SitePublisher } from './publish/queue'
@@ -86,7 +93,13 @@ export async function createTestApi({
   notFoundPage,
   // Карточки для соцсетей: тест очереди даёт свою отрисовку, остальные — настоящую на sharp
   ogCards = sharpOgCards(),
+  // Bot API Telegram: адрес фейкового сервера (notifications/testing/fake-telegram.ts) или свой
+  // клиент целиком. По умолчанию — недостижимый адрес: настоящий Telegram тесты не трогают
+  telegramApiUrl = 'http://127.0.0.1:9',
+  telegram,
 }: {
+  telegramApiUrl?: string
+  telegram?: TelegramApiFactory
   ogCards?: OgCardRenderers
   siteUrl?: string
   notFoundPage?: () => Promise<string | undefined>
@@ -157,6 +170,27 @@ export async function createTestApi({
     logError: (message, error) => log(`${message}\n${String(errorForLog(error))}`),
   })
   await runtime.reload()
+  // Уведомления: каналы как в index.ts, обработчики тесты запускают сами (sendNotifications,
+  // binder.pollOnce). Вызовы wake и bind считаются — тест проверит, что действие будит очередь
+  const notificationWakes = {
+    count: 0,
+    binds: 0,
+    resets: [] as (boolean | NotificationChannelKind | undefined)[],
+  }
+  const telegramApi = telegram ?? botApi({ baseUrl: telegramApiUrl, timeoutMs: 5000 })
+  const notifications: NotificationDeps = {
+    channels: createChannels({ telegram: telegramApi }),
+    telegram: telegramApi,
+    wake: (reset) => {
+      notificationWakes.count += 1
+      notificationWakes.resets.push(reset)
+    },
+    bind: () => (notificationWakes.binds += 1),
+    bindProblem: () => binder.problem(),
+  }
+  const mailDeps = { runtime, settings: mailSettings, wake: () => (wakes.count += 1) }
+  const notifyDeps = () => notifyDepsOf(mailDeps, notifications)
+  const binder = telegramBinder({ db, deps: notifyDeps, telegram: telegramApi, pollTimeoutSec: 1 })
   const app = createApp({
     db,
     auth,
@@ -167,7 +201,8 @@ export async function createTestApi({
     icons: sharpIcons(),
     ogCards,
     mediaMaxBytes,
-    mail: { runtime, settings: mailSettings, wake: () => (wakes.count += 1) },
+    mail: mailDeps,
+    notifications,
     adminUrl: testOrigins.admin,
     siteUrl,
     notFoundPage,
@@ -238,6 +273,13 @@ export async function createTestApi({
     mailSettings,
     /** Сколько раз API будил обработчик писем */
     mailWakes: wakes,
+    /** Каналы уведомлений и счётчики wake/bind */
+    notifications,
+    notificationWakes,
+    /** Что нужно ядру уведомлений сейчас: каналы, ключ, состояние почты */
+    notifyDeps,
+    /** Привязка чатов Telegram: тест зовёт pollOnce или handle сам */
+    binder,
     createUser,
     sessionHeaders,
     loginAs,
@@ -268,4 +310,22 @@ export async function sendQueue(api: TestApi, maxPasses = 50) {
     if (result.claimed === 0 || result.mailOff || result.serverDown || result.aborted) return
   }
   throw new Error(`Очередь писем не опустела за ${maxPasses} проходов`)
+}
+
+/**
+ * Отправить очередь уведомлений (Telegram) тестового API. Как sendQueue: проход, который ничего
+ * не взял или упёрся в сломанный канал, — конец
+ */
+export async function sendNotifications(api: TestApi, maxPasses = 20) {
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const result = await processNotifications({
+      db: api.db,
+      channels: api.notifications.channels,
+      secretBox: api.secretBox,
+      readiness: () => api.notifyDeps().readiness,
+      maxAttempts: api.mailSettings.maxAttempts,
+    })
+    if (result.claimed === 0 || result.down.size > 0) return result
+  }
+  throw new Error(`Очередь уведомлений не опустела за ${maxPasses} проходов`)
 }

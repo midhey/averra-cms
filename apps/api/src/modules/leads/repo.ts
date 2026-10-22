@@ -210,7 +210,6 @@ export function leadsRepo(db: Db) {
     async settings(siteId: string): Promise<LeadSettings | undefined> {
       const [row] = await db
         .select({
-          recipients: sites.leadRecipients,
           retentionDays: sites.leadRetentionDays,
           confirmToVisitor: sites.leadConfirmation,
         })
@@ -223,13 +222,11 @@ export function leadsRepo(db: Db) {
       const [row] = await tx
         .update(sites)
         .set({
-          leadRecipients: settings.recipients,
           leadRetentionDays: settings.retentionDays,
           leadConfirmation: settings.confirmToVisitor,
         })
         .where(eq(sites.id, siteId))
         .returning({
-          recipients: sites.leadRecipients,
           retentionDays: sites.leadRetentionDays,
           confirmToVisitor: sites.leadConfirmation,
         })

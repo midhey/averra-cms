@@ -119,12 +119,19 @@ export const parseRecipients = (text: string) =>
     .map((address) => address.trim())
     .filter((address) => address !== '')
 
-/** Ошибки адресов (recipients.0, recipients.1…) — одним сообщением у поля: какой адрес не так */
-export function recipientsError(errors: FieldErrors, recipients: readonly string[]) {
+/**
+ * Ошибки адресов (addresses.0, addresses.1…) — одним сообщением у поля: какой адрес не так.
+ * field — имя поля со списком в схеме
+ */
+export function recipientsError(
+  errors: FieldErrors,
+  recipients: readonly string[],
+  field = 'addresses',
+) {
   for (const [path, message] of Object.entries(errors)) {
     if (message === undefined) continue
-    if (path === 'recipients') return message
-    const match = /^recipients\.(\d+)/.exec(path)
+    if (path === field) return message
+    const match = new RegExp(String.raw`^${field}\.(\d+)`).exec(path)
     if (match) return `${recipients[Number(match[1])] ?? 'Адрес'}: ${message}`
   }
   return undefined
@@ -134,16 +141,19 @@ export function recipientsError(errors: FieldErrors, recipients: readonly string
 export const newLeadsLabel = (count: number) =>
   `${count} ${pluralRu(count, ['новая', 'новые', 'новых'])}`
 
-/** Куда уходят уведомления, одной строкой под заголовком экрана заявок */
+/**
+ * Куда уходят уведомления, одной строкой под заголовком экрана заявок. targets — готовые
+ * получатели (адреса и «Telegram «чат»»), пусто — владельцам письмом
+ */
 export function notificationsLine(
-  settings: { recipients: readonly string[]; retentionDays: number },
-  enabled: boolean,
+  notifications: { enabled: boolean; targets: readonly string[] },
+  settings: { retentionDays: number },
 ) {
-  const where = !enabled
+  const where = !notifications.enabled
     ? 'Уведомления не уходят'
-    : settings.recipients.length === 0
+    : notifications.targets.length === 0
       ? 'Уведомления уходят владельцам админки'
-      : `Уведомления уходят на ${settings.recipients.join(', ')}`
+      : `Уведомления уходят: ${notifications.targets.join(', ')}`
   const days = pluralRu(settings.retentionDays, ['день', 'дня', 'дней'])
   return `${where} · хранятся ${settings.retentionDays} ${days}`
 }

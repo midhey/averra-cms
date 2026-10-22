@@ -41,6 +41,7 @@ const siteLinks = {
   pages: { to: '/pages', exact: false },
   media: { to: '/media', exact: false },
   leads: { to: '/leads', exact: false },
+  notifications: { to: '/notifications', exact: false },
   seo: { to: '/seo', exact: false },
   settings: { to: '/settings', exact: false },
 } as const satisfies Record<SiteSectionId, { to: string; exact: boolean }>

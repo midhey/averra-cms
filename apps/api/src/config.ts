@@ -95,6 +95,16 @@ const Origin = z
 const emptyToUndefined = (value: unknown) =>
   typeof value === 'string' && value.trim() === '' ? undefined : value
 
+/**
+ * Адрес Bot API, которому можно http://: этот компьютер или контейнер в своей сети docker (имя
+ * без точки — telegram-bot-api). Токен в адресе запроса тогда не покидает сервер. Всё, что за
+ * пределами сервера, — только https://
+ */
+const isInternalBotApi = (url: string) => {
+  const { hostname } = new URL(url)
+  return isLoopbackHost(hostname) || /^[a-z0-9-]+$/i.test(hostname)
+}
+
 const isLoopbackUrl = (url: string) => URL.canParse(url) && isLoopbackHost(new URL(url).hostname)
 
 type RawEnv = { NODE_ENV: string; PORT: number; ADMIN_URL?: string; API_URL?: string }
@@ -340,6 +350,20 @@ const envSchema = (options: ConfigOptions) =>
       // вместо 465 или 587. Тестовый SMTP-сервер e2e слушает свободный порт: порты ниже 1024
       // на Linux без root не занять. Вне учебного режима — ошибка конфига
       DEV_SMTP_CONNECT_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+      // Адрес Bot API Telegram для уведомлений: свой сервер Bot API или зеркало (с российских VPS
+      // api.telegram.org бывает недоступен). Вне учебного режима — https, а http только для своего
+      // сервера Bot API на этой машине или в сети docker: в адресе запроса идёт токен бота. Без
+      // переменной — https://api.telegram.org
+      TELEGRAM_API_URL: z.preprocess(
+        emptyToUndefined,
+        z
+          .url({
+            protocol: /^https?$/,
+            error: 'TELEGRAM_API_URL — адрес вида https://api.telegram.org',
+          })
+          .transform((url) => url.replace(/\/+$/, ''))
+          .optional(),
+      ),
     })
     .superRefine((env, ctx) => {
       if ((env.DEV_OWNER_EMAIL === undefined) !== (env.DEV_OWNER_PASSWORD === undefined)) {
@@ -397,6 +421,20 @@ const envSchema = (options: ConfigOptions) =>
             'на localhost). Уберите его: на сервере SMTP из админки ходит только на 465 и 587',
         })
       }
+      if (
+        env.TELEGRAM_API_URL !== undefined &&
+        URL.canParse(env.TELEGRAM_API_URL) &&
+        new URL(env.TELEGRAM_API_URL).protocol !== 'https:' &&
+        !isInternalBotApi(env.TELEGRAM_API_URL) &&
+        !isLocalDev(env, options)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_API_URL'],
+          message:
+            'TELEGRAM_API_URL — только https:// (в адресе запроса идёт токен бота). http:// — лишь для своего сервера Bot API на этой машине (localhost) или в сети docker (имя без точки), а также для разработки и e2e (pnpm dev, флаг --dev)',
+        })
+      }
       // Учебный секрет, вписанный руками, — всё тот же публичный секрет из репозитория, в том числе
       // с пробелами, кавычками, в другом регистре или с другими разделителями (см. isDevAuthSecret)
       if (
@@ -449,6 +487,8 @@ const envSchema = (options: ConfigOptions) =>
         mailKeyKind: mailKey.kind,
         // Куда подключается SMTP из админки вместо 465 и 587 — только в учебном режиме (e2e)
         smtpConnectPort: localDev ? env.DEV_SMTP_CONNECT_PORT : undefined,
+        // Bot API Telegram: по умолчанию настоящий
+        telegramApiUrl: env.TELEGRAM_API_URL ?? 'https://api.telegram.org',
       }
     })
 

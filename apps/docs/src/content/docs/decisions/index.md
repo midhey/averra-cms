@@ -41,6 +41,7 @@ sidebar:
 ## Почта и формы
 
 - [Письма через очередь (outbox)](/averra-cms/decisions/outbox/)
+- [Уведомления: каналы и очередь](/averra-cms/decisions/notifications/)
 - [Форма без JavaScript](/averra-cms/decisions/no-js-form/)
 - [Антиспам без капчи](/averra-cms/decisions/antispam/)
 

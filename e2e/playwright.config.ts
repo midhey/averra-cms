@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eOwner, ownerStateFile, ports, publishDir, smtpTest, urls } from './urls'
+import { e2eOwner, ownerStateFile, ports, publishDir, smtpTest, telegramTest, urls } from './urls'
 
 export default defineConfig({
   testDir: './tests',
@@ -66,6 +66,8 @@ export default defineConfig({
         // Тестовый SMTP-сервер слушает свой порт, а не 587: SMTP из админки подключается к нему
         // вместо 465 и 587. API принимает это только в учебном режиме (--dev)
         DEV_SMTP_CONNECT_PORT: String(smtpTest.port),
+        // Bot API Telegram — фейковый сервер теста уведомлений (tests/notifications.spec.ts)
+        TELEGRAM_API_URL: `http://127.0.0.1:${telegramTest.port}`,
         // Публикация собирает сайт на «сервере», как в установке на VPS: настоящий Astro в папку
         // релиза (tests/server-build.spec.ts). Сборки идут в фоне и по одной, тестам не мешают
         PUBLISH_DIR: publishDir,

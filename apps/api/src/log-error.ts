@@ -3,14 +3,24 @@ import { DrizzleQueryError } from 'drizzle-orm'
 // Ошибка для лога сервера. У ошибки запроса к базе (DrizzleQueryError) в тексте, а значит и
 // в стеке, — параметры запроса («Failed query: … params: …»), а у её причины из Postgres в detail —
 // строка целиком («Failing row contains (…)»). Там бывают секреты и персональные данные:
-// зашифрованный пароль SMTP, адреса, данные писем. Без Node API: модуль подключает app.ts
+// зашифрованный пароль SMTP, адреса, данные писем. У ошибки разбора адреса (ERR_INVALID_URL)
+// весь адрес — в свойстве input, и консоль его печатает, а в адресе бывает пароль (прокси).
+// Без Node API: модуль подключает app.ts
 
 /** Глубже по цепочке причин не идём: так длинных цепочек не бывает, а цикл не повесит лог */
 const MAX_DEPTH = 5
 
-function hasQueryError(error: unknown, depth = 0): boolean {
+/** Ошибка разбора адреса: в input — сам адрес */
+const isInvalidUrl = (error: Error) => (error as { code?: unknown }).code === 'ERR_INVALID_URL'
+
+/** В ошибке или её причинах есть то, что печатать нельзя: параметры запроса или адрес */
+function hasSecretFields(error: unknown, depth = 0): boolean {
   if (depth > MAX_DEPTH || !(error instanceof Error)) return false
-  return error instanceof DrizzleQueryError || hasQueryError(error.cause, depth + 1)
+  return (
+    error instanceof DrizzleQueryError ||
+    isInvalidUrl(error) ||
+    hasSecretFields(error.cause, depth + 1)
+  )
 }
 
 /** Строки стека «at …» — без заголовка с текстом ошибки */
@@ -39,10 +49,11 @@ function describe(error: unknown, depth: number): string[] {
 /**
  * Что писать в лог об ошибке. Если в ней или в цепочке её причин есть ошибка запроса к базе —
  * текст без параметров и без подробностей Postgres: запрос с плейсхолдерами ($1, $2…),
- * сообщение и код ошибки базы, места в коде. Иначе — сама ошибка, как есть
+ * сообщение и код ошибки базы, места в коде. Ошибка разбора адреса — так же, текстом без input.
+ * Иначе — сама ошибка, как есть
  */
 export function errorForLog(error: unknown): unknown {
-  if (!hasQueryError(error)) return error
+  if (!hasSecretFields(error)) return error
   return describe(error, 0).join('\n')
 }
 

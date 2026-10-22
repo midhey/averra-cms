@@ -6,7 +6,8 @@
     ".": "./src/app.ts",
     "./testing": "./src/testing.ts",
     "./testing/certs": "./src/mail/testing/certs.ts",
-    "./testing/smtp": "./src/mail/testing/smtp.ts"
+    "./testing/smtp": "./src/mail/testing/smtp.ts",
+    "./testing/telegram": "./src/notifications/testing/fake-telegram.ts"
   },
   "devEngines": {
     "runtime": {
@@ -48,6 +49,7 @@
     "opentype.js": "2.0.0",
     "pg": "8.23.1",
     "sharp": "catalog:",
+    "undici": "8.12.3",
     "zod": "catalog:"
   },
   "devDependencies": {

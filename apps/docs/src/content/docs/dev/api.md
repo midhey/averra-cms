@@ -165,8 +165,37 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `PATCH /api/sites/:siteId/leads/:leadId` | `{ status: "processed" \| "new" }` |
 | `DELETE /api/sites/:siteId/leads/:leadId` | удалить: 204 |
 | `GET /api/sites/:siteId/leads/export` | все заявки в CSV потоком: `;`, UTF-8 с BOM, формулы обезврежены |
-| `GET /api/sites/:siteId/leads/settings` | адреса уведомлений, срок хранения, подтверждение посетителю |
-| `PUT /api/sites/:siteId/leads/settings` | сохранить: до 10 адресов, срок 7–1825 дней; сменились адреса — письмо владельцам и прежним адресам |
+| `GET /api/sites/:siteId/leads/settings` | срок хранения, подтверждение посетителю |
+| `PUT /api/sites/:siteId/leads/settings` | сохранить: срок 7–1825 дней, подтверждение |
+
+## Уведомления
+
+Получатели заявок — владелец и клиент (`leads.settings`, токену — 403):
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/notifications` | получатели заявок, готовность каналов и `details` — что канал говорит о себе клиенту (у Telegram — имя бота), куда уведомления уходят сейчас и `warning`, если сообщения канала ждут дольше 15 минут. Редактору — 403 |
+| `PUT /api/sites/:siteId/notifications/email` | `{ addresses }` — до 10 адресов почты; сменились получатели — уведомление владельцам и прежним получателям. Не чаще 10 раз за 15 минут на человека и сайт, иначе 429 |
+| `DELETE /api/sites/:siteId/notifications/recipients/:id` | отвязать получателя: 204, ждущие ему сообщения удаляются |
+| `POST /api/sites/:siteId/notifications/telegram/link` | одноразовый код привязки чата → 201 `{ id, code, expiresAt, links }`; Telegram не готов — 409 |
+| `GET /api/sites/:siteId/notifications/telegram/link/:id` | что с кодом: `waiting`, `bound` (и получатель) или `expired`; `problem` — почему опрос Telegram сейчас не идёт (webhook у бота — 409, нет сети) |
+| `POST /api/sites/:siteId/notifications/test` | тестовое уведомление получателям через очередь → `{ queued, fallback }`; получателей нет — владельцам письмом (`fallback: true`); 10 за 15 минут |
+
+Каналы и служебные события — только владелец:
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/notifications` | каналы: готовность, `details` из `describe` адаптера без секретов (у Telegram — бот, прокси без пароля, «токен задан»), `warning` — сообщения ждут дольше 15 минут; служебные события и получатели |
+| `PUT /api/notifications/channels/:kind` | `{ enabled }` — включить или выключить канал |
+| `PUT /api/notifications/telegram` | `{ token, proxy?, currentPassword }`: токен (пусто — прежний) проверяется `getMe`, нет `proxy` — прежний прокси. Неверный пароль — 403, не принят токен или прокси — 400 у поля, нет `MAIL_ENCRYPTION_KEY` — 409 |
+| `DELETE /api/notifications/telegram` | удалить бота `{ currentPassword }`, чаты отвязываются в той же транзакции, ждущие им сообщения удаляются |
+| `POST /api/notifications/channels/:kind/check` | «Проверить» канал — `check` его адаптера → `{ ok, steps }`: Telegram — `getMe` и сообщение в каждый чат сразу, почта — письмо себе через очередь; 10 за 15 минут. Прошла — пауза канала после сбоя снимается, его сообщения уходят сразу |
+| `PUT /api/notifications/service/email` | `{ recipients: [{ address, events }] }` — адреса почты служебных |
+| `PATCH /api/notifications/service/recipients/:id` | `{ events }` — события получателя |
+| `DELETE /api/notifications/service/recipients/:id` | отвязать: 204 |
+| `POST /api/notifications/service/telegram/link`, `GET …/link/:id` | привязка чата к служебным, как у заявок |
+| `POST /api/notifications/service/test` | тестовое уведомление служебным получателям |
+| `GET /api/notifications/outbox` | последние 50 сообщений очереди уведомлений без данных, с подписью события (`title`) |
 
 ## Сборка и выгрузка
 

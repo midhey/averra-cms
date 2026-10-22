@@ -25,6 +25,20 @@ import { sharpProcessor } from './media/sharp-processor'
 import { invitationsRepo } from './modules/invitations/repo'
 import { leadsRepo } from './modules/leads/repo'
 import { defaultSiteName, sitesRepo } from './modules/sites/repo'
+import { collectStatus } from './modules/status/service'
+import { createChannels } from './notifications/channels'
+import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
+import { notificationSettingsRepo } from './notifications/settings'
+import { telegramBinder } from './notifications/telegram/binder'
+import { botApi } from './notifications/telegram/bot-api'
+import {
+  failedBuilds,
+  installationLabel,
+  lastMailSentAt,
+  serviceSignals,
+  startServiceWatch,
+} from './notifications/watch'
+import { startNotificationWorker } from './notifications/worker'
 import { sharpOgCards } from './og/sharp-og'
 import { installationNotFoundPage, linkInstallationSite } from './publish/installation-link'
 import { publishedSite } from './publish/published-site'
@@ -201,6 +215,79 @@ const interruptedSites = publishQueue ? await publishQueue.markInterrupted() : [
 // установки. Ставится при каждом старте — после восстановления из бэкапа сайт может быть другим
 if (config.PUBLISH_DIR) await linkInstallationSite(config.PUBLISH_DIR, installationSite.id)
 
+// Уведомления (src/notifications): каналы «Почта» (поверх очереди писем) и «Telegram» (Bot API
+// напрямую или через прокси). Обработчик очереди уведомлений — в этом же процессе, как у писем;
+// привязка чатов опрашивает Telegram, только пока есть живые коды; наблюдение за состоянием раз
+// в 5 минут шлёт служебные уведомления на переходах (бэкап, диск, сборка, почта)
+const telegram = botApi({ baseUrl: config.telegramApiUrl })
+const channels = createChannels({ telegram })
+const mailDeps = { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() }
+const notificationWorker = startNotificationWorker({
+  db,
+  channels,
+  secretBox: mail.secretBox,
+  readiness: () => notifyDepsOf(mailDeps, notifications).readiness,
+  maxAttempts: config.mail.maxAttempts,
+  retentionDays: config.mail.retentionDays,
+  log: console.log,
+  cleanupAlso: [
+    {
+      what: 'коды привязки чатов',
+      run: (now) =>
+        notificationSettingsRepo(db).cleanupLinkCodes(
+          new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        ),
+    },
+  ],
+})
+const binder = telegramBinder({
+  db,
+  deps: () => notifyDepsOf(mailDeps, notifications),
+  telegram,
+  log: console.log,
+})
+const notifications: NotificationDeps = {
+  channels,
+  telegram,
+  wake: (resetPauses) => notificationWorker.wake(resetPauses),
+  bind: () => binder.wake(),
+  bindProblem: () => binder.problem(),
+}
+// Код привязки, выданный до перезапуска, ещё жив: опрос возобновляется сам
+binder.wake()
+const host = hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) })
+const serviceWatch = startServiceWatch({
+  db,
+  deps: () => notifyDepsOf(mailDeps, notifications),
+  read: async () => {
+    const state = mail.status()
+    const facts = await collectStatus(db, {
+      version: config.AVERRA_VERSION,
+      host,
+      publishEnabled: publishQueue !== undefined,
+      mail: state.enabled ? { enabled: true, reason: null } : state,
+    })
+    // База не ответила — ничего не знаем: круг пропускается, а не «все проблемы ушли»
+    if (!facts.db.up) return undefined
+    const site = await sites.installationSite()
+    return serviceSignals(
+      facts,
+      await failedBuilds(db),
+      {
+        installation: installationLabel(site?.name ?? installationSite.name, config.SITE_URL),
+        adminUrl: config.ADMIN_URL,
+      },
+      new Date(),
+      await lastMailSentAt(db),
+    )
+  },
+  onQueued: () => {
+    mailWorker.wake()
+    notificationWorker.wake()
+  },
+  log: console.log,
+})
+
 const app = createApp({
   db,
   auth,
@@ -211,7 +298,8 @@ const app = createApp({
   icons: sharpIcons(),
   ogCards: sharpOgCards(),
   mediaMaxBytes: config.MEDIA_MAX_BYTES,
-  mail: { runtime: mail, settings: mailSettings, wake: () => mailWorker.wake() },
+  mail: mailDeps,
+  notifications,
   adminUrl: config.ADMIN_URL,
   siteUrl: config.SITE_URL,
   publisher: publishQueue,
@@ -219,7 +307,7 @@ const app = createApp({
   notFoundPage: config.PUBLISH_DIR ? installationNotFoundPage(config.PUBLISH_DIR) : undefined,
   version: config.AVERRA_VERSION,
   // Состояние установки: итоги бэкапов и обновлений от deploy/averra.sh и место на дисках
-  host: hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) }),
+  host,
 })
 
 const server = serve(
@@ -276,6 +364,9 @@ async function shutdown() {
   }
   // Идущая сборка сайта прерывается и соберётся заново при следующем старте (publish/queue.ts)
   await publishQueue?.stop()
+  await serviceWatch.stop()
+  await binder.stop()
+  await notificationWorker.stop()
   await mailWorker.stop()
   server.close()
   await mail.close()

@@ -7,6 +7,7 @@ import { leadReceivedTemplate } from './lead-received'
 import { leadRecipientsChangedTemplate } from './lead-recipients-changed'
 import { mailSettingsChangedTemplate } from './mail-settings-changed'
 import { mailTestTemplate } from './mail-test'
+import { notificationTemplate } from './notification'
 import { passwordResetTemplate } from './password-reset'
 
 /** Все шаблоны писем. Новый шаблон — файл рядом и строка здесь */
@@ -18,6 +19,7 @@ export const mailTemplates = {
   'lead-new': leadNewTemplate,
   'lead-received': leadReceivedTemplate,
   'lead-recipients-changed': leadRecipientsChangedTemplate,
+  notification: notificationTemplate,
 } as const
 
 export type MailTemplateId = keyof typeof mailTemplates

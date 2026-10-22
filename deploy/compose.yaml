@@ -56,6 +56,9 @@ services:
       MEDIA_DIR: /data/media
       # Итоги бэкапов и обновлений от averra.sh — для «Состояния» в админке
       STATE_DIR: /data/state
+      # Свой адрес Bot API Telegram (локальный сервер Bot API, зеркало), если api.telegram.org
+      # недоступен с VPS. Пусто — настоящий Telegram (https://midhey.github.io/averra-cms/install/telegram/)
+      TELEGRAM_API_URL: ${TELEGRAM_API_URL:-}
       # SMTP задают в админке (страница «Почта»): пароль шифруется MAIL_ENCRYPTION_KEY.
       # SMTP из окружения — через compose.override.yaml
       # (см. https://midhey.github.io/averra-cms/install/server/)

@@ -74,8 +74,9 @@ describe('состояние', () => {
         expect.objectContaining({ id: 'lead-received', title: 'Заявка получена' }),
         expect.objectContaining({
           id: 'lead-recipients-changed',
-          title: 'Адреса уведомлений о заявках изменены',
+          title: 'Получатели уведомлений о заявках изменены',
         }),
+        expect.objectContaining({ id: 'notification', title: 'Уведомление' }),
       ],
     })
   })

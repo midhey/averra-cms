@@ -10,7 +10,7 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { legacySiteTarget } from './legacy-paths'
-import { canInvite, canSeeLeads, safeRedirect } from './permissions'
+import { canInvite, canManageChannels, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
   invitationsQuery,
@@ -22,11 +22,14 @@ import {
   mailSmtpQuery,
   mediaQuery,
   meQuery,
+  notificationOutboxQuery,
+  notificationsQuery,
   pageQuery,
   pagesQuery,
   passwordResetQuery,
   recentLeadsQuery,
   siteIdOf,
+  siteNotificationsQuery,
   siteQuery,
   siteSettingsQuery,
   statusQuery,
@@ -40,6 +43,7 @@ import { LeadsScreen } from './screens/LeadsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MailScreen } from './screens/MailScreen'
 import { MediaScreen } from './screens/MediaScreen'
+import { NotificationsScreen } from './screens/NotificationsScreen'
 import { OverviewScreen } from './screens/OverviewScreen'
 import { PagesScreen } from './screens/PagesScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
@@ -252,6 +256,25 @@ const leadRoute = createRoute({
   notFoundComponent: LeadNotFound,
 })
 
+// Уведомления: получатели заявок (владелец и клиент) — главное содержимое, их сбой — экран ошибки.
+// Грузятся у любой роли, как заявки: редактору, открывшему адрес напрямую, API ответит 403, и
+// экран ошибки скажет почему, а не покажет пустой экран с одним заголовком. Каналы и служебные
+// события — владельцу. Последние сообщения — второстепенное (allSettled)
+const notificationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/notifications',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId, site } = await loadSite(queryClient)
+    await Promise.all([
+      queryClient.ensureQueryData(siteNotificationsQuery(siteId)),
+      canManageChannels(site.access) && queryClient.ensureQueryData(notificationsQuery()),
+      canManageChannels(site.access) &&
+        Promise.allSettled([queryClient.ensureQueryData(notificationOutboxQuery())]),
+    ])
+  },
+  component: NotificationsScreen,
+})
+
 // Настройки сайта: заявки (владелец и клиент), участники (владелец), сайт на сервере, выгрузка.
 // Настройки заявок — главное содержимое своего раздела: их сбой — экран ошибки. Остальное —
 // второстепенное (allSettled): сбой показывается внутри своего раздела
@@ -353,6 +376,7 @@ const routeTree = rootRoute.addChildren([
     pagesRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
+    notificationsRoute,
     seoRoute,
     settingsRoute,
     mailRoute,
