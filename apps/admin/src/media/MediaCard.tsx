@@ -16,14 +16,28 @@ type MediaCardProps = {
   invalid?: boolean
   /** Превью квадратом и целиком — для иконки сайта */
   square?: boolean
+  /** Превью целиком, без обрезки (SVG-логотип) */
+  whole?: boolean
 }
 
 /** Карточка картинки в поле выбора из медиатеки: превью, имя и размеры, действие */
-export function MediaCard({ thumbnail, name, meta, action, invalid, square }: MediaCardProps) {
+export function MediaCard({
+  thumbnail,
+  name,
+  meta,
+  action,
+  invalid,
+  square,
+  whole,
+}: MediaCardProps) {
   return (
     <div className={styles.card} data-invalid={invalid ? true : undefined}>
       {thumbnail ? (
-        <img className={cx(styles.thumb, square && styles.square)} src={thumbnail} alt="" />
+        <img
+          className={cx(styles.thumb, square && styles.square, whole && styles.whole)}
+          src={thumbnail}
+          alt=""
+        />
       ) : (
         <span className={cx(styles.placeholder, square && styles.square)} aria-hidden="true">
           <Icon name="media" />

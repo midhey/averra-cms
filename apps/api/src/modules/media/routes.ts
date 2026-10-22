@@ -3,7 +3,12 @@ import {
   fileTooLargeMessage,
   imageMimeTypes,
   MAIN_PAGE_SLUG,
+  MAX_SVG_BYTES,
+  type MediaMimeType,
+  mediaMimeTypes,
   type SiteSettings,
+  SVG_MIME_TYPE,
+  svgTooLargeMessage,
   Uuid,
 } from '@averra/schema'
 import { Hono } from 'hono'
@@ -16,10 +21,17 @@ import { conflict } from '../../errors'
 import {
   type ImageProcessor,
   MAX_PIXELS,
-  type ProcessedImage,
+  MAX_SVG_EMBEDDED_PIXELS,
   type ProcessFailure,
 } from '../../media/processor'
-import { type MediaStorage, mediaKey } from '../../media/storage'
+import { type MediaStorage, mediaKey, SVG_FILE } from '../../media/storage'
+import {
+  looksLikeSvg,
+  MAX_SVG_DEPTH,
+  MAX_SVG_SIDE,
+  type SvgFailure,
+  sanitizeSvg,
+} from '../../media/svg'
 import { validate } from '../../validate'
 import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
@@ -51,23 +63,73 @@ const tooLarge = (maxBytes: number) => ({
   },
 })
 
-const rejected: Record<ProcessFailure, { status: 413 | 415; code: string; message: string }> = {
-  unsupported: {
-    status: 415,
-    code: 'unsupported_media_type',
-    message: 'Можно загрузить JPEG, PNG, WebP или AVIF. SVG, GIF и другие форматы не принимаются',
-  },
-  broken: {
-    status: 415,
-    code: 'unsupported_media_type',
-    message: 'Файл повреждён: картинку не удалось прочитать',
-  },
+type Failure = { status: 413 | 415; code: string; message: string }
+
+const unsupported = (message: string): Failure => ({
+  status: 415,
+  code: 'unsupported_media_type',
+  message,
+})
+
+const rejected: Record<ProcessFailure, Failure> = {
+  unsupported: unsupported(
+    'Можно загрузить JPEG, PNG, WebP, AVIF или SVG (для логотипа и иконки). GIF, HEIC и другие форматы не принимаются',
+  ),
+  broken: unsupported('Файл повреждён: картинку не удалось прочитать'),
   too_many_pixels: {
     status: 413,
     code: 'payload_too_large',
     message: `Картинка слишком большая: не больше ${MAX_PIXELS / 1_000_000} мегапикселей`,
   },
 }
+
+const svgRejected: Record<SvgFailure | 'embedded' | 'embedded_pixels' | 'too_large', Failure> = {
+  broken: unsupported('SVG не читается: файл повреждён или это не SVG'),
+  doctype: unsupported(
+    'SVG с объявлениями сущностей (DOCTYPE с […]) не принимаем: так атакуют сервер. Экспортируйте файл заново обычным SVG',
+  ),
+  encoding: unsupported('SVG должен быть в кодировке UTF-8: пересохраните файл'),
+  no_size: unsupported(
+    'У SVG нет размеров: нужен viewBox или width и height числами. Экспортируйте файл заново',
+  ),
+  bad_size: unsupported(
+    `Размеры SVG слишком большие: не больше ${MAX_SVG_SIDE.toLocaleString('ru-RU')} по стороне`,
+  ),
+  too_deep: unsupported(`SVG слишком сложный: вложенность элементов больше ${MAX_SVG_DEPTH}`),
+  embedded: unsupported(
+    'Картинка внутри SVG не читается или не того формата: внутри можно PNG, JPEG, GIF или WebP',
+  ),
+  embedded_pixels: {
+    status: 413,
+    code: 'payload_too_large',
+    message: `Картинки внутри SVG слишком большие: всего не больше ${MAX_SVG_EMBEDDED_PIXELS / 1_000_000} мегапикселей. Загрузите PNG`,
+  },
+  too_large: { status: 413, code: 'payload_too_large', message: svgTooLargeMessage() },
+}
+
+/**
+ * Что сохранить: файлы в хранилище и поля строки медиатеки. size — вес для подписи в админке: у
+ * растра — загруженного файла, у SVG — очищенного (его и отдаём)
+ */
+type Prepared =
+  | {
+      ok: true
+      files: { file: string; data: Uint8Array }[]
+      mimeType: MediaMimeType
+      width: number
+      height: number
+      size?: number
+      variants: StoredVariant[]
+      originalFile: string
+    }
+  | { ok: false; failure: Failure }
+
+/**
+ * Политика для SVG, открытого напрямую по адресу файла: ничего не грузить и не исполнять
+ * (sandbox — ещё и отдельный источник). Очистка уже убрала скрипты; это вторая линия. Внутри
+ * <img> скрипты SVG не работают и так. Тот же заголовок ставит Caddy на домене сайта
+ */
+export const SVG_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"
 
 /** Имя файла только для показа в админке: без управляющих символов и не длиннее 200 */
 function displayName(name: string) {
@@ -97,25 +159,90 @@ const usageWhere = ({ draft, published }: MediaUsage) =>
 export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
   const repo = mediaRepo(db)
 
-  /** Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы */
+  /** Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы. У SVG оригинал и вариант — один файл */
   const keysOf = (siteId: string, mediaId: string, files: readonly string[]) =>
-    files.map((file) => mediaKey(siteId, mediaId, file))
+    [...new Set(files)].map((file) => mediaKey(siteId, mediaId, file))
 
   /** Файлы — в хранилище, потом строка в базе. Не вышло — файлы убираем, мусора не остаётся */
-  async function store(siteId: string, mediaId: string, image: ProcessedImage) {
-    const files = [image.original, ...image.variants]
+  async function store(
+    siteId: string,
+    mediaId: string,
+    files: { file: string; data: Uint8Array }[],
+  ) {
     const keys = keysOf(
       siteId,
       mediaId,
       files.map((file) => file.file),
     )
     try {
-      await Promise.all(files.map((file, index) => storage.put(keys[index] as string, file.data)))
+      await Promise.all(
+        files.map((file) => storage.put(mediaKey(siteId, mediaId, file.file), file.data)),
+      )
     } catch (error) {
       await storage.remove(keys).catch(() => {})
       throw error
     }
     return keys
+  }
+
+  /** Растр: проверка и нарезка вариантов (sharp) */
+  async function prepareImage(data: Uint8Array): Promise<Prepared> {
+    const result = await images.process(data)
+    if (!result.ok) return { ok: false, failure: rejected[result.reason] }
+    const { image } = result
+    return {
+      ok: true,
+      files: [image.original, ...image.variants],
+      mimeType: imageMimeTypes[image.format],
+      width: image.width,
+      height: image.height,
+      variants: image.variants.map(({ data: bytes, ...variant }) => ({
+        ...variant,
+        size: bytes.byteLength,
+      })),
+      originalFile: image.original.file,
+    }
+  }
+
+  /**
+   * SVG: свой предел веса, очистка (src/media/svg.ts) и проверка вложенных картинок по заголовку:
+   * формат должен совпасть с объявленным, а пикселей — не больше MAX_SVG_EMBEDDED_PIXELS. Хранится
+   * один очищенный файл: он и «оригинал», и единственный вариант
+   */
+  async function prepareSvg(data: Uint8Array): Promise<Prepared> {
+    if (data.byteLength > MAX_SVG_BYTES) return { ok: false, failure: svgRejected.too_large }
+    const result = sanitizeSvg(data)
+    if (!result.ok) return { ok: false, failure: svgRejected[result.reason] }
+    const { svg } = result
+    let pixels = 0
+    for (const embedded of svg.embedded) {
+      const info = await images.inspect(embedded.data)
+      if (!info || info.mediaType !== embedded.declared) {
+        return { ok: false, failure: svgRejected.embedded }
+      }
+      pixels += info.width * info.height
+    }
+    if (pixels > MAX_SVG_EMBEDDED_PIXELS) {
+      return { ok: false, failure: svgRejected.embedded_pixels }
+    }
+    return {
+      ok: true,
+      files: [{ file: SVG_FILE, data: svg.data }],
+      mimeType: SVG_MIME_TYPE,
+      width: svg.width,
+      height: svg.height,
+      size: svg.data.byteLength,
+      variants: [
+        {
+          format: 'svg',
+          width: svg.width,
+          height: svg.height,
+          size: svg.data.byteLength,
+          file: SVG_FILE,
+        },
+      ],
+      originalFile: SVG_FILE,
+    }
   }
 
   return (
@@ -143,31 +270,29 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
           const { file } = c.req.valid('form')
           if (file.size > maxBytes) return c.json(tooLarge(maxBytes), 413)
 
-          const result = await images.process(new Uint8Array(await file.arrayBuffer()))
+          const data = new Uint8Array(await file.arrayBuffer())
+          // Тип — по содержимому: SVG (XML) начинается с «<», растровые форматы — нет
+          const result = looksLikeSvg(data) ? await prepareSvg(data) : await prepareImage(data)
           if (!result.ok) {
-            const { status, code, message } = rejected[result.reason]
+            const { status, code, message } = result.failure
             return c.json({ error: { code, message, issues: [{ path: 'file', message }] } }, status)
           }
 
-          const { image } = result
+          const upload = result
           const id = crypto.randomUUID()
-          const keys = await store(siteId, id, image)
-          const variants: StoredVariant[] = image.variants.map(({ data, ...variant }) => ({
-            ...variant,
-            size: data.byteLength,
-          }))
+          const keys = await store(siteId, id, upload.files)
           try {
             const created = await repo.create(
               {
                 id,
                 siteId,
                 originalName: displayName(file.name),
-                mimeType: imageMimeTypes[image.format],
-                width: image.width,
-                height: image.height,
-                size: file.size,
-                variants,
-                originalFile: image.original.file,
+                mimeType: upload.mimeType,
+                width: upload.width,
+                height: upload.height,
+                size: upload.size ?? file.size,
+                variants: upload.variants,
+                originalFile: upload.originalFile,
               },
               c.var.actor,
             )
@@ -254,12 +379,13 @@ export function mediaFilesRoutes({ db, storage }: Pick<MediaDeps, 'db' | 'storag
     if (!data) return c.json(notFound('Файл не найден'), 404)
 
     return c.body(data as Uint8Array<ArrayBuffer>, 200, {
-      'content-type': imageMimeTypes[variant.format],
+      'content-type': mediaMimeTypes[variant.format],
       'content-length': String(data.byteLength),
       // Файл под этим адресом не меняется никогда: новая картинка — новый id
       'cache-control': 'public, max-age=31536000, immutable',
       // Браузер не угадывает тип по содержимому: что сказали, то и есть
       'x-content-type-options': 'nosniff',
+      ...(variant.format === 'svg' && { 'content-security-policy': SVG_CSP }),
     })
   })
 }

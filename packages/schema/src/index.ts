@@ -15,7 +15,17 @@ export {
   UserEmail,
   UserName,
 } from './auth'
-export { BlockInstance, type BlockType, blocks, cta, features, form, hero, text } from './blocks'
+export {
+  BlockInstance,
+  type BlockType,
+  blocks,
+  cta,
+  features,
+  form,
+  hero,
+  text,
+  video,
+} from './blocks'
 export { TEXT_BODY_MAX } from './blocks/text'
 export { Button, Href } from './common'
 export {
@@ -99,11 +109,22 @@ export {
   type ImageMimeType,
   imageFormatOf,
   imageMimeTypes,
+  isSvgFile,
+  isSvgMedia,
+  MAX_SVG_BYTES,
   MediaFile,
+  MediaFormat,
   MediaId,
   type MediaMap,
+  type MediaMimeType,
   type MediaRef,
   MediaVariantView,
+  mediaMimeTypes,
+  SVG_MIME_TYPE,
+  svgIconMessage,
+  svgInContentMessage,
+  svgSocialMessage,
+  svgTooLargeMessage,
 } from './media'
 export {
   DeleteTelegramChannel,
@@ -232,4 +253,15 @@ export {
 } from './status'
 export { parseTextBody, plainTextValue, type TextPart } from './text-body'
 export { Theme } from './theme'
+export {
+  parseVideoUrl,
+  VIDEO_URL_MESSAGE,
+  type VideoProvider,
+  type VideoRef,
+  VideoUrl,
+  videoEmbedUrl,
+  videoProviders,
+  videoProviderTitles,
+  videoWatchUrl,
+} from './video'
 export { setupZodMessages } from './zod-messages'

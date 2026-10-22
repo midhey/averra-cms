@@ -48,6 +48,7 @@
     "nodemailer": "^10.1.0",
     "opentype.js": "2.0.0",
     "pg": "8.23.1",
+    "saxes": "6.0.0",
     "sharp": "catalog:",
     "undici": "8.12.3",
     "zod": "catalog:"

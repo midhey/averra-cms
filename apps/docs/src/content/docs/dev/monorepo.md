@@ -51,7 +51,7 @@ apps/api/src/
   auth/             # Better Auth, права (access.ts), middleware, повторный пароль
   modules/<имя>/    # routes.ts — HTTP и проверка входа, repo.ts — запросы, service.ts — логика
   mail/             # Mailer, очередь (outbox), шаблоны, SMTP
-  media/            # MediaStorage, ImageProcessor (sharp)
+  media/            # MediaStorage, ImageProcessor (sharp), очистка SVG (saxes)
   publish/          # очередь сборок, процесс Astro, папки релизов
   db/               # схема Drizzle, клиент, замок PGlite, тесты миграций
   cli/              # команды терминала

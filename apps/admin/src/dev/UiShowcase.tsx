@@ -34,6 +34,14 @@ import { usePageTitle } from '../ui/use-page-title'
 import styles from './UiShowcase.module.scss'
 
 /**
+ * Файл логотипа 120 × 40 для карточки SVG: содержимое картинки, как у загруженного файла, а не
+ * оформление админки, поэтому цвета в нём свои. Вытянутый — видно, что превью не обрезано
+ */
+const SAMPLE_SVG_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40"><rect width="40" height="40" rx="8" fill="#f60"/><rect x="48" y="12" width="72" height="16" rx="4" fill="#555"/></svg>',
+)}`
+
+/**
  * Витрина компонентов (только в разработке, /dev/ui): все состояния в одном месте — для экранов
  * экранов и для проверяющего. Данные выдуманные, в API витрина не ходит
  */
@@ -645,6 +653,14 @@ export function UiShowcase() {
             <MediaCard
               meta="Этой картинки нет в медиатеке сайта"
               invalid
+              action={<Button size="small">Заменить</Button>}
+            />
+            {/* Логотип из SVG: формат в подписи, превью — сам файл */}
+            <MediaCard
+              thumbnail={SAMPLE_SVG_LOGO}
+              whole
+              name="logo-remont.svg"
+              meta="120 × 40 · SVG"
               action={<Button size="small">Заменить</Button>}
             />
             <SearchSnippet

@@ -178,6 +178,7 @@ describe('все данные сайта', () => {
     const files = await unzip(res)
     expect([...(files[`media/${mediaId}/original.jpg`] ?? [])]).toEqual([...original])
     expect(decode(files['README.txt'])).toContain('персональные данные')
+    expect(decode(files['README.txt'])).toContain('media/<id>/image.svg')
     const site = JSON.parse(decode(files['site.json']))
     expect(site).toMatchObject({
       format: 'averra-site-export',

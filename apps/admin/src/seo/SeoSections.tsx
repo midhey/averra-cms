@@ -215,13 +215,14 @@ export function IconSection({ siteId, view }: SectionProps) {
         label="Иконка"
         name="icon"
         square
+        allowSvg
         value={icon}
         onChange={(mediaId) => {
           setIcon(mediaId)
           form.clear('icon')
         }}
         error={form.error('icon')}
-        hint="Квадратная картинка от 512 × 512, лучше PNG с прозрачным фоном. Из неё сайт получит favicon.ico, иконку для iPhone и Android. SVG медиатека не принимает"
+        hint="Квадратная картинка от 512 × 512 или SVG, лучше с прозрачным фоном. Из неё сайт получит favicon.ico, иконку для iPhone и Android"
       />
     </SettingsCard>
   )
@@ -388,6 +389,8 @@ export function OrganizationSection({ siteId, view }: SectionProps) {
         siteId={siteId}
         label="Логотип"
         name="organization.logo"
+        allowSvg
+        hint="Лучше SVG или PNG с прозрачным фоном. Сейчас он — в разметке организации для поисковиков, потом встанет в шапку сайта"
         value={values.logo}
         onChange={(mediaId) => set('logo', mediaId)}
         error={form.error('organization.logo')}

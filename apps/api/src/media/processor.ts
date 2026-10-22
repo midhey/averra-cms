@@ -49,8 +49,24 @@ export type ProcessResult =
   | { ok: true; image: ProcessedImage }
   | { ok: false; reason: ProcessFailure }
 
+/** Что в растровом файле по его заголовку: тип по содержимому и размеры */
+export type ImageInfo = { mediaType: string; width: number; height: number }
+
 /** Проверка и нарезка загруженной картинки. Отказ — результатом, а не исключением */
-export type ImageProcessor = { process(data: Uint8Array): Promise<ProcessResult> }
+export type ImageProcessor = {
+  process(data: Uint8Array): Promise<ProcessResult>
+  /**
+   * Только заголовок, пиксели не декодируются: так проверяются картинки, вложенные в SVG.
+   * undefined — файл не читается
+   */
+  inspect(data: Uint8Array): Promise<ImageInfo | undefined>
+}
+
+/**
+ * Сколько пикселей всего у картинок, вложенных в SVG. Иконку из SVG растеризует сервер (sharp,
+ * librsvg) — вложенный растр он декодирует целиком
+ */
+export const MAX_SVG_EMBEDDED_PIXELS = 16_000_000
 
 /**
  * Ширины вариантов для исходника такой ширины. Больше исходника не растягиваем. Если

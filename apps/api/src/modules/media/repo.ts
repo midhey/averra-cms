@@ -1,4 +1,4 @@
-import type { ImageMimeType } from '@averra/schema'
+import type { MediaMimeType } from '@averra/schema'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
@@ -23,7 +23,7 @@ export type NewMedia = {
   id: string
   siteId: string
   originalName: string
-  mimeType: ImageMimeType
+  mimeType: MediaMimeType
   width: number
   height: number
   size: number
@@ -123,14 +123,17 @@ export function mediaRepo(db: Db) {
       return created
     },
 
-    /** Какие из этих id есть в медиатеке сайта. Чужие и несуществующие не попадут */
-    async existingIds(siteId: string, ids: readonly string[]) {
-      if (ids.length === 0) return new Set<string>()
+    /**
+     * Какие из этих id есть в медиатеке сайта и какого они типа: SVG ставится не везде. Чужие и
+     * несуществующие не попадут
+     */
+    async mimeTypes(siteId: string, ids: readonly string[]) {
+      if (ids.length === 0) return new Map<string, MediaMimeType>()
       const rows = await db
-        .select({ id: media.id })
+        .select({ id: media.id, mimeType: media.mimeType })
         .from(media)
         .where(and(eq(media.siteId, siteId), inArray(media.id, [...new Set(ids)])))
-      return new Set(rows.map((row) => row.id))
+      return new Map(rows.map((row) => [row.id, row.mimeType]))
     },
 
     /** Справочник для блоков: id → размеры и варианты. Только картинки этого сайта */

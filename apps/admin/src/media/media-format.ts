@@ -1,4 +1,12 @@
-import { fileTooLargeMessage, formatBytes, type MediaMap } from '@averra/schema'
+import {
+  fileTooLargeMessage,
+  formatBytes,
+  isSvgFile,
+  MAX_SVG_BYTES,
+  type MediaMap,
+  SVG_MIME_TYPE,
+  svgTooLargeMessage,
+} from '@averra/schema'
 import type { InferResponseType } from 'hono/client'
 import type { api } from '../api'
 import { formatDateTime } from '../pages-format'
@@ -14,12 +22,23 @@ export type MediaItem = MediaLibraryData['items'][number]
 
 type Variant = Pick<MediaItem['variants'][number], 'format' | 'width' | 'url'>
 
-/** Размеры и вес для подписи под превью: 1200 × 800 · 240 КБ */
-export const mediaSummary = (media: Pick<MediaItem, 'width' | 'height' | 'size'>) =>
-  `${media.width} × ${media.height} · ${formatBytes(media.size)}`
+/** Размеры и вес для подписи под превью: 1200 × 800 · 240 КБ, у SVG — с пометкой формата */
+export const mediaSummary = (
+  media: Pick<MediaItem, 'width' | 'height' | 'size'> & { mimeType?: string },
+) =>
+  [
+    `${media.width} × ${media.height}`,
+    media.mimeType === SVG_MIME_TYPE && 'SVG',
+    formatBytes(media.size),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+/** SVG ставится только туда, где его допускает API: логотип и иконка сайта */
+export const isSvgItem = (media: Pick<MediaItem, 'mimeType'>) => media.mimeType === SVG_MIME_TYPE
 
 /** Порядок форматов в подписи: сначала современные, их браузер и возьмёт */
-const FORMAT_ORDER = ['avif', 'webp', 'jpeg', 'png'] as const
+const FORMAT_ORDER = ['avif', 'webp', 'jpeg', 'png', 'svg'] as const
 
 /** Форматы вариантов для подписи под превью: «AVIF, WebP» — без повторов, по порядку выше */
 export function mediaFormats(variants: readonly Pick<Variant, 'format'>[]) {
@@ -65,8 +84,15 @@ export function mediaMapOf(
  * файл API отвечает 413, не дочитав тело, и обрывает соединение: браузер (тем более через
  * прокси) увидел бы сетевой сбой вместо понятной причины. Лимит неизвестен — решит API
  */
-export const tooLargeMessage = (file: Pick<File, 'size'>, maxBytes: number | undefined) =>
-  maxBytes !== undefined && file.size > maxBytes ? fileTooLargeMessage(maxBytes) : undefined
+export function tooLargeMessage(
+  file: Pick<File, 'size' | 'type' | 'name'>,
+  maxBytes: number | undefined,
+) {
+  if (maxBytes !== undefined && file.size > maxBytes) return fileTooLargeMessage(maxBytes)
+  // У SVG свой предел, меньше общего: API ответил бы 413 уже после отправки
+  if (isSvgFile(file) && file.size > MAX_SVG_BYTES) return svgTooLargeMessage()
+  return undefined
+}
 
 type LabelledMedia = Pick<MediaItem, 'originalName' | 'width' | 'height' | 'createdAt'>
 

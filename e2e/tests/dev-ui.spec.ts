@@ -123,6 +123,19 @@ test.describe('витрина компонентов', () => {
     await expect(devices.getByRole('radio', { name: 'Планшет' })).toBeChecked()
   })
 
+  test('карточка SVG-логотипа: превью целиком, без обрезки', async ({ page }) => {
+    await page.goto('/dev/ui')
+    const card = page.locator('div', { hasText: /^logo-remont\.svg/u }).filter({
+      has: page.locator('img'),
+    })
+    const preview = card.locator('img').first()
+    await expect(preview).toBeVisible()
+    await expect(preview).toHaveCSS('object-fit', 'contain')
+    // Файл показался, а не значок битой картинки
+    await expect(preview).toHaveJSProperty('complete', true)
+    await expect(preview).not.toHaveJSProperty('naturalWidth', 0)
+  })
+
   // Контрастная тема Windows (forced colors): выбор виден системным «выделением», подписи читаются.
   // Светлая и тёмная системные палитры дают разные пары цветов — проверяем обе
   for (const colorScheme of ['light', 'dark'] as const) {

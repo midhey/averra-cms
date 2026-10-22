@@ -21,6 +21,25 @@ export function Picture({ image, media, sizes, priority, className }: PicturePro
   // Ссылку на картинку не из медиатеки сайта не пропустит API. Если всё же нет — без картинки
   if (!file) return null
 
+  // SVG — один файл без вариантов (логотип для будущей шапки). В блоки API его не пускает, но
+  // если он здесь окажется, выводим его как есть, а не пустое место
+  const vector = file.variants.find((variant) => variant.format === 'svg')
+  if (vector) {
+    return (
+      <picture className={className}>
+        <img
+          className={styles.image}
+          src={vector.url}
+          width={file.width}
+          height={file.height}
+          alt={image.alt}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+        />
+      </picture>
+    )
+  }
+
   const srcSet = (format: ImageFormat) =>
     file.variants
       .filter((variant) => variant.format === format)
@@ -30,8 +49,9 @@ export function Picture({ image, media, sizes, priority, className }: PicturePro
 
   // Запасной формат — исходный JPEG или PNG. Если исходник был WebP или AVIF, запасной — WebP
   const fallback: ImageFormat =
-    file.variants.find((variant) => variant.format === 'jpeg' || variant.format === 'png')
-      ?.format ?? 'webp'
+    file.variants
+      .map((variant) => variant.format)
+      .find((format): format is 'jpeg' | 'png' => format === 'jpeg' || format === 'png') ?? 'webp'
   const largest = file.variants
     .filter((variant) => variant.format === fallback)
     .reduce<(typeof file.variants)[number] | undefined>(

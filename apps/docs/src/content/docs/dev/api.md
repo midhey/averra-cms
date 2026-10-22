@@ -85,7 +85,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `GET /api/sites/:siteId/pages` | страницы: заголовок, адрес, когда опубликована, есть ли неопубликованные правки |
 | `POST /api/sites/:siteId/pages` | создать `{ slug, title, template: "empty" \| "hero" }`; адрес занят — 409 |
 | `GET /api/sites/:siteId/pages/:slug` | страница с черновиком и опубликованной версией |
-| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks, seo? } }`; `seo` — `{ title?, description?, image?: { mediaId }, canonical?, noindex? }` (`PageSeo`). Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта (в блоке или `seo.image`) — 409 с путём до поля |
+| `PUT /api/sites/:siteId/pages/:slug` | сохранить черновик `{ title, content: { blocks, seo? } }`; `seo` — `{ title?, description?, image?: { mediaId }, canonical?, noindex? }` (`PageSeo`). Нет страницы — создаёт (клиенту — 404). Картинка не из медиатеки сайта или SVG (в блоке или `seo.image`: SVG — только логотип и иконка) — 409 с путём до поля |
 | `POST /api/sites/:siteId/pages/:slug/publish` | опубликовать черновик с заголовком; пишет версию в историю и ставит сборку |
 | `DELETE /api/sites/:siteId/pages/:slug` | удалить вместе с историей; главную — 409 |
 
@@ -94,7 +94,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | Запрос | Что делает |
 |---|---|
 | `GET /api/sites/:siteId/settings` | `{ settings, installationUrl, url }`: настройки (`SiteSettings`), адрес установки (`SITE_URL`) и адрес сайта, который из них выходит |
-| `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`, `cookies`) — целиком. Ставит сборку. Картинка не из медиатеки, редирект с адреса страницы и страница политики (`cookies.policyPage`), которой нет на сайте, — 409 с путём до поля |
+| `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`, `cookies`) — целиком. Ставит сборку. Картинка не из медиатеки, SVG в `ogImage`, SVG в `icon`, из которого не собрался набор иконок (набор растеризуется до сохранения), редирект с адреса страницы и страница политики (`cookies.policyPage`), которой нет на сайте, — 409 с путём до поля |
 | `POST /api/sites/:siteId/settings/legal-pages` | `{ document: 'privacy' \| 'consent' }` — черновик страницы `/privacy` или `/consent` из шаблона (`legalPageContent`) с реквизитами организации и включёнными сервисами; 201 со страницей. Адрес занят — 409, страница не перезаписывается |
 
 Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/),
@@ -124,9 +124,9 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | Запрос | Что делает |
 |---|---|
 | `GET /api/sites/:siteId/media` | `{ items, maxBytes }`: картинки с вариантами и предел размера файла |
-| `POST /api/sites/:siteId/media` | загрузить: multipart, поле `file` → 201. Не тот тип — 415, слишком большой — 413 (тело сверх лимита обрывается, не дочитанным) |
+| `POST /api/sites/:siteId/media` | загрузить: multipart, поле `file` → 201. JPEG, PNG, WebP, AVIF — с вариантами; SVG — очищается (`sanitizeSvg`) и хранится одним файлом `image.svg`, до 256 КБ (`MAX_SVG_BYTES`). Не тот тип, битый SVG, DOCTYPE с сущностями, не UTF-8, без размеров (`viewBox`), слишком глубокий или со вложенной картинкой не того формата — 415 с причиной; слишком большой — 413 (тело сверх лимита обрывается, не дочитанным) |
 | `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице или в настройках SEO (иконка, картинка для соцсетей, логотип) — 409 с тем, где стоит |
-| `GET /api/media/:mediaId/:file` | файл варианта (`480.avif`, `960.webp`…), `immutable`, `nosniff`. **Открыт** |
+| `GET /api/media/:mediaId/:file` | файл варианта (`480.avif`, `960.webp`…) или `image.svg` (`image/svg+xml` с `Content-Security-Policy: default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox` — `SVG_CSP`), `immutable`, `nosniff`. **Открыт** |
 
 ## Участники
 

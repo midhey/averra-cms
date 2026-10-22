@@ -144,18 +144,65 @@ test('картинку, которая стоит на странице, уда�
   await expect(media.item(file.name)).toBeVisible()
 })
 
-test('SVG не загружается: понятная ошибка, в медиатеке ничего не появилось', async ({ page }) => {
+test('SVG: загружается очищенным, ставится логотипом, а в выбор картинки для соцсетей не попадает', async ({
+  page,
+}) => {
   const media = mediaScreen(page)
   await media.open()
   const name = `logo-${randomUUID().slice(0, 8)}.svg`
   await media.fileInput.setInputFiles({
     name,
     mimeType: 'image/svg+xml',
-    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+    buffer: Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" onload="alert(1)"><script>alert(1)</script><rect width="120" height="40" fill="#f60"/></svg>',
+    ),
   })
-  await expect(media.alert).toContainText(`Не удалось загрузить «${name}»`)
-  await expect(media.alert).toContainText('Можно загрузить JPEG, PNG, WebP или AVIF')
-  await expect(media.item(name)).toHaveCount(0)
+  await expect(media.status).toHaveText(`Картинка «${name}» загружена`)
+  await expect(media.item(name)).toContainText('120 × 40 · SVG')
+
+  // Файл — очищенный и с CSP: открытый напрямую, он ничего не исполнит
+  const src = await media.item(name).locator('img').getAttribute('src')
+  expect(src).toMatch(/\/api\/media\/[0-9a-f-]{36}\/image\.svg$/)
+  const file = await page.request.get(new URL(src ?? '', page.url()).href)
+  expect(file.headers()['content-type']).toBe('image/svg+xml')
+  expect(file.headers()['content-security-policy']).toContain('sandbox')
+  const body = await file.text()
+  expect(body).toContain('<rect width="120" height="40" fill="#f60"/>')
+  expect(body).not.toMatch(/script|onload/)
+
+  // SVG без размеров — понятная причина
+  const broken = `bez-razmerov-${randomUUID().slice(0, 8)}.svg`
+  await media.fileInput.setInputFiles({
+    name: broken,
+    mimeType: 'image/svg+xml',
+    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'),
+  })
+  await expect(media.alert).toContainText(`Не удалось загрузить «${broken}»`)
+  await expect(media.alert).toContainText('нужен viewBox')
+  await expect(media.item(broken)).toHaveCount(0)
+
+  // Логотип организации — SVG можно; картинка для соцсетей — в выборе его нет
+  await page.goto('/seo')
+  const organization = page.getByRole('region', { name: 'Организация' })
+  await organization
+    .getByRole('group', { name: 'Логотип' })
+    .getByRole('button', { name: /Выбрать картинку|Заменить/ })
+    .click()
+  const logoDialog = page.getByRole('dialog', { name: /^Медиатека/ })
+  await logoDialog.getByRole('button', { name: new RegExp(`^Выбрать «${name}»`) }).click()
+  await expect(logoDialog).toBeHidden()
+  await expect(organization.getByRole('group', { name: 'Логотип' })).toContainText(name)
+
+  const general = page.getByRole('region', { name: 'Основное' })
+  await general
+    .getByRole('group', { name: 'Картинка для соцсетей' })
+    .getByRole('button', { name: /Выбрать картинку|Заменить/ })
+    .click()
+  const socialDialog = page.getByRole('dialog', { name: /^Медиатека/ })
+  await expect(socialDialog).toContainText('SVG сюда не ставится')
+  await expect(socialDialog.getByRole('button', { name: new RegExp(`«${name}»`) })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(socialDialog).toBeHidden()
 })
 
 test('файл больше лимита: понятная причина сразу, без отправки на сервер', async ({ page }) => {

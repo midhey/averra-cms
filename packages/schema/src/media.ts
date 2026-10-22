@@ -40,6 +40,51 @@ export const imageFormatOf: Readonly<Record<string, ImageFormat>> = Object.fromE
 )
 
 /**
+ * Форматы файлов медиатеки: растровые и SVG. SVG — отдельно от ImageFormat: его не режут на
+ * варианты и не кодируют, а очищают и хранят одним файлом. Ставится только туда, где растр не
+ * нужен: логотип организации и иконка сайта
+ */
+export const MediaFormat = z.enum([...ImageFormat.options, 'svg'])
+export type MediaFormat = z.infer<typeof MediaFormat>
+
+export const SVG_MIME_TYPE = 'image/svg+xml'
+
+export const mediaMimeTypes = {
+  ...imageMimeTypes,
+  svg: SVG_MIME_TYPE,
+} as const satisfies Record<MediaFormat, `image/${string}`>
+export type MediaMimeType = (typeof mediaMimeTypes)[MediaFormat]
+
+/**
+ * Самый большой SVG. Логотипу и иконке хватает с запасом; больше — почти всегда вложенная
+ * растровая картинка, её лучше загрузить PNG. Общий лимит медиатеки (MEDIA_MAX_BYTES) — для фото
+ */
+export const MAX_SVG_BYTES = 256 * 1024
+
+export const svgTooLargeMessage = () =>
+  `SVG больше ${formatBytes(MAX_SVG_BYTES)}. Логотипу столько не нужно: упростите файл или загрузите PNG`
+
+/** Файл — SVG (по типу или имени, которые назвал браузер): админка проверяет вес до отправки */
+export const isSvgFile = (file: { type: string; name: string }) =>
+  file.type === SVG_MIME_TYPE || /\.svg$/i.test(file.name)
+
+/** Картинка медиатеки — SVG: у неё один вариант формата svg */
+export const isSvgMedia = (media: { variants: readonly { format: MediaFormat }[] }) =>
+  media.variants.some((variant) => variant.format === 'svg')
+
+/** Почему SVG нельзя в блок или SEO-картинку страницы: одна фраза для API и MCP */
+export const svgInContentMessage =
+  'SVG — только для логотипа и иконки сайта. Сюда выберите JPEG, PNG, WebP или AVIF'
+
+/** Почему этот SVG не годится иконкой: сервер не смог превратить его в favicon и PNG */
+export const svgIconMessage =
+  'Из этого SVG не получилась иконка сайта. Пересохраните файл в редакторе или выберите PNG 512 × 512'
+
+/** Почему SVG нельзя картинкой для соцсетей */
+export const svgSocialMessage =
+  'SVG соцсети и мессенджеры не показывают. Выберите JPEG или PNG, лучше 1200 × 630'
+
+/**
  * Вес по-человечески: 820 Б, 14 КБ, 2,4 МБ. Единица — по величине: лимит в 2 КБ (как в тестах)
  * не превращается в «0 МБ». Одна функция на сообщения API и подписи админки
  */
@@ -61,7 +106,7 @@ export const fileSizeLimitHint = (maxBytes: number) => `Не больше ${form
 
 /** Вариант картинки так, как его видят рендерер и админка: формат, размеры и адрес файла */
 export const MediaVariantView = z.object({
-  format: ImageFormat,
+  format: MediaFormat,
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   url: z.string(),

@@ -204,28 +204,31 @@ describe('загрузка', () => {
 describe('отказ в загрузке', () => {
   it.each([
     ['текст под видом JPEG', 'просто текст, а не картинка', 'photo.jpg', 'image/jpeg'],
-    [
-      'SVG',
-      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>alert(1)</script></svg>',
-      'logo.svg',
-      'image/svg+xml',
-    ],
-    [
-      'SVG под видом PNG',
-      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>',
-      'logo.png',
-      'image/png',
-    ],
+    ['мусор под видом PNG', '\x01\x02 не картинка', 'photo.png', 'image/png'],
   ])('%s → 415 с понятным сообщением', async (_, data, name, type) => {
     const res = await upload(owner.headers, data, name, demoSiteId, type)
     expect(res.status).toBe(415)
     expect(await res.json()).toMatchObject({
       error: {
         code: 'unsupported_media_type',
-        message: expect.stringMatching(/JPEG, PNG, WebP или AVIF/),
+        message: expect.stringMatching(/JPEG, PNG, WebP, AVIF или SVG/),
         issues: [{ path: 'file' }],
       },
     })
+  })
+
+  it('SVG под видом PNG: тип — по содержимому, файл принят как SVG и очищен', async () => {
+    const res = await upload(
+      owner.headers,
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>alert(1)</script></svg>',
+      'logo.png',
+      demoSiteId,
+      'image/png',
+    )
+    const media = await uploaded(res)
+    expect(media.mimeType).toBe('image/svg+xml')
+    const stored = await storage.get(mediaKey(demoSiteId, media.id, 'image.svg'))
+    expect(new TextDecoder().decode(stored)).not.toContain('script')
   })
 
   it('очень высокая картинка (длинная инфографика) загружается: варианты ужаты до предела WebP', async () => {
@@ -243,7 +246,7 @@ describe('отказ в загрузке', () => {
     expect(widest?.height).toBe(MAX_VARIANT_SIDE)
   })
 
-  it('GIF → 415: принимаются только четыре формата', async () => {
+  it('GIF → 415: из растровых принимаются только четыре формата', async () => {
     const gif = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#000' } })
       .gif()
       .toBuffer()
@@ -302,6 +305,7 @@ describe('лимит размера', async () => {
   const real = sharpProcessor()
   let processed = 0
   const images: ImageProcessor = {
+    inspect: (data) => real.inspect(data),
     process: (data) => {
       processed += 1
       return real.process(data)

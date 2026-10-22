@@ -120,3 +120,9 @@
   padding-block-start: var(--space-2);
   margin-block-start: auto;
 }
+
+// SVG-логотип — целиком на фоне превью: обрезка «cover» отрезала бы края надписи
+.whole {
+  padding: var(--space-2);
+  object-fit: contain;
+}

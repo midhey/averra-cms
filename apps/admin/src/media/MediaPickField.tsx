@@ -6,7 +6,7 @@ import { Dialog } from '../ui/Dialog'
 import styles from './ImageField.module.scss'
 import { MediaCard } from './MediaCard'
 import { MediaLibrary } from './MediaLibrary'
-import { mediaFormats, thumbnailUrl } from './media-format'
+import { isSvgItem, mediaFormats, thumbnailUrl } from './media-format'
 
 type MediaPickFieldProps = {
   siteId: string
@@ -20,6 +20,8 @@ type MediaPickFieldProps = {
   name: string
   /** Превью квадратом — для иконки сайта */
   square?: boolean
+  /** SVG можно: логотип и иконка. Картинке для соцсетей — нет, её SVG соцсети не покажут */
+  allowSvg?: boolean
 }
 
 /**
@@ -35,6 +37,7 @@ export function MediaPickField({
   error,
   name,
   square,
+  allowSvg = false,
 }: MediaPickFieldProps) {
   const { data: library } = useQuery(mediaQuery(siteId))
   const chosen = library?.items.find((media) => media.id === value)
@@ -53,6 +56,7 @@ export function MediaPickField({
       )}
       <MediaCard
         square={square}
+        whole={chosen !== undefined && isSvgItem(chosen)}
         invalid={error !== undefined}
         thumbnail={chosen && thumbnailUrl(chosen.variants)}
         name={chosen?.originalName}
@@ -97,6 +101,7 @@ export function MediaPickField({
           <MediaLibrary
             siteId={siteId}
             canDelete={false}
+            allowSvg={allowSvg}
             selectedId={value ?? undefined}
             onPick={(media) => {
               onChange(media.id)

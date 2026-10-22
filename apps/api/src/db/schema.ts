@@ -1,8 +1,8 @@
 import type {
   FormFieldType,
-  ImageFormat,
-  ImageMimeType,
   LeadStatus,
+  MediaFormat,
+  MediaMimeType,
   PageContent,
   SiteBuildStatus,
   Theme,
@@ -330,7 +330,7 @@ export const leads = pgTable(
 
 /** Вариант картинки: какой файл лежит в хранилище и что в нём. Имя файла строит сервер */
 export type StoredVariant = {
-  format: ImageFormat
+  format: MediaFormat
   width: number
   height: number
   /** Вес файла в байтах */
@@ -352,8 +352,9 @@ export const media = pgTable(
       .notNull()
       .references(() => sites.id, { onDelete: 'cascade' }),
     originalName: text().notNull(),
-    // Тип по содержимому файла, а не по расширению: его определил sharp
-    mimeType: text().$type<ImageMimeType>().notNull(),
+    // Тип по содержимому файла, а не по расширению: растр определил sharp, SVG — очистка
+    // (src/media/svg.ts). SVG хранится одним очищенным файлом image.svg
+    mimeType: text().$type<MediaMimeType>().notNull(),
     // Размеры уже после поворота по EXIF — такими картинку видит человек
     width: integer().notNull(),
     height: integer().notNull(),
@@ -370,7 +371,7 @@ export const media = pgTable(
     index('media_site_id_idx').on(table.siteId),
     check(
       'media_mime_type_valid',
-      sql`${table.mimeType} IN ('image/jpeg', 'image/png', 'image/webp', 'image/avif')`,
+      sql`${table.mimeType} IN ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/svg+xml')`,
     ),
     check(
       'media_size_positive',

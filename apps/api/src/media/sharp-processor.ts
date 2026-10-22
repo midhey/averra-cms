@@ -54,6 +54,17 @@ function encodeOriginal(pipeline: Sharp, format: ImageFormat) {
 export function sharpProcessor({ concurrency = PROCESSING_CONCURRENCY } = {}): ImageProcessor {
   const queue = concurrencyLimit(concurrency)
   return {
+    async inspect(data) {
+      try {
+        const { mediaType, width, height } = await sharp(data, {
+          limitInputPixels: false,
+        }).metadata()
+        return mediaType ? { mediaType, width, height } : undefined
+      } catch {
+        return undefined
+      }
+    },
+
     async process(data) {
       let metadata: Metadata
       try {

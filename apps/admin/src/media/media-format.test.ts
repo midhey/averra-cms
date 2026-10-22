@@ -1,4 +1,4 @@
-import { formatBytes } from '@averra/schema'
+import { formatBytes, MAX_SVG_BYTES, svgTooLargeMessage } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
   deleteQuestion,
@@ -18,6 +18,8 @@ const variant = (format: 'avif' | 'webp' | 'jpeg', width: number) => ({
   url: `/api/media/id/${width}.${format}`,
 })
 
+const jpegFile = { type: 'image/jpeg', name: 'photo.jpg' }
+
 describe('вес файла', () => {
   it.each([
     [820, '820 Б'],
@@ -29,8 +31,11 @@ describe('вес файла', () => {
     expect(formatBytes(bytes)).toBe(expected)
   })
 
-  it('подпись под превью — размеры и вес', () => {
+  it('подпись под превью — размеры и вес, у SVG — ещё и формат', () => {
     expect(mediaSummary({ width: 1200, height: 800, size: 240 * 1024 })).toBe('1200 × 800 · 240 КБ')
+    expect(mediaSummary({ width: 120, height: 40, size: 2048, mimeType: 'image/svg+xml' })).toBe(
+      '120 × 40 · SVG · 2 КБ',
+    )
   })
 })
 
@@ -85,14 +90,23 @@ describe('размер до отправки', () => {
   const limit = 10 * 1024 * 1024
 
   it('файл больше лимита — тот же текст, что у API, запрос не нужен', () => {
-    expect(tooLargeMessage({ size: 18 * 1024 * 1024 }, limit)).toBe(
+    expect(tooLargeMessage({ ...jpegFile, size: 18 * 1024 * 1024 }, limit)).toBe(
       'Файл больше 10 МБ. Уменьшите картинку и загрузите снова',
     )
   })
 
+  it('SVG больше своего предела — отказ до отправки, даже если общий лимит больше', () => {
+    const svg = { type: 'image/svg+xml', name: 'logo.svg' }
+    expect(tooLargeMessage({ ...svg, size: MAX_SVG_BYTES + 1 }, limit)).toBe(svgTooLargeMessage())
+    expect(
+      tooLargeMessage({ type: '', name: 'LOGO.SVG', size: MAX_SVG_BYTES + 1 }, undefined),
+    ).toBe(svgTooLargeMessage())
+    expect(tooLargeMessage({ ...svg, size: MAX_SVG_BYTES }, limit)).toBeUndefined()
+  })
+
   it('файл в пределах лимита или лимит ещё неизвестен — решает API', () => {
-    expect(tooLargeMessage({ size: limit }, limit)).toBeUndefined()
-    expect(tooLargeMessage({ size: 50 * 1024 * 1024 }, undefined)).toBeUndefined()
+    expect(tooLargeMessage({ ...jpegFile, size: limit }, limit)).toBeUndefined()
+    expect(tooLargeMessage({ ...jpegFile, size: 50 * 1024 * 1024 }, undefined)).toBeUndefined()
   })
 })
 

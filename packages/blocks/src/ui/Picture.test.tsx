@@ -78,4 +78,20 @@ describe('Picture', () => {
   it('картинки нет в справочнике — ничего не выводит', () => {
     expect(render({})).toBe('')
   })
+
+  it('SVG — одним файлом без источников и srcset, с размерами и alt', () => {
+    const url = `/api/media/${mediaId}/image.svg`
+    const html = render({
+      [mediaId]: {
+        width: 120,
+        height: 40,
+        variants: [{ format: 'svg', width: 120, height: 40, url }],
+      },
+    })
+    expect(html).not.toContain('<source')
+    expect(html).not.toContain('srcset')
+    expect(html).toMatch(
+      /<img[^>]* src="[^"]+image.svg" width="120" height="40" alt="Бригада на объекте"/,
+    )
+  })
 })

@@ -833,6 +833,18 @@ describe('Caddyfile: кеш', () => {
     expect(re.test('/manifest.webmanifest')).toBe(false)
   })
 
+  it('сайт: SVG из медиатеки — с той же CSP, что отдаёт API, и только по адресу файла SVG', () => {
+    const site = siteBlock('{$SITE_DOMAIN}')
+    const svg = /@svg path_regexp (\S+)/.exec(site)?.[1]
+    const re = new RegExp(svg ?? '^$')
+    expect(re.test('/media/c6026fd5-5af8-4af9-a36e-1e08b05210a8/image.svg')).toBe(true)
+    expect(re.test('/media/c6026fd5-5af8-4af9-a36e-1e08b05210a8/640.webp')).toBe(false)
+    expect(re.test('/media/c6026fd5-5af8-4af9-a36e-1e08b05210a8/image.svg/x')).toBe(false)
+    expect(site).toContain(
+      `header @svg Content-Security-Policy "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"`,
+    )
+  })
+
   it('сайт: адрес без файла уходит в API — редирект из «SEO» или страница 404 релиза', () => {
     const site = siteBlock('{$SITE_DOMAIN}')
     const errors = /^\thandle_errors 404 \{\n([\s\S]*?)^\t\}/m.exec(site)?.[1] ?? ''

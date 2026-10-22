@@ -155,7 +155,14 @@ export function createApp(deps: AppDeps) {
     // SEO и настройки сайта — владельцу; иконки сайта открыты: их берёт рендерер (modules/settings)
     .route(
       '/sites/:siteId/settings',
-      settingsRoutes({ db, siteUrl: deps.siteUrl, publisher: deps.publisher, log }),
+      settingsRoutes({
+        db,
+        siteUrl: deps.siteUrl,
+        publisher: deps.publisher,
+        log,
+        storage: deps.storage,
+        icons: deps.icons,
+      }),
     )
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке

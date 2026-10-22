@@ -6,10 +6,11 @@ import { type MediaStorage, mediaKey } from '../media/storage'
 
 /**
  * Ссылка на файл картинки на собранном сайте: /media/<id картинки>/<ширина>.<формат>
- * (CMS_LINKS=relative у рендерера). Оригинал (original.*) наружу не отдаётся — его здесь нет
+ * (CMS_LINKS=relative у рендерера), у SVG — /media/<id>/image.svg. Оригинал (original.*) наружу не
+ * отдаётся — его здесь нет
  */
 const MEDIA_REF =
-  /\/media\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{1,5}\.(?:avif|webp|jpg|png))/g
+  /\/media\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{1,5}\.(?:avif|webp|jpg|png)|image\.svg)/g
 
 /** Все файлы папки, рекурсивно, путями от неё */
 async function filesOf(dir: string): Promise<string[]> {

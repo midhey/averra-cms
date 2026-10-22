@@ -7,6 +7,9 @@ import {
   redirectTableIssues,
   type SiteSettings,
   SiteSettingsPatch,
+  SVG_MIME_TYPE,
+  svgIconMessage,
+  svgSocialMessage,
   Uuid,
 } from '@averra/schema'
 import { Hono } from 'hono'
@@ -15,6 +18,8 @@ import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict, type Issue } from '../../errors'
 import { errorForLog } from '../../log-error'
+import { ICON_FILES, type IconRenderer } from '../../media/favicon'
+import { type MediaStorage, mediaKey } from '../../media/storage'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
 import { mediaRepo } from '../media/repo'
@@ -34,6 +39,9 @@ type SettingsDeps = {
   siteUrl: string | undefined
   publisher?: SitePublisher
   log: (message: string) => void
+  storage: MediaStorage
+  /** Набор иконок сайта: SVG пробуется растеризовать до сохранения в настройку icon */
+  icons: IconRenderer
 }
 
 /**
@@ -49,7 +57,7 @@ type SettingsDeps = {
 const needsRebuild = (patch: SiteSettingsPatch) =>
   Object.keys(patch).some((key) => key !== 'redirects')
 
-export function settingsRoutes({ db, siteUrl, publisher, log }: SettingsDeps) {
+export function settingsRoutes({ db, siteUrl, publisher, log, storage, icons }: SettingsDeps) {
   const repo = settingsRepo(db)
   const media = mediaRepo(db)
   const pages = sitesRepo(db)
@@ -68,16 +76,49 @@ export function settingsRoutes({ db, siteUrl, publisher, log }: SettingsDeps) {
       { path: 'icon', id: patch.icon },
       { path: 'organization.logo', id: patch.organization?.logo },
     ].flatMap(({ path, id }) => (typeof id === 'string' ? [{ path, id }] : []))
-    const existing = await media.existingIds(
+    const types = await media.mimeTypes(
       siteId,
       refs.map((ref) => ref.id),
     )
-    return refs
-      .filter((ref) => !existing.has(ref.id))
-      .map((ref) => ({
-        path: ref.path,
-        message: 'Картинки нет в медиатеке сайта: выберите другую',
-      }))
+    return refs.flatMap((ref) => {
+      const type = types.get(ref.id)
+      // SVG годится логотипом и иконкой (её набор растеризуется), но не картинкой для соцсетей:
+      // VK, Telegram и мессенджеры SVG не показывают
+      const message =
+        type === undefined
+          ? 'Картинки нет в медиатеке сайта: выберите другую'
+          : type === SVG_MIME_TYPE && ref.path === 'ogImage'
+            ? svgSocialMessage
+            : undefined
+      return message ? [{ path: ref.path, message }] : []
+    })
+  }
+
+  /**
+   * Иконка из SVG: весь набор растеризуется сразу, до сохранения. Иначе файл, который sharp не
+   * осилит, встал бы иконкой, а потом /icons отвечал бы 500 и сборка сайта падала до замены
+   * иконки. Удачная попытка заодно кладёт набор в кеш — сборке не придётся ждать. Растр проверен
+   * sharp ещё при загрузке
+   */
+  async function unusableIcon(siteId: string, patch: SiteSettingsPatch): Promise<Issue[]> {
+    const id = patch.icon
+    if (typeof id !== 'string') return []
+    const types = await media.mimeTypes(siteId, [id])
+    if (types.get(id) !== SVG_MIME_TYPE) return []
+    const files = await media.findFiles(id)
+    const site = await pages.find(siteId)
+    if (!files || !site) return []
+    try {
+      for (const file of ICON_FILES) {
+        await icons({ mediaId: files.id, file, background: site.theme.colors.background }, () =>
+          storage.get(mediaKey(files.siteId, files.id, files.originalFile)),
+        )
+      }
+      return []
+    } catch (error) {
+      log(`Сайт ${siteId}: SVG ${id} не растеризуется в иконку — ${String(errorForLog(error))}`)
+      return [{ path: 'icon', message: svgIconMessage }]
+    }
   }
 
   /**
@@ -160,6 +201,7 @@ export function settingsRoutes({ db, siteUrl, publisher, log }: SettingsDeps) {
           const patch = c.req.valid('json')
           const issues = [
             ...(await missingMedia(siteId, patch)),
+            ...(await unusableIcon(siteId, patch)),
             ...(await shadowedRedirects(siteId, patch)),
             ...(await sameSiteLoops(siteId, patch)),
             ...(await missingPolicyPage(siteId, patch)),

@@ -301,6 +301,22 @@ describe('JSON-LD организации', () => {
     })
   })
 
+  it('SVG-логотип — файлом image.svg', () => {
+    const svgId = '33333333-3333-4333-8333-333333333333'
+    const svgMedia: MediaMap = {
+      [svgId]: {
+        width: 120,
+        height: 40,
+        variants: [{ format: 'svg', width: 120, height: 40, url: `/media/${svgId}/image.svg` }],
+      },
+    }
+    const tag = organizationJsonLd(
+      site({ organization: { name: 'ООО «Ремонт»', logo: svgId } }),
+      svgMedia,
+    )
+    expect(tag).toContain(`"logo":"https://remont.example/media/${svgId}/image.svg"`)
+  })
+
   it('название с </script> не закрывает тег раньше времени', () => {
     const tag = organizationJsonLd(site({ organization: { name: 'Ремонт</script><b>' } }), media)
     expect(tag?.match(/<\/script>/g)).toHaveLength(1)

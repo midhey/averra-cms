@@ -24,6 +24,7 @@ async function tempDir(prefix: string) {
 
 const siteId = 'd0000000-0000-4000-8000-000000000001'
 const mediaId = 'a1111111-1111-4111-8111-111111111111'
+const svgId = 'b2222222-2222-4222-8222-222222222222'
 
 /** Страница, как её собирает рендерер с CMS_LINKS=relative: картинка и стили от корня сайта */
 const pageHtml = (title: string) => `<!doctype html><html><head>
@@ -63,11 +64,12 @@ async function storageWithImage() {
 
 describe('файлы релиза', () => {
   it('находит файлы картинок в srcset и src, без повторов и без оригинала', () => {
-    const html = `${pageHtml('x')}<img src="/media/${mediaId}/original.jpg"><img src="/media/${mediaId}/960.jpg">`
+    const html = `${pageHtml('x')}<img src="/media/${mediaId}/original.jpg"><img src="/media/${mediaId}/960.jpg"><img src="https://site.ru/media/${svgId}/image.svg">`
     expect(referencedMedia(html)).toEqual([
       { mediaId, file: '480.avif' },
       { mediaId, file: '960.avif' },
       { mediaId, file: '960.jpg' },
+      { mediaId: svgId, file: 'image.svg' },
     ])
   })
 

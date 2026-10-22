@@ -277,7 +277,10 @@ export function organizationJsonLd(site: SeoSite, media: MediaMap) {
   const org = site.settings.organization
   if (!org.name) return undefined
   const logoFile = org.logo ? media[org.logo] : undefined
-  const logoVariant = logoFile && socialImage(logoFile)
+  // SVG-логотип — как есть: формат логотипа Google берёт любой из тех, что понимает Google Картинки
+  const logoVariant =
+    logoFile &&
+    (logoFile.variants.find((variant) => variant.format === 'svg') ?? socialImage(logoFile))
   const data = compact({
     '@context': 'https://schema.org',
     '@type': org.type,

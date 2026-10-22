@@ -63,3 +63,8 @@
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
 }
+
+// SVG-логотип — целиком, без обрезки: у логотипа важны края
+.whole {
+  object-fit: contain;
+}

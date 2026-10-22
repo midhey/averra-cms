@@ -125,7 +125,14 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
         size="large"
       >
         {picking && (
-          <MediaLibrary siteId={siteId} canDelete={false} onPick={pick} selectedId={mediaId} />
+          <MediaLibrary
+            siteId={siteId}
+            canDelete={false}
+            onPick={pick}
+            selectedId={mediaId}
+            // Картинки блоков — растр с вариантами: SVG сюда не пустит API
+            allowSvg={false}
+          />
         )}
       </Dialog>
     </fieldset>

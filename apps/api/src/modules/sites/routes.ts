@@ -151,10 +151,14 @@ export function sitesRoutes({
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
           const { title, content } = c.req.valid('json')
-          // Картинка — ссылка в медиатеку этого сайта: на чужую или удалённую сослаться нельзя
+          // Картинка — ссылка в медиатеку этого сайта: на чужую или удалённую сослаться нельзя, SVG
+          // в блоки не ставится
           const missing = await missingMediaIssues(media, siteId, content)
           if (missing.length > 0) {
-            return c.json(conflict('На странице есть картинки не из медиатеки сайта', missing), 409)
+            return c.json(
+              conflict('Не все картинки на странице подходят: причина — у каждого поля', missing),
+              409,
+            )
           }
           const newSlug = PageSlug.safeParse(slug)
           if (can(c.var.siteRole, 'page.create') && newSlug.success) {

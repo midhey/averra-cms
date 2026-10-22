@@ -80,6 +80,10 @@
 		# Страницы проверяются при каждом заходе: после публикации посетитель сразу видит новую
 		@pages not path_regexp ^/(_astro/|media/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)
 		header @pages Cache-Control "no-cache"
+		# SVG из медиатеки (логотип), открытый прямо по адресу, ничего не грузит и не исполняет:
+		# скрипты убрала очистка при загрузке, это вторая линия. Тот же заголовок ставит API
+		@svg path_regexp ^/media/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/image\.svg$
+		header @svg Content-Security-Policy "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"
 		file_server
 	}
 

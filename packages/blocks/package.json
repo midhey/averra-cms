@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./base.css": "./src/base.css",
-    "./cookie-consent": "./src/cookie/consent-dom.ts"
+    "./cookie-consent": "./src/cookie/consent-dom.ts",
+    "./video-player": "./src/video/player-dom.ts"
   },
   "devEngines": {
     "runtime": {

@@ -15,8 +15,12 @@ export type MediaStorage = {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
-/** Имя файла внутри папки картинки: 480.avif, original.jpg. Его составляет сервер */
-const FILE_NAME = String.raw`(original|\d{1,5})\.(avif|webp|jpg|png)`
+/**
+ * Имя файла внутри папки картинки: 480.avif, original.jpg, а у SVG — единственный очищенный
+ * image.svg. Его составляет сервер
+ */
+export const SVG_FILE = 'image.svg'
+const FILE_NAME = String.raw`(?:(?:original|\d{1,5})\.(?:avif|webp|jpg|png)|image\.svg)`
 
 /** Полный ключ: <siteId>/<mediaId>/<файл>. Ничего, кроме этого, хранилище не примет */
 export const MEDIA_KEY = new RegExp(`^${UUID}/${UUID}/${FILE_NAME}$`)

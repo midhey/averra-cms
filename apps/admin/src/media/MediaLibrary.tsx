@@ -1,4 +1,4 @@
-import { formatBytes, imageMimeTypes } from '@averra/schema'
+import { formatBytes, imageMimeTypes, mediaMimeTypes } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ChangeEvent, useId, useState } from 'react'
 import { api } from '../api'
@@ -12,6 +12,7 @@ import { InlineAlert } from '../ui/InlineAlert'
 import styles from './MediaLibrary.module.scss'
 import {
   deleteQuestion,
+  isSvgItem,
   type MediaItem,
   mediaLabel,
   mediaSummary,
@@ -28,21 +29,34 @@ type MediaLibraryProps = {
   onPick?: (media: MediaItem) => void
   /** Какая картинка уже стоит в поле */
   selectedId?: string | undefined
+  /**
+   * Можно ли SVG. На экране медиатеки и у логотипа с иконкой — да. В блоках, SEO-картинке страницы
+   * и картинке для соцсетей — нет (их не пустит API): SVG там не показываем и не предлагаем загрузить
+   */
+  allowSvg?: boolean
 }
 
 type Notice = { kind: 'busy' | 'done' | 'error'; text: string }
 
 // Браузер покажет в выборе файлов только эти типы. Это удобство: проверяет тип API по содержимому
-const accept = Object.values(imageMimeTypes).join(',')
+const acceptAll = Object.values(mediaMimeTypes).join(',')
+const acceptRaster = Object.values(imageMimeTypes).join(',')
 
 /**
  * Медиатека сайта: загрузка и сетка превью. На своём экране — с удалением, в поле «картинка» —
  * с выбором. Загрузить можно и прямо из выбора, не уходя из редактора
  */
-export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLibraryProps) {
+export function MediaLibrary({
+  siteId,
+  canDelete,
+  onPick,
+  selectedId,
+  allowSvg = true,
+}: MediaLibraryProps) {
   const queryClient = useQueryClient()
   const { data, error, isPending } = useQuery(mediaQuery(siteId))
-  const items = data?.items
+  const items = allowSvg ? data?.items : data?.items.filter((media) => !isSvgItem(media))
+  const hiddenSvg = (data?.items.length ?? 0) - (items?.length ?? 0)
   const maxBytes = data?.maxBytes
   const inputId = useId()
   const hintId = useId()
@@ -54,7 +68,15 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
     mutationFn: (file: File) => uploadMedia(siteId, file, setProgress),
     onSuccess: async (media) => {
       await refresh()
-      setNotice({ kind: 'done', text: `Картинка «${media.originalName}» загружена` })
+      // SVG в выборе для блока не показываем: без пояснения он «пропал» бы сразу после загрузки
+      setNotice(
+        !allowSvg && isSvgItem(media)
+          ? {
+              kind: 'error',
+              text: `SVG «${media.originalName}» загружен в медиатеку, но сюда его поставить нельзя: SVG — только для логотипа и иконки сайта`,
+            }
+          : { kind: 'done', text: `Картинка «${media.originalName}» загружена` },
+      )
     },
     onError: (failure, file) =>
       setNotice({
@@ -112,7 +134,7 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
           id={inputId}
           className={cx(styles.fileInput, 'visually-hidden')}
           type="file"
-          accept={accept}
+          accept={allowSvg ? acceptAll : acceptRaster}
           aria-describedby={hintId}
           disabled={upload.isPending}
           onChange={choose}
@@ -123,7 +145,10 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
         </label>
         <p id={hintId} className={styles.hint}>
           JPEG, PNG, WebP или AVIF{maxBytes !== undefined && `, не больше ${formatBytes(maxBytes)}`}
-          . Метаданные (в том числе место съёмки) удаляются, размеры для сайта нарезаются сами
+          . Метаданные (в том числе место съёмки) удаляются, размеры для сайта нарезаются сами.
+          {allowSvg
+            ? ' SVG — для логотипа и иконки сайта: его очищают от скриптов и ссылок наружу'
+            : ' SVG сюда не ставится: он только для логотипа и иконки сайта'}
         </p>
         {progress !== undefined && (
           <progress
@@ -157,7 +182,9 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
       )}
       {items?.length === 0 && (
         <EmptyState title="Картинок пока нет" icon="media" headingLevel={3}>
-          Загрузите первую — она появится здесь.
+          {hiddenSvg > 0
+            ? 'В медиатеке только SVG, а сюда нужна обычная картинка. Загрузите JPEG, PNG, WebP или AVIF.'
+            : 'Загрузите первую — она появится здесь.'}
         </EmptyState>
       )}
 
@@ -170,7 +197,8 @@ export function MediaLibrary({ siteId, canDelete, onPick, selectedId }: MediaLib
             >
               {/* Превью без alt: рядом подписано имя файла, а у кнопки выбора своё имя */}
               <img
-                className={styles.thumb}
+                // Логотип SVG — целиком, а не обрезанный под рамку превью
+                className={cx(styles.thumb, isSvgItem(media) && styles.whole)}
                 src={thumbnailUrl(media.variants)}
                 alt=""
                 width={media.width}

@@ -30,6 +30,7 @@ describe('каталог блоков', () => {
       'hero',
       'features',
       'text',
+      'video',
       'cta',
       'form',
     ])
