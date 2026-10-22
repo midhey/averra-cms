@@ -9,6 +9,13 @@ export const ApiError = z.object({
   }),
 })
 
+/**
+ * Код 403 участнику, у которого доступ только к другому сайту базы (старые базы разработки).
+ * Его отдаёт API и по нему админка предлагает «Выйти», а не «К обзору сайта» — обзор ответил бы
+ * той же ошибкой. Общий для обоих: переименуют в API — админка не вернётся молча к петле
+ */
+export const NO_SITE_ACCESS_CODE = 'no_site_access'
+
 /** Ошибка API человеческим языком: что не так и в каком поле */
 export function describeApiError(status: number, body: unknown) {
   const parsed = ApiError.safeParse(body)

@@ -9,8 +9,8 @@ import type { DbOrTx } from './outbox'
 
 /**
  * Контекст шифрования пароля (AAD): к чему он относится. Запись, переставленная в строку сайта
- * (потом, с формами), не расшифруется. У сайта контекст будет свой:
- * mail_settings.password:site:<id>
+ * (потом, с формами), не расшифруется. У сайта контекст будет свой —
+ * mail_settings.password:site:<id>, с id сайта
  */
 export const MAIL_PASSWORD_CONTEXT = 'mail_settings.password:installation'
 

@@ -51,8 +51,7 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
     <fieldset
       className={styles.field}
       aria-describedby={describedBy || undefined}
-      // aria-invalid у группы полей не предусмотрен:
-      // ошибку читает aria-describedby, рамка — по data
+      // aria-invalid у группы полей не бывает: ошибку читает aria-describedby, рамка — по data
       data-invalid={error ? true : undefined}
     >
       {/* Без пометки «необязательно»: обязательна ли картинка, решает не сама схема поля,

@@ -23,8 +23,8 @@ export type SiteSection = {
 
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
- * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO и аналитика» — только
- * владельцу
+ * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO и аналитика» видит
+ * только владелец
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [

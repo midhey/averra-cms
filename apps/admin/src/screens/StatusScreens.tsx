@@ -1,3 +1,4 @@
+import { NO_SITE_ACCESS_CODE } from '@averra/schema'
 import { type ErrorComponentProps, Link } from '@tanstack/react-router'
 import { ApiRequestError, messageOf, screenErrorOf } from '../errors'
 import { useLogout } from '../shell/use-logout'
@@ -30,7 +31,7 @@ const backHome = (
  * ошибкой, поэтому вместо «К обзору сайта» — выйти и войти под другим пользователем
  */
 const isNoSiteAccess = (error: unknown) =>
-  error instanceof ApiRequestError && error.code === 'no_site_access'
+  error instanceof ApiRequestError && error.code === NO_SITE_ACCESS_CODE
 
 /** Не загрузился сайт или страница (или экран сломался): что случилось и куда вернуться */
 export function ErrorScreen({ error }: Pick<ErrorComponentProps, 'error'>) {

@@ -11,8 +11,8 @@ import type { mediaRepo } from './repo'
  * Ссылки на картинки, которых нет в медиатеке этого сайта (чужие, удалённые или выдуманные), и
  * SVG в содержимом страницы: SVG — только для логотипа и иконки сайта, а картинки блоков и
  * SEO-картинка страницы — растр с вариантами. Путь — до поля в теле запроса
- * (content.blocks.0.props.image.mediaId): админка покажет ошибку у поля, а MCP поймёт, какой блок
- * поправить
+ * (content.blocks.0.props.image.mediaId): админка покажет ошибку у поля, а MCP поймёт, какой
+ * блок поправить
  */
 export async function missingMediaIssues(
   media: ReturnType<typeof mediaRepo>,

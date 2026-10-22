@@ -321,9 +321,9 @@ const envSchema = (options: ConfigOptions) =>
       // Владелец, которого API создаёт в пустой базе в учебном режиме. Без --dev не используется
       DEV_OWNER_EMAIL: z.email().optional(),
       DEV_OWNER_PASSWORD: z.string().min(10).max(128).optional(),
-      // Почта (документация: Установка и сопровождение → Почта). smtp —
-      // настоящая отправка, file — письма в папку (разработка), off —
-      // выключена. Не задано: SMTP_HOST → smtp, учебный режим → file, иначе off
+      // Почта (документация: Установка и сопровождение → Почта). smtp — настоящая отправка,
+      // file — письма в папку (разработка), off — выключена. Не задано: SMTP_HOST → smtp,
+      // учебный режим → file, иначе off
       MAIL_TRANSPORT: z.enum(['smtp', 'file', 'off']).optional(),
       SMTP_HOST: z.string().trim().min(1).optional(),
       SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),

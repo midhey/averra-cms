@@ -82,8 +82,8 @@ export type AppDeps = {
    */
   publisher?: SitePublisher
   /**
-   * Опубликованные сайты на диске — для выгрузки статическим архивом. Есть вместе с publisher
-   * (PUBLISH_DIR)
+   * Опубликованные сайты на диске — для выгрузки статическим архивом. Есть, когда задан
+   * PUBLISH_DIR, вместе с publisher
    */
   published?: PublishedSite
   /**

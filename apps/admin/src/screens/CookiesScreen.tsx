@@ -228,7 +228,7 @@ type PreviewProps = {
 function CookiePreview(props: PreviewProps) {
   const { cookies, analytics, published, theme, siteName, shown } = props
   const [device, setDevice] = useState<Device>('phone')
-  // Предпросмотр показывает уведомление и без счётчиков: так видно, как оно встанет, когда их добавят
+  // Предпросмотр показывает уведомление и без счётчиков: видно, как оно встанет, когда их добавят
   const { notice, footer } = cookieNoticeView(
     { cookies, analytics: previewAnalytics(analytics) },
     published,

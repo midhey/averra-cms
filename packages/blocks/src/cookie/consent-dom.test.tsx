@@ -88,7 +88,7 @@ let restore: (() => void) | undefined
 type HappyDomWindow = { happyDOM?: { settings: { handleDisabledFileLoadingAsSuccess: boolean } } }
 
 beforeAll(() => {
-  // Счётчики не скачиваются (happy-dom не грузит скрипты) — и без ошибки в выводе: важен сам <script>
+  // Счётчики не скачиваются (happy-dom не грузит скрипты), и без ошибки в выводе: важен <script>
   const happyDOM = (window as unknown as HappyDomWindow).happyDOM
   if (happyDOM) happyDOM.settings.handleDisabledFileLoadingAsSuccess = true
 })

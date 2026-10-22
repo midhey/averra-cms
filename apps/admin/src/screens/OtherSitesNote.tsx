@@ -7,12 +7,13 @@ import { InlineAlert } from '../ui/InlineAlert'
  */
 export function OtherSitesNote({ otherSites }: { otherSites: number | null }) {
   if (!otherSites) return null
-  const one = pluralRu(otherSites, ['one', 'many', 'many']) === 'one'
   return (
     <InlineAlert tone="info" title="В базе есть и другие сайты">
       В базе ещё {otherSites} {pluralRu(otherSites, ['сайт', 'сайта', 'сайтов'])}:{' '}
-      {one ? 'он сохранён, но в админке не виден' : 'они сохранены, но в админке не видны'}. Одна
-      установка — один сайт, и админка работает с созданным первым.
+      {otherSites === 1
+        ? 'он сохранён, но в админке не виден'
+        : 'они сохранены, но в админке не видны'}
+      . Одна установка — один сайт, и админка работает с созданным первым.
     </InlineAlert>
   )
 }

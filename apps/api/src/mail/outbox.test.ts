@@ -641,8 +641,7 @@ describe('очистка', () => {
     const oldSent = await insert({ status: 'sent', data: null, sentAt: after(-31 * DAY) })
     const freshSent = await insert({ status: 'sent', data: null, sentAt: after(-29 * DAY) })
     const oldFailed = await insert({ status: 'failed', lastAttemptAt: after(-31 * DAY) })
-    // Неотправленное без попыток (ссылка истекла, пока почта была выключена) — по времени
-    // постановки
+    // Неотправленное без попыток (ссылка истекла, пока почта была выключена) — по createdAt
     const oldFailedNeverTried = await insert({ status: 'failed', createdAt: after(-31 * DAY) })
     // Почта была выключена или обработчик не работал: письмо так и не ушло, но и не лежит вечно
     const oldPending = await insert({ status: 'pending', createdAt: after(-60 * DAY) })

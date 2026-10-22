@@ -1,4 +1,4 @@
-export { ApiError, describeApiError } from './api-error'
+export { ApiError, describeApiError, NO_SITE_ACCESS_CODE } from './api-error'
 export {
   ForgotPassword,
   InvitationAccept,
@@ -137,6 +137,7 @@ export {
   NotificationChannelToggle,
   NotificationEventId,
   PROXY_MESSAGES,
+  PROXY_UNPARSED,
   type ProxyParts,
   SaveTelegramChannel,
   SERVICE_EVENT_HINTS,

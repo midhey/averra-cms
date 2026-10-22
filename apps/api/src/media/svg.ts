@@ -419,7 +419,7 @@ function serialize(node: Node | string, out: string[]) {
   out.push(`</${node.name}>`)
 }
 
-/** Корень: размеры числами (и viewBox, если его не было) — пропорции знает любой, кто покажет файл */
+/** Корень: размеры числами (и viewBox, если его не было): пропорции знает любой показ файла */
 function sizeRoot(root: Node) {
   const get = (name: string) => root.attributes.find(([key]) => key === name)?.[1]
   const viewBox = viewBoxSize(get('viewBox'))

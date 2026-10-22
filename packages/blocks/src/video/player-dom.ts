@@ -18,7 +18,7 @@ export const isEmbedUrl = (url: string) => EMBED_PREFIXES.some((prefix) => url.s
  * Права плеера — минимальные, с которыми плееры площадок работают: свои скрипты и хранилище
  * (allow-scripts, allow-same-origin — без них YouTube и VK не запускают ролик), полноэкранный
  * режим и трансляция (allow-presentation), ссылка «Смотреть на площадке» в новой вкладке
- * (allow-popups и allow-popups-to-escape-sandbox — иначе открытая площадка работала бы в песочнице).
+ * (allow-popups и allow-popups-to-escape-sandbox — иначе открытая площадка была бы в песочнице).
  * Ни формы, ни переход страницы сайта (allow-top-navigation), ни модальные окна
  */
 export const PLAYER_SANDBOX =

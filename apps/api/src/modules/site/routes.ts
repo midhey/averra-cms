@@ -3,19 +3,11 @@ import { Hono } from 'hono'
 import { siteRoleOf } from '../../auth/access'
 import { type AuthEnv, notFound } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { noSiteAccess } from '../../errors'
 import { messagePage, PAGE_HEADERS } from '../leads/pages'
 import { readStoredSettings } from '../settings/read'
 import { sitesRepo } from '../sites/repo'
 import { siteSnapshot } from '../sites/snapshot'
-
-/** 403 участнику, у которого доступ только к другому сайту базы (старые базы разработки) */
-export const NO_INSTALLATION_SITE_ACCESS =
-  'Нет доступа к сайту этой установки: попросите владельца пригласить вас'
-/**
- * Код этой 403: по нему админка предлагает «Выйти» (войти под другим пользователем), а не «К
- * обзору сайта» — обзор ответил бы той же ошибкой
- */
-export const NO_SITE_ACCESS_CODE = 'no_site_access'
 
 // Одна установка — один сайт. Здесь — «сайт, с которым работает пришедший», без id в адресе:
 // админка и рендерер узнают по нему id и дальше ходят в /api/sites/:siteId/… как раньше.
@@ -48,10 +40,7 @@ export function siteRoutes({ db, siteUrl, notFoundPage }: SiteRoutesDeps) {
           actor.kind === 'token' ? await repo.find(actor.siteId) : await repo.installationSite()
         if (!site) return c.json(notFound('Сайт не найден'), 404)
         if (!(await siteRoleOf(db, actor, site.id))) {
-          return c.json(
-            { error: { code: NO_SITE_ACCESS_CODE, message: NO_INSTALLATION_SITE_ACCESS } },
-            403,
-          )
+          return c.json(noSiteAccess(), 403)
         }
         const owner = actor.kind === 'user' && actor.user.role === 'owner'
         return c.json({

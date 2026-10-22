@@ -52,8 +52,8 @@ test('клиенту не видны «Новая страница», «Удал
 
   await actAsClient(page)
 
-  // Обзор — первый экран, как у всех: ни «Новой страницы», ни «Опубликовать правки», хоть правки и
-  // есть
+  // Обзор — первый экран, как у всех: ни «Новой страницы», ни «Опубликовать правки», хотя
+  // правки есть
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(demoSite.name)
   await expect(page.getByRole('link', { name: 'Новая страница' })).toHaveCount(0)

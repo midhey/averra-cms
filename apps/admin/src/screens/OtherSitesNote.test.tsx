@@ -21,7 +21,10 @@ describe('заметка о других сайтах базы', () => {
     )
     cleanup()
     render(<OtherSitesNote otherSites={21} />)
-    expect(document.body.textContent).toContain('В базе ещё 21 сайт: он сохранён')
+    // 21 — форма «сайт», но сайтов много: «они»
+    expect(document.body.textContent).toContain(
+      'В базе ещё 21 сайт: они сохранены, но в админке не видны.',
+    )
   })
 
   it.each([0, null])('нет других сайтов (%s) или пришёл не владелец — заметки нет', (count) => {

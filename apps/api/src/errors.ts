@@ -1,4 +1,15 @@
+import { NO_SITE_ACCESS_CODE } from '@averra/schema'
+
 export type Issue = { path: string; message: string }
+
+/** 403 участнику, у которого доступ только к другому сайту базы (старые базы разработки) */
+export const NO_INSTALLATION_SITE_ACCESS =
+  'Нет доступа к сайту этой установки: попросите владельца пригласить вас'
+
+/** Нет доступа к сайту установки: код NO_SITE_ACCESS_CODE — админка предложит «Выйти» */
+export const noSiteAccess = () => ({
+  error: { code: NO_SITE_ACCESS_CODE, message: NO_INSTALLATION_SITE_ACCESS },
+})
 
 /**
  * 409 — запрос правильный, но спорит с тем, что уже лежит в базе. issues с путём до поля,

@@ -24,10 +24,7 @@ export type BackupKind = z.infer<typeof BackupKind>
 export const BackupRemote = z.enum(['off', 'uploaded', 'failed', 'cleanup-failed'])
 export type BackupRemote = z.infer<typeof BackupRemote>
 
-/**
- * Один бэкап: файл state/backup-last.json (последний) и state/backup-last-ok.json (последний
- * удачный)
- */
+/** Один бэкап: state/backup-last.json — последний, state/backup-last-ok.json — последний удачный */
 export const BackupRun = z.object({
   name: z.string().regex(/^[0-9]{8}-[0-9]{6}-[a-z-]+$/),
   kind: BackupKind,

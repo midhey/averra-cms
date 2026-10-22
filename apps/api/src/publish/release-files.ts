@@ -71,8 +71,7 @@ export async function copyReferencedMedia({
         await link(join(previousDir, 'media', mediaId, file), target)
         continue
       } catch {
-        // В прежнем релизе файла нет (новая картинка) или жёсткую ссылку не сделать — берём из
-        // медиатеки
+        // В прежнем релизе файла нет (новая картинка) или жёсткая ссылка не вышла — из медиатеки
       }
     }
     // mediaKey проверяет вид ключа: строка из HTML не уведёт запись за пределы папки

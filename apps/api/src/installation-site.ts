@@ -1,21 +1,24 @@
 import { pluralRu } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
+import type { Config } from './config'
 import type { Db } from './db/client'
 import { seedDemo } from './db/seed'
 import { defaultSiteName, sitesRepo } from './modules/sites/repo'
 import { linkInstallationSite } from './publish/installation-link'
 
-type PrepareOptions = {
-  db: Db
-  /** SITE_NAME: его пишет install.sh */
-  siteName: string | undefined
-  /** SITE_URL: без SITE_NAME название — его домен */
-  siteUrl: string | undefined
-  /** Учебный режим: в пустую базу сначала ложится демо-сайт, он и становится сайтом установки */
-  demo: boolean
-  /** PUBLISH_DIR: ссылка main в нём ведёт на папку сайта установки. Без него публикации нет */
-  publishDir?: string | undefined
-}
+/**
+ * Что из конфига API нужно сайту установки. Функция получает сам конфиг, а не поля по одному:
+ * связку «переменная окружения → сайт» проверяет тест, а не только чтение index.ts.
+ * - SITE_NAME — название (его пишет install.sh);
+ * - SITE_URL — без SITE_NAME названием станет его домен;
+ * - devSeed — учебный режим: в пустую базу сначала ложится демо-сайт, он и становится сайтом
+ *   установки;
+ * - PUBLISH_DIR — ссылка main в нём ведёт на папку сайта установки. Без него публикации нет
+ */
+export type InstallationSiteConfig = Pick<
+  Config,
+  'SITE_NAME' | 'SITE_URL' | 'devSeed' | 'PUBLISH_DIR'
+>
 
 /**
  * Сайт установки при старте API. Одна установка — один сайт: его нет (первый запуск на пустой
@@ -25,17 +28,11 @@ type PrepareOptions = {
  * (modules/sites/repo.ts). Ссылка main ставится при каждом старте: после восстановления из
  * бэкапа сайт может быть другим. lines — что напечатать в лог
  */
-export async function prepareInstallationSite({
-  db,
-  siteName,
-  siteUrl,
-  demo,
-  publishDir,
-}: PrepareOptions) {
-  if (demo) await seedDemo(db)
+export async function prepareInstallationSite(db: Db, config: InstallationSiteConfig) {
+  if (config.devSeed) await seedDemo(db)
   const sites = sitesRepo(db)
   const { site, created } = await sites.ensureInstallationSite(
-    siteName ?? defaultSiteName(siteUrl),
+    config.SITE_NAME ?? defaultSiteName(config.SITE_URL),
     defaultTheme,
   )
   const lines: string[] = []
@@ -48,6 +45,6 @@ export async function prepareInstallationSite({
         'через API, но в админке не видны (https://midhey.github.io/averra-cms/decisions/single-site/)',
     )
   }
-  if (publishDir) await linkInstallationSite(publishDir, site.id)
+  if (config.PUBLISH_DIR) await linkInstallationSite(config.PUBLISH_DIR, site.id)
   return { site, lines }
 }

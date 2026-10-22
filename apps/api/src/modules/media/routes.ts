@@ -159,7 +159,10 @@ const usageWhere = ({ draft, published }: MediaUsage) =>
 export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
   const repo = mediaRepo(db)
 
-  /** Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы. У SVG оригинал и вариант — один файл */
+  /**
+   * Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы. У SVG оригинал
+   * и вариант — один файл
+   */
   const keysOf = (siteId: string, mediaId: string, files: readonly string[]) =>
     [...new Set(files)].map((file) => mediaKey(siteId, mediaId, file))
 

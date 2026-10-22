@@ -1,13 +1,13 @@
-import { readSiteSettings } from '@averra/schema'
+import { NO_SITE_ACCESS_CODE, readSiteSettings } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createDb } from '../../db/client'
 import { migrateDb } from '../../db/migrate'
 import { pages, sites } from '../../db/schema'
+import { NO_INSTALLATION_SITE_ACCESS } from '../../errors'
 import { createTestApi } from '../../testing'
 import { defaultSiteName, sitesRepo } from '../sites/repo'
-import { NO_INSTALLATION_SITE_ACCESS, NO_SITE_ACCESS_CODE } from './routes'
 
 // Одна установка — один сайт: какой сайт у установки, как он появляется и что видит пришедший
 // без id сайта в адресе (GET /api/site)

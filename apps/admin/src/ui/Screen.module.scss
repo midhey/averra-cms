@@ -72,8 +72,9 @@
   display: grid;
   gap: var(--space-1) var(--space-4);
 
-  // 180 px названия, отступ и не меньше 220 px значения
-  @container (min-width: 26rem) {
+  // 180 px названия, отступ и не меньше 220 px значения. Sass подставляет значение в условие
+  // @container только интерполяцией
+  @container (min-width: #{ui.rem(416)}) {
     grid-template-columns: ui.rem(180) minmax(0, 1fr);
   }
 }

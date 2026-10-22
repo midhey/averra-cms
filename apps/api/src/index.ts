@@ -166,13 +166,7 @@ if (config.devSeed) {
 // Одна установка — один сайт: при первом запуске API создаёт его сам, в учебном режиме это
 // демо-сайт; ссылка main в PUBLISH_DIR ведёт на него (installation-site.ts)
 const sites = sitesRepo(db)
-const { site: installationSite, lines: siteLines } = await prepareInstallationSite({
-  db,
-  siteName: config.SITE_NAME,
-  siteUrl: config.SITE_URL,
-  demo: config.devSeed,
-  publishDir: config.PUBLISH_DIR,
-})
+const { site: installationSite, lines: siteLines } = await prepareInstallationSite(db, config)
 for (const line of siteLines) console.log(line)
 
 // Публикация на сервере: после «Опубликовать» API собирает сайт отдельным процессом

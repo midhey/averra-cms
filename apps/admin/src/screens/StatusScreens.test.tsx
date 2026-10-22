@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { NO_SITE_ACCESS_CODE } from '@averra/schema'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +16,7 @@ const noSiteAccess = new ApiRequestError(
   403,
   'Нет доступа к сайту этой установки: попросите владельца пригласить вас',
   [],
-  'no_site_access',
+  NO_SITE_ACCESS_CODE,
 )
 
 describe('экран ошибки', () => {
