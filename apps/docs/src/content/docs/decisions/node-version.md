@@ -2,7 +2,7 @@
 title: Node 24 LTS закреплена в проекте
 description: "Почему версия Node закреплена в devEngines и pnpm скачивает её сам."
 sidebar:
-  order: 8
+  order: 11
 ---
 
 Для разработчика: почему не важно, какая Node стоит у вас глобально.

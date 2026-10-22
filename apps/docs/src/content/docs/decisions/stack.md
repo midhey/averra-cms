@@ -2,7 +2,7 @@
 title: TypeScript, Hono и проверенные библиотеки
 description: "Почему стек — TypeScript везде, Hono, Zod, Drizzle, Astro и Better Auth."
 sidebar:
-  order: 6
+  order: 9
 ---
 
 Для разработчика: почему выбран такой стек и чего в нём сознательно нет.

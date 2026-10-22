@@ -2,7 +2,7 @@
 title: node-postgres в проде, PGlite в разработке
 description: "Почему в разработке встроенный PGlite, на сервере — PostgreSQL через node-postgres."
 sidebar:
-  order: 9
+  order: 12
 ---
 
 Для разработчика: почему две базы и как держится, что код работает на обеих.
