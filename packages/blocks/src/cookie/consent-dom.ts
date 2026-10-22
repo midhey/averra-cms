@@ -83,25 +83,38 @@ type Modal = {
   isOpen: () => boolean
 }
 
+type ModalOptions = {
+  /** Открытые окна по порядку: Tab и Esc — у верхнего (настройки поверх «окна по центру») */
+  layers: DialogElement[]
+  onEscape: () => void
+  onToggle?: (open: boolean) => void
+  /**
+   * Фокус при открытии — на само окно (у него tabindex="-1"), а не на первую ссылку: иначе первое
+   * Enter в окне уведомления уводит на политику вместо выбора
+   */
+  focusSelf?: boolean
+}
+
 /**
  * Модальное окно на <dialog>: showModal, где он есть (фон недоступен, окно поверх всего), иначе
  * атрибут open. Фокус переходит внутрь и не выходит по Tab, Esc закрывает, после закрытия фокус
- * возвращается туда, откуда окно открыли
+ * возвращается туда, откуда окно открыли. Tab и Esc слушает document, а не окно: без showModal
+ * фокус может оказаться за окном — клик по затемнению ставит его на body, — и ловушка должна
+ * вернуть его и оттуда
  */
-function modal(
-  root: HTMLElement,
-  dialog: DialogElement,
-  onEscape: () => void,
-  onToggle: (open: boolean) => void = () => {},
-): Modal {
+function modal(root: HTMLElement, dialog: DialogElement, options: ModalOptions): Modal {
+  const { layers, onEscape, onToggle = () => {}, focusSelf = false } = options
+  const doc = dialog.ownerDocument
   let opener: HTMLElement | null = null
   const focusables = () =>
     Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
       (element) => !element.closest('[hidden]'),
     )
   const isOpen = () => dialog.hasAttribute('open')
+  const isTop = () => layers[layers.length - 1] === dialog
 
-  dialog.addEventListener('keydown', (event) => {
+  function onKeydown(event: KeyboardEvent) {
+    if (!isTop()) return
     if (event.key === 'Escape') {
       event.preventDefault()
       onEscape()
@@ -112,15 +125,25 @@ function modal(
     const first = items[0]
     const last = items[items.length - 1]
     if (!first || !last) return
-    const active = dialog.ownerDocument.activeElement
-    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+    const active = doc.activeElement
+    // Фокус на самом окне или за ним (на body): Tab ведёт к первому элементу окна, а Shift+Tab
+    // к последнему
+    const inside = active !== dialog && dialog.contains(active)
+    if (event.shiftKey && (active === first || !inside)) {
       event.preventDefault()
       last.focus()
-    } else if (!event.shiftKey && active === last) {
+    } else if (!event.shiftKey && (active === last || !inside)) {
       event.preventDefault()
       first.focus()
     }
-  })
+  }
+  // Фокус ушёл за окно иначе, чем по Tab (экранный диктор, скрипт страницы), — вернуть внутрь
+  function onFocusin(event: FocusEvent) {
+    const target = event.target as Node | null
+    if (!isTop() || !target || dialog.contains(target)) return
+    const back = focusables()[0] ?? dialog
+    back.focus()
+  }
   // Закрытие средствами браузера (кнопка «назад» на Android) — тем же путём, что Esc
   dialog.addEventListener('cancel', (event) => {
     event.preventDefault()
@@ -133,15 +156,25 @@ function modal(
       if (isOpen()) return
       opener = from instanceof HTMLElement ? from : null
       root.setAttribute('data-modal-open', '')
+      layers.push(dialog)
       onToggle(true)
+      // У showModal окно модально само, у атрибута open — нет: диктору говорим об этом явно
+      dialog.setAttribute('aria-modal', 'true')
       if (typeof dialog.showModal === 'function') dialog.showModal()
       else dialog.setAttribute('open', '')
-      focusables()[0]?.focus()
+      doc.addEventListener('keydown', onKeydown)
+      doc.addEventListener('focusin', onFocusin)
+      const target = focusSelf ? dialog : focusables()[0]
+      target?.focus()
     },
     close() {
       if (!isOpen()) return
+      doc.removeEventListener('keydown', onKeydown)
+      doc.removeEventListener('focusin', onFocusin)
+      layers.splice(layers.indexOf(dialog), 1)
       if (typeof dialog.close === 'function') dialog.close()
       else dialog.removeAttribute('open')
+      dialog.removeAttribute('aria-modal')
       onToggle(false)
       if (!root.querySelector('dialog[open]')) root.removeAttribute('data-modal-open')
       // Кнопка, которая открыла окно, могла пропасть (уведомление скрыто) — тогда фокус на body
@@ -179,16 +212,18 @@ export function startCookieConsent(doc: Document = document) {
   root.hidden = false
   let lastFocus: Element | null = null
   // Вид «окно по центру» — <dialog>. По тегу, а не instanceof: в iOS до 15.4 HTMLDialogElement нет
+  const layers: DialogElement[] = []
   const noticeModal =
-    notice.tagName === 'DIALOG' ? modal(root, notice, () => noticeModal?.close()) : null
+    notice.tagName === 'DIALOG'
+      ? modal(root, notice, { layers, onEscape: () => noticeModal?.close(), focusSelf: true })
+      : null
   // Пока открыто окно настроек, уведомление под ним приглушено (CSS по data-settings-open)
   const settingsModal = settings
-    ? modal(
-        root,
-        settings,
-        () => settingsModal?.close(),
-        (open) => root.toggleAttribute('data-settings-open', open),
-      )
+    ? modal(root, settings, {
+        layers,
+        onEscape: () => settingsModal?.close(),
+        onToggle: (open) => root.toggleAttribute('data-settings-open', open),
+      })
     : null
 
   const ports: ConsentPorts = {
@@ -242,10 +277,13 @@ export function startCookieConsent(doc: Document = document) {
     lastFocus = button
     action()
   })
-  // «Настройки cookie» внизу страницы: без JS и в режиме уведомления их нет
+  // «Настройки cookie» внизу страницы: без JS и в режиме уведомления их нет. Подвал, где кроме
+  // них ничего (политика не опубликована), без JS скрыт целиком — показываем и его
   if (mode === 'consent' && settingsModal) {
     for (const link of doc.querySelectorAll<HTMLElement>('[data-consent-open]')) {
       link.hidden = false
+      const footer = link.closest<HTMLElement>('[data-legal-footer]')
+      if (footer) footer.hidden = false
       link.addEventListener('click', () => {
         lastFocus = link
         consent.openSettings()

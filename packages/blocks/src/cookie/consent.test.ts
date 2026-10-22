@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   analyticsCookieNames,
   analyticsIds,
+  analyticsServices,
   analyticsStorageKeys,
   CONSENT_MAX_AGE,
   type ConsentConfig,
   choiceCookie,
+  choiceValue,
   cookieDomains,
   createConsent,
   forgetCookies,
@@ -56,18 +58,42 @@ function fakePage(initialCookies = '') {
 const config: ConsentConfig = { mode: 'consent', metrika: '98765432', ga4: '', secure: true }
 
 describe('cookie выбора', () => {
-  it('только выбор, на год, на весь сайт; Secure — на https', () => {
-    expect(choiceCookie('analytics', true)).toBe(
-      `averra_consent=analytics; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax; Secure`,
+  it('только выбор и сервисы, на год, на весь сайт; Secure — на https', () => {
+    expect(choiceCookie('analytics', true, ['ym'])).toBe(
+      `averra_consent=analytics.ym; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax; Secure`,
     )
-    expect(choiceCookie('necessary', false)).not.toContain('Secure')
+    expect(choiceCookie('necessary', false, ['ym'])).toBe(
+      `averra_consent=necessary; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax`,
+    )
+    expect(choiceValue('notice', ['ym', 'ga'])).toBe('notice.ym.ga')
     expect(CONSENT_MAX_AGE).toBe(31_536_000)
   })
 
   it('читает свой выбор среди чужих cookie, незнакомое значение — выбора нет', () => {
-    expect(readChoice('_ym_uid=1; averra_consent=necessary; a=b')).toBe('necessary')
-    expect(readChoice('averra_consent=maybe')).toBeUndefined()
-    expect(readChoice('')).toBeUndefined()
+    expect(readChoice('_ym_uid=1; averra_consent=necessary; a=b', ['ym'])).toBe('necessary')
+    expect(readChoice('averra_consent=analytics.ym', ['ym'])).toBe('analytics')
+    expect(readChoice('averra_consent=maybe', ['ym'])).toBeUndefined()
+    expect(readChoice('averra_consent=analytics.ym.vk', ['ym'])).toBeUndefined()
+    expect(readChoice('averra_consent=necessary.ym', ['ym'])).toBeUndefined()
+    expect(readChoice('', ['ym'])).toBeUndefined()
+  })
+
+  it('согласие — на названные сервисы: новый сервис на сайте — выбора нет', () => {
+    expect(readChoice('averra_consent=analytics.ym.ga', ['ym', 'ga'])).toBe('analytics')
+    expect(readChoice('averra_consent=analytics.ym.ga', ['ga'])).toBe('analytics')
+    // Владелец добавил GA4: согласие на одну Метрику на него не распространяется
+    expect(readChoice('averra_consent=analytics.ym', ['ym', 'ga'])).toBeUndefined()
+    expect(readChoice('averra_consent=notice.ym', ['ym', 'ga'])).toBeUndefined()
+    // Отказ — от всего: новый сервис его не отменяет
+    expect(readChoice('averra_consent=necessary', ['ym', 'ga'])).toBe('necessary')
+    // Значение без набора (до того, как он появился) — согласие ни на что: спросить снова
+    expect(readChoice('averra_consent=analytics', ['ym'])).toBeUndefined()
+    expect(readChoice('averra_consent=notice', ['ym'])).toBeUndefined()
+  })
+
+  it('сервисы сайта — по проверенным номерам', () => {
+    expect(analyticsServices({ metrika: '98765432', ga4: 'G-ABC123' })).toEqual(['ym', 'ga'])
+    expect(analyticsServices({ metrika: '', ga4: 'G-ABC123' })).toEqual(['ga'])
   })
 
   it('уведомление: в режиме согласия — пока нет согласия или отказа', () => {
@@ -104,7 +130,7 @@ describe('режим согласия', () => {
     consent.acceptAll()
     expect(page.calls).toEqual([
       'show',
-      `cookie averra_consent=analytics; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax; Secure`,
+      `cookie averra_consent=analytics.ym; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax; Secure`,
       'close settings',
       'hide',
       'load',
@@ -113,9 +139,20 @@ describe('режим согласия', () => {
   })
 
   it('сохранённое согласие — счётчик сразу, уведомления нет', () => {
-    const page = fakePage('averra_consent=analytics')
+    const page = fakePage('averra_consent=analytics.ym')
     createConsent(config, page.ports).start()
     expect(page.calls).toEqual(['load'])
+  })
+
+  it('владелец добавил GA4: согласие на одну Метрику — ни одного счётчика, вопрос снова', () => {
+    const both = { ...config, ga4: 'G-ABC123' }
+    const page = fakePage('averra_consent=analytics.ym')
+    const consent = createConsent(both, page.ports)
+    consent.start()
+    expect(page.calls).toEqual(['show'])
+    consent.acceptAll()
+    expect(page.cookies()).toBe('averra_consent=analytics.ym.ga')
+    expect(page.loaded).toEqual([{ metrika: '98765432', ga4: 'G-ABC123' }])
   })
 
   it('«Только необходимые» — счётчика нет ни сейчас, ни после перезагрузки', () => {
@@ -143,7 +180,7 @@ describe('режим согласия', () => {
   })
 
   it('счётчик грузится один раз', () => {
-    const page = fakePage('averra_consent=analytics')
+    const page = fakePage('averra_consent=analytics.ym')
     const consent = createConsent(config, page.ports)
     consent.start()
     consent.acceptAll()
@@ -152,7 +189,7 @@ describe('режим согласия', () => {
   })
 
   it('отзыв согласия после загрузки — стереть cookie счётчиков и перезагрузить', () => {
-    const page = fakePage('averra_consent=analytics')
+    const page = fakePage('averra_consent=analytics.ym')
     const consent = createConsent(config, page.ports)
     consent.start()
     consent.saveSettings(false)
@@ -176,7 +213,7 @@ describe('режим согласия', () => {
   })
 
   it('«Понятно» из режима уведомления — не согласие: сайт спросит снова', () => {
-    const page = fakePage('averra_consent=notice')
+    const page = fakePage('averra_consent=notice.ym')
     createConsent(config, page.ports).start()
     expect(page.calls).toEqual(['show'])
   })
@@ -198,9 +235,13 @@ describe('режим уведомления', () => {
   })
 
   it('согласие из режима согласия засчитывается: человек уже ответил «да»', () => {
-    const page = fakePage('averra_consent=analytics')
+    const page = fakePage('averra_consent=analytics.ym')
     createConsent(notice, page.ports).start()
     expect(page.calls).toEqual([])
+    // «Понятно» тоже помнит, о каких сервисах сказали: добавили GA4 — уведомление снова
+    const told = fakePage('averra_consent=notice.ym')
+    createConsent({ ...notice, ga4: 'G-ABC123' }, told.ports).start()
+    expect(told.calls).toEqual(['show'])
   })
 
   it('отказ из режима согласия — уведомление снова: счётчики теперь работают без спроса', () => {

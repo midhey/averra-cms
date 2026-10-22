@@ -14,9 +14,10 @@ export const CONSENT_MAX_AGE = 365 * 24 * 60 * 60
  */
 export type ConsentChoice = 'analytics' | 'necessary' | 'notice'
 
-const CHOICES: readonly string[] = ['analytics', 'necessary', 'notice']
-
 export type ConsentMode = 'consent' | 'notice'
+
+/** Сервис аналитики в значении cookie: ym — Метрика, ga — GA4 */
+export type AnalyticsService = 'ym' | 'ga'
 
 export type ConsentConfig = {
   mode: ConsentMode
@@ -41,6 +42,14 @@ export function analyticsIds(config: Pick<ConsentConfig, 'metrika' | 'ga4'>) {
   }
 }
 
+/** Сервисы аналитики сайта по проверенным номерам — в порядке, в котором их пишет cookie */
+export function analyticsServices(ids: { metrika: string; ga4: string }): AnalyticsService[] {
+  const services: AnalyticsService[] = []
+  if (ids.metrika !== '') services.push('ym')
+  if (ids.ga4 !== '') services.push('ga')
+  return services
+}
+
 /** Значение cookie по имени из document.cookie */
 export function cookieValue(cookies: string, name: string) {
   for (const part of cookies.split(';')) {
@@ -50,15 +59,41 @@ export function cookieValue(cookies: string, name: string) {
   return undefined
 }
 
-/** Выбор из cookie. Незнакомое значение — выбора нет: сайт спросит снова */
-export function readChoice(cookies: string): ConsentChoice | undefined {
-  const value = cookieValue(cookies, CONSENT_COOKIE)
-  return value !== undefined && CHOICES.includes(value) ? (value as ConsentChoice) : undefined
+/**
+ * Значение cookie: necessary — отказ от всего, без набора; analytics и notice — с набором
+ * сервисов, о которых человеку сказали: analytics.ym, notice.ym.ga. Старое значение без набора
+ * (до того, как набор появился) — пустой набор
+ */
+const CHOICE_VALUE = /^(?:necessary|(analytics|notice)((?:\.(?:ym|ga))*))$/
+
+/**
+ * Выбор из cookie. Согласие и «Понятно» действуют, только если покрывают все сервисы сайта
+ * сейчас: владелец добавил GA4 — согласившиеся на одну Метрику увидят вопрос снова, а не получат
+ * GA4 молча. Незнакомое значение — выбора нет: сайт спросит снова
+ */
+export function readChoice(
+  cookies: string,
+  services: readonly AnalyticsService[],
+): ConsentChoice | undefined {
+  const match = CHOICE_VALUE.exec(cookieValue(cookies, CONSENT_COOKIE) ?? '')
+  if (!match) return undefined
+  const [, kind, list = ''] = match
+  if (kind !== 'analytics' && kind !== 'notice') return 'necessary'
+  const known = list.split('.').filter(Boolean)
+  return services.every((service) => known.includes(service)) ? kind : undefined
 }
 
+/** Значение cookie для выбора: у согласия и «Понятно» — сервисы, о которых сказали */
+export const choiceValue = (choice: ConsentChoice, services: readonly AnalyticsService[]) =>
+  choice === 'necessary' ? choice : [choice, ...services].join('.')
+
 /** Строка для document.cookie: выбор на год на весь сайт */
-export function choiceCookie(choice: ConsentChoice, secure: boolean) {
-  return `${CONSENT_COOKIE}=${choice}; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax${secure ? '; Secure' : ''}`
+export function choiceCookie(
+  choice: ConsentChoice,
+  secure: boolean,
+  services: readonly AnalyticsService[],
+) {
+  return `${CONSENT_COOKIE}=${choiceValue(choice, services)}; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax${secure ? '; Secure' : ''}`
 }
 
 /** Показывать ли уведомление при этом выборе */
@@ -140,7 +175,8 @@ export type ConsentPorts = {
  */
 export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
   const ids = analyticsIds(config)
-  let choice = readChoice(ports.readCookies())
+  const services = analyticsServices(ids)
+  let choice = readChoice(ports.readCookies(), services)
   let loaded = false
 
   function load() {
@@ -151,7 +187,7 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
 
   function choose(next: ConsentChoice) {
     choice = next
-    ports.writeCookie(choiceCookie(next, config.secure))
+    ports.writeCookie(choiceCookie(next, config.secure, services))
     ports.closeSettings()
     ports.hideNotice()
     if (next === 'analytics') {

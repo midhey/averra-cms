@@ -124,7 +124,8 @@ test('режим согласия на собранном сайте: Метри
     expect(
       first.requested.some((url) => url.startsWith('https://mc.yandex.ru/metrika/tag.js')),
     ).toBe(true)
-    expect(await consentCookie(first.context)).toBe('analytics')
+    // Согласие — на названный сервис: ym — Метрика. Добавят GA4 — сайт спросит снова
+    expect(await consentCookie(first.context)).toBe('analytics.ym')
 
     // Выбор помнится: после перезагрузки уведомления нет, счётчик грузится сразу
     await page.reload()
@@ -167,7 +168,7 @@ test('режим согласия на собранном сайте: Метри
     await settings.getByRole('button', { name: 'Сохранить выбор' }).click()
     await expect(settings).toBeHidden()
     await expect(other.locator(METRIKA_SCRIPT)).toHaveCount(1)
-    expect(await consentCookie(second.context)).toBe('analytics')
+    expect(await consentCookie(second.context)).toBe('analytics.ym')
     await second.context.close()
 
     // Без JS: уведомления нет, счётчика нет, страница и ссылка на политику на месте

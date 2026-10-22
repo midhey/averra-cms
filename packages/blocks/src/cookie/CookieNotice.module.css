@@ -17,7 +17,6 @@
 .root[data-settings-open] .notice::after {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   background: var(--color-text);
   content: "";
   opacity: 0.45;
@@ -89,6 +88,12 @@
   margin: auto;
   overflow: auto;
   border-radius: calc(var(--radius) * 2);
+}
+
+/* Фокус при открытии — на самом окне, чтобы первое Enter не увело на политику. Окно — не элемент
+   управления, кольцо вокруг всего окна только сбивало бы; дальше Tab ведёт по кнопкам с кольцом */
+.notice[data-look="modal"]:focus {
+  outline: none;
 }
 
 .notice[data-look="modal"]:not([open]),
@@ -381,6 +386,15 @@ label.option {
    до выбора элементы скрыты */
 .root[hidden],
 .root [hidden],
+.footer[hidden],
 .footer [hidden] {
   display: none;
+}
+
+/* Уведомление под окном настроек (слой приглушения — в начале файла). Слой — внутри рамки: за
+   ней он вылез бы в прокрутку у «окна по центру». overflow обрезает его по внутреннему
+   скруглению, без светлых уголков. Рамку приглушаем цветом — тем же смешением, что даёт слой */
+.root[data-settings-open] .notice {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--color-text) 45%, var(--color-surface));
 }

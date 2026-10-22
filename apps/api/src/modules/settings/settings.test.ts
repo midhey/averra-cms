@@ -1,9 +1,10 @@
 import { demoSiteId, SITE_ROOT_FILES, type SiteSettings } from '@averra/schema'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
 import { notificationChannels, notificationRecipients, pages, sites } from '../../db/schema'
 import { cachedIcons, ICO_SIZES, ICON_FILES, icoFromPngs } from '../../media/favicon'
+import { channelSecretContext } from '../../notifications/channel'
 import type { SitePublisher } from '../../publish/queue'
 import { createTestApi } from '../../testing'
 import { sameSitePathOf } from './same-site'
@@ -609,6 +610,117 @@ describe('cookie и согласие', () => {
           .delete(notificationRecipients)
           .where(eq(notificationRecipients.id, recipient.id))
       }
+    }
+  })
+
+  it('почта в шаблонах — как у отправки заявок (с письмом владельцам); ролики — если есть', async () => {
+    const page = (fields: { name: string; type: string; label: string }[]) => ({
+      blocks: [
+        { id: 'lead', type: 'form', props: { title: 'Заявка', fields, policyUrl: '/privacy' } },
+        {
+          id: 'clip',
+          type: 'video',
+          props: { url: 'https://youtu.be/aqz-KE-bpKQ', title: 'Как мы работаем' },
+        },
+      ],
+    })
+    const save = async (fields: Parameters<typeof page>[0]) => {
+      const put = await app.request(`/api/sites/${demoSiteId}/pages/contacts`, {
+        method: 'PUT',
+        headers: json(owner.headers),
+        body: JSON.stringify({ title: 'Контакты', content: page(fields) }),
+      })
+      expect(put.status, await put.clone().text()).toBe(200)
+    }
+    await save([{ name: 'email', type: 'email', label: 'Почта' }])
+    const policy = async () => {
+      const res = await legal('privacy')
+      expect(res.status, await res.clone().text()).toBe(201)
+      await removePage('privacy')
+      return JSON.stringify(((await res.json()) as { draft: unknown }).draft)
+    }
+    const staff = 'письма с уведомлением о заявке'
+    const visitor = 'письмо-подтверждение заявки'
+    // Токен бота в базе — только зашифрованным (проверка таблицы): подделка того же вида не
+    // расшифровывается, как после смены MAIL_ENCRYPTION_KEY
+    const sealed = `v1.${'0'.repeat(16)}.${'A'.repeat(16)}.${'A'.repeat(22)}.AAAA`
+    if (!api.secretBox) throw new Error('тесту нужен ключ секретов')
+    const token = api.secretBox.encrypt('123456:token', channelSecretContext('telegram'))
+    const bot = { botId: 1, botUsername: 'averra_bot', botName: 'Бот', proxy: null }
+    const [recipient] = await api.db
+      .insert(notificationRecipients)
+      .values({ siteId: demoSiteId, channel: 'email', address: 'sales@example.ru', events: [] })
+      .returning()
+    const [chat] = await api.db
+      .insert(notificationRecipients)
+      .values({ siteId: demoSiteId, channel: 'telegram', address: '-100123', events: ['lead.new'] })
+      .returning()
+    if (!recipient || !chat) throw new Error('нет получателей')
+    try {
+      // На заявки на почте никто не подписан, а Telegram без токена бота заявку не повезёт: она
+      // уйдёт владельцам письмом (notify → ownerTargets). Подтверждение посетителю включено
+      let text = await policy()
+      expect(text).toContain(staff)
+      expect(text).toContain(visitor)
+      expect(text).toContain('YouTube (Google LLC, США) — плеер ролика')
+
+      // Получателей нет вовсе — тоже письмо владельцам
+      await api.db.delete(notificationRecipients).where(eq(notificationRecipients.id, chat.id))
+      await api.db.update(sites).set({ leadConfirmation: false }).where(eq(sites.id, demoSiteId))
+      text = await policy()
+      expect(text).toContain(staff)
+      expect(text).not.toContain(visitor)
+
+      // Чат подписан, но токен бота не расшифровать: notify отправит заявку владельцам письмом
+      await api.db.insert(notificationRecipients).values(chat)
+      await api.db
+        .insert(notificationChannels)
+        .values({ kind: 'telegram', enabled: true, secretEncrypted: sealed, settings: bot })
+      expect(await policy()).toContain(staff)
+
+      // Токен читается, но бот не настроен (нет имени бота) — тоже письмо владельцам
+      await api.db
+        .update(notificationChannels)
+        .set({ secretEncrypted: token, settings: {} })
+        .where(eq(notificationChannels.kind, 'telegram'))
+      expect(await policy()).toContain(staff)
+
+      // Заявки забирает готовый Telegram, на почте подписчиков нет: письма не уходят
+      await api.db
+        .update(notificationChannels)
+        .set({ settings: bot })
+        .where(eq(notificationChannels.kind, 'telegram'))
+      expect(await policy()).not.toContain('почтовый сервис')
+
+      // Получатель на почте подписан на заявки — письма снова есть
+      await api.db
+        .update(notificationRecipients)
+        .set({ events: ['lead.new'] })
+        .where(eq(notificationRecipients.id, recipient.id))
+      expect(await policy()).toContain(staff)
+
+      // Почта выключена в «Уведомлениях»: письма сотрудникам не уходят
+      await api.db.insert(notificationChannels).values({ kind: 'email', enabled: false })
+      expect(await policy()).not.toContain('почтовый сервис')
+
+      // Подтверждение включено, но в форме нет поля почты: посетителю писать некуда
+      await api.db.delete(notificationChannels).where(eq(notificationChannels.kind, 'email'))
+      await api.db.update(sites).set({ leadConfirmation: true }).where(eq(sites.id, demoSiteId))
+      expect(await policy()).toContain(visitor)
+      await save([{ name: 'phone', type: 'phone', label: 'Телефон' }])
+      text = await policy()
+      expect(text).not.toContain(visitor)
+      expect(text).toContain(staff)
+    } finally {
+      await api.db
+        .delete(notificationChannels)
+        .where(inArray(notificationChannels.kind, ['email', 'telegram']))
+      await api.db.update(sites).set({ leadConfirmation: true }).where(eq(sites.id, demoSiteId))
+      await api.db
+        .delete(notificationRecipients)
+        .where(inArray(notificationRecipients.id, [recipient.id, chat.id]))
+      await removePage('privacy')
+      await removePage('contacts')
     }
   })
 

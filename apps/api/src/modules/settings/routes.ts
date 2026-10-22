@@ -20,6 +20,7 @@ import { conflict, type Issue } from '../../errors'
 import { errorForLog } from '../../log-error'
 import { ICON_FILES, type IconRenderer } from '../../media/favicon'
 import { type MediaStorage, mediaKey } from '../../media/storage'
+import type { NotifyDeps } from '../../notifications/notify'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
 import { mediaRepo } from '../media/repo'
@@ -42,6 +43,8 @@ type SettingsDeps = {
   storage: MediaStorage
   /** Набор иконок сайта: SVG пробуется растеризовать до сохранения в настройку icon */
   icons: IconRenderer
+  /** Каналы уведомлений сейчас: шаблон политики называет почту, только если заявки уходят ею */
+  notify: () => NotifyDeps
 }
 
 /**
@@ -57,7 +60,8 @@ type SettingsDeps = {
 const needsRebuild = (patch: SiteSettingsPatch) =>
   Object.keys(patch).some((key) => key !== 'redirects')
 
-export function settingsRoutes({ db, siteUrl, publisher, log, storage, icons }: SettingsDeps) {
+export function settingsRoutes(deps: SettingsDeps) {
+  const { db, siteUrl, publisher, log, storage, icons } = deps
   const repo = settingsRepo(db)
   const media = mediaRepo(db)
   const pages = sitesRepo(db)
@@ -245,6 +249,7 @@ export function settingsRoutes({ db, siteUrl, publisher, log, storage, icons }: 
             settings,
             effectiveSiteUrl(settings, siteUrl),
             new Date(),
+            deps.notify(),
           )
           const { slug, title } = legalPages[document]
           const page = await pages.createPage(

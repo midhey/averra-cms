@@ -19,6 +19,9 @@ const facts = (overrides: Partial<LegalFacts> = {}): LegalFacts => ({
   cookieMode: 'consent',
   forms: true,
   telegram: false,
+  mail: true,
+  visitorConfirmation: false,
+  video: [],
   leadRetentionDays: 180,
   policyPage: '',
   date: '2026-10-22',
@@ -127,6 +130,62 @@ describe('legalPageContent', () => {
     })
   })
 
+  it('почта — только когда письма правда уходят: сотрудникам и подтверждение посетителю', () => {
+    const service = 'почтовый сервис [укажите почтовый сервис'
+    const staff = 'письма с уведомлением о заявке и её содержимым приходят сотрудникам'
+    const visitor = 'письмо-подтверждение заявки уходит на адрес почты'
+    const both = pageText('privacy', facts({ visitorConfirmation: true }))
+    expect(both).toContain(service)
+    expect(both).toContain(staff)
+    expect(both).toContain(visitor)
+    // Получателей на почте нет или канал выключен — про письма сотрудникам ни слова
+    const confirmationOnly = pageText('privacy', facts({ mail: false, visitorConfirmation: true }))
+    expect(confirmationOnly).not.toContain(staff)
+    expect(confirmationOnly).toContain(visitor)
+    const noMail = pageText('privacy', facts({ mail: false }))
+    expect(noMail).not.toContain('почтовый сервис')
+    // Без форм писем нет, даже если получатели остались
+    expect(pageText('privacy', facts({ forms: false, visitorConfirmation: true }))).not.toContain(
+      'почтовый сервис',
+    )
+    expect(pageText('consent', facts({ visitorConfirmation: true }))).toContain(
+      'Письма с заявкой и подтверждение заявки на мою почту отправляются через почтовый сервис',
+    )
+    expect(pageText('consent', facts({}))).toContain(
+      'Письма с заявкой отправляются через почтовый сервис',
+    )
+    // Сотрудникам писем нет — согласие не говорит о «письмах с заявкой»
+    const visitorOnly = pageText('consent', facts({ mail: false, visitorConfirmation: true }))
+    expect(visitorOnly).toContain(
+      'Подтверждение заявки на мою почту отправляется через почтовый сервис',
+    )
+    expect(visitorOnly).not.toContain('Письма с заявкой')
+    expect(pageText('consent', facts({ mail: false }))).not.toContain('почтовый сервис')
+  })
+
+  it('срок хранения склоняется по числу', () => {
+    expect(pageText('consent', facts({ leadRetentionDays: 21 }))).toContain('Срок: 21 день с')
+    expect(pageText('consent', facts({ leadRetentionDays: 22 }))).toContain('Срок: 22 дня с')
+    expect(pageText('consent', facts({ leadRetentionDays: 25 }))).toContain('Срок: 25 дней с')
+    expect(pageText('privacy', facts({ leadRetentionDays: 31 }))).toContain('31 день с момента')
+  })
+
+  it('ролики: площадка — в получателях, YouTube — с трансграничной передачей, и про cookie', () => {
+    const youtube = pageText('privacy', facts({ video: ['youtube'] }))
+    expect(youtube).toContain('YouTube (Google LLC, США) — плеер ролика')
+    expect(youtube).toContain('трансграничная передача')
+    expect(youtube).toContain('плеер площадки видео ставит свои cookie')
+    const russian = pageText('privacy', facts({ video: ['rutube', 'vk'] }))
+    expect(russian).toContain('Rutube (Россия)')
+    expect(russian).toContain('VK Видео (ООО «ВК», Россия)')
+    expect(russian).not.toContain('YouTube')
+    expect(pageText('privacy', facts())).not.toContain('плеер ролика')
+    // Только ролики: данные всё же уходят площадке, и раздел о cookie есть
+    const videoOnly = pageText('privacy', facts({ metrika: false, forms: false, video: ['vk'] }))
+    expect(videoOnly).not.toContain('Сайт не собирает персональные данные')
+    expect(videoOnly).toContain('Сам сайт cookie не ставит')
+  })
+
   it('разметка из реквизитов не получается: значения — одной строкой', () => {
     const organization = Organization.parse({
       name: '## Взлом\n\n- лишний пункт',
@@ -145,7 +204,10 @@ describe('legalPageContent', () => {
 
   it('каждый блок проходит схему блока «Текст»', () => {
     for (const document of ['privacy', 'consent'] as const) {
-      for (const block of legalPageContent(document, facts({ ga4: true, telegram: true })).blocks) {
+      for (const block of legalPageContent(
+        document,
+        facts({ ga4: true, telegram: true, visitorConfirmation: true, video: ['youtube'] }),
+      ).blocks) {
         if (block.type === 'text') expect(text.props.safeParse(block.props).success).toBe(true)
       }
     }

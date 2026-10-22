@@ -76,12 +76,12 @@ describe('CookieNotice', () => {
     expect(modal).not.toContain('<section')
   })
 
-  it('режим уведомления: «Понятно», без окна настроек и без номеров счётчиков', () => {
+  it('режим уведомления: «Понятно», без окна настроек, номера счётчиков — для набора в cookie', () => {
     const { notice, footer } = renderNotice(settings({ mode: 'notice', look: 'bar' }))
     expect(notice).toContain('Понятно')
     expect(notice).not.toContain('Принять все')
     expect(notice).not.toContain('data-consent-settings')
-    expect(notice).not.toContain('data-metrika')
+    expect(notice).toContain('data-metrika="98765432"')
     expect(notice).toContain('Яндекс Метрику, чтобы понимать')
     expect(footer).not.toContain('Настройки cookie')
   })
@@ -95,11 +95,14 @@ describe('CookieNotice', () => {
     const { notice, footer } = renderNotice(settings({ policyPage: 'privacy' }), ['index'])
     expect(notice).not.toContain('Политика конфиденциальности')
     expect(footer).not.toContain('Политика конфиденциальности')
+    // В подвале только «Настройки cookie»: без JS он скрыт целиком, а не пустой полосой
+    expect(footer).toMatch(/^<footer[^>]*data-legal-footer=""[^>]*hidden=""/)
   })
 
   it('подвал: политика видна и без JS, «Настройки cookie» — только со скриптом', () => {
     const { footer } = renderNotice(settings({ policyPage: 'privacy' }))
     expect(footer).toContain('<footer')
+    expect(footer).not.toMatch(/^<footer[^>]*hidden/)
     expect(footer).toContain('<a href="/privacy"')
     expect(footer).toMatch(/data-consent-open=""[^>]*hidden=""/)
   })

@@ -11,7 +11,10 @@ export type CookieNoticeProps = {
   policyHref: string | null
   /** Что делает аналитика — строка в окне настроек */
   analyticsDescription: string
-  /** Номера счётчиков: по ним скрипт грузит их после согласия. В режиме уведомления не нужны */
+  /**
+   * Номера счётчиков. В режиме согласия скрипт грузит по ним счётчики после согласия, в обоих
+   * режимах — знает, о каких сервисах сказали посетителю: их набор пишется в cookie выбора
+   */
   metrika?: string
   ga4?: string
   /**
@@ -79,8 +82,8 @@ export function CookieNotice(props: CookieNoticeProps) {
       data-cookie-consent=""
       data-mode={mode}
       data-look={look}
-      data-metrika={consent ? props.metrika || undefined : undefined}
-      data-ga4={consent ? props.ga4 || undefined : undefined}
+      data-metrika={props.metrika || undefined}
+      data-ga4={props.ga4 || undefined}
       data-modal-open={preview && look === 'modal' ? '' : undefined}
       hidden={!preview}
     >
@@ -91,6 +94,7 @@ export function CookieNotice(props: CookieNoticeProps) {
           data-consent-notice=""
           aria-labelledby={NOTICE_TITLE_ID}
           open={preview}
+          tabIndex={-1}
         >
           {content}
         </dialog>
@@ -206,12 +210,13 @@ export type LegalFooterProps = {
 /**
  * Подвал страницы с документами: ссылка на политику (152-ФЗ: политика опубликована на сайте) и
  * «Настройки cookie», чтобы изменить выбор на любой странице. Без JS кнопка скрыта — без скрипта
- * она ничего не открыла бы
+ * она ничего не открыла бы. Если, кроме неё, в подвале ничего нет, без JS скрыт весь подвал: иначе
+ * внизу страницы осталась бы пустая полоса
  */
 export function LegalFooter({ policyHref, cookieSettings }: LegalFooterProps) {
   if (!policyHref && !cookieSettings) return null
   return (
-    <footer className={styles.footer}>
+    <footer className={styles.footer} data-legal-footer="" hidden={!policyHref}>
       <div className={styles.footerInner}>
         {policyHref && (
           <a href={policyHref} className={styles.link}>
