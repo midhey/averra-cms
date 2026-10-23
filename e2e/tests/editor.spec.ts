@@ -231,10 +231,10 @@ test('«Добавить блок» с клавиатуры: окно с кат�
   await ed.addBlockButton.focus()
   await page.keyboard.press('Enter')
   await expect(ed.addBlockDialog).toBeVisible()
-  // У каждого блока каталога — описание и пример
+  // У каждого блока каталога — описание; фокус — в поиске (с мышью)
   const hero = ed.addBlockDialog.getByRole('button', { name: /^Первый экран/ })
   await expect(hero).toContainText('первое, что видит посетитель')
-  await expect(hero).toContainText('Пример: «Главная мысль страницы»')
+  await expect(ed.addBlockDialog.getByRole('searchbox', { name: 'Найти блок' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(ed.addBlockDialog).toBeHidden()
   await expect(ed.addBlockButton).toBeFocused()

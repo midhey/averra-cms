@@ -136,10 +136,11 @@ describe('блоки', () => {
     await renderWithRouter(<Editor site={site} page={published} />)
     await user.click(within(blockList()).getByRole('button', { name: 'Добавить блок' }))
     const dialog = screen.getByRole('dialog', { name: 'Добавить блок' })
-    // У каждого блока каталога — название, описание и пример
+    // У каждого блока каталога — название и описание, у новых — пометка
     const option = within(dialog).getByRole('button', { name: /^Призыв к действию/ })
     expect(option.textContent).toContain('подтолкнуть к следующему шагу')
-    expect(option.textContent).toContain('Пример: «Готовы начать?»')
+    expect(option.textContent).not.toContain('новый')
+    expect(within(dialog).getByRole('button', { name: /^Цифры/ }).textContent).toContain('новый')
     expect(dialog.textContent).toContain('Блок встанет после')
 
     await user.click(option)

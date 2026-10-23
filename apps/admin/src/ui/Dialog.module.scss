@@ -29,6 +29,11 @@
   max-width: ui.rem(880);
 }
 
+// Каталог блоков: четыре карточки в ряд, как в концепте
+.wide {
+  max-width: ui.rem(1120);
+}
+
 .header {
   display: flex;
   gap: var(--space-3);
@@ -54,6 +59,11 @@
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-card) 0;
+
+  // Окно без кнопок внизу (каталог блоков): нижний отступ даёт само содержимое
+  &:last-child {
+    padding-block-end: var(--space-card);
+  }
 }
 
 .footer {

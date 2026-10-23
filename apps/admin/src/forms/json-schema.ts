@@ -50,7 +50,10 @@ export function fieldKind(schema: JsonSchema): FieldKind {
     case 'object':
       return 'object'
     case 'array':
-      return schema.items?.type === 'object' ? 'list' : 'unsupported'
+      // Пункты-объекты (преимущества) и пункты-строки (что входит в тариф) — карточки списка
+      return schema.items?.type === 'object' || schema.items?.type === 'string'
+        ? 'list'
+        : 'unsupported'
     default:
       return 'unsupported'
   }

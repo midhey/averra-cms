@@ -207,13 +207,17 @@ function EnumField({ schema, value, path, label, errors, onChange }: FieldProps)
   )
 }
 
-/** Да или нет: флажок с подписью. Значение по умолчанию — из схемы */
-function CheckboxField({ schema, value, path, label, onChange }: FieldProps) {
+/**
+ * Да или нет: флажок с подписью. Значение по умолчанию — из схемы. Ошибка — у флажка: «выделить
+ * можно один тариф» встаёт у второго выделенного
+ */
+function CheckboxField({ schema, value, path, label, errors, onChange }: FieldProps) {
   const checked = typeof value === 'boolean' ? value : schema.default === true
   return (
     <Checkbox
       label={label}
       hint={schema.description}
+      error={errors[pathKey(path)]}
       checked={checked}
       onChange={(event) => onChange(path, event.target.checked)}
     />
@@ -288,14 +292,28 @@ function ListField({ schema, value, path, label, errors, onChange, widgets }: Fi
               onMove={move}
               onRemove={remove}
             >
-              <Fields
-                schema={itemSchema}
-                value={item}
-                path={[...path, index]}
-                errors={errors}
-                onChange={onChange}
-                widgets={widgets}
-              />
+              {itemSchema.type === 'object' ? (
+                <Fields
+                  schema={itemSchema}
+                  value={item}
+                  path={[...path, index]}
+                  errors={errors}
+                  onChange={onChange}
+                  widgets={widgets}
+                />
+              ) : (
+                // Пункт-строка — одно поле: подпись из схемы пункта, пустым его не оставить
+                <SchemaField
+                  schema={itemSchema}
+                  value={item}
+                  path={[...path, index]}
+                  label={itemSchema.title ?? 'Текст'}
+                  required
+                  errors={errors}
+                  onChange={onChange}
+                  widgets={widgets}
+                />
+              )}
             </ListItem>
           ))}
         </ol>
@@ -361,10 +379,12 @@ function ListItem(props: ListItemProps) {
   )
 }
 
-/** Имя пункта для диктора: его заголовок или подпись (поле формы, вариант), иначе номер */
+/** Имя пункта для диктора: заголовок, подпись, вопрос или название тарифа, иначе номер */
 function itemLabel(item: unknown, index: number) {
+  if (typeof item === 'string') return item.trim() === '' ? `№ ${index + 1}` : item
   const fields = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {}
-  const name = [fields.title, fields.label].find(
+  // Тариф называется name, вопрос — question; у поля формы name — ключ, поэтому подпись раньше
+  const name = [fields.title, fields.label, fields.question, fields.name].find(
     (candidate) => typeof candidate === 'string' && candidate.trim() !== '',
   )
   return typeof name === 'string' ? name : `№ ${index + 1}`

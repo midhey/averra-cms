@@ -7,6 +7,14 @@ import {
   themeRadiusTitles,
 } from '@averra/schema'
 import { type ReactNode, useId, useState } from 'react'
+import { AddBlockDialog } from '../editor/AddBlockDialog'
+import {
+  type CatalogSection,
+  catalog,
+  catalogEntry,
+  catalogSections,
+  sectionTitle,
+} from '../editor/catalog'
 import { MediaCard } from '../media/MediaCard'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { RedirectRows } from '../seo/RedirectRows'
@@ -124,6 +132,10 @@ export function UiShowcase() {
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [largeOpen, setLargeOpen] = useState(false)
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  const [picked, setPicked] = useState('')
+  const [imageSide, setImageSide] = useState<'left' | 'right'>('left')
+  const [catalogSection, setCatalogSection] = useState<CatalogSection>('all')
   const [column, setColumn] = useState<'blocks' | 'preview' | 'fields'>('blocks')
   const columnsId = useId()
   const [deleted, setDeleted] = useState(false)
@@ -387,6 +399,32 @@ export function UiShowcase() {
           </div>
           <div className={styles.narrow}>
             <SegmentedControl
+              legend="Картинка"
+              appearance="cards"
+              options={(['left', 'right'] as const).map((side) => ({
+                value: side,
+                label: side === 'left' ? 'Слева' : 'Справа',
+                thumbnail: (
+                  <LayoutThumbnail sketch={side === 'left' ? 'image-left' : 'image-right'} />
+                ),
+              }))}
+              value={imageSide}
+              onChange={setImageSide}
+            />
+          </div>
+          {/* Пилюли с переносом: разделы каталога «Добавить блок» */}
+          <SegmentedControl
+            legend="Раздел каталога"
+            appearance="chips"
+            options={catalogSections.map((value) => ({
+              value,
+              label: value === 'all' ? `Все · ${catalog.length}` : sectionTitle(value),
+            }))}
+            value={catalogSection}
+            onChange={setCatalogSection}
+          />
+          <div className={styles.narrow}>
+            <SegmentedControl
               legend="Режим cookie-уведомления"
               appearance="list"
               options={[
@@ -623,10 +661,24 @@ export function UiShowcase() {
               Удалить страницу…
             </Button>
             <Button onClick={() => setLargeOpen(true)}>Большое окно…</Button>
+            <Button icon="plus" onClick={() => setCatalogOpen(true)}>
+              Каталог блоков…
+            </Button>
             <p className={styles.muted} aria-live="polite">
               {deleted ? 'Страница «Отзывы» удалена (понарошку).' : ''}
+              {picked ? `Выбран блок «${picked}» (понарошку).` : ''}
             </p>
           </div>
+          {/* Самое широкое окно — настоящий каталог редактора: поиск, разделы, наброски, «новый» */}
+          <AddBlockDialog
+            open={catalogOpen}
+            onClose={() => setCatalogOpen(false)}
+            onPick={(type) => {
+              setPicked(catalogEntry(type).title)
+              setCatalogOpen(false)
+            }}
+            after={null}
+          />
           <Dialog
             open={largeOpen}
             onClose={() => setLargeOpen(false)}

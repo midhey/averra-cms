@@ -1,0 +1,74 @@
+@use "@averra/ui" as ui;
+
+// Набросок — рисунок блока в масштабе: скругления деталей — часть рисунка, а не форма
+// интерфейса, поэтому это свои величины компонента, а не роли темы
+$bar-radius: ui.rem(3);
+$box-radius: ui.rem(5);
+
+.sketch {
+  display: flex;
+  flex-shrink: 0;
+  gap: ui.rem(5);
+  height: ui.rem(92);
+  padding: ui.rem(10);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-inner);
+
+  // Контрастная тема: фон браузер сбросил бы в Canvas, а детали нарисованы фоном — набросок
+  // стал бы пустым. Рисуем его системными цветами сами
+  @media (forced-colors: active) {
+    background: Canvas;
+    border: ui.rem(1) solid GrayText;
+    forced-color-adjust: none;
+  }
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.column {
+  flex-direction: column;
+  justify-content: center;
+}
+
+.bar,
+.box {
+  display: block;
+  flex-shrink: 0;
+}
+
+.bar {
+  border-radius: $bar-radius;
+}
+
+.box {
+  border-radius: $box-radius;
+}
+
+.light {
+  background: var(--color-border);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
+}
+
+.dark {
+  background: var(--color-border-strong);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+  }
+}
+
+.accent {
+  background: var(--color-action);
+
+  @media (forced-colors: active) {
+    background: Highlight;
+  }
+}

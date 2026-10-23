@@ -14,7 +14,7 @@ function BlockForm({
   initial,
   errors = {},
 }: {
-  type: 'hero' | 'features' | 'form'
+  type: 'hero' | 'features' | 'form' | 'pricing'
   initial: Record<string, unknown>
   errors?: Record<string, string>
 }) {
@@ -179,5 +179,55 @@ describe('SchemaForm', () => {
       within(cards()[0] as HTMLElement).getByRole('button', { name: 'Удалить пункт' }),
     )
     expect(formValue().items.map((item: { title: string }) => item.title)).toEqual(['Смета', ''])
+  })
+
+  it('пункты-строки внутри пункта — карточки с одним полем: «Что входит» у тарифа', async () => {
+    const user = userEvent.setup()
+    const plan = (name: string, features: string[]) => ({ name, price: '1 ₽', features })
+    render(
+      <BlockForm
+        type="pricing"
+        initial={{ plans: [plan('Базовый', ['Покраска', 'Обои']), plan('Полный', [])] }}
+        errors={{ 'plans.0.features.1': 'Слишком длинно' }}
+      />,
+    )
+    // Тариф в списке назван своим названием, а не номером
+    expect(screen.getByRole('button', { name: 'Перетащить пункт «Полный»' })).toBeTruthy()
+    const features = screen.getAllByRole('group', { name: 'Что входит' })[0] as HTMLElement
+    const cards = () => within(features).getAllByRole('listitem')
+    expect(cards()).toHaveLength(2)
+    // Имя пункта для ручки — сам текст
+    expect(
+      within(cards()[1] as HTMLElement).getByRole('button', { name: 'Перетащить пункт «Обои»' }),
+    ).toBeTruthy()
+    const second = within(cards()[1] as HTMLElement).getByLabelText('Пункт')
+    expect(second.getAttribute('aria-invalid')).toBe('true')
+
+    await user.clear(second)
+    await user.type(second, 'Плитка')
+    expect(formValue().plans[0].features).toEqual(['Покраска', 'Плитка'])
+
+    await user.click(within(features).getByRole('button', { name: 'Добавить пункт' }))
+    expect(formValue().plans[0].features).toEqual(['Покраска', 'Плитка', ''])
+    // Флажок «Выделить» — у каждого тарифа
+    expect(screen.getAllByLabelText('Выделить')).toHaveLength(2)
+  })
+
+  it('ошибка флажка — под ним и в aria-describedby', () => {
+    const plan = (name: string) => ({ name, price: '1 ₽', featured: true })
+    render(
+      <BlockForm
+        type="pricing"
+        initial={{ plans: [plan('А'), plan('Б')] }}
+        errors={{ 'plans.1.featured': 'Выделить можно один тариф' }}
+      />,
+    )
+    const [first, second] = screen.getAllByLabelText('Выделить')
+    expect(first?.getAttribute('aria-invalid')).toBeNull()
+    expect(second?.getAttribute('aria-invalid')).toBe('true')
+    const ids = (second?.getAttribute('aria-describedby') ?? '').split(' ')
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain(
+      'Выделить можно один тариф',
+    )
   })
 })

@@ -229,6 +229,48 @@ $sketch-media-radius: ui.rem(3);
   align-items: center;
 }
 
+// Картинка слева от текста: порядок рисунка, а не разметки — миниатюра скрыта от диктора
+.sketchMediaFirst {
+  flex-direction: row-reverse;
+}
+
+// Пилюли с переносом: разделы каталога блоков. Выбранная — тёмной заливкой и жирной подписью
+.chips .options {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chips .option {
+  min-height: var(--size-control-small);
+  padding-inline: ui.rem(14);
+  font-size: var(--font-size-caption);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+
+  &:hover {
+    background: var(--color-surface-muted);
+  }
+
+  &:has(.input:checked) {
+    color: var(--color-primary-text);
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+
+    // Контрастная тема: заливку браузер сбросил бы, и выбор пропал бы — системная пара «выделение»
+    @media (forced-colors: active) {
+      color: HighlightText;
+      background: Highlight;
+      forced-color-adjust: none;
+    }
+  }
+}
+
+.chips .label {
+  overflow: visible;
+}
+
 // Список: карточки в столбик, подпись и пояснение слева. Выбор — рамка, галочка и жирная подпись
 .list .options {
   flex-direction: column;

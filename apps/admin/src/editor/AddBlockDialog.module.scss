@@ -1,21 +1,50 @@
 @use "@averra/ui" as ui;
 
+// Поиск и разделы остаются наверху, пока листаешь карточки: окно прокручивается целиком
+.toolbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  padding-block: var(--space-2);
+  margin-block: calc(-1 * var(--space-2));
+  background: var(--color-surface);
+}
+
+.search {
+  flex: 0 1 ui.rem(280);
+  min-width: 0;
+
+  @include ui.breakpoint-down(small) {
+    flex-basis: 100%;
+  }
+}
+
+// Четыре карточки в ряд на широком окне, на телефоне — список в одну колонку
 .list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(ui.rem(220), 1fr));
-  gap: var(--space-2);
+  gap: ui.rem(14);
   padding: 0;
   margin: 0;
   list-style: none;
+
+  @include ui.breakpoint-down(small) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
 }
 
 .option {
   display: flex;
   flex-direction: column;
-  gap: ui.rem(4);
+  gap: var(--space-2);
   width: 100%;
   height: 100%;
-  padding: var(--space-3);
+  padding: ui.rem(10);
   color: var(--color-text);
   text-align: start;
   cursor: pointer;
@@ -30,6 +59,32 @@
     background: var(--color-surface-accent);
     border-color: var(--color-action);
   }
+
+  // Телефон: набросок слева от текста, карточки — строками списка
+  @include ui.breakpoint-down(small) {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.sketch {
+  @include ui.breakpoint-down(small) {
+    width: ui.rem(112);
+  }
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(4);
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ui.rem(6);
+  align-items: center;
 }
 
 .title {
@@ -38,12 +93,6 @@
 
 .description {
   font-size: var(--font-size-caption);
-  color: var(--color-text-muted);
-}
-
-.example {
-  margin-block-start: auto;
-  padding-block-start: var(--space-1);
-  font-size: var(--font-size-small);
+  line-height: 1.4;
   color: var(--color-text-muted);
 }

@@ -38,6 +38,15 @@ describe('fieldKind', () => {
     expect(fieldKind(field(item, 'options'))).toBe('list')
     expect(emptyValue(item)).toEqual({ name: '', type: 'name', label: '' })
   })
+
+  it('список строк — тоже карточки: «Что входит» у тарифа', () => {
+    const plan = field(catalogEntry('pricing').schema, 'plans').items ?? {}
+    const features = field(plan, 'features')
+    expect(fieldKind(features)).toBe('list')
+    expect(emptyValue(features.items ?? {})).toBe('')
+    expect(fieldKind(field(plan, 'featured'))).toBe('checkbox')
+    expect(fieldKind({ type: 'array', items: { type: 'number' } })).toBe('unsupported')
+  })
 })
 
 describe('emptyValue', () => {

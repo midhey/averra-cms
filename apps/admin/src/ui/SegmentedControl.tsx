@@ -21,9 +21,10 @@ type SegmentedControlProps<T extends string> = {
   onChange: (value: T) => void
   /**
    * segments — плотная дорожка (ширина предпросмотра), cards — карточки с миниатюрами,
-   * list — карточки в столбик с пояснением (режим cookie-уведомления)
+   * list — карточки в столбик с пояснением (режим cookie-уведомления), chips — пилюли
+   * с переносом строк (разделы каталога блоков: вариантов много, подписи разной длины)
    */
-  appearance?: 'segments' | 'cards' | 'list'
+  appearance?: 'segments' | 'cards' | 'list' | 'chips'
   disabled?: boolean
   /** Карточки растягиваются на всю ширину: вариантов мало, подписи длинные (вид cookie) */
   fill?: boolean
@@ -94,13 +95,16 @@ export function SegmentedControl<T extends string>({
  * и, у варианта с картинкой, картинка справа. Имена рисунков — из пометки x-enum-sketches схемы
  */
 export function LayoutThumbnail({ sketch = 'left' }: { sketch?: EnumSketch }) {
+  // Картинка рядом с текстом: справа у первого экрана «С картинкой» и у «Текста с картинкой»
+  // справа, слева — у «Текста с картинкой» слева
+  const media = sketch === 'split' || sketch === 'image-right' || sketch === 'image-left'
   return (
-    <span className={styles.sketch}>
+    <span className={cx(styles.sketch, sketch === 'image-left' && styles.sketchMediaFirst)}>
       <span className={cx(styles.sketchLines, sketch === 'centered' && styles.sketchCentered)}>
         <span className={styles.sketchLine} />
         <span className={cx(styles.sketchLine, styles.sketchLineShort)} />
       </span>
-      {sketch === 'split' && <span className={styles.sketchMedia} />}
+      {media && <span className={styles.sketchMedia} />}
     </span>
   )
 }

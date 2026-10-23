@@ -12,7 +12,8 @@ type DialogProps = {
   children?: ReactNode
   /** Кнопки внизу: «Отмена», «Удалить» */
   footer?: ReactNode
-  size?: 'small' | 'medium' | 'large'
+  /** large — сетка внутри окна (медиатека), wide — каталог блоков в четыре колонки */
+  size?: 'small' | 'medium' | 'large' | 'wide'
 }
 
 /**

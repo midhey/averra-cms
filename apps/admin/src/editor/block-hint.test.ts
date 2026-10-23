@@ -23,6 +23,10 @@ describe('blockHint', () => {
     expect(blockHint(block({ title: ' ', fields: [{}, {}] }, 'form'))).toBe('2 поля формы')
   })
 
+  it('без заголовка у цен — число тарифов', () => {
+    expect(blockHint(block({ plans: [{}, {}, {}] }, 'pricing'))).toBe('3 тарифа')
+  })
+
   it('пусто — якорь, чтобы одинаковые блоки различались', () => {
     expect(blockHint(block({ items: [] }))).toBe('#features-1')
   })

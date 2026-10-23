@@ -9,14 +9,17 @@ export function blockName(block: EditorBlock) {
 
 /**
  * Краткая подсказка содержимого под типом блока в списке: заголовок; без заголовка — сколько
- * в блоке пунктов или полей формы; иначе якорь, чтобы одинаковые блоки различались
+ * в блоке пунктов, тарифов или полей формы; иначе якорь, чтобы одинаковые блоки различались
  */
 export function blockHint(block: EditorBlock) {
   const title = block.props.title
   if (typeof title === 'string' && title.trim() !== '') return title
-  const { items, fields } = block.props
+  const { items, fields, plans } = block.props
   if (Array.isArray(items) && items.length > 0) {
     return countRu(items.length, ['пункт', 'пункта', 'пунктов'])
+  }
+  if (Array.isArray(plans) && plans.length > 0) {
+    return countRu(plans.length, ['тариф', 'тарифа', 'тарифов'])
   }
   if (Array.isArray(fields) && fields.length > 0) {
     return countRu(fields.length, ['поле формы', 'поля формы', 'полей формы'])

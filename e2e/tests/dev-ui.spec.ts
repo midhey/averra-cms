@@ -121,6 +121,33 @@ test.describe('витрина компонентов', () => {
     await devices.getByRole('radio', { name: 'Десктоп' }).focus()
     await page.keyboard.press('ArrowLeft')
     await expect(devices.getByRole('radio', { name: 'Планшет' })).toBeChecked()
+
+    // Пилюли разделов каталога — те же радиокнопки: выбранная тёмная и жирнее, не только цветом
+    const sections = page.getByRole('group', { name: 'Раздел каталога' })
+    await sections.getByRole('radio', { name: /^Все/u }).focus()
+    await page.keyboard.press('ArrowRight')
+    const start = sections.getByRole('radio', { name: 'Начало страницы' })
+    await expect(start).toBeChecked()
+    const label = sections
+      .locator('label')
+      .filter({ has: page.getByRole('radio', { name: 'Начало страницы' }) })
+    await expect(label).toHaveCSS('outline-style', 'solid')
+    await expect(label.locator('span').last()).toHaveCSS('font-weight', '600')
+  })
+
+  test('каталог блоков: поиск, наброски, пометка «новый», выбор', async ({ page }) => {
+    await page.goto('/dev/ui')
+    await page.getByRole('button', { name: 'Каталог блоков…' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Добавить блок' })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('searchbox', { name: 'Найти блок' }).fill('нет такого')
+    await expect(dialog.getByRole('heading', { name: 'Такого блока нет' })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Показать все блоки' }).click()
+    const faq = dialog.getByRole('button', { name: /^Вопросы и ответы/u })
+    await expect(faq).toContainText('новый')
+    await faq.click()
+    await expect(dialog).toBeHidden()
+    await expect(page.getByText('Выбран блок «Вопросы и ответы» (понарошку).')).toBeVisible()
   })
 
   test('карточка SVG-логотипа: превью целиком, без обрезки', async ({ page }) => {
