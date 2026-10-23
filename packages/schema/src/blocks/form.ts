@@ -16,6 +16,7 @@ export const form = defineBlock({
   title: 'Форма заявки',
   description:
     'Заявка с сайта без JavaScript: поля, согласие на обработку данных, уведомление на почту',
+  category: 'contact',
   props: z
     .strictObject({
       title: z.string().trim().min(1).max(120).meta({ title: 'Заголовок' }),

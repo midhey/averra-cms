@@ -1,0 +1,91 @@
+.header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.text {
+  max-width: 60ch;
+  color: var(--color-muted);
+}
+
+.plans {
+  display: grid;
+  align-items: stretch;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .plans[data-count="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .plans[data-count="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Кнопка — внизу карточки: у тарифов с разным числом пунктов кнопки стоят в ряд */
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 2);
+  background: var(--color-background);
+}
+
+/* Рамка толще — место под неё из отступа: выделенная карточка не шире соседних */
+.plan[data-featured="true"] {
+  padding: calc(var(--space-6) - 1px);
+  border: 2px solid var(--color-accent);
+}
+
+.badge {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.name {
+  font-size: var(--text-xl);
+}
+
+.price {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-heading-weight, 700);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.features {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+.action {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}

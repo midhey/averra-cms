@@ -10,6 +10,7 @@ export const features = defineBlock({
   type: 'features',
   title: 'Преимущества',
   description: 'Сетка коротких пунктов: почему выбирают вас',
+  category: 'about',
   props: z.strictObject({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     columns: z.literal([2, 3, 4]).default(3).meta({ title: 'Колонок' }),

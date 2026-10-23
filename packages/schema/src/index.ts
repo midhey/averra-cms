@@ -20,10 +20,15 @@ export {
   type BlockType,
   blocks,
   cta,
+  faq,
   features,
   form,
   hero,
+  pricing,
+  stats,
+  steps,
   text,
+  textImage,
   video,
 } from './blocks'
 export { TEXT_BODY_MAX } from './blocks/text'
@@ -44,7 +49,14 @@ export {
   defaultCookieText,
   PolicyPage,
 } from './cookies'
-export { BlockId, defineBlock, ENUM_SKETCHES, type EnumSketch } from './define-block'
+export {
+  BLOCK_CATEGORIES,
+  type BlockCategory,
+  BlockId,
+  defineBlock,
+  ENUM_SKETCHES,
+  type EnumSketch,
+} from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export {
   CHECKED_VALUE,
@@ -253,7 +265,7 @@ export {
   UpdateRun,
   updateResultText,
 } from './status'
-export { parseTextBody, plainTextValue, type TextPart } from './text-body'
+export { parseTextBody, plainTextValue, splitParagraphs, type TextPart } from './text-body'
 export {
   type ContrastCheck,
   type ContrastPair,

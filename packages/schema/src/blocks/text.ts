@@ -12,6 +12,7 @@ export const text = defineBlock({
   type: 'text',
   title: 'Текст',
   description: 'Заголовок и абзацы текста: подробности, условия, политика конфиденциальности',
+  category: 'about',
   props: z.strictObject({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     body: z.string().trim().min(1).max(TEXT_BODY_MAX).meta({

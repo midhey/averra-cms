@@ -10,6 +10,7 @@ export const hero = defineBlock({
   type: 'hero',
   title: 'Первый экран',
   description: 'Заголовок, подзаголовок и кнопка — первое, что видит посетитель',
+  category: 'start',
   props: z
     .strictObject({
       variant: z

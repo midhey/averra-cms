@@ -15,6 +15,7 @@ import {
   pageDocumentTitle,
   type StoredSiteSettings,
   siteLanguages,
+  splitParagraphs,
   type Theme,
 } from '@averra/schema'
 
@@ -300,6 +301,29 @@ export function organizationJsonLd(site: SeoSite, media: MediaMap) {
     taxID: org.inn,
     identifier: org.ogrn ? { '@type': 'PropertyValue', propertyID: 'ОГРН', value: org.ogrn } : '',
   })
+  return `<script type="application/ld+json">${scriptJson(data)}</script>`
+}
+
+/**
+ * Вопросы и ответы страницы для поисковиков (schema.org FAQPage). Разметка на странице одна —
+ * так требует Google, — поэтому в ней вопросы всех блоков «Вопросы и ответы» по порядку. Страница
+ * вне индекса (noindex, скрытый сайт, 404) разметки не получает: поисковику её некуда показать
+ */
+export function faqJsonLd(site: SeoSite, page: SeoPage) {
+  if (!isIndexable(site, page)) return undefined
+  const questions = page.content.blocks.flatMap((block) =>
+    block.type === 'faq' ? block.props.items : [],
+  )
+  if (questions.length === 0) return undefined
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: questions.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: splitParagraphs(item.answer).join('\n\n') },
+    })),
+  }
   return `<script type="application/ld+json">${scriptJson(data)}</script>`
 }
 

@@ -6,6 +6,7 @@ export const cta = defineBlock({
   type: 'cta',
   title: 'Призыв к действию',
   description: 'Заголовок, пара строк и кнопка — подтолкнуть к следующему шагу',
+  category: 'sales',
   props: z.strictObject({
     title: z.string().trim().min(1).max(120).meta({ title: 'Заголовок' }),
     text: z.string().trim().max(300).optional().meta({ title: 'Текст' }),

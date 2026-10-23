@@ -57,3 +57,20 @@ export function plainTextValue(value: string) {
     .trim()
     .replace(/^(?:[-–—•#]+\s*)+/, '')
 }
+
+/**
+ * Абзацы простого текста (ответ в «Вопросах и ответах»): пустая строка — новый абзац, строки
+ * внутри абзаца склеиваются пробелом. Без списков и подзаголовков — у ответа их нет
+ */
+export function splitParagraphs(text: string) {
+  return text
+    .split(/\r?\n\s*\r?\n/)
+    .map((paragraph) =>
+      paragraph
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(' '),
+    )
+    .filter(Boolean)
+}

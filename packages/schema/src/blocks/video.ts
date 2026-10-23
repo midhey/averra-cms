@@ -8,6 +8,7 @@ export const video = defineBlock({
   title: 'Видео',
   description:
     'Ролик с YouTube, Rutube или VK Видео: обложка на странице, плеер включается по клику',
+  category: 'about',
   props: z.strictObject({
     url: VideoUrl.meta({
       title: 'Ссылка на ролик',

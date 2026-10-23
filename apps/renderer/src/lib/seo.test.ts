@@ -2,6 +2,7 @@ import {
   defaultNotFoundContent,
   type MediaMap,
   ogCardVersion,
+  PageContent,
   readSiteSettings,
   type StoredSiteSettings,
 } from '@averra/schema'
@@ -11,6 +12,7 @@ import {
   analyticsHead,
   canonicalPath,
   documentTitle,
+  faqJsonLd,
   headTags,
   needsOgCard,
   organizationJsonLd,
@@ -392,5 +394,60 @@ describe('манифест', () => {
         { src: '/icon-512.png', sizes: '512x512' },
       ],
     })
+  })
+})
+
+describe('JSON-LD вопросов и ответов', () => {
+  const faq = (id: string, items: { question: string; answer: string }[]) => ({
+    id,
+    type: 'faq',
+    props: { items },
+  })
+  const withFaq = (slug = 'ceny', seo?: { noindex: boolean }) =>
+    page(slug, {
+      content: PageContent.parse({
+        blocks: [
+          faq('faq-1', [
+            { question: 'Сколько стоит замер?', answer: 'Бесплатно.\n\nВ удобное время.' },
+          ]),
+          { id: 'cta', type: 'cta', props: { title: 'Ну?', button: { label: 'Да', href: '#a' } } },
+          faq('faq-2', [{ question: 'Есть гарантия?', answer: 'Три <года> & больше' }]),
+        ],
+        ...(seo && { seo }),
+      }),
+    })
+  const parse = (tag: string | undefined) =>
+    JSON.parse(
+      tag?.replace('<script type="application/ld+json">', '').replace('</script>', '') ?? '',
+    )
+
+  it('одна разметка FAQPage на страницу: вопросы всех блоков по порядку', () => {
+    const tag = faqJsonLd(site(), withFaq())
+    expect(parse(tag)).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'Сколько стоит замер?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Бесплатно.\n\nВ удобное время.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Есть гарантия?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Три <года> & больше' },
+        },
+      ],
+    })
+    // Текст из блока не выходит из тега script
+    expect(tag).not.toContain('<года>')
+    expect(tag?.match(/<script/g)).toHaveLength(1)
+  })
+
+  it('без вопросов, вне индекса и на странице 404 разметки нет', () => {
+    expect(faqJsonLd(site(), page('ceny'))).toBeUndefined()
+    expect(faqJsonLd(site(), withFaq('ceny', { noindex: true }))).toBeUndefined()
+    expect(faqJsonLd(site({ hideFromSearch: true }), withFaq())).toBeUndefined()
+    expect(faqJsonLd(site(), withFaq('404'))).toBeUndefined()
   })
 })

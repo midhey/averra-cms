@@ -1,0 +1,89 @@
+/* Строка вопроса и ответа — до 70 знаков, как у «Текста» */
+.faq {
+  max-width: 50rem;
+  margin-inline: auto;
+}
+
+.title {
+  margin-bottom: var(--space-6);
+  font-size: var(--text-2xl);
+}
+
+.item {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.item:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+/* summary — блоком, а не flex: старый Safari не делает summary флекс-контейнером. Место под
+   значок справа — отступом, сам значок — абсолютно */
+.question {
+  position: relative;
+  display: block;
+  padding: var(--space-4) var(--space-12) var(--space-4) 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* Свой значок вместо треугольника браузера: в Safari треугольник — отдельный псевдоэлемент */
+.question::-webkit-details-marker {
+  display: none;
+}
+
+/* «+», у открытого вопроса — «−». Цветом текста: акцент на поверхности тема только предупреждает */
+.marker {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.5rem;
+}
+
+.marker::before,
+.marker::after {
+  position: absolute;
+  top: calc(50% - 1px);
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-text);
+  content: "";
+}
+
+.marker::after {
+  transform: rotate(90deg);
+}
+
+.item[open] .marker::after {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .marker::after {
+    transition: transform 0.2s;
+  }
+}
+
+/* Контрастная тема Windows: фон псевдоэлементов сбрасывается, значок рисуем системным текстом */
+@media (forced-colors: active) {
+  .marker::before,
+  .marker::after {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
+.answer {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  color: var(--color-muted);
+}

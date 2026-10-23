@@ -8,6 +8,7 @@
   background: var(--color-accent);
   color: var(--color-on-accent);
   font-weight: 600;
+  text-align: center;
   text-decoration: none;
 }
 
@@ -15,8 +16,29 @@
   filter: brightness(1.08);
 }
 
+/* Рамка — тем же акцентом, настоящей границей (тень пропала бы в контрастной теме Windows).
+   Её ширину вычитаем из отступов: по размеру кнопки рядом не различаются */
+.button[data-appearance="outline"] {
+  padding: calc(var(--space-3) - 2px) calc(var(--space-6) - 2px);
+  border: 2px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.button[data-appearance="outline"]:hover {
+  filter: none;
+  background: var(--color-surface);
+}
+
+.button[data-wide="true"] {
+  display: flex;
+  width: 100%;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .button {
-    transition: filter 0.15s;
+    transition:
+      filter 0.15s,
+      background-color 0.15s;
   }
 }

@@ -1,0 +1,52 @@
+.title {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-2xl);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-8) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Шагов 3 или 6 — по три в ряд, 4 — четыре, 5 — три и два */
+@media (min-width: 64rem) {
+  .list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .list[data-count="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-accent);
+}
+
+.number {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight, 700);
+  color: var(--color-accent);
+}
+
+.stepTitle {
+  font-size: var(--text-lg);
+}
+
+.text {
+  color: var(--color-muted);
+}

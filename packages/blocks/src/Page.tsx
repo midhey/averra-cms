@@ -5,10 +5,15 @@ import {
   type PageContent,
 } from '@averra/schema'
 import { Cta } from './cta/Cta'
+import { Faq } from './faq/Faq'
 import { Features } from './features/Features'
 import { Form } from './form/Form'
 import { Hero } from './hero/Hero'
+import { Pricing } from './pricing/Pricing'
+import { Stats } from './stats/Stats'
+import { Steps } from './steps/Steps'
 import { Text } from './text/Text'
+import { TextImage } from './text-image/TextImage'
 import { Video } from './video/Video'
 
 type PageProps = {
@@ -52,8 +57,18 @@ function Block({ block, ...common }: BlockProps) {
   switch (block.type) {
     case 'hero':
       return <Hero id={block.id} data={block.props} {...common} />
+    case 'text-image':
+      return <TextImage id={block.id} data={block.props} {...common} />
     case 'features':
       return <Features id={block.id} data={block.props} {...common} />
+    case 'stats':
+      return <Stats id={block.id} data={block.props} {...common} />
+    case 'steps':
+      return <Steps id={block.id} data={block.props} {...common} />
+    case 'pricing':
+      return <Pricing id={block.id} data={block.props} {...common} />
+    case 'faq':
+      return <Faq id={block.id} data={block.props} {...common} />
     case 'text':
       return <Text id={block.id} data={block.props} {...common} />
     case 'video':

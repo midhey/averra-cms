@@ -28,12 +28,19 @@ describe('каталог блоков', () => {
     const catalog = blockCatalog()
     expect(catalog.blocks.map((block) => block.type)).toEqual([
       'hero',
+      'text-image',
       'features',
-      'text',
-      'video',
+      'stats',
+      'steps',
+      'pricing',
+      'faq',
       'cta',
       'form',
+      'video',
+      'text',
     ])
+    // Раздел каталога — подписью для людей: по нему нейронка выбирает место блока на странице
+    expect(catalog.blocks.find((block) => block.type === 'faq')?.category).toBe('Доверие')
     expect(catalog.blocks[0]?.props).toMatchObject({
       properties: { title: { title: 'Заголовок' } },
     })

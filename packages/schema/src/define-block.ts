@@ -6,6 +6,19 @@ export const BlockId = z
   .regex(/^[\w-]{1,64}$/, 'Id блока: латиница, цифры, _ и -, не длиннее 64 символов')
 
 /**
+ * Разделы каталога «Добавить блок»: в каком месте страницы и для чего блок. Ключ — для схемы и
+ * MCP, подпись — для людей. Порядок — как на странице: сверху вниз
+ */
+export const BLOCK_CATEGORIES = {
+  start: 'Начало страницы',
+  about: 'О компании',
+  sales: 'Продажа',
+  trust: 'Доверие',
+  contact: 'Связь',
+} as const
+export type BlockCategory = keyof typeof BLOCK_CATEGORIES
+
+/**
  * Описание блока. Схема props — единственный источник правды о блоке:
  * из неё получаются проверка в API, TS-типы, формы в админке и JSON Schema для MCP
  */
@@ -14,6 +27,8 @@ export function defineBlock<const Type extends string, Props extends z.ZodObject
   title: string
   /** Чем блок полезен, одной фразой: её видят каталог в редакторе и нейронка в MCP */
   description: string
+  /** Раздел каталога: по нему блок находят в редакторе, а нейронка — его место на странице */
+  category: BlockCategory
   props: Props
   /** Пример заполнения: с ним блок появляется в редакторе, его же видит нейронка в каталоге */
   example: z.input<Props>
@@ -34,5 +49,5 @@ export function defineBlock<const Type extends string, Props extends z.ZodObject
  * значение → какой рисунок показать на карточке варианта. Набор рисунков — у админки, поэтому
  * здесь только их имена
  */
-export const ENUM_SKETCHES = ['centered', 'left', 'split'] as const
+export const ENUM_SKETCHES = ['centered', 'left', 'split', 'image-left', 'image-right'] as const
 export type EnumSketch = (typeof ENUM_SKETCHES)[number]
