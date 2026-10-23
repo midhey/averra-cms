@@ -19,7 +19,8 @@ MCP, блоки и `deploy`.
 | `blocks/*`, `define-block.ts` | блоки, их каталог и союз `BlockInstance` |
 | `page.ts` | страница (`PageContent`, до 50 блоков, `seo` страницы), заголовок, адрес, шаблоны, страница 404, входы API страниц |
 | `site-settings.ts` | настройки SEO сайта (`SiteSettings`, `SiteSettingsPatch`, чтение из базы `readSiteSettings`), редиректы с проверкой петель (`Redirects`, `redirectTableIssues`, `findRedirect`, `redirectLocation`), счётчики и коды |
-| `site.ts`, `theme.ts` | название и новый сайт; тема (цвета `#RRGGBB`, шрифты, скругления) |
+| `site.ts`, `theme.ts` | название и новый сайт; тема (`Theme`, `ThemeInput` с контрастом, `readTheme` для темы из базы, проекция `legacyTheme`, пары `contrastPairs`) |
+| `contrast.ts`, `theme-presets.ts` | контраст WCAG (`contrastRatio`, `formatContrast` с округлением вниз); готовые темы экрана «Тема» (`themePresets`, `presetOf`) |
 | `media.ts` | картинка в блоке (`Image`), форматы и MIME-типы медиатеки |
 | `forms.ts` | поля формы и правила для браузера и сервера, лимиты |
 | `auth.ts` | имя, пароль, почта, роли, сброс пароля, приглашения |

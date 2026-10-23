@@ -92,8 +92,68 @@ sidebar:
 
 - Блоки — `packages/blocks`, стили на **CSS Modules** и **переменных темы**: `var(--color-accent)`,
   `var(--color-text)`, `var(--space-4)`, `var(--text-sm)`. Конкретных цветов и шрифтов в блоках нет.
-- Тема сайта — схема `Theme` в `@averra/schema`: шесть цветов (`#RRGGBB`), шрифты заголовков и
-  текста (пока системные: `system`, `humanist`, `serif`) и скругления. `@averra/tokens` превращает её
-  в CSS-переменные; шкалы отступов и размеров текста общие для всех сайтов.
-- Шрифты сайта — без внешних запросов. Редактора темы в админке пока нет (см. [Дорожную
-  карту](/averra-cms/roadmap/)).
+- Шкалы отступов и размеров текста (`--space-*`, `--text-*`, `--container`) общие для всех сайтов:
+  тема их не меняет, так сохраняется ритм.
+
+### Модель темы
+
+Схема `Theme` в `packages/schema/src/theme.ts`; меняют её на экране [«Тема»](/averra-cms/admin/theme/).
+
+| Поле | Значения | CSS-переменная |
+|---|---|---|
+| `colors.background` | фон страниц; все цвета — `#RRGGBB` | `--color-background` |
+| `colors.surface` | полосы блоков, «Призыв», форма | `--color-surface` |
+| `colors.text` | основной текст | `--color-text` |
+| `colors.muted` | подписи, рамки полей формы | `--color-muted` |
+| `colors.accent` | кнопки, ссылки, фокус | `--color-accent` |
+| `colors.onAccent` | текст на кнопках | `--color-on-accent` |
+| `colors.border` | рамки карточек «Преимуществ» и окон cookie (декор, без проверки контраста) | `--color-border` |
+| `fonts.heading`, `fonts.body` | id из `themeFontIds` | `--font-heading`, `--font-body`, `--font-heading-weight` |
+| `radius` | `none`, `small`, `medium`, `large` (0, 4, 8, 16 px) | `--radius` |
+
+- **Контраст** — `themeContrast(colors)` в `@averra/schema`: пары, пороги и какие блокируют
+  (`contrastPairs`). `ThemeInput` — `Theme` плюс блокирующие пары: им проверяют и админка, и API
+  (`PUT /api/sites/:siteId/theme`). Показ числа — `formatContrast`, с округлением вниз. Почему так —
+  [решение](/averra-cms/decisions/theme-contrast/).
+- **Каждая переменная цвета** берётся хотя бы одним блоком — это проверяет
+  `apps/renderer/src/lib/theme-roles.test.ts`. Новая роль без блока, который ею красит, уронит
+  тест: цвет на экране «Тема» менялся бы впустую.
+- **Готовые темы** — `themePresets` (`theme-presets.ts`). Новая готовая тема проходит все пары, и
+  блокирующие, и предупреждающую: это проверяет `contrast.test.ts`.
+- **Из базы** тема читается только `readTheme`: тема до редактора тем (шесть цветов) получает
+  линии из текста и фона, незнакомое поле — значение по умолчанию. В колонки — см.
+  [Данные](/averra-cms/dev/data/).
+- **В CSS** — `themeToCss` из `@averra/tokens`: одна строка `:root{…}` в `<head>` сайта и в
+  предпросмотре. Блок берёт только переменные; заголовки — `font-weight:
+  var(--font-heading-weight)` (уже в `base.css`).
+
+### Шрифты сайта
+
+Каталог — `fontCatalog` в `packages/tokens/src/fonts.ts`: у своего шрифта семейство, пакет
+`@fontsource`, запасной стек, вес заголовков и жирного в тексте; у системного — только стек.
+`themeFontFiles(theme)` — файлы темы: тексту 400 и жирный, заголовкам свой вес, подмножества
+кириллица и латиница, только WOFF2. Плюс на каждый вес файл latin-ext с `unicode-range: U+20BD`:
+у Fontsource знак ₽ лежит только там, а без него цены рисовались бы системным шрифтом. Браузер
+качает этот файл, только когда на странице есть ₽. Внешних запросов нет.
+
+- **Сайт** — маршрут `/_fonts/[file].woff2` рендерера (`src/routes/fonts.ts`): при сборке пишет только
+  файлы темы, с хешем содержимого в имени; `@font-face` с этими адресами — в `<head>` перед
+  переменными темы. Caddy отдаёт `/_fonts/` с кешем на год.
+- **Предпросмотр админки** — те же `@font-face`, файлы — адресами Vite (`theme/preview-fonts.ts`).
+- Пути к файлам приходят из виртуального модуля `virtual:averra/font-files` — его даёт плагин
+  `fontFilesPlugin` из `@averra/tokens/vite` (подключён в `astro.config.mjs` и `vite.config.ts`
+  админки). Пакеты шрифтов — зависимости `@averra/tokens`, приложениям перечислять их не нужно.
+
+**Как добавить шрифт:**
+
+1. Проверьте лицензию (OFL или похожая, разрешающая раздавать файлы) и кириллицу на
+   [fontsource.org](https://fontsource.org/).
+2. Добавьте пакет `@fontsource/<шрифт>` в `packages/tokens/package.json` (версия не моложе суток).
+3. Id и подпись — в `themeFontIds` и `themeFontTitles` (`packages/schema/src/theme.ts`).
+4. Запись в `fontCatalog`: `family`, `package`, `prefix` (начало имён файлов в `files/` пакета),
+   `fallback`, `headingWeight`, `boldWeight` — только веса, которые в пакете есть.
+5. `pnpm test`: тест `@averra/tokens` проверит, что каталог совпадает со схемой и каждый файл лежит в
+   пакете.
+
+Убрать шрифт так просто нельзя: его могли выбрать в теме. Сначала — значение на замену в
+`readTheme`, иначе такие сайты получат системный шрифт.
