@@ -1,5 +1,6 @@
 import {
   collectMediaRefs,
+  legacyTheme,
   MAIN_PAGE_SLUG,
   newSiteSettings,
   type PageContent,
@@ -51,8 +52,10 @@ export function sitesRepo(db: Db) {
     return db.transaction(async (tx) => {
       const [site] = await tx
         .insert(sites)
-        .values({ name, theme, settings })
-        .returning({ id: sites.id, name: sites.name, theme: sites.theme })
+        // Тема — сразу опубликованная, и её проекция в прежнем формате: её читает версия до
+        // редактора тем, если установку откатят
+        .values({ name, theme: legacyTheme(theme), themePublished: theme, settings })
+        .returning({ id: sites.id, name: sites.name })
       if (!site) throw new Error('База не вернула созданный сайт')
       await tx
         .insert(pages)

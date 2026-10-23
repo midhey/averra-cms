@@ -1,0 +1,100 @@
+@use "@averra/ui" as ui;
+
+// Две колонки по концепту: настройки слева, предпросмотр справа и шире. Колонки переносятся сами,
+// когда места на обе не хватает: предпросмотр тогда под настройками
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.settings {
+  flex: 1 1 ui.rem(360);
+  min-width: 0;
+  max-width: ui.rem(460);
+
+  @include ui.breakpoint-down(small) {
+    max-width: none;
+  }
+}
+
+.colors {
+  display: flex;
+  flex-direction: column;
+}
+
+.fonts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(ui.rem(150), 1fr));
+  gap: var(--space-3);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+// Предпросмотр держится в поле зрения, пока листают настройки
+.preview {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex: 999 1 ui.rem(420);
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+
+  @include ui.breakpoint-down(small) {
+    position: static;
+  }
+}
+
+.previewBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.pageSelect {
+  flex: 1 1 ui.rem(200);
+  max-width: ui.rem(320);
+}
+
+.frame {
+  height: min(ui.rem(760), calc(100vh - ui.rem(64)));
+  min-height: ui.rem(420);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}
+
+// Кнопки прилипают к низу экрана, пока видна форма: фон страницы под ними, чтобы поля, уезжая
+// под панель, не просвечивали сквозь кнопки
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  background: var(--color-background);
+  border-top: ui.rem(1) solid var(--color-border);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}

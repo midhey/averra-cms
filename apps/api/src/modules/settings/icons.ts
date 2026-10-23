@@ -8,6 +8,7 @@ import { type MediaStorage, mediaKey } from '../../media/storage'
 import { validate } from '../../validate'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
+import { publishedTheme } from '../theme/read'
 import { readStoredSettings } from './read'
 
 const IconParams = z.object({ siteId: Uuid(), file: z.enum(ICON_FILES) })
@@ -39,7 +40,7 @@ export function iconsRoutes({
       return c.json(notFound('У сайта нет иконки'), 404)
     }
     const data = await icons(
-      { mediaId: files.id, file, background: site.theme.colors.background },
+      { mediaId: files.id, file, background: publishedTheme(site).colors.background },
       () => storage.get(mediaKey(files.siteId, files.id, files.originalFile)),
     )
     return c.body(data as Uint8Array<ArrayBuffer>, 200, {

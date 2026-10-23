@@ -10,6 +10,7 @@ import {
   type SiteRole,
   siteRoleOf,
   TOKEN_PERSONAL_DATA_MESSAGE,
+  tokenDenied,
 } from './access'
 import type { Auth } from './auth'
 
@@ -125,6 +126,8 @@ export function requireSite(db: Db, permission: Permission) {
     if (c.var.actor.kind === 'token' && personalData.has(permission)) {
       return c.json(forbidden(TOKEN_PERSONAL_DATA_MESSAGE), 403)
     }
+    const deniedToToken = tokenDenied[permission]
+    if (c.var.actor.kind === 'token' && deniedToToken) return c.json(forbidden(deniedToToken), 403)
     if (!can(role, permission)) return c.json(forbidden(forbiddenMessages[permission]), 403)
     c.set('siteRole', role)
     return next()

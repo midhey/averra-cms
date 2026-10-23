@@ -1,4 +1,10 @@
-import { canEditSeo, canSeeLeads, canSeeNotifications, type SiteAccess } from '../permissions'
+import {
+  canEditSeo,
+  canEditTheme,
+  canSeeLeads,
+  canSeeNotifications,
+  type SiteAccess,
+} from '../permissions'
 import type { IconName } from '../ui/Icon'
 
 // Что боковая панель показывает роли. Решает всё равно API (apps/api/src/auth/access.ts):
@@ -7,6 +13,7 @@ import type { IconName } from '../ui/Icon'
 export type SiteSectionId =
   | 'overview'
   | 'pages'
+  | 'theme'
   | 'media'
   | 'leads'
   | 'notifications'
@@ -23,15 +30,16 @@ export type SiteSection = {
 
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
- * (у редактора и токена newLeads — null), «Уведомления» — им же. «SEO и аналитика» видит
- * только владелец
+ * (у редактора и токена newLeads — null), «Уведомления» — им же. «Тема» — владельцу и редактору
+ * (клиент тему не меняет), «SEO и аналитика» — только владельцу
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [
     { id: 'overview', label: 'Обзор', icon: 'overview' },
     { id: 'pages', label: 'Страницы', icon: 'pages' },
-    { id: 'media', label: 'Медиатека', icon: 'media' },
   ]
+  if (canEditTheme(site.access)) sections.push({ id: 'theme', label: 'Тема', icon: 'palette' })
+  sections.push({ id: 'media', label: 'Медиатека', icon: 'media' })
   if (canSeeLeads(site.access) && site.newLeads !== null) {
     sections.push({ id: 'leads', label: 'Заявки', icon: 'leads', badge: site.newLeads })
   }

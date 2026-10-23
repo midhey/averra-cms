@@ -28,6 +28,7 @@ export {
 } from './blocks'
 export { TEXT_BODY_MAX } from './blocks/text'
 export { Button, Href } from './common'
+export { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
 export {
   type AnalyticsIds,
   analyticsDescription,
@@ -253,7 +254,39 @@ export {
   updateResultText,
 } from './status'
 export { parseTextBody, plainTextValue, type TextPart } from './text-body'
-export { Theme } from './theme'
+export {
+  type ContrastCheck,
+  type ContrastPair,
+  contrastMessage,
+  contrastPairs,
+  defaultTheme,
+  derivedBorder,
+  type LegacyTheme,
+  legacyTheme,
+  readTheme,
+  sameTheme,
+  systemThemeFonts,
+  Theme,
+  ThemeColor,
+  type ThemeColorRole,
+  ThemeColors,
+  ThemeFont,
+  ThemeInput,
+  ThemeRadius,
+  themeColorRoles,
+  themeColorTitles,
+  themeContrast,
+  themeFontIds,
+  themeFontTitles,
+  themeRadiusTitles,
+} from './theme'
+export {
+  presetOf,
+  type ThemePreset,
+  type ThemePresetId,
+  themePresetIds,
+  themePresets,
+} from './theme-presets'
 export {
   parseVideoUrl,
   VIDEO_URL_MESSAGE,

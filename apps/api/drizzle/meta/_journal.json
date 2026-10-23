@@ -127,6 +127,13 @@
       "when": 1792685441275,
       "tag": "0017_media_svg",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792754118723,
+      "tag": "0018_site_theme",
+      "breakpoints": true
     }
   ]
 }

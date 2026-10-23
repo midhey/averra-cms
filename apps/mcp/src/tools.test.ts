@@ -227,3 +227,18 @@ describe('токен', () => {
     expect(own.siteId).toBe(other)
   })
 })
+
+describe('тема сайта', () => {
+  it('get_theme отдаёт тему на сайте с названиями шрифтов, без права её менять', async () => {
+    const result = await tools.getTheme({})
+    expect(result.theme.colors.accent).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(result.fonts).toEqual({ heading: 'Системный', body: 'Системный' })
+    expect(result.unpublishedDraft).toBe(false)
+    // Тот же токен записать тему не может: тему меняют в админке
+    const res = await clientWith(token).api.sites[':siteId'].theme.$put({
+      param: { siteId: site.id },
+      json: result.theme,
+    })
+    expect(res.status).toBe(403)
+  })
+})

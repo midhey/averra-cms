@@ -1,4 +1,5 @@
 import react from '@astrojs/react'
+import { fontFilesPlugin } from '@averra/tokens/vite'
 import { defineConfig, envField } from 'astro/config'
 import { ICON_FILES } from './src/lib/icon-files.ts'
 
@@ -25,6 +26,12 @@ const sitePages = {
       // Карточки страниц для соцсетей из заголовка: /og/<адрес>.png. В dev неизвестный адрес под
       // /og/ — редирект или страница 404 сайта, как на сервере
       injectRoute({ pattern: '/og/[slug].png', entrypoint: './src/routes/og.ts', prerender })
+      // Шрифты темы со своего сервера: при сборке — только начертания темы сайта
+      injectRoute({
+        pattern: '/_fonts/[file].woff2',
+        entrypoint: './src/routes/fonts.ts',
+        prerender,
+      })
       const manifest = './src/routes/manifest.ts'
       const favicon = './src/routes/favicon.ts'
       const icons = './src/routes/icons.ts'
@@ -48,6 +55,9 @@ const sitePages = {
 export default defineConfig({
   // React нужен только на этапе сборки: блоки превращаются в HTML, JS в браузер не уходит
   integrations: [react(), sitePages],
+  // Пути к файлам шрифтов из пакетов @fontsource (virtual:averra/font-files): маршрут /_fonts/
+  // читает с диска только файлы темы сайта, остальные в сборку не попадают
+  vite: { plugins: [fontFilesPlugin({ as: 'path' })] },
   server: { port: 4321 },
   env: {
     schema: {

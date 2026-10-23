@@ -292,3 +292,18 @@ $sketch-media-radius: ui.rem(3);
 .fill .options {
   grid-template-columns: repeat(auto-fit, minmax(ui.rem(128), 1fr));
 }
+
+// Дорожка с переносом: в узкой колонке — сетка 2×2 на всю ширину, подписи целиком. Ширину
+// меряем у самой группы (container query): колонка формы узкая и на широком экране. Без
+// container queries остаётся дорожка в строку — рабочая, только подписи могут сократиться
+.wrap {
+  container-type: inline-size;
+}
+
+@container (max-width: #{ui.rem(360)}) {
+  .wrap.segments .options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}

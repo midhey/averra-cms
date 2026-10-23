@@ -74,7 +74,8 @@ describe('новый сайт', () => {
   it('появляется с темой по умолчанию и пустой неопубликованной главной', async () => {
     const created = await newSite('Студия йоги')
     expect(created.name).toBe('Студия йоги')
-    expect(created.theme).toEqual(defaultTheme)
+    const site = await sites[':siteId'].$get({ param: { siteId: created.id } })
+    expect(await site.json()).toMatchObject({ theme: defaultTheme })
 
     const all = await (await sites.$get()).json()
     expect(all).toContainEqual({ id: created.id, name: 'Студия йоги' })

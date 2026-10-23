@@ -1,4 +1,4 @@
-import { ExistingPageSlug, LeadStatus, Uuid } from '@averra/schema'
+import { ExistingPageSlug, LeadStatus, MAIN_PAGE_SLUG, Uuid } from '@averra/schema'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
@@ -33,6 +33,7 @@ import {
   siteQuery,
   siteSettingsQuery,
   statusQuery,
+  themeQuery,
 } from './queries'
 import { CookiesScreen } from './screens/CookiesScreen'
 import { EditorScreen } from './screens/EditorScreen'
@@ -51,6 +52,7 @@ import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { SeoScreen } from './screens/SeoScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
+import { ThemeScreen } from './screens/ThemeScreen'
 import { AdminLayout } from './shell/AdminLayout'
 
 // Маршруты описаны в коде, без генератора: всё дерево видно здесь.
@@ -201,6 +203,26 @@ const pagesRoute = createRoute({
     await queryClient.ensureQueryData(pagesQuery(siteId))
   },
   component: PagesScreen,
+})
+
+// Тема сайта — владельцу и редактору (клиенту пункта в панели нет, а экран у него только для
+// чтения). Главное — тема и список страниц для предпросмотра; черновик главной и медиатека для
+// предпросмотра — второстепенное (allSettled): без них экран покажет пример лендинга
+const themeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/theme',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await Promise.all([
+      queryClient.ensureQueryData(themeQuery(siteId)),
+      queryClient.ensureQueryData(pagesQuery(siteId)),
+      Promise.allSettled([
+        queryClient.ensureQueryData(pageQuery(siteId, MAIN_PAGE_SLUG)),
+        queryClient.ensureQueryData(mediaQuery(siteId)),
+      ]),
+    ])
+  },
+  component: ThemeScreen,
 })
 
 const mediaRoute = createRoute({
@@ -391,6 +413,7 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     overviewRoute,
     pagesRoute,
+    themeRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
     notificationsRoute,

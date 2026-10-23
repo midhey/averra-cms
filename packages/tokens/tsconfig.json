@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": []
+    "types": ["node"],
+    // vite.ts импортирует fonts.ts с расширением: его грузит сама Node из конфигов Vite
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

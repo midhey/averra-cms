@@ -6,11 +6,13 @@ import {
   PageSlug,
   PageTitle,
   pageSeoChecks,
+  readTheme,
   SEO_DESCRIPTION_RANGE,
   SEO_TITLE_RANGE,
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,
+  themeFontTitles,
   Uuid,
 } from '@averra/schema'
 import type { McpServer } from '@modelcontextprotocol/server'
@@ -50,6 +52,22 @@ const SavedDraft = z.object({
       .catch(undefined),
   }),
 })
+
+/**
+ * Тема из GET /api/sites/:siteId/theme: черновик не нужен — нейронке важно то, что на сайте. Тему
+ * читает readTheme: установка новее MCP могла добавить поле или шрифт, и это не повод для ошибки
+ */
+const SiteThemeView = z.object({
+  published: z.unknown().transform((theme) => readTheme(theme)),
+  unpublished: z.boolean().catch(false),
+})
+
+const SiteRef = z.object({
+  siteId: Uuid()
+    .optional()
+    .describe('Id сайта. Не нужен: по умолчанию — сайт, на который выпущен токен'),
+})
+type SiteRef = z.output<typeof SiteRef>
 
 const PageRef = z.object({
   // Одна установка — один сайт, и токен выпущен на него: id указывать не нужно
@@ -132,7 +150,7 @@ export function cmsTools(client: Api | undefined) {
     const fail = async (): Promise<never> => {
       throw new Error(missingTokenMessage)
     }
-    return { listSites: fail, getPage: fail, saveDraft: fail, publishPage: fail }
+    return { listSites: fail, getPage: fail, saveDraft: fail, publishPage: fail, getTheme: fail }
   }
   const sites = client.api.sites
   const page = sites[':siteId'].pages[':slug']
@@ -189,6 +207,20 @@ export function cmsTools(client: Api | undefined) {
       const param = { siteId: await siteOf(siteId), slug }
       const saved = await unwrap(() => page.$put({ param, json: { title, content } }))
       return { seoChecks: await seoChecksOf(param.siteId, slug, saved) }
+    },
+    /**
+     * Тема на сайте: цвета, шрифты (с названиями) и скругления — чтобы подбирать тексты и картинки
+     * под стиль. Только чтение: тему меняют в админке, токену API запись запрещена
+     */
+    getTheme: async ({ siteId }: SiteRef) => {
+      const param = { siteId: await siteOf(siteId) }
+      const view = SiteThemeView.parse(await unwrap(() => sites[':siteId'].theme.$get({ param })))
+      const { heading, body } = view.published.fonts
+      return {
+        theme: view.published,
+        fonts: { heading: themeFontTitles[heading], body: themeFontTitles[body] },
+        unpublishedDraft: view.unpublished,
+      }
     },
     publishPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
@@ -255,6 +287,18 @@ export function registerTools(server: McpServer, api: Api | undefined) {
         next: 'Чтобы изменения попали на сайт, вызови publish_page',
       })
     },
+  )
+
+  server.registerTool(
+    'get_theme',
+    {
+      title: 'Тема сайта',
+      description:
+        'Цвета, шрифты и скругления сайта, как они на сайте сейчас: чтобы подбирать тексты, картинки и обложки под стиль. Менять тему через MCP нельзя — это делают в админке, на экране «Тема».',
+      inputSchema: SiteRef,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.getTheme(args)),
   )
 
   server.registerTool(

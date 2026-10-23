@@ -1,0 +1,120 @@
+@use "@averra/ui" as ui;
+
+// Строка цвета: палитра, поле #RRGGBB и отметка контраста. Раскладка — по ширине своей колонки
+// (container query): в узкой отметка уходит под поле, палитра и поле остаются рядом. Без
+// container queries остаётся узкая раскладка — она рабочая
+.colorRow {
+  padding-block: var(--space-2);
+  border-bottom: ui.rem(1) solid var(--color-border-subtle);
+  container-type: inline-size;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: start;
+}
+
+.title {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.picker {
+  position: relative;
+  display: block;
+  width: var(--size-control);
+  height: var(--size-control);
+}
+
+.pickerInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: ui.rem(3);
+  cursor: pointer;
+  background: var(--color-background);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+
+  &:focus-visible {
+    @include ui.focus-ring;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.hex {
+  min-width: 0;
+}
+
+.check {
+  display: flex;
+  grid-column: 2;
+  align-items: center;
+  min-height: ui.rem(24);
+}
+
+.badge {
+  font-variant-numeric: tabular-nums;
+}
+
+.noCheck {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+// После .check: в широкой колонке отметка встаёт третьим столбцом
+@container (min-width: #{ui.rem(288)}) {
+  .colorGrid {
+    grid-template-columns: auto minmax(0, 1fr) ui.rem(104);
+  }
+
+  .check {
+    grid-column: auto;
+    min-height: var(--size-control);
+  }
+}
+
+// Миниатюра темы: цвета приходят переменными из данных темы, здесь — значения по умолчанию
+.swatch {
+  --swatch-background: var(--color-surface);
+  --swatch-accent: var(--color-action);
+  --swatch-text: var(--color-text);
+  --swatch-border: var(--color-border);
+
+  display: flex;
+  gap: ui.rem(6);
+  align-items: center;
+  width: 100%;
+  height: ui.rem(40);
+  padding: 0 ui.rem(8);
+  background: var(--swatch-background);
+  border: ui.rem(1) solid var(--swatch-border);
+  border-radius: var(--radius-inner);
+}
+
+.swatchDot {
+  flex-shrink: 0;
+  width: ui.rem(14);
+  height: ui.rem(14);
+  background: var(--swatch-accent);
+  border-radius: 50%;
+}
+
+.swatchLine {
+  flex: 1;
+  height: ui.rem(6);
+  background: var(--swatch-text);
+  border-radius: ui.rem(3);
+}

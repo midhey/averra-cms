@@ -1,3 +1,4 @@
+import { legacyTheme } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -69,7 +70,7 @@ describe('постановка в очередь', () => {
   it('в той же транзакции, что и действие: откатилась транзакция — письма нет', async () => {
     const failure = await errorOf(
       db.transaction(async (tx) => {
-        await tx.insert(sites).values({ name: 'Сайт с заявкой', theme: defaultTheme })
+        await tx.insert(sites).values({ name: 'Сайт с заявкой', theme: legacyTheme(defaultTheme) })
         await enqueueMail(tx, testMail(), T0)
         throw new Error('действие сломалось после постановки письма')
       }),
@@ -81,7 +82,7 @@ describe('постановка в очередь', () => {
 
   it('транзакция прошла — письмо в очереди вместе с действием', async () => {
     await db.transaction(async (tx) => {
-      await tx.insert(sites).values({ name: 'Сайт', theme: defaultTheme })
+      await tx.insert(sites).values({ name: 'Сайт', theme: legacyTheme(defaultTheme) })
       await enqueueMail(tx, testMail(), T0)
     })
     expect(await db.select().from(mailOutbox)).toHaveLength(1)

@@ -1,3 +1,11 @@
+import {
+  contrastMessage,
+  defaultTheme,
+  type ThemeRadius,
+  themeContrast,
+  themePresets,
+  themeRadiusTitles,
+} from '@averra/schema'
 import { type ReactNode, useId, useState } from 'react'
 import { MediaCard } from '../media/MediaCard'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
@@ -8,6 +16,7 @@ import { SettingsCardActions } from '../seo/SettingsCard'
 import { SocialCard } from '../seo/SocialCard'
 import type { RedirectRow } from '../seo/seo-format'
 import { SiteHeader } from '../shell/SiteHeader'
+import { ColorRow, ContrastBadge, ThemeSwatch } from '../theme/ThemeParts'
 import {
   AppShell,
   NavLinkContent,
@@ -52,6 +61,7 @@ const sections = [
   { id: 'choice', label: 'Выбор', icon: 'check' },
   { id: 'tabs', label: 'Вкладки', icon: 'leads' },
   { id: 'statuses', label: 'Состояния', icon: 'status' },
+  { id: 'theme', label: 'Тема сайта', icon: 'palette' },
   { id: 'cards', label: 'Карточки и таблица', icon: 'media' },
   { id: 'alerts', label: 'Сообщения', icon: 'info' },
   { id: 'dialog', label: 'Окно', icon: 'mail' },
@@ -104,6 +114,7 @@ export function UiShowcase() {
   usePageTitle('Витрина компонентов')
   const [device, setDevice] = useState<'phone' | 'tablet' | 'desktop'>('desktop')
   const [variant, setVariant] = useState<'center' | 'left' | 'split'>('split')
+  const [radius, setRadius] = useState<ThemeRadius>('medium')
   const [tab, setTab] = useState<'new' | 'done' | 'all'>('new')
   const [cookieMode, setCookieMode] = useState<'consent' | 'notice'>('consent')
   const [cookieLook, setCookieLook] = useState<'bar' | 'card' | 'modal'>('card')
@@ -336,6 +347,19 @@ export function UiShowcase() {
             value={device}
             onChange={setDevice}
           />
+          {/* С переносом: в узкой колонке — сетка 2×2, подписи целиком (скругления темы) */}
+          <div className={styles.narrow}>
+            <SegmentedControl
+              legend="Скругления"
+              wrap
+              options={(['none', 'small', 'medium', 'large'] as const).map((value) => ({
+                value,
+                label: themeRadiusTitles[value],
+              }))}
+              value={radius}
+              onChange={setRadius}
+            />
+          </div>
           <div className={styles.narrow}>
             <SegmentedControl
               legend="Вариант"
@@ -483,6 +507,10 @@ export function UiShowcase() {
               не настроено
             </StatusPill>
           </div>
+        </Section>
+
+        <Section id="theme" title="Тема сайта">
+          <ThemeShowcase />
         </Section>
 
         <Section id="cards" title="Карточки и таблица">
@@ -757,5 +785,60 @@ export function UiShowcase() {
         </Section>
       </main>
     </AppShell>
+  )
+}
+
+/**
+ * Тема сайта: отметки контраста (ок, мало у основной пары — ошибка, мало у пары с поверхностью —
+ * предупреждение), строки цвета с ошибкой и без проверки, миниатюры готовых тем
+ */
+function ThemeShowcase() {
+  const checks = themeContrast({ ...defaultTheme.colors, accent: '#ffe066' })
+  const [accent, setAccent] = useState('#ffe066')
+  const accentCheck = themeContrast({
+    ...defaultTheme.colors,
+    accent: /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#ffe066',
+  }).find((check) => check.id === 'accent-background')
+  return (
+    <>
+      <div className={styles.row}>
+        {checks
+          .filter((check) =>
+            ['text-background', 'accent-background', 'accent-surface'].includes(check.id),
+          )
+          .map((check) => (
+            <ContrastBadge key={check.id} check={check} />
+          ))}
+      </div>
+      <div className={styles.themeRows}>
+        <ColorRow
+          colorRole="accent"
+          title="Акцент (кнопки, ссылки)"
+          value={accent}
+          swatch={/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#ffe066'}
+          check={accentCheck}
+          error={accentCheck && !accentCheck.ok ? contrastMessage(accentCheck) : undefined}
+          disabled={false}
+          onChange={setAccent}
+        />
+        <ColorRow
+          colorRole="border"
+          title="Линии и рамки"
+          value={defaultTheme.colors.border}
+          swatch={defaultTheme.colors.border}
+          check={undefined}
+          error={undefined}
+          disabled
+          onChange={() => {}}
+        />
+      </div>
+      <div className={styles.row}>
+        {themePresets.map((preset) => (
+          <span key={preset.id} className={styles.themeSwatch}>
+            <ThemeSwatch theme={preset.theme} />
+          </span>
+        ))}
+      </div>
+    </>
   )
 }

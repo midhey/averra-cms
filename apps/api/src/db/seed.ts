@@ -2,6 +2,7 @@ import {
   demoPage,
   demoPageTitle,
   demoSiteId,
+  legacyTheme,
   MAIN_PAGE_SLUG,
   newSiteSettings,
   PageContent,
@@ -27,7 +28,8 @@ export async function seedDemo(db: Db) {
       .values({
         id: demoSiteId,
         name: 'Демо: ремонт квартир',
-        theme: defaultTheme,
+        theme: legacyTheme(defaultTheme),
+        themePublished: defaultTheme,
         settings: newSiteSettings(),
       })
       .returning({ id: sites.id })

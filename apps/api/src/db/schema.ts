@@ -1,11 +1,11 @@
 import type {
   FormFieldType,
   LeadStatus,
+  LegacyTheme,
   MediaFormat,
   MediaMimeType,
   PageContent,
   SiteBuildStatus,
-  Theme,
 } from '@averra/schema'
 import { sql } from 'drizzle-orm'
 import {
@@ -32,7 +32,14 @@ export const sites = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     name: text().notNull(),
-    theme: jsonb().$type<Theme>().notNull(),
+    // Опубликованная тема в прежнем формате (6 цветов, системные шрифты): её строго читает версия
+    // до редактора тем, и после отката она соберёт сайт в тех же цветах. Пишется вместе с
+    // themePublished. Новый код читает её, только если themePublished нет (сайт до шага 3.21)
+    theme: jsonb().$type<LegacyTheme>().notNull(),
+    // Тема сайта (схема Theme, читает readTheme): опубликованная — на сайте, черновик — на экране
+    // «Тема». NULL у опубликованной — тема из theme; у черновика — такой же, как опубликованная
+    themePublished: jsonb().$type<Record<string, unknown>>(),
+    themeDraft: jsonb().$type<Record<string, unknown>>(),
     // Устарело: адреса уведомлений о заявках живут в notification_recipients (модуль уведомлений,
     // миграция 0016 перенесла их туда). Колонку пишет модуль, пока прежняя версия API может
     // читать её при откате; удаляется вторым шагом
@@ -50,6 +57,14 @@ export const sites = pgTable(
     check('sites_lead_retention_valid', sql`${table.leadRetentionDays} BETWEEN 7 AND 1825`),
     check('sites_lead_recipients_array', sql`jsonb_typeof(${table.leadRecipients}) = 'array'`),
     check('sites_settings_object', sql`jsonb_typeof(${table.settings}) = 'object'`),
+    check(
+      'sites_theme_published_object',
+      sql`${table.themePublished} IS NULL OR jsonb_typeof(${table.themePublished}) = 'object'`,
+    ),
+    check(
+      'sites_theme_draft_object',
+      sql`${table.themeDraft} IS NULL OR jsonb_typeof(${table.themeDraft}) = 'object'`,
+    ),
   ],
 )
 

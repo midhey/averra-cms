@@ -1,3 +1,4 @@
+import { legacyTheme } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -89,7 +90,7 @@ describe('токены API', () => {
   it('удаляется вместе с сайтом', async () => {
     const [site] = await api.db
       .insert(sites)
-      .values({ name: 'Временный', theme: defaultTheme })
+      .values({ name: 'Временный', theme: legacyTheme(defaultTheme) })
       .returning({ id: sites.id })
     if (!site) throw new Error('Сайт не создался')
     const { id } = await tokens.create({ siteId: site.id, name: 'temp' })

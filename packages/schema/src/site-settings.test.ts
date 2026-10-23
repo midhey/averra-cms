@@ -227,6 +227,7 @@ describe('редиректы', () => {
     ['главная', '/', /С главной/],
     ['служебный путь', '/media/x', /Служебные/],
     ['служебный путь без хвоста', '/api', /Служебные/],
+    ['шрифты темы', '/_fonts/golos-text-cyrillic-400-normal-0123456789.woff2', /Служебные/],
   ])('отклоняет «откуда»: %s', (_, from, message) => {
     expect(issuesOf(parse([{ from, to: '/new' }]))[0]?.message).toMatch(message)
   })

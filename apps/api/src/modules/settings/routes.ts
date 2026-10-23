@@ -25,6 +25,7 @@ import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
+import { publishedTheme } from '../theme/read'
 import { legalFacts } from './legal'
 import { effectiveSiteUrl, settingsRepo } from './repo'
 import { sameSitePathOf } from './same-site'
@@ -114,8 +115,9 @@ export function settingsRoutes(deps: SettingsDeps) {
     if (!files || !site) return []
     try {
       for (const file of ICON_FILES) {
-        await icons({ mediaId: files.id, file, background: site.theme.colors.background }, () =>
-          storage.get(mediaKey(files.siteId, files.id, files.originalFile)),
+        await icons(
+          { mediaId: files.id, file, background: publishedTheme(site).colors.background },
+          () => storage.get(mediaKey(files.siteId, files.id, files.originalFile)),
         )
       }
       return []

@@ -3,6 +3,7 @@ import type { Db } from '../../db/client'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
+import { publishedTheme } from '../theme/read'
 import { sitesRepo } from './repo'
 
 /**
@@ -31,7 +32,7 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
     site: {
       id: found.id,
       name: found.name,
-      theme: found.theme,
+      theme: publishedTheme(found),
       url: effectiveSiteUrl(settings, siteUrl),
       settings,
     },

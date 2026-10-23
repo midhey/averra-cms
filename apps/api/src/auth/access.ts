@@ -48,6 +48,9 @@ const permissions = {
   // ошибка здесь выкидывает сайт из поиска, а отвечает за это студия, которая ведёт установку.
   // Клиент передаёт ей коды счётчиков; описание и noindex страницы он правит в самой странице
   'site.settings': ['owner'],
+  // Тема сайта (экран «Тема»): цвета и шрифты на весь сайт сразу. Те же, кто публикует страницы:
+  // публикация темы пересобирает весь сайт. Клиент публиковать не может — и тему не меняет
+  'theme.edit': ['owner', 'editor'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -65,6 +68,15 @@ export const personalData: ReadonlySet<Permission> = new Set([
 
 export const TOKEN_PERSONAL_DATA_MESSAGE =
   'Токену API заявки недоступны: в них персональные данные посетителей. Смотрите их в админке'
+
+/**
+ * Действия, в которых токену API отказано при любой таблице выше, кроме персональных данных. Тема:
+ * она одна на весь сайт, нейронка не видит, как выглядит результат, а проверка контраста не
+ * ловит «некрасиво». Читать тему токену можно (GET /api/sites/:siteId/theme, MCP get_theme)
+ */
+export const tokenDenied: Partial<Record<Permission, string>> = {
+  'theme.edit': 'Тему сайта меняют в админке: токену API она доступна только для чтения',
+}
 
 export function can(role: SiteRole, permission: Permission) {
   return (permissions[permission] as readonly SiteRole[]).includes(role)
@@ -85,6 +97,7 @@ export const forbiddenMessages: Record<Permission, string> = {
   'leads.settings': 'Настройки заявок меняют владелец и клиент сайта',
   'site.export': 'Выгрузить все данные сайта могут владелец и клиент: в них заявки',
   'site.settings': 'Настройки SEO сайта меняет владелец',
+  'theme.edit': 'Тему сайта меняет владелец или редактор',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

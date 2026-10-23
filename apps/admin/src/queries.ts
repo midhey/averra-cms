@@ -25,6 +25,7 @@ export const queryKeys = {
   lead: (siteId: string, leadId: string) => ['sites', siteId, 'leads', 'item', leadId] as const,
   leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
   siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
+  theme: (siteId: string) => ['sites', siteId, 'theme'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   notifications: ['notifications'] as const,
@@ -65,6 +66,17 @@ export const siteQuery = (siteId: string) =>
     queryKey: queryKeys.site(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Тема сайта: черновик с экрана «Тема», опубликованная и есть ли разница между ними */
+export const themeQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.theme(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].theme.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

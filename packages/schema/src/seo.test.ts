@@ -331,6 +331,7 @@ describe('карточка для соцсетей', () => {
       muted: '#666666',
       accent: '#2f5bea',
       onAccent: '#ffffff',
+      border: '#e5e5e5',
     },
     fonts: { heading: 'system', body: 'system' },
   })

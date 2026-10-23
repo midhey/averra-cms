@@ -32,6 +32,7 @@ export function AdminLayout() {
 const siteLinks = {
   overview: { to: '/', exact: true },
   pages: { to: '/pages', exact: false },
+  theme: { to: '/theme', exact: false },
   media: { to: '/media', exact: false },
   leads: { to: '/leads', exact: false },
   notifications: { to: '/notifications', exact: false },

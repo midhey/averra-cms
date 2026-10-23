@@ -5,6 +5,7 @@ import { type MediaStorage, mediaKey } from '../../media/storage'
 import { notificationSettingsRepo } from '../../notifications/settings'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
 import { readStoredSettings } from '../settings/read'
+import { draftTheme, publishedTheme } from '../theme/read'
 import type { ZipEntry } from './zip'
 
 // Полный экспорт данных сайта (принцип 8 «клиент не заложник»): всё, что человек завёл в этой
@@ -18,7 +19,13 @@ const README = `Выгрузка сайта из Averra CMS
 ============================
 
 site.json — все данные сайта (формат averra-site-export, версия ${EXPORT_FORMAT_VERSION}):
-  site      — название, тема оформления (цвета, шрифты), настройки заявок (leadSettings:
+  site      — название; тема оформления на сайте (theme): цвета по ролям (colors:
+              background — фон, surface — поверхность, text — текст, muted — приглушённый
+              текст, accent — акцент, onAccent — текст на акценте, border — линии и рамки;
+              #RRGGBB), шрифты заголовков и текста (fonts: heading, body — id шрифта, например
+              golos-text, lora или system — шрифт устройства), скругления (radius: none, small,
+              medium, large); черновик темы с экрана «Тема» (themeDraft, в том же формате; null —
+              тему там не сохраняли); настройки заявок (leadSettings:
               recipients — адреса почты для заявок, notificationRecipients — все получатели
               уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
               и SEO (settings:
@@ -124,7 +131,9 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
     site: {
       id: site.id,
       name: site.name,
-      theme: site.theme,
+      theme: publishedTheme(site),
+      // Черновик темы, если его ещё не опубликовали: правки с экрана «Тема» тоже данные сайта
+      themeDraft: site.themeDraft ? draftTheme(site) : null,
       createdAt: site.createdAt.toISOString(),
       leadSettings: {
         recipients: recipients

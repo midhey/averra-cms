@@ -199,7 +199,7 @@ export type Organization = z.infer<typeof Organization>
 export const REDIRECTS_MAX = 300
 
 /** Пути, которые сайт отдаёт сам: перенаправлять их нельзя */
-const SERVICE_PREFIXES = ['/api/', '/media/', '/_astro/']
+const SERVICE_PREFIXES = ['/api/', '/media/', '/_astro/', '/_fonts/']
 
 /**
  * Файлы в корне сайта, которые кладёт сборка: robots.txt, sitemap.xml, страница 404, иконки и
@@ -248,7 +248,7 @@ export const RedirectFrom = z
   .refine((path) => path !== '/', 'С главной перенаправить нельзя: она есть всегда')
   .refine(
     (path) => !SERVICE_PREFIXES.some((prefix) => `${path}/`.startsWith(prefix)),
-    'Служебные адреса /api/, /media/ и /_astro/ перенаправить нельзя',
+    'Служебные адреса /api/, /media/, /_astro/ и /_fonts/ перенаправить нельзя',
   )
   .refine(
     (path) => !(SITE_ROOT_FILES as readonly string[]).includes(path.toLowerCase()),

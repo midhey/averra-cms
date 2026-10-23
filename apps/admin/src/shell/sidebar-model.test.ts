@@ -8,6 +8,7 @@ describe('разделы сайта в панели', () => {
     expect(ids({ access: 'owner', newLeads: 3 })).toEqual([
       'overview',
       'pages',
+      'theme',
       'media',
       'leads',
       'notifications',
@@ -27,10 +28,11 @@ describe('разделы сайта в панели', () => {
     ).toEqual({ id: 'leads', label: 'Заявки', icon: 'leads', badge: 0 })
   })
 
-  it('редактор заявок не видит', () => {
+  it('редактор заявок не видит, а тему меняет; клиенту темы нет', () => {
     expect(ids({ access: 'editor', newLeads: null })).toEqual([
       'overview',
       'pages',
+      'theme',
       'media',
       'settings',
     ])

@@ -27,6 +27,7 @@ import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
+import { themeRoutes } from './modules/theme/routes'
 import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
 import type { OgCardRenderers } from './og/card'
 import type { SitePublisher } from './publish/queue'
@@ -165,6 +166,8 @@ export function createApp(deps: AppDeps) {
         notify: () => notifyDepsOf(mail, notifications),
       }),
     )
+    // Тема сайта: черновик и публикация (modules/theme)
+    .route('/sites/:siteId/theme', themeRoutes({ db, publisher: deps.publisher, log }))
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке
     .route('/sites/:siteId', ogRoutes({ db, siteUrl: deps.siteUrl, cards: deps.ogCards }))

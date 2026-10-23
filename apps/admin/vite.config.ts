@@ -1,3 +1,4 @@
+import { fontFilesPlugin } from '@averra/tokens/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -6,7 +7,9 @@ const apiUrl = process.env.CMS_API_URL ?? 'http://localhost:4000'
 const port = Number(process.env.ADMIN_PORT ?? 5173)
 
 export default defineConfig({
-  plugins: [react()],
+  // Шрифты темы сайта для предпросмотра (virtual:averra/font-files): все файлы каталога ссылками
+  // Vite, браузер грузит только те, что стоят в теме предпросмотра
+  plugins: [react(), fontFilesPlugin({ as: 'url' })],
   server: {
     port,
     // В разработке админка ходит в API через прокси — без CORS

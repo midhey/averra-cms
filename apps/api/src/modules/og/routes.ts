@@ -8,6 +8,7 @@ import { validate } from '../../validate'
 import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
 import { sitesRepo } from '../sites/repo'
+import { publishedTheme } from '../theme/read'
 
 const SiteParams = z.object({ siteId: Uuid() })
 const CardParams = SiteParams.extend({ slug: ExistingPageSlug })
@@ -55,7 +56,7 @@ export function ogRoutes({
       title,
       siteName: site.name,
       siteUrl: effectiveSiteUrl(settings, siteUrl),
-      theme: site.theme,
+      theme: publishedTheme(site),
     })
   }
 

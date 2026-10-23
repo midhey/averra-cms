@@ -18,6 +18,8 @@ h2,
 h3 {
   margin: 0;
   font-family: var(--font-heading);
+  /* Вес заголовков — у шрифта темы свой: широкому Unbounded хватает 600, системному нужен 700 */
+  font-weight: var(--font-heading-weight, 700);
   line-height: 1.15;
   text-wrap: balance;
 }

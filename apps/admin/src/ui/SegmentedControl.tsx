@@ -27,6 +27,11 @@ type SegmentedControlProps<T extends string> = {
   disabled?: boolean
   /** Карточки растягиваются на всю ширину: вариантов мало, подписи длинные (вид cookie) */
   fill?: boolean
+  /**
+   * Дорожка в узкой колонке переносится сеткой 2×2, а не режет подписи многоточием: варианты
+   * с длинными подписями («Средние», «Большие») на телефоне иначе не прочитать
+   */
+  wrap?: boolean
   /** Имя радиокнопок в форме: по нему focusField ставит фокус на группу с ошибкой */
   name?: string
   /** Описания группы (ошибка, подсказка рядом): диктор прочитает их, войдя в группу */
@@ -46,6 +51,7 @@ export function SegmentedControl<T extends string>({
   appearance = 'segments',
   disabled,
   fill,
+  wrap,
   name: formName,
   'aria-describedby': describedBy,
 }: SegmentedControlProps<T>) {
@@ -53,7 +59,7 @@ export function SegmentedControl<T extends string>({
   const name = formName ?? ownName
   return (
     <fieldset
-      className={cx(styles.group, styles[appearance], fill && styles.fill)}
+      className={cx(styles.group, styles[appearance], fill && styles.fill, wrap && styles.wrap)}
       disabled={disabled}
       aria-describedby={describedBy}
     >

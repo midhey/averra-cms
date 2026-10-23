@@ -23,6 +23,7 @@ import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
+import { publishedTheme } from '../theme/read'
 import { sitesRepo } from './repo'
 import { siteSnapshot } from './snapshot'
 
@@ -97,7 +98,7 @@ export function sitesRoutes({
         return c.json({
           id: found.id,
           name: found.name,
-          theme: found.theme,
+          theme: publishedTheme(found),
           access: c.var.siteRole,
           hiddenFromSearch: settings.hideFromSearch,
           seo,

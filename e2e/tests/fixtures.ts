@@ -1,6 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import type { AppType } from '@averra/api'
-import { demoPage, demoPageTitle, MAIN_PAGE_SLUG } from '@averra/schema'
+import {
+  defaultTheme,
+  demoPage,
+  demoPageTitle,
+  MAIN_PAGE_SLUG,
+  sameTheme,
+  type Theme,
+} from '@averra/schema'
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { hc } from 'hono/client'
 import { ownerStateFile, urls } from '../urls'
@@ -68,6 +75,7 @@ async function resetDemoSite() {
   })
   expect(settings.status, 'сброс настроек SEO демо-сайта').toBe(200)
   const site = { ...found, name: DEMO_SITE_NAME }
+  await resetTheme(site.id)
   const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })
@@ -83,6 +91,20 @@ async function resetDemoSite() {
     expect(deleted.status, `удаление страницы ${slug} демо-сайта`).toBe(204)
   }
   return site
+}
+
+/**
+ * Тема демо-сайта — по умолчанию. Публикация темы пересобирает сайт, поэтому только если тему
+ * поменяли (tests/theme.spec.ts): иначе каждый тест ставил бы лишнюю сборку
+ */
+async function resetTheme(siteId: string) {
+  const theme = sites[':siteId'].theme
+  const res = await theme.$get({ param: { siteId } })
+  expect(res.status, 'тема демо-сайта').toBe(200)
+  const view = (await res.json()) as { published: Theme; unpublished: boolean }
+  if (sameTheme(view.published, defaultTheme) && !view.unpublished) return
+  expect((await theme.$put({ param: { siteId }, json: defaultTheme })).status).toBe(200)
+  expect((await theme.publish.$post({ param: { siteId } })).status).toBe(200)
 }
 
 export const test = base.extend<{ demoSite: DemoSite }>({

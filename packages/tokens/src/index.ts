@@ -1,24 +1,17 @@
-import { Theme } from '@averra/schema'
+import { defaultTheme, Theme } from '@averra/schema'
+import { fontCatalog, fontStack } from './fonts'
 
-export const defaultTheme: Theme = {
-  colors: {
-    background: '#ffffff',
-    surface: '#f4f5f7',
-    text: '#16181d',
-    muted: '#5b6170',
-    accent: '#2f5bea',
-    onAccent: '#ffffff',
-  },
-  fonts: { heading: 'system', body: 'system' },
-  radius: 'medium',
-}
+export {
+  allFontFiles,
+  type FontFile,
+  fontCatalog,
+  fontFaceCss,
+  fontStack,
+  themeFontFiles,
+} from './fonts'
 
-const fontStacks: Record<Theme['fonts']['body'], string> = {
-  system: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  humanist:
-    'Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif',
-  serif: 'Charter, "Bitstream Charter", "Sitka Text", Cambria, serif',
-}
+/** Тема нового сайта — из @averra/schema: схема и её значения по умолчанию живут вместе */
+export { defaultTheme }
 
 const radii: Record<Theme['radius'], string> = {
   none: '0',
@@ -58,8 +51,10 @@ export function themeToCss(theme: Theme): string {
     '--color-muted': colors.muted,
     '--color-accent': colors.accent,
     '--color-on-accent': colors.onAccent,
-    '--font-heading': fontStacks[fonts.heading],
-    '--font-body': fontStacks[fonts.body],
+    '--color-border': colors.border,
+    '--font-heading': fontStack(fonts.heading),
+    '--font-body': fontStack(fonts.body),
+    '--font-heading-weight': String(fontCatalog[fonts.heading].headingWeight),
     '--radius': radii[radius],
   }
   const declarations = Object.entries(vars).map(([name, value]) => `${name}:${value}`)

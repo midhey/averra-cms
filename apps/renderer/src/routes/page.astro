@@ -5,6 +5,7 @@ import { findRedirect, MAIN_PAGE_SLUG, NOT_FOUND_PAGE_SLUG, redirectLocation } f
 import { themeToCss } from '@averra/tokens'
 import CookieConsent from '../components/CookieConsent.astro'
 import VideoPlayer from '../components/VideoPlayer.astro'
+import { siteFontCss, siteFontFiles } from '../lib/fonts'
 import { analyticsHead, headTags, organizationJsonLd } from '../lib/seo'
 import { formActionFor, loadSnapshot, notFoundPage } from '../lib/snapshot'
 
@@ -50,7 +51,8 @@ const scripts = [
   ...analyticsHead(site.settings),
   ...(page.slug === MAIN_PAGE_SLUG ? [organizationJsonLd(seoSite, media) ?? ''] : []),
 ]
-const themeCss = themeToCss(site.theme)
+// Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы
+const themeCss = siteFontCss(await siteFontFiles(site.theme)) + themeToCss(site.theme)
 // Cookie-уведомление и подвал с документами: ссылка на политику — только на опубликованную страницу
 const cookies = cookieNoticeView(
   site.settings,

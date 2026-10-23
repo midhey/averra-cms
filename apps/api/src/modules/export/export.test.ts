@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { defaultTheme, themePresets } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { unzipSync } from 'fflate'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -224,6 +225,33 @@ describe('все данные сайта', () => {
         data: [{ name: 'name', label: 'Имя', type: 'name', value: 'Анна' }],
       }),
     ])
+  })
+
+  it('тема: на сайте — в новом формате (линии, шрифты), черновик — отдельно, README их описывает', async () => {
+    const { headers } = await api.loginAs('owner')
+    const before = await unzip(await api.app.request(url('data'), { headers }))
+    const exported = JSON.parse(decode(before['site.json']))
+    expect(exported.site.theme).toEqual(defaultTheme)
+    expect(exported.site.themeDraft).toBeNull()
+
+    // Черновик с экрана «Тема» — тоже данные сайта, хотя на сайт ещё не вышел
+    const draft = themePresets.find((preset) => preset.id === 'bright')?.theme
+    if (!draft) throw new Error('нет темы «Яркая»')
+    const saved = await api.app.request(`/api/sites/${api.demoSiteId}/theme`, {
+      method: 'PUT',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify(draft),
+    })
+    expect(saved.status).toBe(200)
+    const files = await unzip(await api.app.request(url('data'), { headers }))
+    const site = JSON.parse(decode(files['site.json'])).site
+    expect(site.theme).toEqual(defaultTheme)
+    expect(site.themeDraft).toEqual(draft)
+    expect(site.theme.colors.border).toMatch(/^#[0-9a-f]{6}$/)
+    const readme = decode(files['README.txt'])
+    expect(readme).toContain('themeDraft')
+    expect(readme).toContain('border — линии и рамки')
+    expect(readme).toContain('golos-text')
   })
 
   it('site.json потоком: заявки порциями с курсором — все, по одному разу; пустой сайт — валидный JSON', async () => {

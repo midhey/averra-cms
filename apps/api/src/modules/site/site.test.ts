@@ -1,4 +1,4 @@
-import { NO_SITE_ACCESS_CODE, readSiteSettings } from '@averra/schema'
+import { legacyTheme, NO_SITE_ACCESS_CODE, readSiteSettings } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -57,8 +57,16 @@ describe('сайт установки в базе', () => {
       const [younger, older] = await db
         .insert(sites)
         .values([
-          { name: 'Младший', theme: defaultTheme, createdAt: new Date('2026-02-01T00:00:00Z') },
-          { name: 'Старший', theme: defaultTheme, createdAt: new Date('2026-01-01T00:00:00Z') },
+          {
+            name: 'Младший',
+            theme: legacyTheme(defaultTheme),
+            createdAt: new Date('2026-02-01T00:00:00Z'),
+          },
+          {
+            name: 'Старший',
+            theme: legacyTheme(defaultTheme),
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
         ])
         .returning()
       if (!younger || !older) throw new Error('Сайты не создались')

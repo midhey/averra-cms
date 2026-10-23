@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { previewStyleNodes } from '../styles/global-style'
+import { previewFontCss } from '../theme/preview-fonts'
 import { InlineAlert } from '../ui/InlineAlert'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import styles from './Preview.module.scss'
@@ -118,11 +119,12 @@ export function Preview(props: PreviewProps) {
   }, [width])
 
   // Стили в iframe: CSS блоков из админки (без её глобального слоя), базовые стили лендинга,
-  // тема сайта и подсветка выбранного блока. Vite подменяет стили при правках, поэтому следим
-  // за <head> админки и копируем заново
+  // шрифты и тема сайта и подсветка выбранного блока. Vite подменяет стили при правках, поэтому
+  // следим за <head> админки и копируем заново
   useEffect(() => {
     if (!frameDocument || !selectionStyle) return
-    const themeCss = themeToCss(theme)
+    // Шрифты темы — перед её переменными, как в <head> сайта
+    const themeCss = previewFontCss(theme) + themeToCss(theme)
     const sync = () => {
       const copied = previewStyleNodes(document).map((node) => node.cloneNode(true))
       frameDocument.head.replaceChildren(

@@ -813,7 +813,7 @@ describe('Caddyfile: кеш', () => {
     expect(caddyfile).not.toContain('SITE_ID')
   })
 
-  it('сайт: immutable только у файлов Astro и картинок /media/<uuid>/, страница media — no-cache', () => {
+  it('сайт: immutable только у файлов Astro, шрифтов и картинок /media/<uuid>/, страница media — no-cache', () => {
     const site = siteBlock('{$SITE_DOMAIN}')
     const immutable = /@immutable path_regexp (\S+)/.exec(site)?.[1]
     const pages = /@pages not path_regexp (\S+)/.exec(site)?.[1]
@@ -823,6 +823,7 @@ describe('Caddyfile: кеш', () => {
     // Синтаксис RE2 в Caddy здесь тот же, что у RegExp
     const re = new RegExp(immutable ?? '')
     expect(re.test('/_astro/index.Bx1.css')).toBe(true)
+    expect(re.test('/_fonts/golos-text-cyrillic-400-normal-15a5cbadfc.woff2')).toBe(true)
     expect(re.test('/media/c6026fd5-5af8-4af9-a36e-1e08b05210a8/640.webp')).toBe(true)
     expect(re.test('/media/')).toBe(false)
     expect(re.test('/media/index.html')).toBe(false)

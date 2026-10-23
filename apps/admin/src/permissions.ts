@@ -50,5 +50,11 @@ export const canInvite = (access: SiteAccess) => access === 'owner'
  */
 export const canEditSeo = (access: SiteAccess) => access === 'owner'
 
+/**
+ * Тема сайта (экран «Тема»): меняют и публикуют те же, кто публикует страницы, — владелец и
+ * редактор. Публикация темы пересобирает весь сайт (apps/api/src/auth/access.ts, theme.edit)
+ */
+export const canEditTheme = (access: SiteAccess) => access !== 'client'
+
 /** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки: владелец и клиент */
 export const canExportData = (access: SiteAccess) => access !== 'editor'
