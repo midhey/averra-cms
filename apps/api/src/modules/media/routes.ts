@@ -73,7 +73,7 @@ const unsupported = (message: string): Failure => ({
 
 const rejected: Record<ProcessFailure, Failure> = {
   unsupported: unsupported(
-    'Можно загрузить JPEG, PNG, WebP, AVIF или SVG (для логотипа и иконки). GIF, HEIC и другие форматы не принимаются',
+    'Можно загрузить JPEG, PNG, WebP, AVIF или SVG (для логотипов и иконки). GIF, HEIC и другие форматы не принимаются',
   ),
   broken: unsupported('Файл повреждён: картинку не удалось прочитать'),
   too_many_pixels: {

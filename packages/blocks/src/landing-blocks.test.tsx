@@ -52,6 +52,17 @@ describe('«Наши работы»', () => {
     expect(html).not.toContain('<a ')
     expect(html).toMatch(/<span [^>]*aria-hidden="true"><\/span><figcaption/)
   })
+
+  it('sizes по колонкам: с 64rem — треть или четверть экрана, а не половина', () => {
+    const sizesOf = (columns: number) =>
+      /<img[^>]* sizes="([^"]+)"/.exec(
+        render([block('gallery', { columns, items: [{ image }] })], media),
+      )?.[1]
+    expect(sizesOf(3)).toBe(
+      '(min-width: 72rem) 24rem, (min-width: 64rem) 33.3vw, (min-width: 40rem) 50vw, 100vw',
+    )
+    expect(sizesOf(2)).toBe('(min-width: 72rem) 36rem, (min-width: 40rem) 50vw, 100vw')
+  })
 })
 
 describe('«Отзывы»', () => {
@@ -115,6 +126,23 @@ describe('«Команда»', () => {
     expect(html).toContain('data-shape="round"')
     expect(html).toContain('aria-hidden="true"')
   })
+
+  // sizes — как сетка в CSS: иначе браузер возьмёт вариант мельче колонки или крупнее нужного
+  const sizesOf = (props: Record<string, unknown>) =>
+    /<img[^>]* sizes="([^"]+)"/.exec(
+      render([block('team', { ...props, members: [{ name: 'Иван', photo: image }] })], media),
+    )?.[1]
+
+  it('sizes фото по колонкам: две — половина экрана и на планшете; круглое — 10rem', () => {
+    expect(sizesOf({ columns: 2 })).toBe('(min-width: 72rem) 36rem, 50vw')
+    expect(sizesOf({ columns: 3 })).toBe(
+      '(min-width: 72rem) 24rem, (min-width: 40rem) 33.3vw, 50vw',
+    )
+    expect(sizesOf({ columns: 4 })).toBe(
+      '(min-width: 72rem) 18rem, (min-width: 64rem) 25vw, (min-width: 40rem) 33.3vw, 50vw',
+    )
+    expect(sizesOf({ columns: 4, photoShape: 'round' })).toBe('10rem')
+  })
 })
 
 describe('«Контакты»', () => {
@@ -160,5 +188,11 @@ describe('«Контакты»', () => {
     const noMap = render([block('contacts', { email: 'info@example.ru' })])
     expect(noMap).not.toContain('Открыть на карте')
     expect(noMap).not.toContain('Телефон')
+  })
+
+  it('адрес — заглушка из примера: адрес виден, а ссылки на поиск по «[Город…]» нет', () => {
+    const html = render([block('contacts', { address: '[Город, улица, дом, офис]' })])
+    expect(html).toContain('[Город, улица, дом, офис]')
+    expect(html).not.toContain('Открыть на карте')
   })
 })

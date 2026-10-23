@@ -26,6 +26,15 @@ describe('тема по умолчанию', () => {
     expect(css).toContain('--font-heading-weight:700')
   })
 
+  // Строка уходит в <style> страницы как есть: недопустимый цвет — исключение, а не CSS
+  it.each(['#ffffff;}body{display:none', '#fff}</style><script>'])(
+    'цвет с решёткой и хвостом CSS (%s) — исключение, строка не пишется',
+    (value) => {
+      const injected = { ...defaultTheme, colors: { ...defaultTheme.colors, accent: value } }
+      expect(() => themeToCss(injected)).toThrow()
+    },
+  )
+
   it('тема в прежнем формате после readTheme даёт те же цвета, что раньше, и линии', () => {
     const css = themeToCss(
       readTheme({

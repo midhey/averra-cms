@@ -1,11 +1,16 @@
 import type { BlockComponentProps } from '../types'
+import { gridSizes } from '../ui/grid-sizes'
 import { fullSizeUrl, Picture } from '../ui/Picture'
 import { Section } from '../ui/Section'
 import styles from './Gallery.module.css'
 
-// Ширина фото по колонкам: доля контейнера (72rem) на широком экране, половина — на среднем
+// Ширина фото — как сетка в Gallery.module.css: одна колонка на телефоне, две с 40rem, с 64rem —
+// сколько выбрано
 const sizesFor = (columns: number) =>
-  `(min-width: 72rem) ${Math.round(72 / columns)}rem, (min-width: 40rem) 50vw, 100vw`
+  gridSizes(1, [
+    [40, 2],
+    [64, columns],
+  ])
 
 /**
  * Наши работы: сетка фото с подписями. Фото — ссылка на снимок целиком (без JS лайтбокса нет,

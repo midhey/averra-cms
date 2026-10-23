@@ -5,6 +5,7 @@
 
 .grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
   margin: 0;
   padding: 0;
@@ -46,8 +47,8 @@
   min-width: 0;
 }
 
-/* Без подложки число — акцентом (акцент на фоне тема проверяет). На подложке — цветом текста:
-   акцент на поверхности тема только предупреждает, поэтому там им рисуют лишь заливки */
+/* Число — акцентом и на подложке: крупный текст (от 36 px), ему хватает порога 3, а акцент на
+   фоне и на поверхности тема проверяет строго */
 .value {
   font-family: var(--font-heading);
   font-size: var(--text-3xl);
@@ -55,10 +56,6 @@
   line-height: 1.1;
   overflow-wrap: anywhere;
   color: var(--color-accent);
-}
-
-.grid[data-tone="surface"] .value {
-  color: var(--color-text);
 }
 
 .label {

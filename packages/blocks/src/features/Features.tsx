@@ -8,7 +8,8 @@ export function Features({ id, data, headingLevel }: BlockComponentProps<'featur
   return (
     <Section id={id} tone="muted">
       {data.title && <Heading className={styles.title}>{data.title}</Heading>}
-      <ul className={styles.grid} data-columns={data.columns}>
+      {/* biome-ignore lint/a11y/noRedundantRoles: Safari без маркеров списка теряет роль list */}
+      <ul role="list" className={styles.grid} data-columns={data.columns}>
         {data.items.map((item, index) => (
           // У пунктов нет id. Ключ по индексу здесь безопасен: список рендерится статично
           <li key={index} className={styles.item}>

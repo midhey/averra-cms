@@ -34,6 +34,18 @@ describe('все блоки каталога', () => {
   })
 })
 
+describe('списки без маркеров', () => {
+  // Safari с list-style: none не называет список списком, если у него нет role="list"
+  it.each(['features', 'stats', 'steps', 'pricing', 'gallery', 'reviews', 'team', 'clients'])(
+    '«%s»: главный список блока — с role="list"',
+    (type) => {
+      const entry = blocks.find((item) => item.type === type)
+      const html = render([block(type, entry?.example)])
+      expect(/<(ul|ol)[\s>][^>]*/.exec(html)?.[0]).toContain('role="list"')
+    },
+  )
+})
+
 describe('«Текст с картинкой»', () => {
   const image = { mediaId, alt: 'Бригада на объекте' }
 

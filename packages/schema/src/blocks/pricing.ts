@@ -35,6 +35,8 @@ export const pricing = defineBlock({
       text: z.string().trim().max(300).optional().meta({ title: 'Текст' }),
       featuredLabel: z.string().trim().min(1).max(30).default('Чаще выбирают').meta({
         title: 'Подпись выделенного тарифа',
+        description:
+          'Над выделенным тарифом. Это утверждение о клиентах — пишите, что правда: «Чаще выбирают», «Выгодно», «Новинка»',
       }),
       plans: z.array(Plan).min(2).max(4).meta({ title: 'Тарифы' }),
     })
@@ -56,6 +58,8 @@ export const pricing = defineBlock({
   example: {
     title: 'Услуги и цены',
     text: '[Что входит в цену и что считается отдельно]',
+    // Подпись — в примере, а не только значением по умолчанию: в редакторе она видна в поле
+    featuredLabel: 'Чаще выбирают',
     plans: [
       {
         name: 'Косметический',

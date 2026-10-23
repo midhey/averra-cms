@@ -104,10 +104,26 @@ test('телефон 375 px: подписи скруглений целиком,
       ),
     ).toBeLessThanOrEqual(0)
   }
+  // Предпросмотр на телефоне начинается с телефона: «десктоп» в масштабе там не прочитать
+  await expect(page.getByRole('radio', { name: 'Телефон' })).toBeChecked()
   // Код выполняется в браузере строкой: типов DOM у e2e нет
   expect(
     await page.evaluate(
       'document.documentElement.scrollWidth - document.documentElement.clientWidth',
     ),
   ).toBe(0)
+})
+
+test('десктоп 1440 px: скругления — одной строкой, предпросмотр — «Десктоп»', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/theme')
+  const radius = page.getByRole('group', { name: 'Скругления' })
+  const tops = new Set<number>()
+  for (const name of ['Нет', 'Малые', 'Средние', 'Большие']) {
+    const box = await radius.getByText(name, { exact: true }).boundingBox()
+    tops.add(Math.round(box?.y ?? -1))
+  }
+  // Четыре коротких варианта на широком экране — в ряд, как в концепте, а не сеткой 2×2
+  expect(tops.size).toBe(1)
+  await expect(page.getByRole('radio', { name: 'Десктоп' })).toBeChecked()
 })

@@ -128,21 +128,43 @@ describe('что сайт отдаёт редактору страницы', () 
     const patched = await app.request(`${base}/settings`, {
       method: 'PATCH',
       headers: json(owner.headers),
-      body: JSON.stringify({ titleTemplate: '%s — Ремонт у Ивана', description: 'Ремонт в Твери' }),
+      body: JSON.stringify({
+        titleTemplate: '%s — Ремонт у Ивана',
+        description: 'Ремонт в Твери',
+        organization: {
+          name: 'ИП Иванов',
+          phone: '+7 900 000-00-00',
+          email: 'ivan@example.ru',
+          address: { street: 'Ленина, 50' },
+        },
+      }),
     })
     expect(patched.status).toBe(200)
-    const { token } = await api.createToken(demoSiteId, 'mcp')
-    for (const headers of [owner.headers, client.headers, { authorization: `Bearer ${token}` }]) {
+    const common = {
+      titleTemplate: '%s — Ремонт у Ивана',
+      description: 'Ремонт в Твери',
+      ogImage: null,
+      url: 'https://example.ru',
+      hideFromSearch: true,
+    }
+    // Людям — и организация: по ней проверки сверяют «Контакты» с разметкой
+    for (const headers of [owner.headers, client.headers]) {
       const res = await app.request(base, { headers })
       expect(res.status).toBe(200)
       expect(((await res.json()) as { seo: unknown }).seo).toEqual({
-        titleTemplate: '%s — Ремонт у Ивана',
-        description: 'Ремонт в Твери',
-        ogImage: null,
-        url: 'https://example.ru',
-        hideFromSearch: true,
+        ...common,
+        organization: {
+          name: 'ИП Иванов',
+          phone: '+7 900 000-00-00',
+          email: 'ivan@example.ru',
+          street: 'Ленина, 50',
+        },
       })
     }
+    // Токену — без организации: телефон и почта ИП — персональные данные
+    const { token } = await api.createToken(demoSiteId, 'mcp')
+    const res = await app.request(base, { headers: { authorization: `Bearer ${token}` } })
+    expect(((await res.json()) as { seo: unknown }).seo).toEqual(common)
   })
 })
 

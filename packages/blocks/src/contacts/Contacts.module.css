@@ -1,6 +1,7 @@
 /* Контакты и картинка карты поровну. На узком экране картинка — под контактами */
 .layout {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-8);
 }
@@ -14,6 +15,7 @@
 /* Без картинки карточка не растягивается на всю ширину: строки контактов короткие */
 .card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-width: 0;
   max-width: 40rem;

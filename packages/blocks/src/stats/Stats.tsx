@@ -11,7 +11,8 @@ export function Stats({ id, data, headingLevel }: BlockComponentProps<'stats'>) 
   return (
     <Section id={id}>
       {data.title && <Heading className={styles.title}>{data.title}</Heading>}
-      <ul className={styles.grid} data-tone={data.tone} data-count={data.items.length}>
+      {/* biome-ignore lint/a11y/noRedundantRoles: Safari без маркеров списка теряет роль list */}
+      <ul role="list" className={styles.grid} data-tone={data.tone} data-count={data.items.length}>
         {data.items.map((item, index) => (
           // У фактов нет id. Ключ по индексу здесь безопасен: список рендерится статично
           <li key={index} className={styles.item}>

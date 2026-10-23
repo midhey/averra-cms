@@ -43,7 +43,8 @@ function fakePage(initialCookies = '') {
         calls.push('load')
         loaded.push(ids)
       },
-      forgetAnalytics: () => calls.push('forget'),
+      forgetAnalytics: ({ reload }: { reload: boolean }) =>
+        calls.push(reload ? 'forget' : 'forget without reload'),
       showNotice: () => calls.push('show'),
       hideNotice: () => calls.push('hide'),
       openSettings: (analytics: boolean) => {
@@ -202,7 +203,37 @@ describe('режим согласия', () => {
     const consent = createConsent(config, page.ports)
     consent.start()
     consent.saveSettings(false)
-    expect(page.calls).not.toContain('forget')
+    expect(page.calls.filter((call) => call.startsWith('forget'))).toEqual([])
+  })
+
+  it.each([
+    ['analytics.ym', 'necessaryOnly'],
+    ['analytics', 'saveSettings'],
+    ['notice.ym', 'necessaryOnly'],
+  ] as const)(
+    'прежнее «%s», добавили GA4: отказ на повторный вопрос стирает следы без перезагрузки',
+    (previous, refuse) => {
+      const page = fakePage(`averra_consent=${previous}`)
+      const consent = createConsent({ ...config, ga4: 'G-ABC123' }, page.ports)
+      consent.start()
+      expect(consent.loaded).toBe(false)
+      if (refuse === 'necessaryOnly') consent.necessaryOnly()
+      else consent.saveSettings(false)
+      expect(page.calls.filter((call) => call.startsWith('forget'))).toEqual([
+        'forget without reload',
+      ])
+      // Второй отказ — стирать уже нечего
+      consent.saveSettings(false)
+      expect(page.calls.filter((call) => call.startsWith('forget'))).toHaveLength(1)
+    },
+  )
+
+  it('прежний отказ — следов нет, стирать нечего', () => {
+    const page = fakePage('averra_consent=necessary')
+    const consent = createConsent(config, page.ports)
+    consent.start()
+    consent.saveSettings(false)
+    expect(page.calls.filter((call) => call.startsWith('forget'))).toEqual([])
   })
 
   it('неверный номер счётчика — грузить нечего даже после согласия', () => {
@@ -280,8 +311,8 @@ describe('cookie счётчиков', () => {
     expect(cookieDomains('localhost')).toEqual(['', 'localhost'])
     expect(cookieDomains('127.0.0.1')).toEqual(['', '127.0.0.1'])
     expect(forgetCookies('_ym_uid=1; averra_consent=necessary', 'example.ru')).toEqual([
-      '_ym_uid=; Max-Age=0; Path=/',
-      '_ym_uid=; Max-Age=0; Path=/; Domain=example.ru',
+      '_ym_uid=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/',
+      '_ym_uid=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=example.ru',
     ])
   })
 })

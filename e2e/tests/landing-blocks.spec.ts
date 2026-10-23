@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import sharp from 'sharp'
 import { urls } from '../urls'
 import { editor, expect, sites, test } from './fixtures'
 
@@ -10,6 +11,8 @@ const PHONE = '+7 (342) 000-00-00'
 const EMAIL = 'office@remont.example'
 const ADDRESS = 'Пермь, улица Ленина, 50'
 const CLIENT = 'ООО «Стройка»'
+const WORK_ALT = 'Кухня после ремонта'
+const MEMBER_ALT = 'Прораб на объекте'
 
 test('работы, отзывы, клиенты, команда и контакты — из каталога на сайт', async ({
   page,
@@ -83,9 +86,35 @@ test('работы, отзывы, клиенты, команда и контак
   await ed.inspector.getByLabel(/^Координаты/).fill('58.0105, 56.2502')
   await ed.inspector.getByLabel('Разметка для поисковиков').check()
 
+  // «Наши работы»: фото в первую работу — JPEG шире самого большого варианта
   await ed.addBlock('Наши работы')
+  const photoName = `kuhnya-${randomUUID().slice(0, 8)}.jpg`
+  const photo = await sharp({
+    create: { width: 1600, height: 1200, channels: 3, background: '#c8a26b' },
+  })
+    .jpeg()
+    .toBuffer()
+  // У галереи «Фото» — и весь список, и поле пункта: берём первую кнопку и первое описание
+  const pickImage = ed.inspector.getByRole('button', { name: 'Выбрать картинку' }).first()
+  const imageAlt = ed.inspector.getByLabel('Описание картинки (alt)').first()
+  await pickImage.click()
+  await library.getByLabel('Загрузить картинку').setInputFiles({
+    name: photoName,
+    mimeType: 'image/jpeg',
+    buffer: photo,
+  })
+  await library.getByRole('button', { name: new RegExp(`^Выбрать «${photoName}»`) }).click()
+  await expect(library).toBeHidden()
+  await imageAlt.fill(WORK_ALT)
+
   await ed.addBlock('Отзывы')
+
+  // «Команда»: то же фото из медиатеки — первому человеку
   await ed.addBlock('Команда')
+  await pickImage.click()
+  await library.getByRole('button', { name: new RegExp(`^Выбрать «${photoName}»`) }).click()
+  await expect(library).toBeHidden()
+  await imageAlt.fill(MEMBER_ALT)
   await expect(ed.blocks).toHaveCount(6)
 
   // Предпросмотр — те же компоненты
@@ -119,6 +148,13 @@ test('работы, отзывы, клиенты, команда и контак
   await expect(site.locator('iframe')).toHaveCount(0)
 
   await expect(site.getByRole('heading', { level: 2, name: 'Наши работы' })).toBeVisible()
+  // Фото работы — ссылка на самый большой вариант снимка (1600 px), браузер откроет его сам
+  const workImage = site.getByRole('img', { name: WORK_ALT })
+  await expect(workImage).toBeVisible()
+  expect(await site.getByRole('link', { name: WORK_ALT }).getAttribute('href')).toMatch(
+    /\/1600\.jpe?g$/,
+  )
+  await expect(site.getByRole('img', { name: MEMBER_ALT })).toBeVisible()
   await expect(site.locator('figcaption', { hasText: '[Что за объект, площадь]' })).toHaveCount(3)
   await expect(site.locator('blockquote')).toHaveCount(2)
   await expect(site.locator('figcaption', { hasText: '[Имя клиента]' })).toHaveCount(2)

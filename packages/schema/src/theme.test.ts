@@ -6,6 +6,7 @@ import {
   readTheme,
   sameTheme,
   Theme,
+  ThemeColor,
   ThemeInput,
   themeContrast,
 } from './theme'
@@ -37,6 +38,18 @@ describe('Theme', () => {
     }
     expect(Theme.safeParse(injected).success).toBe(false)
   })
+
+  // Значение, которое начинается как цвет: шаблон держится только якорями ^…$ и длиной
+  it.each(['#ffffff;}body{display:none', '#fff}</style><script>', '#ffffff\n}'])(
+    'цвет с решёткой и хвостом CSS (%j) не проходит ни Theme, ни ThemeInput',
+    (value) => {
+      expect(ThemeColor.safeParse(value).success).toBe(false)
+      const injected = { ...defaultTheme, colors: { ...defaultTheme.colors, accent: value } }
+      expect(Theme.safeParse(injected).success).toBe(false)
+      const issues = ThemeInput.safeParse(injected).error?.issues ?? []
+      expect(issues.map((issue) => issue.path.join('.'))).toEqual(['colors.accent'])
+    },
+  )
 
   it('шрифт — только из списка: строка из запроса не попадёт в font-family', () => {
     const font = { ...defaultTheme, fonts: { heading: 'Comic Sans"', body: 'system' } }
@@ -136,7 +149,7 @@ describe('ThemeInput — контраст основных пар', () => {
   })
 
   it('бледный приглушённый текст на поверхности — блок «Призыв» — не сохранить', () => {
-    const theme = { ...defaultTheme, colors: { ...defaultTheme.colors, surface: '#9aa0aa' } }
+    const theme = { ...defaultTheme, colors: { ...defaultTheme.colors, surface: '#c4c8d0' } }
     const checks = themeContrast(theme.colors)
     expect(checks.find((check) => check.id === 'text-surface')?.ok).toBe(true)
     expect(checks.find((check) => check.id === 'muted-surface')?.ok).toBe(false)
@@ -144,7 +157,7 @@ describe('ThemeInput — контраст основных пар', () => {
     expect(result.error?.issues.map((issue) => issue.path.join('.'))).toEqual(['colors.muted'])
   })
 
-  it('предупреждение сохранению не мешает: акцент на тёмной поверхности', () => {
+  it('акцент, плохо заметный на поверхности, не сохранить: там рамка фокуса и кнопки', () => {
     // Тёмная тема: поверхность чуть светлее фона, акцент проходит на фоне и не проходит на ней
     const colors = {
       background: '#111111',
@@ -158,9 +171,16 @@ describe('ThemeInput — контраст основных пар', () => {
     const checks = themeContrast(colors)
     const accentSurface = checks.find((check) => check.id === 'accent-surface')
     expect(accentSurface?.ok).toBe(false)
-    expect(accentSurface?.blocking).toBe(false)
-    expect(checks.filter((check) => check.blocking).every((check) => check.ok)).toBe(true)
-    expect(ThemeInput.safeParse({ ...defaultTheme, colors }).success).toBe(true)
+    expect(accentSurface?.blocking).toBe(true)
+    // Остальные пары проходят: отказ — только из-за поверхности
+    expect(checks.filter((check) => !check.ok).map((check) => check.id)).toEqual(['accent-surface'])
+    const result = ThemeInput.safeParse({ ...defaultTheme, colors })
+    expect(result.error?.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      [
+        'colors.accent',
+        'Акцент на поверхности (кнопки, фокус): контраст 2,6 — нужно не меньше 3,0',
+      ],
+    ])
   })
 })
 

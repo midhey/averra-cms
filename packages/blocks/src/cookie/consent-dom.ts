@@ -126,8 +126,8 @@ function modal(root: HTMLElement, dialog: DialogElement, options: ModalOptions):
     const last = items[items.length - 1]
     if (!first || !last) return
     const active = doc.activeElement
-    // Фокус на самом окне или за ним (на body): Tab ведёт к первому элементу окна, а Shift+Tab
-    // к последнему
+    // Фокус на самом окне или за ним (на body): Tab ведёт к первому элементу окна, Shift+Tab —
+    // к его последнему элементу
     const inside = active !== dialog && dialog.contains(active)
     if (event.shiftKey && (active === first || !inside)) {
       event.preventDefault()
@@ -232,10 +232,10 @@ export function startCookieConsent(doc: Document = document) {
       doc.cookie = cookie
     },
     loadAnalytics: (ids) => loadAnalytics(doc, ids),
-    forgetAnalytics: () => {
+    forgetAnalytics: ({ reload }) => {
       for (const cookie of forgetCookies(doc.cookie, win.location.hostname)) doc.cookie = cookie
       forgetStorage(win)
-      win.location.reload()
+      if (reload) win.location.reload()
     },
     showNotice: () => {
       if (noticeModal) noticeModal.open(doc.activeElement)

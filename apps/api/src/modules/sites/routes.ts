@@ -88,12 +88,25 @@ export function sitesRoutes({
         const settings = readStoredSettings(found.settings)
         // Что редактору страницы нужно от SEO сайта: сниппет, карточка и проверки в панели «SEO»
         // страницы. Всё это и так видно на опубликованных страницах; настройки целиком — владельцу
+        const org = settings.organization
         const seo: SiteSeo = {
           titleTemplate: settings.titleTemplate,
           description: settings.description,
           ogImage: settings.ogImage,
           url: effectiveSiteUrl(settings, siteUrl),
           hideFromSearch: settings.hideFromSearch,
+          // Сверка «Контактов» с организацией — людям. Телефон и почта ИП — персональные данные:
+          // токену API их не отдаём, даже если они и так в разметке на главной
+          ...(c.var.actor.kind === 'user'
+            ? {
+                organization: {
+                  name: org.name,
+                  phone: org.phone,
+                  email: org.email,
+                  street: org.address.street,
+                },
+              }
+            : {}),
         }
         return c.json({
           id: found.id,

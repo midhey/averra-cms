@@ -138,8 +138,8 @@ afterEach(() => {
   restore?.()
   restore = undefined
   vi.restoreAllMocks()
-  setCookie('averra_consent=; Max-Age=0; Path=/')
-  setCookie('_ym_uid=; Max-Age=0; Path=/')
+  setCookie('averra_consent=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/')
+  setCookie('_ym_uid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/')
   localStorage.clear()
   sessionStorage.clear()
   for (const script of document.head.querySelectorAll('script')) script.remove()
@@ -290,6 +290,28 @@ describe('старый браузер без <dialog> (iOS до 15.4)', () => {
     expect(sessionStorage.getItem('_ym98765432_lsid')).toBeNull()
     expect(localStorage.getItem('averra_draft')).toBe('чужое')
     expect(reload).toHaveBeenCalledOnce()
+  })
+
+  it('согласие на Метрику, добавили GA4: отказ на повторный вопрос стирает следы Метрики', () => {
+    restore = withoutDialogApi()
+    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {})
+    setCookie('averra_consent=analytics.ym; Path=/')
+    setCookie('_ym_uid=1700000000123; Path=/')
+    localStorage.setItem('_ym_uid', '"1700000000123"')
+    localStorage.setItem('averra_draft', 'чужое')
+    const { notice } = mount('bar', 'consent', 'privacy', { metrika: '98765432', ga4: 'G-ABC123' })
+    // Набор устарел: счётчиков на странице нет, сайт спрашивает снова
+    expect(counters()).toEqual([])
+    expect(notice.hidden).toBe(false)
+
+    button(notice, 'necessary').click()
+
+    expect(document.cookie).toContain('averra_consent=necessary')
+    expect(document.cookie).not.toContain('_ym_uid')
+    expect(localStorage.getItem('_ym_uid')).toBeNull()
+    expect(localStorage.getItem('averra_draft')).toBe('чужое')
+    // Счётчик на этой странице не работал — перезагружать нечего
+    expect(reload).not.toHaveBeenCalled()
   })
 
   it('настройки поверх окна по центру: Esc и Tab — только у настроек', () => {

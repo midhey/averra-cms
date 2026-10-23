@@ -20,6 +20,11 @@ export type JsonSchema = {
   'x-widget'?: string
   /** Картинке можно быть SVG (логотип в «Клиентах»): пометку ставит схема Logo */
   'x-allow-svg'?: boolean
+  /**
+   * Строка особого вида — почта или телефон (EmailAddress, PhoneNumber): однострочное поле с
+   * нужным type и клавиатурой на телефоне
+   */
+  'x-input'?: 'email' | 'tel'
   /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
   'x-enum-titles'?: Readonly<Record<string, string>>
   /**
@@ -45,8 +50,10 @@ export function fieldKind(schema: JsonSchema): FieldKind {
   if (schema.enum) return 'select'
   switch (schema.type) {
     case 'string':
-      // Строка с шаблоном (ссылка и т.п.) всегда однострочная, даже если допускает 2048 символов
-      return (schema.maxLength ?? 0) > 150 && !schema.pattern ? 'textarea' : 'text'
+      // Строка с шаблоном (ссылка и т.п.), почта и телефон всегда однострочные, даже если
+      // допускают 254 или 2048 символов
+      if (schema.pattern || schema['x-input']) return 'text'
+      return (schema.maxLength ?? 0) > 150 ? 'textarea' : 'text'
     case 'boolean':
       return 'checkbox'
     case 'object':

@@ -42,4 +42,13 @@ describe('ссылка на карту', () => {
     expect(mapUrl({ service: 'yandex' })).toBeUndefined()
     expect(mapUrl({ service: '2gis', address: '  ' })).toBeUndefined()
   })
+
+  it('адрес-заглушка из примера («[Город, улица…]») — ссылки нет, координаты — есть', () => {
+    const address = '[Город, улица, дом, офис]'
+    expect(mapUrl({ service: 'yandex', address })).toBeUndefined()
+    expect(mapUrl({ service: '2gis', address: 'Пермь, [улица]' })).toBeUndefined()
+    expect(mapUrl({ service: 'yandex', address, coordinates: '58.0105, 56.2502' })).toBe(
+      'https://yandex.ru/maps/?pt=56.2502,58.0105&z=17&l=map',
+    )
+  })
 })

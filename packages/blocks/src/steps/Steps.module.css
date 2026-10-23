@@ -5,6 +5,7 @@
 
 .list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-8) var(--space-6);
   margin: 0;
   padding: 0;
@@ -37,10 +38,12 @@
   border-top: 2px solid var(--color-accent);
 }
 
+/* Номер — цветом текста: это мелкий текст, ему нужен контраст 4,5, а акцент тема проверяет
+   порогом 3. Акцент остаётся полосой над шагом */
 .number {
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight, 700);
-  color: var(--color-accent);
+  color: var(--color-text);
 }
 
 .stepTitle {

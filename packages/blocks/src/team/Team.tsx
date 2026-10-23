@@ -1,17 +1,26 @@
 import type { BlockComponentProps } from '../types'
+import { gridSizes } from '../ui/grid-sizes'
 import { Picture } from '../ui/Picture'
 import { Section } from '../ui/Section'
 import styles from './Team.module.css'
 
-// Ширина фото по колонкам: доля контейнера (72rem) на широком экране, половина — на телефоне
-const sizesFor = (columns: number) =>
-  `(min-width: 72rem) ${Math.round(72 / columns)}rem, (min-width: 40rem) 33vw, 50vw`
+/**
+ * Ширина фото — как сетка в Team.module.css: на телефоне по двое, с 40rem — три колонки (две, если
+ * выбрано две), с 64rem — сколько выбрано. Круглое фото не шире 10rem при любой колонке
+ */
+function sizesFor(columns: number, shape: 'portrait' | 'round') {
+  if (shape === 'round') return '10rem'
+  return gridSizes(2, [
+    [40, Math.min(columns, 3)],
+    [64, columns],
+  ])
+}
 
 /** Команда: фото, имя (заголовок пункта) и должность. Без фото — плашка поверхности */
 export function Team({ id, data, headingLevel, media }: BlockComponentProps<'team'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   const NameHeading = headingLevel === 1 ? 'h2' : 'h3'
-  const sizes = sizesFor(data.columns)
+  const sizes = sizesFor(data.columns, data.photoShape)
   return (
     <Section id={id}>
       {(data.title || data.text) && (

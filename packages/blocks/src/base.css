@@ -11,6 +11,16 @@ body {
   font-family: var(--font-body);
   font-size: var(--text-base);
   line-height: 1.6;
+  /* Длинное слово без пробелов (адрес сайта, почта) переносится, а не растягивает сетку и не даёт
+     горизонтальную прокрутку. anywhere ещё и сужает минимальную ширину колонок сетки и флекса;
+     где его нет (iOS до 15.4), сетки блоков держатся на minmax(0, 1fr) */
+  overflow-wrap: break-word;
+}
+
+@supports (overflow-wrap: anywhere) {
+  body {
+    overflow-wrap: anywhere;
+  }
 }
 
 h1,

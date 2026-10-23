@@ -14,7 +14,7 @@ function BlockForm({
   initial,
   errors = {},
 }: {
-  type: 'hero' | 'features' | 'form' | 'pricing'
+  type: 'hero' | 'features' | 'form' | 'pricing' | 'contacts' | 'gallery'
   initial: Record<string, unknown>
   errors?: Record<string, string>
 }) {
@@ -211,6 +211,40 @@ describe('SchemaForm', () => {
     expect(formValue().plans[0].features).toEqual(['Покраска', 'Плитка', ''])
     // Флажок «Выделить» — у каждого тарифа
     expect(screen.getAllByLabelText('Выделить')).toHaveLength(2)
+  })
+
+  it('почта и телефон — однострочные поля с type и клавиатурой, без счётчика', () => {
+    render(<BlockForm type="contacts" initial={{ phone: '+7 900 123-45-67' }} />)
+    const phone = screen.getByLabelText('Телефон · необязательно', { exact: false })
+    const email = screen.getByLabelText('Почта · необязательно')
+    expect([phone.tagName, phone.getAttribute('type'), phone.getAttribute('inputmode')]).toEqual([
+      'INPUT',
+      'tel',
+      'tel',
+    ])
+    expect([email.tagName, email.getAttribute('type'), email.getAttribute('inputmode')]).toEqual([
+      'INPUT',
+      'email',
+      'email',
+    ])
+    const described = (email.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+    expect(described.join(' ')).not.toMatch(/из 254/)
+  })
+
+  it('значение по умолчанию — подсказкой в пустом поле: его и покажет сайт', () => {
+    const plan = (name: string) => ({ name, price: '1 ₽' })
+    render(<BlockForm type="pricing" initial={{ plans: [plan('А'), plan('Б')] }} />)
+    const label = screen.getByLabelText('Подпись выделенного тарифа', { exact: false })
+    expect((label as HTMLInputElement).value).toBe('')
+    expect(label.getAttribute('placeholder')).toBe('Чаще выбирают')
+  })
+
+  it('фото галереи в списке названо подписью, без подписи — номером', () => {
+    render(<BlockForm type="gallery" initial={{ items: [{ caption: 'Кухня, 12 м²' }, {}] }} />)
+    expect(screen.getByRole('button', { name: 'Перетащить пункт «Кухня, 12 м²»' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Перетащить пункт «№ 2»' })).toBeTruthy()
   })
 
   it('ошибка флажка — под ним и в aria-describedby', () => {

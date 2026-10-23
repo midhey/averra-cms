@@ -13,7 +13,7 @@ export function Faq({ id, data, headingLevel }: BlockComponentProps<'faq'>) {
     <Section id={id} tone="muted">
       <div className={styles.faq}>
         {data.title && <Heading className={styles.title}>{data.title}</Heading>}
-        <div className={styles.list}>
+        <div>
           {data.items.map((item, index) => (
             // У вопросов нет id. Ключ по индексу здесь безопасен: список рендерится статично
             <details key={index} className={styles.item} open={data.openFirst && index === 0}>

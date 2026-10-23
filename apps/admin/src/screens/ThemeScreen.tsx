@@ -23,7 +23,7 @@ import {
 } from '@tanstack/react-query'
 import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { type Device, DeviceSwitch, Preview } from '../editor/Preview'
+import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
@@ -300,7 +300,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
           {warnings.length > 0 && (
             <InlineAlert tone="warning" title="Стоит поправить">
               {warnings.map((check) => `${check.label}: ${contrastText(check)}`).join('; ')}.
-              Сохранить можно, но на полосах поверхности акцент будет плохо заметен.
+              Сохранить можно, но эти цвета будут хуже заметны.
             </InlineAlert>
           )}
         </Section>
@@ -398,7 +398,8 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
 function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
   const [slug, setSlug] = useState(MAIN_PAGE_SLUG)
-  const [device, setDevice] = useState<Device>('desktop')
+  // На телефоне предпросмотр начинается с телефона: «десктоп» в масштабе там не прочитать
+  const [device, setDevice] = useState<Device>(initialDevice)
   // Пока грузится другая страница, остаётся прежняя: пример лендинга на миг не мелькает
   const page = useQuery({ ...pageQuery(siteId, slug), placeholderData: keepPreviousData })
   const library = useQuery(mediaQuery(siteId))

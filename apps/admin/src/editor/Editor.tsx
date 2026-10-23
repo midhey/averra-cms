@@ -44,7 +44,7 @@ import styles from './Editor.module.scss'
 import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
-import { type Device, DeviceSwitch, Preview } from './Preview'
+import { type Device, DeviceSwitch, initialDevice, Preview } from './Preview'
 import { SeoPanel } from './SeoPanel'
 import { validateBlocks } from './validation'
 
@@ -100,10 +100,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   // Панель «SEO» в колонке полей — вместо полей блока, как история
   const [seoOpen, setSeoOpen] = useState(false)
   const [adding, setAdding] = useState(false)
-  // На телефоне «десктоп» в масштабе не прочитать: там предпросмотр начинается с телефона
-  const [device, setDevice] = useState<Device>(() =>
-    window.matchMedia?.(NARROW_SCREEN).matches ? 'phone' : 'desktop',
-  )
+  const [device, setDevice] = useState<Device>(initialDevice)
   // Версия из истории в предпросмотре. Черновик в редакторе она не трогает
   const [shownRevision, setShownRevision] = useState<HistoryRevision | null>(null)
   const ids = useId()

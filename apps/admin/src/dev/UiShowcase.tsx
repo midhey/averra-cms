@@ -841,8 +841,8 @@ export function UiShowcase() {
 }
 
 /**
- * Тема сайта: отметки контраста (ок, мало у основной пары — ошибка, мало у пары с поверхностью —
- * предупреждение), строки цвета с ошибкой и без проверки, миниатюры готовых тем
+ * Тема сайта: отметки контраста (ок, мало у блокирующей пары — ошибка, мало у пары-предупреждения
+ * — предупреждение), строки цвета с ошибкой и без проверки, миниатюры готовых тем
  */
 function ThemeShowcase() {
   const checks = themeContrast({ ...defaultTheme.colors, accent: '#ffe066' })
@@ -855,11 +855,15 @@ function ThemeShowcase() {
     <>
       <div className={styles.row}>
         {checks
-          .filter((check) =>
-            ['text-background', 'accent-background', 'accent-surface'].includes(check.id),
-          )
+          .filter((check) => ['text-background', 'accent-background'].includes(check.id))
           .map((check) => (
             <ContrastBadge key={check.id} check={check} />
+          ))}
+        {/* Пар-предупреждений в теме сейчас нет, но отметка их умеет: тон решает blocking */}
+        {checks
+          .filter((check) => check.id === 'accent-surface')
+          .map((check) => (
+            <ContrastBadge key={check.id} check={{ ...check, blocking: false }} />
           ))}
       </div>
       <div className={styles.themeRows}>

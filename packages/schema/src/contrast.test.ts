@@ -54,7 +54,7 @@ describe('пороги в проверке темы', () => {
     ).toBe(false)
   })
 
-  it('блокируют пары текста и кнопок, предупреждает только акцент на поверхности', () => {
+  it('блокируют все пары: текст, кнопки, ссылки и акцент на поверхности (фокус)', () => {
     expect(contrastPairs.filter((pair) => pair.blocking).map((pair) => pair.id)).toEqual([
       'text-background',
       'text-surface',
@@ -62,10 +62,9 @@ describe('пороги в проверке темы', () => {
       'muted-surface',
       'on-accent',
       'accent-background',
-    ])
-    expect(contrastPairs.filter((pair) => !pair.blocking).map((pair) => pair.id)).toEqual([
       'accent-surface',
     ])
+    expect(contrastPairs.filter((pair) => !pair.blocking)).toEqual([])
   })
 })
 

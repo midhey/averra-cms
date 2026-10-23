@@ -48,10 +48,13 @@ describe('отметки контраста', () => {
     expect(contrastText(byId('accent-background'))).toBe('1,3 · мало')
   })
 
-  it('мало у основной пары — ошибка, у пары с поверхностью — предупреждение', () => {
+  it('мало у блокирующей пары — ошибка, у пары-предупреждения — предупреждение', () => {
     expect(contrastTone(byId('text-background'))).toBe('success')
     expect(contrastTone(byId('accent-background'))).toBe('danger')
-    expect(contrastTone(byId('accent-surface'))).toBe('warning')
+    // Акцент на поверхности — рамка фокуса и кнопки: тоже ошибка
+    expect(contrastTone(byId('accent-surface'))).toBe('danger')
+    // Пар-предупреждений сейчас нет, но экран их умеет: поле blocking решает тон
+    expect(contrastTone({ ...byId('accent-surface'), blocking: false })).toBe('warning')
   })
 })
 

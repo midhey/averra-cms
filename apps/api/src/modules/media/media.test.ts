@@ -258,6 +258,10 @@ describe('отказ в загрузке', () => {
       'image/gif',
     )
     expect(res.status).toBe(415)
+    // SVG теперь не только для логотипа сайта: логотипы клиентов в блоке «Клиенты» тоже
+    expect(await res.json()).toMatchObject({
+      error: { message: expect.stringContaining('SVG (для логотипов и иконки)') },
+    })
   })
 
   it('битый JPEG (верный заголовок, обрезанные данные) → 415 «файл повреждён»', async () => {

@@ -16,6 +16,7 @@ import { previewStyleNodes } from '../styles/global-style'
 import { previewFontCss } from '../theme/preview-fonts'
 import { InlineAlert } from '../ui/InlineAlert'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { NARROW_SCREEN } from '../ui/use-media-query'
 import styles from './Preview.module.scss'
 import { blockIdAt, previewSelectionCss, type SelectionColors } from './preview-selection'
 
@@ -26,6 +27,13 @@ const deviceLabels: Record<Device, string> = {
   tablet: 'Планшет',
   desktop: 'Десктоп',
 }
+
+/**
+ * С какой ширины начать предпросмотр: на узком экране «десктоп» в масштабе не прочитать — шрифт и
+ * контраст не разглядеть, поэтому там начинаем с телефона
+ */
+export const initialDevice = (): Device =>
+  window.matchMedia?.(NARROW_SCREEN).matches ? 'phone' : 'desktop'
 
 /** Переключатель ширины предпросмотра: в полосе редактора, на узком экране — над предпросмотром */
 export function DeviceSwitch({

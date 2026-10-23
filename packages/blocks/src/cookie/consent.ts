@@ -83,6 +83,16 @@ export function readChoice(
   return services.every((service) => known.includes(service)) ? kind : undefined
 }
 
+/**
+ * Счётчики уже работали у этого посетителя: прежний выбор — согласие или «Понятно» (с любым
+ * набором сервисов, даже если набор устарел и сайт спрашивает снова). Тогда в браузере могли
+ * остаться их cookie и _ym_uid в хранилище
+ */
+export function hadAnalytics(cookies: string) {
+  const match = CHOICE_VALUE.exec(cookieValue(cookies, CONSENT_COOKIE) ?? '')
+  return match?.[1] === 'analytics' || match?.[1] === 'notice'
+}
+
 /** Значение cookie для выбора: у согласия и «Понятно» — сервисы, о которых сказали */
 export const choiceValue = (choice: ConsentChoice, services: readonly AnalyticsService[]) =>
   choice === 'necessary' ? choice : [choice, ...services].join('.')
@@ -142,11 +152,18 @@ export function cookieDomains(hostname: string) {
   return domains
 }
 
+/**
+ * Срок в прошлом рядом с Max-Age=0: браузер стирает cookie по любому из них, а срок в 1970 году
+ * истёк наверняка — Max-Age=0 даёт срок «сейчас», и проверка «истёк ли» в ту же миллисекунду
+ * может его ещё не засчитать
+ */
+const EXPIRED = 'Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+
 /** Строки для document.cookie, которые стирают cookie счётчиков на всех доменах */
 export function forgetCookies(cookies: string, hostname: string) {
   return analyticsCookieNames(cookies).flatMap((name) =>
     cookieDomains(hostname).map(
-      (domain) => `${name}=; Max-Age=0; Path=/${domain === '' ? '' : `; Domain=${domain}`}`,
+      (domain) => `${name}=; ${EXPIRED}; Path=/${domain === '' ? '' : `; Domain=${domain}`}`,
     ),
   )
 }
@@ -158,10 +175,11 @@ export type ConsentPorts = {
   /** Вставить счётчики с этими номерами */
   loadAnalytics: (ids: { metrika: string; ga4: string }) => void
   /**
-   * Согласие отозвано, а счётчики уже работают: стереть их cookie и ключи хранилища
-   * (forgetCookies, analyticsStorageKeys) и перезагрузить страницу — выгрузить скрипт нельзя
+   * Согласие отозвано: стереть cookie и ключи хранилища счётчиков (forgetCookies,
+   * analyticsStorageKeys). reload — счётчики уже работают на этой странице: перезагрузить её,
+   * выгрузить скрипт нельзя
    */
-  forgetAnalytics: () => void
+  forgetAnalytics: (options: { reload: boolean }) => void
   showNotice: () => void
   hideNotice: () => void
   /** Открыть окно настроек; analytics — включён ли переключатель аналитики */
@@ -177,6 +195,9 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
   const ids = analyticsIds(config)
   const services = analyticsServices(ids)
   let choice = readChoice(ports.readCookies(), services)
+  // Прежнее согласие могло устареть (владелец добавил GA4 — сайт спрашивает снова), но следы
+  // счётчиков от него в браузере остались: отказ на повторный вопрос стирает и их
+  let traces = config.mode === 'consent' && hadAnalytics(ports.readCookies())
   let loaded = false
 
   function load() {
@@ -194,7 +215,11 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
       load()
     } else if (loaded) {
       loaded = false
-      ports.forgetAnalytics()
+      traces = false
+      ports.forgetAnalytics({ reload: true })
+    } else if (traces) {
+      traces = false
+      ports.forgetAnalytics({ reload: false })
     }
   }
 

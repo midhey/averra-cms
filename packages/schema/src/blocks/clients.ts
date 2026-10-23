@@ -26,7 +26,8 @@ export const clients = defineBlock({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     tone: z.enum(['color', 'mono']).default('color').meta({
       title: 'Цвет логотипов',
-      description: 'Серые — спокойнее, когда логотипы разных цветов',
+      description:
+        'Серые — спокойнее, когда логотипы разных цветов. На тёмной теме тёмный логотип и серым останется тёмным — загрузите его светлый вариант',
       'x-enum-titles': clientsToneTitles,
     }),
     items: z.array(Client).min(2).max(24).meta({ title: 'Клиенты' }),

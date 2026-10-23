@@ -1,6 +1,6 @@
 import { SaxesParser } from 'saxes'
 import { describe, expect, it } from 'vitest'
-import { looksLikeSvg, MAX_SVG_DEPTH, safeCss, sanitizeSvg, svgForRaster } from './svg'
+import { LENGTH, looksLikeSvg, MAX_SVG_DEPTH, safeCss, sanitizeSvg, svgForRaster } from './svg'
 
 const bytes = (text: string) => new TextEncoder().encode(text)
 const NS = 'xmlns="http://www.w3.org/2000/svg"'
@@ -386,6 +386,20 @@ describe('sanitizeSvg: размеры', () => {
     const raster = svgForRaster(bytes(`<svg ${NS} width="${digits}x" height="1"/>`), 16)
     expect(raster.length).toBeGreaterThan(digits.length)
     expect(performance.now() - started).toBeLessThan(1000)
+  })
+
+  it('регулярка длины сама по себе линейна — без отсечки по длине', () => {
+    const started = performance.now()
+    expect(LENGTH.exec(`${'1'.repeat(60_000)}x`)).toBeNull()
+    expect(LENGTH.exec(`${'1'.repeat(60_000)}.${'1'.repeat(60_000)}x`)).toBeNull()
+    expect(performance.now() - started).toBeLessThan(1000)
+  })
+
+  it('длинная дробь из конвертера без viewBox принимается', () => {
+    const long = '52.916666666666666666666666666667mm'
+    expect(clean(`<svg ${NS} width="${long}" height="${long}"/>`)).toBe(
+      `<svg ${NS} width="200" height="200" viewBox="0 0 200 200"/>`,
+    )
   })
 
   it('длина: дробная, с экспонентой, с точкой в конце', () => {

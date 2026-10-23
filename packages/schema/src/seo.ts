@@ -1,4 +1,5 @@
 import { blocks as blockCatalog } from './blocks'
+import { type BlockSchemaNode, blockPropsSchema, schemaStep } from './media-svg'
 import {
   MAIN_PAGE_SLUG,
   NOT_FOUND_PAGE_SLUG,
@@ -38,7 +39,15 @@ export type SiteSeo = {
   url: string | null
   /** Сайт скрыт от поисковиков целиком (раздел «SEO») */
   hideFromSearch: boolean
+  /**
+   * Организация из «SEO → Организация» — сверить с «Контактами», которые просят разметку. Только
+   * людям: телефон ИП — персональные данные, токену API их не отдаём. Нет — проверки нет
+   */
+  organization?: SiteOrganization | undefined
 }
+
+/** Что от «SEO → Организация» нужно проверке «Контактов»: название и то, что пишет разметка */
+export type SiteOrganization = { name: string; phone: string; email: string; street: string }
 
 type TitledPage = { slug: string; title: string; seo?: Pick<PageSeo, 'title'> | undefined }
 
@@ -191,6 +200,7 @@ export type SeoCheckId =
   | 'noindex'
   | 'canonical'
   | 'image'
+  | 'contacts'
 
 export type SeoCheck = { id: SeoCheckId; level: SeoCheckLevel; title: string; advice?: string }
 
@@ -310,25 +320,28 @@ function headingCheck(blocks: readonly SeoBlock[]): SeoCheck {
   }
 }
 
-/** Картинки блоков: объекты с mediaId и alt — где угодно в полях блока */
+/**
+ * Картинки блоков: объекты с mediaId — где угодно в полях блока. Картинка, у которой по схеме поля
+ * нет alt (Logo в «Клиентах»: его описание — название рядом, оно обязательно), не проверяется.
+ * Схему узнаём по типу блока; незнакомый тип — проверяем всё, что похоже на картинку
+ */
 function blockImages(blocks: readonly SeoBlock[]) {
   const found: { block: SeoBlock; alt: string }[] = []
-  const walk = (block: SeoBlock, value: unknown) => {
+  const walk = (block: SeoBlock, value: unknown, node: BlockSchemaNode | undefined) => {
     if (Array.isArray(value)) {
-      for (const item of value) walk(block, item)
+      for (const item of value) walk(block, item, schemaStep(node, 0))
       return
     }
     if (typeof value !== 'object' || value === null) return
     const record = value as Record<string, unknown>
     if (typeof record.mediaId === 'string') {
-      // Логотип (Logo) без своего alt: его описание — название клиента рядом, оно обязательно
-      if (block.type === 'clients' && !('alt' in record)) return
+      if (node?.properties && !('alt' in node.properties)) return
       found.push({ block, alt: typeof record.alt === 'string' ? record.alt.trim() : '' })
       return
     }
-    for (const child of Object.values(record)) walk(block, child)
+    for (const [key, child] of Object.entries(record)) walk(block, child, schemaStep(node, key))
   }
-  for (const block of blocks) walk(block, block.props)
+  for (const block of blocks) walk(block, block.props, blockPropsSchema(block.type))
   return found
 }
 
@@ -420,6 +433,9 @@ export function pageSeoChecks(page: SeoCheckPage, site: SiteSeo): SeoCheck[] {
   if (alt) checks.push(alt)
   if (notFound) return checks
 
+  const contacts = site.organization && contactsCheck(page.blocks, site.organization)
+  if (contacts) checks.push(contacts)
+
   if (page.slug !== MAIN_PAGE_SLUG) checks.push(slugCheck(page.slug))
 
   if (site.hideFromSearch) {
@@ -477,6 +493,53 @@ export function pageSeoChecks(page: SeoCheckPage, site: SiteSeo): SeoCheck[] {
     })
   }
   return checks
+}
+
+/** Сравнение без пробелов, знаков и регистра: «ул. Ленина, 50» и «Ленина 50» — одно и то же */
+const plainText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+
+/**
+ * «Контакты» с разметкой для поисковиков и «SEO → Организация». Разметка — одна организация, и
+ * телефон, почта и адрес в ней из «SEO» главнее блока (рендерер, organizationJsonLd). Разошлись —
+ * поисковик покажет одно, а посетитель увидит другое: советуем свести. Нет названия организации —
+ * разметки не будет вовсе
+ */
+function contactsCheck(blocks: readonly SeoBlock[], org: SiteOrganization): SeoCheck | undefined {
+  const block = blocks.find(
+    (item) =>
+      item.type === 'contacts' &&
+      (item.props as Record<string, unknown> | undefined)?.markup === true,
+  )
+  if (!block) return undefined
+  if (org.name.trim() === '') {
+    return {
+      id: 'contacts',
+      level: 'warning',
+      title: 'Разметки организации не будет: в «SEO → Организация» нет названия',
+      advice:
+        'Флажок «Разметка для поисковиков» в «Контактах» ставит на страницу организацию из «SEO → Организация». Владелец вписывает там название — или снимите флажок.',
+    }
+  }
+  const phone = textProp(block.props, 'phone')
+  const email = textProp(block.props, 'email')
+  const address = textProp(block.props, 'address')
+  const differs = [
+    org.phone && phone && org.phone.replace(/\D/g, '') !== phone.replace(/\D/g, '')
+      ? 'телефон'
+      : '',
+    org.email && email && org.email.trim().toLowerCase() !== email.toLowerCase() ? 'почта' : '',
+    org.street && address && !plainText(address).includes(plainText(org.street)) ? 'адрес' : '',
+  ].filter(Boolean)
+  if (differs.length === 0) {
+    return { id: 'contacts', level: 'good', title: '«Контакты» и разметка организации совпадают' }
+  }
+  return {
+    id: 'contacts',
+    level: 'warning',
+    title: `«Контакты» и «SEO → Организация» расходятся: ${differs.join(', ')}`,
+    advice:
+      'В разметку для поисковиков идут данные из «SEO → Организация», а посетитель видит данные блока. Сведите их: поправьте блок или попросите владельца поправить «SEO».',
+  }
 }
 
 /** Только советы (warning и problem): их считает кнопка «SEO» и отдаёт MCP */

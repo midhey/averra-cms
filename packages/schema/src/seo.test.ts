@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { blocks } from './blocks'
+import { type BlockSchemaNode, blockPropsSchema } from './media-svg'
 import { PageContent, PageSeo } from './page'
 import {
   canonicalElsewhere,
@@ -280,6 +282,81 @@ describe('проверки: картинки', () => {
       props: { members: [{ name: 'Иван', photo: { mediaId } }] },
     }
     expect(check('alt', page({ blocks: [photo] }))?.level).toBe('problem')
+  })
+
+  it('без alt по схеме — только картинки, у которых в схеме поля нет alt: в каталоге это логотипы', () => {
+    // Обходим JSON Schema всех блоков: объект-картинка (x-widget image) без свойства alt
+    const withoutAlt: string[] = []
+    const walk = (node: BlockSchemaNode | undefined, path: string) => {
+      if (!node) return
+      const record = node as BlockSchemaNode & { 'x-widget'?: string }
+      if (record['x-widget'] === 'image' && !('alt' in (node.properties ?? {}))) {
+        withoutAlt.push(path)
+        expect(node['x-allow-svg']).toBe(true)
+      }
+      if (node.items) walk(node.items, `${path}[]`)
+      for (const [key, child] of Object.entries(node.properties ?? {}))
+        walk(child, `${path}.${key}`)
+    }
+    for (const entry of blocks) walk(blockPropsSchema(entry.type), entry.type)
+    expect(withoutAlt).toEqual(['clients.items[].logo'])
+  })
+
+  it('логотип в незнакомом блоке (черновик после отката версии) — проверяется как картинка', () => {
+    const unknown = { id: 'x', type: 'header', props: { logo: { mediaId } } }
+    expect(check('alt', page({ blocks: [unknown] }))?.level).toBe('problem')
+  })
+})
+
+describe('проверка: «Контакты» и «SEO → Организация»', () => {
+  const org = {
+    name: 'ИП Иванов',
+    phone: '+7 900 000-00-00',
+    email: 'ivan@example.ru',
+    street: 'ул. Ленина, 50',
+  }
+  const contacts = (props: Record<string, unknown>) => ({
+    id: 'contacts',
+    type: 'contacts',
+    props: { markup: true, ...props },
+  })
+  const withOrg = (organization = org) => ({ ...site, organization })
+
+  it('совпадают (номер в другой записи, адрес короче) — хорошо', () => {
+    const block = contacts({ phone: '+7(900)0000000', address: 'Пермь, ул Ленина 50' })
+    expect(check('contacts', page({ blocks: [block] }), withOrg())?.level).toBe('good')
+  })
+
+  it('телефон, почта и адрес разошлись — предупреждение со списком', () => {
+    const block = contacts({
+      phone: '+7 900 111-11-11',
+      email: 'office@example.ru',
+      address: 'Пермь, Мира, 1',
+    })
+    const found = check('contacts', page({ blocks: [block] }), withOrg())
+    expect(found?.level).toBe('warning')
+    expect(found?.title).toBe('«Контакты» и «SEO → Организация» расходятся: телефон, почта, адрес')
+  })
+
+  it('пустое в «SEO» — блок дополняет разметку, расхождения нет', () => {
+    const block = contacts({ phone: '+7 900 111-11-11' })
+    const empty = { ...org, phone: '', email: '', street: '' }
+    expect(check('contacts', page({ blocks: [block] }), withOrg(empty))?.level).toBe('good')
+  })
+
+  it('без названия организации — разметки не будет: предупреждение', () => {
+    const block = contacts({ phone: '+7 900 000-00-00' })
+    expect(check('contacts', page({ blocks: [block] }), withOrg({ ...org, name: '' }))?.title).toBe(
+      'Разметки организации не будет: в «SEO → Организация» нет названия',
+    )
+  })
+
+  it('без флажка разметки и без организации (токен API) — проверки нет', () => {
+    const block = contacts({ markup: false, phone: '+7 900 111-11-11' })
+    expect(check('contacts', page({ blocks: [block] }), withOrg())).toBeUndefined()
+    expect(
+      check('contacts', page({ blocks: [contacts({ phone: '+7 900 111-11-11' })] })),
+    ).toBeUndefined()
   })
 })
 

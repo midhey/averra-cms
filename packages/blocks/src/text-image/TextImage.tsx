@@ -1,8 +1,8 @@
-import { parseTextBody } from '@averra/schema'
 import type { BlockComponentProps } from '../types'
 import { ButtonLink } from '../ui/ButtonLink'
 import { Picture } from '../ui/Picture'
 import { Section } from '../ui/Section'
+import { TextBody } from '../ui/TextBody'
 import styles from './TextImage.module.css'
 
 // Картинка — половина контейнера (72rem) на широком экране и вся ширина на узком
@@ -20,7 +20,6 @@ export function TextImage({
   priority,
 }: BlockComponentProps<'text-image'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
-  const SubHeading = headingLevel === 1 ? 'h2' : 'h3'
   // Картинки нет в справочнике (предпросмотр без медиа) — раскладка как без картинки
   const image = data.image && media[data.image.mediaId] ? data.image : undefined
   return (
@@ -28,27 +27,7 @@ export function TextImage({
       <div className={styles.layout} data-image={image ? data.imagePosition : 'none'}>
         <div className={styles.text}>
           {data.title && <Heading className={styles.title}>{data.title}</Heading>}
-          {parseTextBody(data.body).map((part, index) => {
-            // Части текста не переставляются и рендерятся статично: ключ по месту
-            switch (part.kind) {
-              case 'heading':
-                return (
-                  <SubHeading key={index} className={styles.subtitle}>
-                    {part.text}
-                  </SubHeading>
-                )
-              case 'list':
-                return (
-                  <ul key={index} className={styles.list}>
-                    {part.items.map((item, itemIndex) => (
-                      <li key={itemIndex}>{item}</li>
-                    ))}
-                  </ul>
-                )
-              default:
-                return <p key={index}>{part.text}</p>
-            }
-          })}
+          <TextBody body={data.body} headingLevel={headingLevel} />
           {data.button && (
             <div className={styles.action}>
               <ButtonLink {...data.button} />

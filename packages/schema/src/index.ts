@@ -226,6 +226,7 @@ export {
   type SeoCheckId,
   type SeoCheckLevel,
   type SeoCheckPage,
+  type SiteOrganization,
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,

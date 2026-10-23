@@ -36,6 +36,8 @@ export const PhoneNumber = z
   .trim()
   .regex(PHONE_REGEXP, PHONE_MESSAGE)
   .refine((value) => phoneDigits(value).length >= 5, PHONE_MESSAGE)
+  // Админка выводит поле однострочным, с type="tel": на телефоне откроется цифровая клавиатура
+  .meta({ 'x-input': 'tel' })
 
 /** Почта на сайте: по ней пишут нажатием (mailto:) */
 export const EmailAddress = z
@@ -43,6 +45,9 @@ export const EmailAddress = z
   .trim()
   .max(254)
   .refine((value) => MAIL_ADDRESS_REGEXP.test(value), 'Нужен адрес почты, например info@example.ru')
+  // Адрес до 254 знаков — по стандарту, но строка одна: админка выводит поле однострочным, с
+  // type="email" и клавиатурой с «@», без счётчика
+  .meta({ 'x-input': 'email' })
 
 /** Ссылка «позвонить»: только цифры и «+» в начале — так номер понимают все телефоны */
 export const telHref = (phone: string) =>
@@ -76,12 +81,20 @@ export const mapServiceTitles = {
 } as const satisfies Record<MapService, string>
 
 /**
+ * Заглушка из примера блока: «[Город, улица, дом, офис]». Настоящий адрес квадратных скобок не
+ * пишет, а поиск карты по заглушке увёл бы посетителя на бессмысленную выдачу
+ */
+export const isPlaceholderText = (value: string) => /\[[^\]]*\]/.test(value)
+
+/**
  * Ссылка на точку на карте: по координатам — точка, иначе поиск по адресу. Порядок в адресах
- * сервисов — долгота, потом широта (проверено вживую). Нет ни координат, ни адреса — ссылки нет
+ * сервисов — долгота, потом широта (проверено вживую). Нет ни координат, ни адреса (или адрес —
+ * заглушка из примера) — ссылки нет
  */
 export function mapUrl(place: { service: MapService; coordinates?: string; address?: string }) {
   const point = place.coordinates ? parseCoordinates(place.coordinates) : undefined
-  const address = place.address?.trim()
+  const typed = place.address?.trim()
+  const address = typed && !isPlaceholderText(typed) ? typed : undefined
   if (place.service === '2gis') {
     if (point) return `https://2gis.ru/geo/${point.lon},${point.lat}`
     return address ? `https://2gis.ru/search/${encodeURIComponent(address)}` : undefined

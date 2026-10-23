@@ -15,6 +15,7 @@
 
 .grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6) var(--space-4);
   margin: 0;
   padding: 0;
@@ -75,6 +76,14 @@
 .grid[data-aspect="square"] .photo img,
 .grid[data-aspect="square"] .placeholder {
   aspect-ratio: 1;
+}
+
+/* Без aspect-ratio (iOS до 15) у пустой плашки нет высоты, и она пропадает: высота — запасная.
+   Фото держат пропорции сами, по width и height картинки */
+@supports not (aspect-ratio: 1) {
+  .placeholder {
+    height: 12rem;
+  }
 }
 
 .caption {

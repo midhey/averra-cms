@@ -19,7 +19,8 @@ export function Pricing({ id, data, headingLevel }: BlockComponentProps<'pricing
           {data.text && <p className={styles.text}>{data.text}</p>}
         </div>
       )}
-      <ul className={styles.plans} data-count={data.plans.length}>
+      {/* biome-ignore lint/a11y/noRedundantRoles: Safari без маркеров списка теряет роль list */}
+      <ul role="list" className={styles.plans} data-count={data.plans.length}>
         {data.plans.map((plan, index) => (
           // У тарифов нет id. Ключ по индексу здесь безопасен: список рендерится статично
           <li key={index} className={styles.plan} data-featured={plan.featured}>

@@ -129,13 +129,17 @@ function TextField(props: FieldProps & { multiline?: boolean }) {
   // Пустое необязательное поле убираем совсем, а не храним пустую строку
   const update = (next: string) => onChange(path, next === '' && !required ? undefined : next)
   const mono = isMonospace(schema)
+  const input = schema['x-input']
   const common = {
     label: <FieldLabel label={label} required={required} />,
     hint: schema.description,
     error: errors[pathKey(path)],
     value: text,
+    // Значение по умолчанию — подсказкой: пустое поле на сайте покажет именно его
+    placeholder: typeof schema.default === 'string' ? schema.default : undefined,
+    // Почте и телефону счётчик ни к чему: длина у них не та забота, что у заголовка
     maxChars:
-      !mono && schema.maxLength !== undefined && schema.maxLength <= COUNTER_MAX_LENGTH
+      !mono && !input && schema.maxLength !== undefined && schema.maxLength <= COUNTER_MAX_LENGTH
         ? schema.maxLength
         : undefined,
     mono,
@@ -143,7 +147,12 @@ function TextField(props: FieldProps & { multiline?: boolean }) {
   return multiline ? (
     <TextArea {...common} rows={3} onChange={(event) => update(event.target.value)} />
   ) : (
-    <TextInput {...common} type="text" onChange={(event) => update(event.target.value)} />
+    <TextInput
+      {...common}
+      type={input ?? 'text'}
+      inputMode={input}
+      onChange={(event) => update(event.target.value)}
+    />
   )
 }
 

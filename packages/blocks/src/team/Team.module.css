@@ -81,11 +81,23 @@
   border-radius: 50%;
 }
 
-/* Длинную фамилию в узкой колонке — переносом по слогам, а не обрывом посреди слога */
+/* Без aspect-ratio (iOS до 15) у пустой плашки нет высоты, и она пропадает: высота — запасная.
+   Фото держат пропорции сами, по width и height картинки */
+@supports not (aspect-ratio: 1) {
+  .placeholder {
+    height: 14rem;
+  }
+
+  .grid[data-shape="round"] .placeholder {
+    height: 10rem;
+  }
+}
+
+/* Имя людей по слогам не переносим: «Констан-тин» читается плохо. Переносится только фамилия,
+   которая не влезает в колонку целиком */
 .name {
   font-size: var(--text-lg);
   overflow-wrap: break-word;
-  hyphens: auto;
 }
 
 .role {

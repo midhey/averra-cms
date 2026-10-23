@@ -142,13 +142,13 @@ describe('контраст', () => {
   })
 
   it('бледный приглушённый текст на поверхности (блок «Призыв») — 400', async () => {
-    const theme = { ...defaultTheme, colors: { ...defaultTheme.colors, surface: '#9aa0aa' } }
+    const theme = { ...defaultTheme, colors: { ...defaultTheme.colors, surface: '#c4c8d0' } }
     const res = await save(theme)
     expect(res.status).toBe(400)
     expect((await issues(res)).map((issue) => issue.path)).toEqual(['colors.muted'])
   })
 
-  it('предупреждение (акцент на поверхности) сохранению не мешает', async () => {
+  it('акцент, плохо заметный на поверхности (рамка фокуса, кнопки), — 400', async () => {
     const colors = {
       background: '#111111',
       surface: '#222222',
@@ -158,8 +158,20 @@ describe('контраст', () => {
       onAccent: '#ffffff',
       border: '#333333',
     }
-    expect((await ok(await save({ ...defaultTheme, colors }))).draft.colors.surface).toBe('#222222')
+    const res = await save({ ...defaultTheme, colors })
+    expect(res.status).toBe(400)
+    expect((await issues(res)).map((issue) => issue.path)).toEqual(['colors.accent'])
   })
+
+  it.each(['#ffffff;}body{display:none', '#fff}</style><script>'])(
+    'цвет с решёткой и CSS после неё (%s) — 400, в черновик не попадает',
+    async (value) => {
+      const res = await save({ ...defaultTheme, colors: { ...defaultTheme.colors, accent: value } })
+      expect(res.status).toBe(400)
+      expect((await issues(res)).map((issue) => issue.path)).toEqual(['colors.accent'])
+      expect((await ok(await read())).draft.colors.accent).not.toBe(value)
+    },
+  )
 
   it('старая тема с плохим контрастом не публикуется как есть — сначала поправить', async () => {
     await resetToLegacy({

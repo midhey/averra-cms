@@ -10,6 +10,8 @@ const QUESTION = 'Сколько стоит выезд мастера?'
 const ANSWER = 'Выезд по городу бесплатный.'
 const SECOND_QUESTION = 'Может ли цена вырасти по ходу работ?'
 const PLAN = 'Эконом'
+/** Длинное слово без пробелов: адрес сайта в пункте тарифа и в названии шага (60 знаков) */
+const LONG = 'remont-kvartir-pod-klyuch.example.ru/uslugi/ceny-i-sroki-2026'
 
 test('каталог: поиск, разделы, клавиатура; новые блоки — в редакторе и на сайте', async ({
   page,
@@ -54,6 +56,7 @@ test('каталог: поиск, разделы, клавиатура; новы
 
   // Тариф: название; второй выделенный — ошибка у флажка, сохранить нельзя
   await ed.inspector.getByLabel('Название', { exact: true }).first().fill(PLAN)
+  await ed.inspector.getByLabel('Пункт', { exact: true }).first().fill(LONG)
   const featured = ed.inspector.getByLabel('Выделить', { exact: true })
   await expect(featured.nth(1)).toBeChecked()
   await featured.first().check()
@@ -76,6 +79,7 @@ test('каталог: поиск, разделы, клавиатура; новы
 
   await ed.addBlock('Цифры')
   await ed.addBlock('Как мы работаем')
+  await ed.inspector.getByLabel('Шаг', { exact: true }).first().fill(LONG)
   await ed.addBlock('Текст с картинкой')
   await expect(ed.blocks).toHaveCount(6)
 
@@ -116,12 +120,15 @@ test('каталог: поиск, разделы, клавиатура; новы
   })
   expect(faq?.mainEntity).toHaveLength(3)
 
-  // Телефон: страница без горизонтальной прокрутки
+  // Длинное слово переносится, а не растягивает карточку тарифа и колонку шага: без
+  // горизонтальной прокрутки и на десктопе с тарифами в ряд, и на телефоне
+  const overflow = () =>
+    site.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+  await site.setViewportSize({ width: 1440, height: 900 })
+  await expect(site.getByText(LONG)).toHaveCount(2)
+  expect(await overflow()).toBe(0)
   await site.setViewportSize({ width: 375, height: 812 })
-  const overflow = await site.evaluate(
-    'document.documentElement.scrollWidth - document.documentElement.clientWidth',
-  )
-  expect(overflow).toBe(0)
+  expect(await overflow()).toBe(0)
   await context.close()
 })
 
