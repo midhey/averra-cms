@@ -21,7 +21,8 @@ MCP, блоки и `deploy`.
 | `site-settings.ts` | настройки SEO сайта (`SiteSettings`, `SiteSettingsPatch`, чтение из базы `readSiteSettings`), редиректы с проверкой петель (`Redirects`, `redirectTableIssues`, `findRedirect`, `redirectLocation`), счётчики и коды |
 | `site.ts`, `theme.ts` | название и новый сайт; тема (`Theme`, `ThemeInput` с контрастом, `readTheme` для темы из базы, проекция `legacyTheme`, пары `contrastPairs`) |
 | `contrast.ts`, `theme-presets.ts` | контраст WCAG (`contrastRatio`, `formatContrast` с округлением вниз); готовые темы экрана «Тема» (`themePresets`, `presetOf`) |
-| `media.ts` | картинка в блоке (`Image`), форматы и MIME-типы медиатеки |
+| `media.ts`, `media-svg.ts` | картинка в блоке (`Image`), логотип (`Logo`, можно SVG), форматы и MIME-типы медиатеки; где в странице можно SVG (`svgAllowedAt` по пометке `x-allow-svg`) |
+| `contact.ts` | телефон и почта для «SEO → Организация» и блока «Контакты», ссылки `tel:` (`telHref`) и на Яндекс Карты или 2ГИС (`mapUrl`), координаты |
 | `forms.ts` | поля формы и правила для браузера и сервера, лимиты |
 | `auth.ts` | имя, пароль, почта, роли, сброс пароля, приглашения |
 | `mail.ts`, `mail-settings.ts` | адреса, тема и отправитель письма, настройки SMTP |
