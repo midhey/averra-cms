@@ -1,6 +1,8 @@
 @use "@averra/ui" as ui;
 
-// Раскладка экрана по концепту: поля 40/32 на десктопе, разделы через 28 px
+// Раскладка экрана по концепту: поля 40/32 на десктопе, разделы через 28 px. Колонка по центру
+// области содержимого: на широком мониторе пустота делится поровну по краям, а не остаётся
+// полосой справа
 .screen {
   display: flex;
   flex-direction: column;
@@ -8,6 +10,7 @@
   width: 100%;
   max-width: ui.rem(1200);
   min-width: 0;
+  margin-inline: auto;
   padding: var(--space-page-block) var(--space-page-inline) var(--space-7);
 }
 

@@ -50,6 +50,12 @@
   &[aria-invalid="true"] {
     border-color: var(--color-danger-text);
   }
+
+  // Поле с ошибкой в фокусе: кольцо того же цвета, что и рамка, иначе красная рамка и синее
+  // кольцо выглядят двойной обводкой. Кольцо остаётся той же толщины, фокус виден
+  &[aria-invalid="true"]:focus-visible {
+    outline-color: var(--color-danger-text);
+  }
 }
 
 .mono {
