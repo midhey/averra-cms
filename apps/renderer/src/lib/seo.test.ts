@@ -267,7 +267,7 @@ describe('аналитика', () => {
 
 describe('JSON-LD организации', () => {
   it('нет названия — нет разметки', () => {
-    expect(organizationJsonLd(site(), media)).toBeUndefined()
+    expect(organizationJsonLd(site(), page('index'), media)).toBeUndefined()
   })
 
   it('только заполненное, логотип абсолютным адресом, реквизиты', () => {
@@ -284,6 +284,7 @@ describe('JSON-LD организации', () => {
           ogrn: '1026900000000',
         },
       }),
+      page('index'),
       media,
     )
     const json = JSON.parse(
@@ -292,6 +293,7 @@ describe('JSON-LD организации', () => {
     expect(json).toEqual({
       '@context': 'https://schema.org',
       '@type': 'LocalBusiness',
+      '@id': 'https://remont.example/#organization',
       name: 'ООО «Ремонт»',
       url: 'https://remont.example',
       logo: `https://remont.example/media/${logoId}/480.webp`,
@@ -314,15 +316,78 @@ describe('JSON-LD организации', () => {
     }
     const tag = organizationJsonLd(
       site({ organization: { name: 'ООО «Ремонт»', logo: svgId } }),
+      page('index'),
       svgMedia,
     )
     expect(tag).toContain(`"logo":"https://remont.example/media/${svgId}/image.svg"`)
   })
 
   it('название с </script> не закрывает тег раньше времени', () => {
-    const tag = organizationJsonLd(site({ organization: { name: 'Ремонт</script><b>' } }), media)
+    const tag = organizationJsonLd(
+      site({ organization: { name: 'Ремонт</script><b>' } }),
+      page('index'),
+      media,
+    )
     expect(tag?.match(/<\/script>/g)).toHaveLength(1)
     expect(tag).toContain('\\u003c/script\\u003e')
+  })
+
+  describe('с блоком «Контакты»', () => {
+    const contacts = (props: Record<string, unknown>) =>
+      PageContent.parse({ blocks: [{ id: 'kontakty', type: 'contacts', props }] })
+    const parse = (tag: string | undefined) =>
+      JSON.parse(
+        tag?.replace('<script type="application/ld+json">', '').replace('</script>', '') ?? '',
+      )
+    const blockProps = {
+      phone: '+7 342 000-00-00',
+      email: 'info@remont.example',
+      address: 'Пермь, Ленина, 50',
+      coordinates: '58.0105, 56.2502',
+      markup: true,
+    }
+
+    it('на странице контактов — та же организация, дополненная данными блока', () => {
+      const s = site({ organization: { type: 'LocalBusiness', name: 'Ремонт' } })
+      const json = parse(
+        organizationJsonLd(s, page('kontakty', { content: contacts(blockProps) }), media),
+      )
+      expect(json).toEqual({
+        '@context': 'https://schema.org',
+        '@type': 'LocalBusiness',
+        '@id': 'https://remont.example/#organization',
+        name: 'Ремонт',
+        url: 'https://remont.example',
+        telephone: '+7 342 000-00-00',
+        email: 'info@remont.example',
+        address: { '@type': 'PostalAddress', streetAddress: 'Пермь, Ленина, 50' },
+        hasMap: 'https://yandex.ru/maps/?pt=56.2502,58.0105&z=17&l=map',
+      })
+    })
+
+    it('данные «SEO → Организация» главнее; у организации нет hasMap', () => {
+      const s = site({
+        organization: { name: 'Ремонт', phone: '+7 900 111-11-11', address: { city: 'Пермь' } },
+      })
+      const json = parse(
+        organizationJsonLd(s, page('kontakty', { content: contacts(blockProps) }), media),
+      )
+      expect(json.telephone).toBe('+7 900 111-11-11')
+      expect(json.email).toBe('info@remont.example')
+      expect(json.address).toEqual({ '@type': 'PostalAddress', addressLocality: 'Пермь' })
+      expect(json.hasMap).toBeUndefined()
+    })
+
+    it('без флажка, без названия, вне индекса — разметки на странице нет', () => {
+      const s = site({ organization: { name: 'Ремонт' } })
+      const off = contacts({ ...blockProps, markup: false })
+      expect(organizationJsonLd(s, page('kontakty', { content: off }), media)).toBeUndefined()
+      const on = contacts(blockProps)
+      expect(organizationJsonLd(site(), page('kontakty', { content: on }), media)).toBeUndefined()
+      const hidden = site({ organization: { name: 'Ремонт' }, hideFromSearch: true })
+      expect(organizationJsonLd(hidden, page('kontakty', { content: on }), media)).toBeUndefined()
+      expect(organizationJsonLd(s, page('kontakty'), media)).toBeUndefined()
+    })
   })
 })
 

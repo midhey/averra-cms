@@ -18,6 +18,8 @@ export type JsonSchema = {
   maxItems?: number
   /** Свой виджет вместо обычных полей: пометку ставит схема в @averra/schema (например, Image) */
   'x-widget'?: string
+  /** Картинке можно быть SVG (логотип в «Клиентах»): пометку ставит схема Logo */
+  'x-allow-svg'?: boolean
   /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
   'x-enum-titles'?: Readonly<Record<string, string>>
   /**

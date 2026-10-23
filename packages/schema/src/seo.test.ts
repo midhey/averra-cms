@@ -266,6 +266,21 @@ describe('проверки: картинки', () => {
     expect(isWeakAlt('Фото кухни после ремонта')).toBe(false)
     expect(withAlt('Кухня после ремонта')?.level).toBe('good')
   })
+
+  it('логотип «Клиентов» без своего alt — не беда: его alt — название клиента', () => {
+    const clients = {
+      id: 'clients',
+      type: 'clients',
+      props: { items: [{ name: 'ООО «Стройка»', logo: { mediaId } }, { name: 'Бюро' }] },
+    }
+    expect(check('alt', page({ blocks: [clients] }))).toBeUndefined()
+    const photo = {
+      id: 'team',
+      type: 'team',
+      props: { members: [{ name: 'Иван', photo: { mediaId } }] },
+    }
+    expect(check('alt', page({ blocks: [photo] }))?.level).toBe('problem')
+  })
 })
 
 describe('проверки: адрес, индексация, canonical, картинка для соцсетей', () => {

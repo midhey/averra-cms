@@ -134,7 +134,10 @@ test('владелец заполняет SEO, сайт пересобирает
   expect(index).toContain('<meta name="yandex-verification" content="0a1b2c3d4e5f6a7b">')
   expect(index).toMatch(/<meta property="og:image" content="[^"]+\/media\/[0-9a-f-]+\/1200\.png">/)
   expect(index).toContain('<link rel="icon" href="/favicon.ico"')
-  expect(index).toContain('"@type":"Organization","name":"ООО «Ремонт у Ивана»"')
+  // @id один на сайт: на главной и на странице контактов поисковик видит одну организацию
+  expect(index).toMatch(
+    /"@type":"Organization","@id":"[^"]+\/#organization","name":"ООО «Ремонт у Ивана»"/,
+  )
   // Режим согласия по умолчанию: счётчика в HTML нет, его вставит уведомление после согласия
   // (cookies.spec.ts), запасного пикселя без JS тоже нет
   expect(index).not.toContain('mc.yandex.ru')

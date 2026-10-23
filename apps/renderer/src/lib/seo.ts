@@ -7,6 +7,7 @@ import {
   type MediaFile,
   type MediaMap,
   MetrikaId,
+  mapUrl,
   NOT_FOUND_PAGE_SLUG,
   ogCardOf,
   ogCardVersion,
@@ -271,32 +272,63 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * Разметка организации (schema.org) на главной: <script type="application/ld+json"> — данные,
- * а не JS. Нет названия — разметки нет
+ * Блок «Контакты» страницы, который просит разметку для поисковиков: первый такой на странице в
+ * индексе. Страница вне индекса разметку от блока не получает — поисковику её некуда показать
  */
-export function organizationJsonLd(site: SeoSite, media: MediaMap) {
+function contactsForMarkup(site: SeoSite, page: SeoPage) {
+  if (!isIndexable(site, page)) return undefined
+  for (const block of page.content.blocks) {
+    if (block.type === 'contacts' && block.props.markup) return block.props
+  }
+  return undefined
+}
+
+/**
+ * Разметка организации (schema.org): <script type="application/ld+json"> — данные, а не JS. На
+ * главной — всегда, на других страницах — если на них «Контакты» с разметкой. Организация одна:
+ * тип, название, логотип и реквизиты — из «SEO → Организация», а телефон, почту и адрес блок
+ * «Контакты» добавляет, только если их там нет — на главной и на странице контактов поисковик не
+ * увидит двух разных телефонов. @id один на сайт: разметки разных страниц — одна организация.
+ * Нет названия — разметки нет
+ */
+export function organizationJsonLd(site: SeoSite, page: SeoPage, media: MediaMap) {
   const org = site.settings.organization
   if (!org.name) return undefined
+  const contacts = contactsForMarkup(site, page)
+  if (page.slug !== MAIN_PAGE_SLUG && !contacts) return undefined
   const logoFile = org.logo ? media[org.logo] : undefined
   // SVG-логотип — как есть: формат логотипа Google берёт любой из тех, что понимает Google Картинки
   const logoVariant =
     logoFile &&
     (logoFile.variants.find((variant) => variant.format === 'svg') ?? socialImage(logoFile))
+  const ownAddress = Object.values(org.address).some((line) => line !== '')
+  const map =
+    contacts &&
+    mapUrl({
+      service: contacts.mapService,
+      coordinates: contacts.coordinates,
+      address: contacts.address,
+    })
   const data = compact({
     '@context': 'https://schema.org',
     '@type': org.type,
+    '@id': absolute(site, '/#organization') ?? '',
     name: org.name,
     url: site.url ?? '',
     logo: (logoVariant && absolute(site, logoVariant.url)) ?? '',
-    telephone: org.phone,
-    email: org.email,
-    address: compact({
-      '@type': 'PostalAddress',
-      streetAddress: org.address.street,
-      addressLocality: org.address.city,
-      addressRegion: org.address.region,
-      postalCode: org.address.postalCode,
-    }),
+    telephone: org.phone || (contacts?.phone ?? ''),
+    email: org.email || (contacts?.email ?? ''),
+    address: ownAddress
+      ? compact({
+          '@type': 'PostalAddress',
+          streetAddress: org.address.street,
+          addressLocality: org.address.city,
+          addressRegion: org.address.region,
+          postalCode: org.address.postalCode,
+        })
+      : compact({ '@type': 'PostalAddress', streetAddress: contacts?.address ?? '' }),
+    // hasMap — свойство места (Place): у «Местного бизнеса» оно есть, у организации — нет
+    hasMap: org.type === 'LocalBusiness' ? (map ?? '') : '',
     sameAs: org.socials,
     taxID: org.inn,
     identifier: org.ogrn ? { '@type': 'PropertyValue', propertyID: 'ОГРН', value: org.ogrn } : '',

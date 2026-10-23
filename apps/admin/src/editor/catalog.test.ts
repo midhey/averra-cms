@@ -13,9 +13,14 @@ describe('каталог блоков', () => {
       'stats',
       'steps',
       'pricing',
+      'gallery',
+      'reviews',
+      'clients',
+      'team',
       'faq',
       'cta',
       'form',
+      'contacts',
       'video',
       'text',
     ])
@@ -24,7 +29,12 @@ describe('каталог блоков', () => {
       'stats',
       'steps',
       'pricing',
+      'gallery',
+      'reviews',
+      'clients',
+      'team',
       'faq',
+      'contacts',
     ])
   })
 
@@ -44,7 +54,14 @@ describe('каталог блоков', () => {
 describe('filterCatalog', () => {
   it('раздел оставляет только свои блоки', () => {
     expect(types(filterCatalog(catalog, 'sales', ''))).toEqual(['steps', 'pricing', 'cta'])
-    expect(types(filterCatalog(catalog, 'contact', ''))).toEqual(['form'])
+    expect(types(filterCatalog(catalog, 'contact', ''))).toEqual(['form', 'contacts'])
+    expect(types(filterCatalog(catalog, 'trust', ''))).toEqual([
+      'stats',
+      'gallery',
+      'reviews',
+      'clients',
+      'faq',
+    ])
     expect(filterCatalog(catalog, 'all', '')).toHaveLength(catalog.length)
   })
 
@@ -64,5 +81,7 @@ describe('filterCatalog', () => {
     expect(types(filterCatalog(catalog, 'trust', 'картинк'))).toEqual([])
     expect(types(filterCatalog(catalog, 'about', 'картинк'))).toEqual(['text-image'])
     expect(filterCatalog(catalog, 'all', 'слайдер')).toEqual([])
+    expect(types(filterCatalog(catalog, 'all', 'логотип'))).toEqual(['clients'])
+    expect(types(filterCatalog(catalog, 'all', 'карту'))).toEqual(['contacts'])
   })
 })

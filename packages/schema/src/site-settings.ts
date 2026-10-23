@@ -1,6 +1,6 @@
 import { z } from 'zod'
+import { OptionalEmail, OptionalPhone } from './contact'
 import { CookieSettings } from './cookies'
-import { MAIL_ADDRESS_PATTERN } from './mail'
 import { MediaId } from './media'
 import { SEO_DESCRIPTION_MAX } from './page'
 import { SiteName } from './site'
@@ -105,25 +105,6 @@ export const Ga4Id = z
   .toUpperCase()
   .regex(/^(G-[A-Z0-9]{4,16})?$/, 'Идентификатор потока GA4 вида G-XXXXXXXXXX')
 
-const MAIL_ADDRESS_REGEXP = new RegExp(`^(?:${MAIL_ADDRESS_PATTERN})$`, 'v')
-
-const OptionalEmail = z
-  .string()
-  .trim()
-  .max(254)
-  .refine(
-    (value) => value === '' || MAIL_ADDRESS_REGEXP.test(value),
-    'Нужен адрес почты, например info@example.ru',
-  )
-
-const Phone = z
-  .string()
-  .trim()
-  .regex(
-    /^(\+?[\d\s()-]{5,30})?$/,
-    'Телефон: цифры, пробелы, скобки и дефис, например +7 900 123-45-67',
-  )
-
 const SocialUrl = z
   .string()
   .trim()
@@ -148,7 +129,7 @@ export const Organization = z
     type: OrganizationType.default('Organization'),
     name: z.string().trim().max(200).default(''),
     logo: MediaId.nullable().default(null),
-    phone: Phone.default(''),
+    phone: OptionalPhone.default(''),
     email: OptionalEmail.default(''),
     address: z
       .strictObject({

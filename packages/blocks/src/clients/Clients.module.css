@@ -1,0 +1,55 @@
+.title {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-2xl);
+  text-align: center;
+}
+
+/* Логотипы по центру, переносятся рядами: на телефоне по два-три в ряд */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8) var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 12rem;
+  min-height: 3rem;
+}
+
+.logo {
+  display: block;
+}
+
+/* Логотип — по высоте ряда, ширина своя: у вытянутых и квадратных логотипов один вес в ряду */
+.logo img {
+  width: auto;
+  max-width: 100%;
+  height: 3rem;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+/* Серые логотипы — фильтром: логотипы — не текст, требований контраста у них нет */
+.row[data-tone="mono"] .logo img {
+  opacity: 0.75;
+  filter: grayscale(1);
+}
+
+.name {
+  color: var(--color-muted);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-heading-weight, 700);
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

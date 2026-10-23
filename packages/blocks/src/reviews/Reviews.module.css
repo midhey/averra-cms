@@ -1,0 +1,86 @@
+.title {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-2xl);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .grid[data-columns="2"],
+  .grid[data-columns="3"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .grid[data-columns="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Одна колонка — цитаты крупнее и не шире строки для чтения */
+.grid[data-columns="1"] {
+  max-width: 48rem;
+}
+
+/* Рамка — роль темы «Линии и рамки», фон — цвет страницы: внутри работают пары «на фоне» */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+  margin: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 2);
+}
+
+.quote {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.grid[data-columns="1"] .quote {
+  font-size: var(--text-xl);
+}
+
+/* Подпись — внизу карточки: у отзывов разной длины авторы стоят в ряд */
+.author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+}
+
+.photo {
+  flex-shrink: 0;
+  width: 3rem;
+}
+
+.photo img {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.who {
+  display: grid;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.caption {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}

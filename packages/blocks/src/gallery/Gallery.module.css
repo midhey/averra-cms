@@ -1,0 +1,82 @@
+.header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.text {
+  max-width: 60ch;
+  color: var(--color-muted);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-6) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .grid[data-columns="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid[data-columns="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.figure {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.link {
+  display: block;
+  border-radius: calc(var(--radius) * 2);
+}
+
+.photo {
+  display: block;
+}
+
+/* Без фото — плашка поверхности; «Как есть» без фото пропорций не знает, берём 4 : 3 */
+.placeholder {
+  display: block;
+  aspect-ratio: 4 / 3;
+  background: var(--color-surface);
+}
+
+/* Кадр — aspect-ratio на самой картинке: он сильнее пропорций из width и height. Где его нет
+   (iOS до 15), фото остаются в своих пропорциях — сетка не ломается */
+.photo img,
+.placeholder {
+  border-radius: calc(var(--radius) * 2);
+  object-fit: cover;
+}
+
+.grid[data-aspect="landscape"] .photo img,
+.grid[data-aspect="landscape"] .placeholder {
+  aspect-ratio: 4 / 3;
+}
+
+.grid[data-aspect="square"] .photo img,
+.grid[data-aspect="square"] .placeholder {
+  aspect-ratio: 1;
+}
+
+.caption {
+  color: var(--color-muted);
+}

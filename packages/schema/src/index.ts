@@ -19,20 +19,37 @@ export {
   BlockInstance,
   type BlockType,
   blocks,
+  clients,
+  contacts,
   cta,
   faq,
   features,
   form,
+  gallery,
   hero,
   pricing,
+  reviews,
   stats,
   steps,
+  team,
   text,
   textImage,
   video,
 } from './blocks'
 export { TEXT_BODY_MAX } from './blocks/text'
 export { Button, Href } from './common'
+export {
+  Coordinates,
+  EmailAddress,
+  MapService,
+  mapServiceTitles,
+  mapUrl,
+  OptionalEmail,
+  OptionalPhone,
+  PhoneNumber,
+  parseCoordinates,
+  telHref,
+} from './contact'
 export { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
 export {
   type AnalyticsIds,
@@ -124,6 +141,7 @@ export {
   imageMimeTypes,
   isSvgFile,
   isSvgMedia,
+  Logo,
   MAX_SVG_BYTES,
   MediaFile,
   MediaFormat,
@@ -139,6 +157,7 @@ export {
   svgSocialMessage,
   svgTooLargeMessage,
 } from './media'
+export { svgAllowedAt } from './media-svg'
 export {
   DeleteTelegramChannel,
   LeadEmailRecipients,

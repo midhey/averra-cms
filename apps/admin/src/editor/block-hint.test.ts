@@ -27,6 +27,21 @@ describe('blockHint', () => {
     expect(blockHint(block({ plans: [{}, {}, {}] }, 'pricing'))).toBe('3 тарифа')
   })
 
+  it('у работ, отзывов, клиентов и команды — свои слова', () => {
+    expect(blockHint(block({ items: [{}, {}, {}] }, 'gallery'))).toBe('3 фото')
+    expect(blockHint(block({ items: [{}, {}] }, 'reviews'))).toBe('2 отзыва')
+    expect(blockHint(block({ items: Array(5).fill({}) }, 'clients'))).toBe('5 клиентов')
+    expect(blockHint(block({ members: [{}, {}] }, 'team'))).toBe('2 человека')
+  })
+
+  it('у контактов без заголовка — телефон, иначе адрес', () => {
+    expect(blockHint(block({ phone: '+7 900 000-00-00', address: 'Пермь' }, 'contacts'))).toBe(
+      '+7 900 000-00-00',
+    )
+    expect(blockHint(block({ address: 'Пермь' }, 'contacts'))).toBe('Пермь')
+    expect(blockHint(block({}, 'contacts'))).toBe('#contacts-1')
+  })
+
   it('пусто — якорь, чтобы одинаковые блоки различались', () => {
     expect(blockHint(block({ items: [] }))).toBe('#features-1')
   })

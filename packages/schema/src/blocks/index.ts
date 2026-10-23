@@ -1,12 +1,17 @@
 import { z } from 'zod'
+import { clients } from './clients'
+import { contacts } from './contacts'
 import { cta } from './cta'
 import { faq } from './faq'
 import { features } from './features'
 import { form } from './form'
+import { gallery } from './gallery'
 import { hero } from './hero'
 import { pricing } from './pricing'
+import { reviews } from './reviews'
 import { stats } from './stats'
 import { steps } from './steps'
+import { team } from './team'
 import { text } from './text'
 import { textImage } from './text-image'
 import { video } from './video'
@@ -21,9 +26,14 @@ export const blocks = [
   stats,
   steps,
   pricing,
+  gallery,
+  reviews,
+  clients,
+  team,
   faq,
   cta,
   form,
+  contacts,
   video,
   text,
 ] as const
@@ -35,9 +45,14 @@ export const BlockInstance = z.discriminatedUnion('type', [
   stats.instance,
   steps.instance,
   pricing.instance,
+  gallery.instance,
+  reviews.instance,
+  clients.instance,
+  team.instance,
   faq.instance,
   cta.instance,
   form.instance,
+  contacts.instance,
   video.instance,
   text.instance,
 ])
@@ -45,4 +60,21 @@ export const BlockInstance = z.discriminatedUnion('type', [
 export type BlockType = (typeof blocks)[number]['type']
 export type BlockInstance = z.infer<typeof BlockInstance>
 
-export { cta, faq, features, form, hero, pricing, stats, steps, text, textImage, video }
+export {
+  clients,
+  contacts,
+  cta,
+  faq,
+  features,
+  form,
+  gallery,
+  hero,
+  pricing,
+  reviews,
+  stats,
+  steps,
+  team,
+  text,
+  textImage,
+  video,
+}

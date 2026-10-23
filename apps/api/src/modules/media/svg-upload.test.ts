@@ -265,4 +265,32 @@ describe('где SVG можно', () => {
       { path: 'content.seo.image.mediaId', message: svgInContentMessage },
     ])
   })
+
+  it('логотип в «Клиентах» — да, фото «Наших работ» — нет', async () => {
+    const svg = await uploaded(await upload(LOGO))
+    const put = (content: PageContentInput) =>
+      app.request(`/api/sites/${demoSiteId}/pages/svg-klienty`, {
+        method: 'PUT',
+        headers: json,
+        body: JSON.stringify({ title: 'Клиенты', content }),
+      })
+    const clients: PageContentInput['blocks'][number] = {
+      id: 'clients',
+      type: 'clients',
+      props: { items: [{ name: 'ООО «Стройка»', logo: { mediaId: svg.id } }, { name: 'Бюро' }] },
+    }
+    const saved = await put({ blocks: [clients] })
+    expect(saved.status, await saved.clone().text()).toBe(200)
+
+    const gallery: PageContentInput['blocks'][number] = {
+      id: 'works',
+      type: 'gallery',
+      props: { items: [{ image: { mediaId: svg.id, alt: 'Логотип' } }] },
+    }
+    const refused = await put({ blocks: [clients, gallery] })
+    expect(refused.status).toBe(409)
+    expect((await errorOf(refused)).issues).toEqual([
+      { path: 'content.blocks.1.props.items.0.image.mediaId', message: svgInContentMessage },
+    ])
+  })
 })

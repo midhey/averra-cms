@@ -20,7 +20,8 @@ const asImage = (value: unknown): ImageValue | undefined =>
 
 /**
  * Поле «картинка»: карточка выбранной картинки (превью, имя, размеры и форматы) с «Заменить»
- * и описание (alt) — оно обязательно. Значение — { mediaId, alt }, как в схеме Image.
+ * и описание (alt) — оно обязательно. Значение — { mediaId, alt }, как в схеме Image. У логотипа
+ * (Logo) alt нет — его описание название рядом — и можно SVG (пометка x-allow-svg).
  * Медиатека открывается окном (Dialog): фокус остаётся в нём, Esc закрывает, а загрузить
  * новую картинку можно прямо оттуда
  */
@@ -38,10 +39,11 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
   const at = (...rest: Path) => errors[pathKey([...path, ...rest])]
   const error = at() ?? at('mediaId')
   const altSchema = schema.properties?.alt
+  const allowSvg = schema['x-allow-svg'] === true
 
   function pick(media: MediaItem) {
     // Alt остаётся прежним: заменили фото на похожее — описание обычно то же
-    onChange(path, { mediaId: media.id, alt })
+    onChange(path, altSchema ? { mediaId: media.id, alt } : { mediaId: media.id })
     setPicking(false)
   }
 
@@ -96,15 +98,17 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
 
       {image && (
         <>
-          <TextInput
-            label={altSchema?.title ?? 'Описание картинки (alt)'}
-            hint="Что на картинке — коротко, как сказали бы вслух"
-            error={at('alt')}
-            value={alt}
-            maxChars={altSchema?.maxLength}
-            // Пустой alt храним пустой строкой: схема ответит «опишите картинку», а не «нет поля»
-            onChange={(event) => onChange([...path, 'alt'], event.target.value)}
-          />
+          {altSchema && (
+            <TextInput
+              label={altSchema.title ?? 'Описание картинки (alt)'}
+              hint="Что на картинке — коротко, как сказали бы вслух"
+              error={at('alt')}
+              value={alt}
+              maxChars={altSchema.maxLength}
+              // Пустой alt храним пустой строкой: схема ответит «опишите картинку», а не «нет поля»
+              onChange={(event) => onChange([...path, 'alt'], event.target.value)}
+            />
+          )}
           <Button
             variant="ghost"
             size="small"
@@ -129,8 +133,8 @@ export function ImageField({ siteId, ...props }: FieldProps & { siteId: string }
             canDelete={false}
             onPick={pick}
             selectedId={mediaId}
-            // Картинки блоков — растр с вариантами: SVG сюда не пустит API
-            allowSvg={false}
+            // Фото блоков — растр с вариантами: SVG сюда не пустит API. Логотипу SVG можно
+            allowSvg={allowSvg}
           />
         )}
       </Dialog>

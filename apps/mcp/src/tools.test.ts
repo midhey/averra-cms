@@ -33,14 +33,20 @@ describe('каталог блоков', () => {
       'stats',
       'steps',
       'pricing',
+      'gallery',
+      'reviews',
+      'clients',
+      'team',
       'faq',
       'cta',
       'form',
+      'contacts',
       'video',
       'text',
     ])
     // Раздел каталога — подписью для людей: по нему нейронка выбирает место блока на странице
     expect(catalog.blocks.find((block) => block.type === 'faq')?.category).toBe('Доверие')
+    expect(catalog.blocks.find((block) => block.type === 'contacts')?.category).toBe('Связь')
     expect(catalog.blocks[0]?.props).toMatchObject({
       properties: { title: { title: 'Заголовок' } },
     })

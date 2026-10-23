@@ -22,6 +22,16 @@ export const Image = z
   .meta({ 'x-widget': 'image' })
 export type Image = z.infer<typeof Image>
 
+/**
+ * Логотип в блоке («Клиенты»): картинка из медиатеки, можно и SVG (x-allow-svg — по этой пометке
+ * API пропускает SVG, а админка показывает его в выборе). Описания нет: alt логотипа — название
+ * рядом с ним в том же пункте
+ */
+export const Logo = z
+  .strictObject({ mediaId: MediaId.meta({ title: 'Картинка' }) })
+  .meta({ 'x-widget': 'image', 'x-allow-svg': true })
+export type Logo = z.infer<typeof Logo>
+
 /** Форматы, которые принимает медиатека и в которые режутся варианты */
 export const ImageFormat = z.enum(['jpeg', 'png', 'webp', 'avif'])
 export type ImageFormat = z.infer<typeof ImageFormat>
@@ -74,7 +84,7 @@ export const isSvgMedia = (media: { variants: readonly { format: MediaFormat }[]
 
 /** Почему SVG нельзя в блок или SEO-картинку страницы: одна фраза для API и MCP */
 export const svgInContentMessage =
-  'SVG — только для логотипа и иконки сайта. Сюда выберите JPEG, PNG, WebP или AVIF'
+  'SVG — только для логотипов и иконки сайта. Сюда выберите JPEG, PNG, WebP или AVIF'
 
 /** Почему этот SVG не годится иконкой: сервер не смог превратить его в favicon и PNG */
 export const svgIconMessage =

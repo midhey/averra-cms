@@ -49,7 +49,7 @@ const seoSite = { name: site.name, url: site.url, theme: site.theme, settings: s
 const head = headTags({ site: seoSite, page, media })
 const scripts = [
   ...analyticsHead(site.settings),
-  ...(page.slug === MAIN_PAGE_SLUG ? [organizationJsonLd(seoSite, media) ?? ''] : []),
+  organizationJsonLd(seoSite, page, media) ?? '',
   faqJsonLd(seoSite, page) ?? '',
 ]
 // Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы

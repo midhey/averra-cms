@@ -321,6 +321,8 @@ function blockImages(blocks: readonly SeoBlock[]) {
     if (typeof value !== 'object' || value === null) return
     const record = value as Record<string, unknown>
     if (typeof record.mediaId === 'string') {
+      // Логотип (Logo) без своего alt: его описание — название клиента рядом, оно обязательно
+      if (block.type === 'clients' && !('alt' in record)) return
       found.push({ block, alt: typeof record.alt === 'string' ? record.alt.trim() : '' })
       return
     }

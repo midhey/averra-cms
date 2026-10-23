@@ -379,12 +379,16 @@ function ListItem(props: ListItemProps) {
   )
 }
 
-/** Имя пункта для диктора: заголовок, подпись, вопрос или название тарифа, иначе номер */
+/**
+ * Имя пункта для диктора: заголовок, подпись, вопрос, название тарифа или имя, подпись фото,
+ * иначе номер
+ */
 function itemLabel(item: unknown, index: number) {
   if (typeof item === 'string') return item.trim() === '' ? `№ ${index + 1}` : item
   const fields = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {}
-  // Тариф называется name, вопрос — question; у поля формы name — ключ, поэтому подпись раньше
-  const name = [fields.title, fields.label, fields.question, fields.name].find(
+  // Тариф и человек называются name, вопрос — question, фото галереи — caption; у поля формы name —
+  // ключ, поэтому подпись раньше
+  const name = [fields.title, fields.label, fields.question, fields.name, fields.caption].find(
     (candidate) => typeof candidate === 'string' && candidate.trim() !== '',
   )
   return typeof name === 'string' ? name : `№ ${index + 1}`

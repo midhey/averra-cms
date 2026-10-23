@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { BLOCK_CATEGORIES, ENUM_SKETCHES } from '../define-block'
 import { splitParagraphs } from '../text-body'
-import { blocks, faq, pricing, stats, steps, textImage } from './index'
+import {
+  blocks,
+  clients,
+  contacts,
+  faq,
+  gallery,
+  pricing,
+  reviews,
+  stats,
+  steps,
+  team,
+  textImage,
+} from './index'
 
 const mediaId = '3f1c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'
 const ok = (schema: z.ZodType, value: unknown) => schema.safeParse(value).success
@@ -38,7 +50,19 @@ describe('разделы каталога', () => {
       JSON.stringify(value)
         .replaceAll(/\[[^\]]*\]/g, '')
         .match(/\d/g) ?? []
-    for (const block of [textImage, stats, steps, pricing, faq]) {
+    const landing = [
+      textImage,
+      stats,
+      steps,
+      pricing,
+      gallery,
+      reviews,
+      clients,
+      team,
+      faq,
+      contacts,
+    ]
+    for (const block of landing) {
       expect(numbers(block.example), block.type).toEqual([])
     }
   })
@@ -140,5 +164,121 @@ describe('«Вопросы и ответы»', () => {
 
   it('ответ делится на абзацы по пустой строке', () => {
     expect(splitParagraphs('Первый\nабзац\n\n  \nВторой ')).toEqual(['Первый абзац', 'Второй'])
+  })
+})
+
+describe('«Наши работы»', () => {
+  const image = { mediaId, alt: 'Кухня после ремонта' }
+
+  it('фото и подпись необязательны по отдельности; по умолчанию 3 колонки, 4 : 3, ссылка', () => {
+    expect(gallery.props.parse({ items: [{ image }] })).toMatchObject({
+      columns: 3,
+      aspect: 'landscape',
+      linkToFull: true,
+    })
+    expect(ok(gallery.props, { items: [{ caption: 'Кухня' }], columns: 4, aspect: 'square' })).toBe(
+      true,
+    )
+  })
+
+  it('от 1 до 24 фото, alt обязателен, подпись до 120, только свои варианты', () => {
+    expect(ok(gallery.props, { items: [] })).toBe(false)
+    expect(ok(gallery.props, { items: Array(25).fill({ image }) })).toBe(false)
+    expect(ok(gallery.props, { items: [{ image: { mediaId, alt: ' ' } }] })).toBe(false)
+    expect(ok(gallery.props, { items: [{ caption: 'а'.repeat(121) }] })).toBe(false)
+    expect(ok(gallery.props, { items: [{ image }], columns: 5 })).toBe(false)
+    expect(ok(gallery.props, { items: [{ image }], aspect: 'wide' })).toBe(false)
+    expect(ok(gallery.props, { items: [{ image, href: '/x' }] })).toBe(false)
+  })
+})
+
+describe('«Отзывы»', () => {
+  const review = { quote: 'Сделали быстро.', name: 'Анна' }
+
+  it('текст и имя обязательны, подпись и фото — нет; по умолчанию две колонки', () => {
+    expect(reviews.props.parse({ items: [review] })).toMatchObject({ columns: 2 })
+    expect(
+      ok(reviews.props, {
+        items: [{ ...review, caption: 'Ремонт ванной', photo: { mediaId, alt: 'Анна' } }],
+        columns: 1,
+      }),
+    ).toBe(true)
+    expect(ok(reviews.props, { items: [{ name: 'Анна' }] })).toBe(false)
+    expect(ok(reviews.props, { items: [{ quote: 'Хорошо' }] })).toBe(false)
+  })
+
+  it('не пускает длинный отзыв, 13 отзывов, фото без alt и оценку', () => {
+    expect(ok(reviews.props, { items: [{ ...review, quote: 'а'.repeat(1001) }] })).toBe(false)
+    expect(ok(reviews.props, { items: Array(13).fill(review) })).toBe(false)
+    expect(ok(reviews.props, { items: [{ ...review, photo: { mediaId, alt: '' } }] })).toBe(false)
+    expect(ok(reviews.props, { items: [{ ...review, rating: 5 }] })).toBe(false)
+  })
+})
+
+describe('«Клиенты»', () => {
+  const client = { name: 'ООО «Стройка»' }
+
+  it('от 2 до 24 клиентов, логотип необязателен и без alt — его alt название', () => {
+    expect(clients.props.parse({ items: [client, client] })).toMatchObject({ tone: 'color' })
+    expect(ok(clients.props, { items: [{ ...client, logo: { mediaId } }, client] })).toBe(true)
+    expect(ok(clients.props, { items: [client] })).toBe(false)
+    expect(ok(clients.props, { items: Array(25).fill(client) })).toBe(false)
+  })
+
+  it('название обязательно, лишний alt у логотипа и чужой вариант — ошибка', () => {
+    expect(ok(clients.props, { items: [{ name: '' }, client] })).toBe(false)
+    const withAlt = { ...client, logo: { mediaId, alt: 'Лого' } }
+    expect(ok(clients.props, { items: [withAlt, client] })).toBe(false)
+    expect(ok(clients.props, { items: [client, client], tone: 'dark' })).toBe(false)
+  })
+})
+
+describe('«Команда»', () => {
+  const member = { name: 'Иван Петров' }
+
+  it('имя обязательно, должность и фото — нет; по умолчанию портрет в 3 колонки', () => {
+    expect(team.props.parse({ members: [member] })).toMatchObject({
+      columns: 3,
+      photoShape: 'portrait',
+    })
+    expect(
+      ok(team.props, {
+        members: [{ ...member, role: 'Прораб', photo: { mediaId, alt: 'Иван Петров' } }],
+        photoShape: 'round',
+      }),
+    ).toBe(true)
+  })
+
+  it('от 1 до 24 человек, имя и должность до 80', () => {
+    expect(ok(team.props, { members: [] })).toBe(false)
+    expect(ok(team.props, { members: Array(25).fill(member) })).toBe(false)
+    expect(ok(team.props, { members: [{ name: 'а'.repeat(81) }] })).toBe(false)
+    expect(ok(team.props, { members: [{ ...member, role: 'а'.repeat(81) }] })).toBe(false)
+    expect(ok(team.props, { members: [{ role: 'Прораб' }] })).toBe(false)
+  })
+})
+
+describe('«Контакты»', () => {
+  it('нужен хотя бы телефон, почта или адрес: иначе ошибка у телефона', () => {
+    expect(contacts.props.parse({ phone: '+7 900 123-45-67' })).toMatchObject({
+      tone: 'surface',
+      mapService: 'yandex',
+      markup: false,
+    })
+    expect(ok(contacts.props, { email: 'info@example.ru' })).toBe(true)
+    expect(ok(contacts.props, { address: 'Пермь, Ленина, 50' })).toBe(true)
+    expect(issuePath(contacts.props, { hours: 'Пн–Пт' })).toEqual(['phone'])
+  })
+
+  it('телефон с цифрами, почта по формату, координаты в своих пределах', () => {
+    expect(ok(contacts.props, { phone: '(((((' })).toBe(false)
+    expect(ok(contacts.props, { phone: '+7 900 abc' })).toBe(false)
+    expect(ok(contacts.props, { email: 'почта' })).toBe(false)
+    const address = 'Пермь'
+    expect(ok(contacts.props, { address, coordinates: '58.0105, 56.2502' })).toBe(true)
+    expect(ok(contacts.props, { address, coordinates: '95, 56' })).toBe(false)
+    expect(ok(contacts.props, { address, coordinates: 'Пермь' })).toBe(false)
+    expect(ok(contacts.props, { address, mapService: 'google' })).toBe(false)
+    expect(ok(contacts.props, { address: 'а'.repeat(201) })).toBe(false)
   })
 })

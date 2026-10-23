@@ -1,0 +1,93 @@
+.header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.text {
+  max-width: 60ch;
+  color: var(--color-muted);
+}
+
+/* На телефоне — по двое: лица узнаются и в половину экрана, а список не тянется на километр */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid[data-columns="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .grid[data-columns="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.member {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.placeholder {
+  width: 100%;
+  background: var(--color-surface);
+}
+
+.photo,
+.placeholder {
+  display: block;
+  margin-bottom: var(--space-3);
+}
+
+.photo img,
+.placeholder {
+  aspect-ratio: 3 / 4;
+  border-radius: calc(var(--radius) * 2);
+  object-fit: cover;
+}
+
+/* Круглое фото — не во всю ширину колонки: иначе круг в широкой колонке выглядит плакатом */
+.grid[data-shape="round"] .member {
+  align-items: center;
+  text-align: center;
+}
+
+.grid[data-shape="round"] .photo,
+.grid[data-shape="round"] .placeholder {
+  width: min(100%, 10rem);
+}
+
+.grid[data-shape="round"] .photo img,
+.grid[data-shape="round"] .placeholder {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+/* Длинную фамилию в узкой колонке — переносом по слогам, а не обрывом посреди слога */
+.name {
+  font-size: var(--text-lg);
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.role {
+  color: var(--color-muted);
+}
