@@ -46,8 +46,9 @@
 - База: схема меняется только миграциями (`pnpm db:generate`), миграции **только совместимые
   вперёд** (`apps/api/src/db/migrations-compat.test.ts`); в транзакции — только `tx`.
   Таблицы — `dev/data.md`.
-- Новый блок — схема в `packages/schema/src/blocks` и компонент с `case` в
-  `packages/blocks/src/Page.tsx` (`dev/blocks.md`). Блоки работают без JavaScript.
+- Новый блок — схема в `packages/schema/src/blocks`, компонент с `case` в
+  `packages/blocks/src/Page.tsx` и набросок для каталога в `apps/admin/src/editor/BlockSketch.tsx`
+  (`dev/blocks.md`). Блоки работают без JavaScript.
 - Зависимости: общие — через `catalog:`, версия не моложе суток, скрипты установки — только явной
   записью в `allowBuilds` после чтения скрипта. GitHub Actions — по SHA коммита с версией в
   комментарии.
