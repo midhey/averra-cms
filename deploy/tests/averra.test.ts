@@ -485,6 +485,17 @@ describe('бэкап', () => {
     expect(srv.backups()).toEqual([expect.stringMatching(/-manual$/)])
     expect(existsSync(join(srv.fake, `db-${kept}`))).toBe(false)
   })
+
+  it('только что сделанный бэкап занимает своё место из BACKUP_KEEP, даже если по имени он не последний', () => {
+    // Два бэкапа в одну секунду (ручной и по таймеру) сортируются по виду: «…-manual» раньше
+    // «…-scheduled». Имя «из будущего» воспроизводит это без гонки за секундой
+    const srv = server({ env: ['BACKUP_KEEP=1'] })
+    const later = '99991231-235959-scheduled'
+    mkdirSync(join(srv.dir, 'backups', later), { recursive: true })
+    const run = srv.run(['backup'])
+    expect(run.status, run.output).toBe(0)
+    expect(srv.backups()).toEqual([expect.stringMatching(/-manual$/)])
+  })
 })
 
 describe('внешнее хранилище', () => {

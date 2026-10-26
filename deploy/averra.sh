@@ -292,7 +292,7 @@ backup_keep() {
 # доведено (есть отметка .update-run), не удаляются и его бэкап, и отложенная им база: из них повтор
 # update откатывает (ночной бэкап после перезагрузки посреди обновления их не тронет)
 rotate_backups() {
-  local keep="$1" protect="$2" all total name cutoff db pending='' pending_db=''
+  local keep="$1" protect="$2" all total name cutoff db pending='' pending_db='' others="$1"
   cutoff="$(cutoff_stamp "$keep")" || return 1
   if [[ -f "$UPDATE_RUN" ]]; then
     pending="$(run_get BACKUP)"
@@ -300,11 +300,18 @@ rotate_backups() {
   fi
   all="$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null |
     grep -E "$BACKUP_NAME_RE" | sort || true)"
+  # Только что сделанный бэкап занимает одно место из keep и в список на удаление не идёт. Считать
+  # его по месту в сортировке нельзя: два бэкапа в одну секунду сортируются по виду (manual раньше
+  # scheduled), и самым свежим оказался бы не он
+  if [[ -n "$protect" ]] && grep -qxF -- "$protect" <<<"$all"; then
+    all="$(grep -vxF -- "$protect" <<<"$all" || true)"
+    others=$((keep - 1))
+  fi
   total="$(printf '%s\n' "$all" | grep -c . || true)"
   while read -r name; do
     [[ -n "$name" && "$name" != "$protect" && "$name" != "$pending" ]] || continue
     rm -rf "${BACKUP_DIR:?}/$name"
-  done < <(expired_names "$all" "$total" "$keep" "$cutoff")
+  done < <(expired_names "$all" "$total" "$others" "$cutoff")
   find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '.tmp-*' -exec rm -rf {} + 2>/dev/null || true
   # Базы averra нет — рабочие данные, возможно, лежат под служебным именем: откат обновления
   # оборвался между переименованиями и кончился rollback-failed, отметки .update-run уже нет.
