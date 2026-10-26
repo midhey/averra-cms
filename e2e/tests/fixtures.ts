@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import type { AppType } from '@averra/api'
 import {
+  defaultHeader,
   defaultTheme,
   demoPage,
   demoPageTitle,
+  type Header,
   MAIN_PAGE_SLUG,
+  sameHeader,
   sameTheme,
   type Theme,
 } from '@averra/schema'
@@ -76,6 +79,7 @@ async function resetDemoSite() {
   expect(settings.status, 'сброс настроек SEO демо-сайта').toBe(200)
   const site = { ...found, name: DEMO_SITE_NAME }
   await resetTheme(site.id)
+  await resetHeader(site.id)
   const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })
@@ -105,6 +109,23 @@ async function resetTheme(siteId: string) {
   if (sameTheme(view.published, defaultTheme) && !view.unpublished) return
   expect((await theme.$put({ param: { siteId }, json: defaultTheme })).status).toBe(200)
   expect((await theme.publish.$post({ param: { siteId } })).status).toBe(200)
+}
+
+/**
+ * Шапки на демо-сайте нет, черновик — по умолчанию (tests/header.spec.ts её публикует). Убрать
+ * с сайта — пересборка, поэтому только если шапка там есть
+ */
+async function resetHeader(siteId: string) {
+  const header = sites[':siteId'].header
+  const res = await header.$get({ param: { siteId } })
+  expect(res.status, 'шапка демо-сайта').toBe(200)
+  const view = (await res.json()) as { published: Header | null; draft: Header }
+  if (view.published !== null) {
+    expect((await header.$delete({ param: { siteId } })).status, 'убрать шапку').toBe(200)
+  }
+  if (!sameHeader(view.draft, defaultHeader)) {
+    expect((await header.$put({ param: { siteId }, json: defaultHeader })).status).toBe(200)
+  }
 }
 
 export const test = base.extend<{ demoSite: DemoSite }>({

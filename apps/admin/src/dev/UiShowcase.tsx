@@ -1,6 +1,10 @@
 import {
   contrastMessage,
   defaultTheme,
+  HeaderLayout,
+  type HeaderTargetPage,
+  headerLayoutTitles,
+  type MenuItem,
   type ThemeRadius,
   themeContrast,
   themePresets,
@@ -15,6 +19,7 @@ import {
   catalogSections,
   sectionTitle,
 } from '../editor/catalog'
+import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
 import { MediaCard } from '../media/MediaCard'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { RedirectRows } from '../seo/RedirectRows'
@@ -70,6 +75,7 @@ const sections = [
   { id: 'tabs', label: 'Вкладки', icon: 'leads' },
   { id: 'statuses', label: 'Состояния', icon: 'status' },
   { id: 'theme', label: 'Тема сайта', icon: 'palette' },
+  { id: 'header', label: 'Шапка и меню', icon: 'header' },
   { id: 'cards', label: 'Карточки и таблица', icon: 'media' },
   { id: 'alerts', label: 'Сообщения', icon: 'info' },
   { id: 'dialog', label: 'Окно', icon: 'mail' },
@@ -121,7 +127,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 export function UiShowcase() {
   usePageTitle('Витрина компонентов')
   const [device, setDevice] = useState<'phone' | 'tablet' | 'desktop'>('desktop')
-  const [variant, setVariant] = useState<'center' | 'left' | 'split'>('split')
+  const [variant, setVariant] = useState<'center' | 'left' | 'split' | 'cover'>('split')
   const [radius, setRadius] = useState<ThemeRadius>('medium')
   const [tab, setTab] = useState<'new' | 'done' | 'all'>('new')
   const [cookieMode, setCookieMode] = useState<'consent' | 'notice'>('consent')
@@ -392,6 +398,11 @@ export function UiShowcase() {
                   label: 'С картинкой',
                   thumbnail: <LayoutThumbnail sketch="split" />,
                 },
+                {
+                  value: 'cover',
+                  label: 'На фото',
+                  thumbnail: <LayoutThumbnail sketch="cover" />,
+                },
               ]}
               value={variant}
               onChange={setVariant}
@@ -549,6 +560,10 @@ export function UiShowcase() {
 
         <Section id="theme" title="Тема сайта">
           <ThemeShowcase />
+        </Section>
+
+        <Section id="header" title="Шапка и меню">
+          <HeaderShowcase />
         </Section>
 
         <Section id="cards" title="Карточки и таблица">
@@ -735,6 +750,8 @@ export function UiShowcase() {
               invalid
               action={<Button size="small">Заменить</Button>}
             />
+            {/* Только просмотр (клиент на экране шапки): без кнопки выбора */}
+            <MediaCard name="logo-remont.png" meta="512 × 512 · AVIF, WebP, PNG" square />
             {/* Логотип из SVG: формат в подписи, превью — сам файл */}
             <MediaCard
               thumbnail={SAMPLE_SVG_LOGO}
@@ -895,6 +912,71 @@ function ThemeShowcase() {
           </span>
         ))}
       </div>
+    </>
+  )
+}
+
+const showcasePages: HeaderTargetPage[] = [
+  {
+    slug: 'index',
+    title: 'Ремонт квартир',
+    published: true,
+    hideHeader: false,
+    overlay: false,
+    blocks: [
+      { id: 'pricing-1', type: 'pricing', label: 'Цены', draft: true, published: true },
+      { id: 'form-1', type: 'form', label: 'Заявка', draft: true, published: false },
+    ],
+  },
+  {
+    slug: 'raboty',
+    title: 'Работы',
+    published: false,
+    hideHeader: false,
+    overlay: false,
+    blocks: [],
+  },
+]
+
+/**
+ * Шапка: миниатюры четырёх раскладок и редактор меню — пункт с ошибкой, пункт с предупреждением
+ * (цель не опубликована) и обычный; перестановка ручкой и стрелками работает
+ */
+function HeaderShowcase() {
+  const [layout, setLayout] = useState<HeaderLayout>('classic')
+  const [menu, setMenu] = useState<readonly MenuItem[]>([
+    { label: 'Цены', page: 'index', block: 'pricing-1' },
+    { label: 'Работы', page: 'raboty' },
+    { label: '', page: 'index', block: 'form-1' },
+  ])
+  return (
+    <>
+      <SegmentedControl
+        legend="Раскладка шапки"
+        appearance="cards"
+        columns={2}
+        options={HeaderLayout.options.map((value) => ({
+          value,
+          label: headerLayoutTitles[value],
+          thumbnail: <HeaderLayoutSketch layout={value} />,
+        }))}
+        value={layout}
+        onChange={setLayout}
+      />
+      <MenuEditor
+        items={menu}
+        pages={showcasePages}
+        errors={menu[2]?.label === '' ? { 'menu.2.label': 'Обязательное поле' } : {}}
+        warnings={
+          new Map([
+            [
+              1,
+              'Пункт меню «Работы»: страница «Работы» не опубликована — опубликуйте её или выберите другую',
+            ],
+          ])
+        }
+        onChange={setMenu}
+      />
     </>
   )
 }

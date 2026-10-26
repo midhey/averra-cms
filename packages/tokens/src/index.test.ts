@@ -24,6 +24,8 @@ describe('тема по умолчанию', () => {
     expect(css).toContain(`--color-border:${defaultTheme.colors.border}`)
     expect(css).toContain('--radius:8px')
     expect(css).toContain('--font-heading-weight:700')
+    // Затемнение фото первого экрана — посчитано из текста и фона темы
+    expect(css).toContain('--cover-scrim:0.6')
   })
 
   // Строка уходит в <style> страницы как есть: недопустимый цвет — исключение, а не CSS

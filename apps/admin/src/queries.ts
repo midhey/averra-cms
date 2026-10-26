@@ -26,6 +26,7 @@ export const queryKeys = {
   leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
   siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
   theme: (siteId: string) => ['sites', siteId, 'theme'] as const,
+  header: (siteId: string) => ['sites', siteId, 'header'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   notifications: ['notifications'] as const,
@@ -77,6 +78,20 @@ export const themeQuery = (siteId: string) =>
     queryKey: queryKeys.theme(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].theme.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Шапка сайта и меню: черновик, что на сайте, цели меню (страницы с блоками) и телефон с адресом
+ * организации для предпросмотра
+ */
+export const headerQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.header(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].header.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

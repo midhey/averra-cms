@@ -13,6 +13,7 @@ import { legacySiteTarget } from './legacy-paths'
 import { canInvite, canManageChannels, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
+  headerQuery,
   invitationsQuery,
   leadQuery,
   leadSettingsQuery,
@@ -38,6 +39,7 @@ import {
 import { CookiesScreen } from './screens/CookiesScreen'
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
+import { HeaderScreen } from './screens/HeaderScreen'
 import { InstallationScreen } from './screens/InstallationScreen'
 import { InviteScreen } from './screens/InviteScreen'
 import { LeadError, LeadNotFound, LeadScreen, NoLeadSelected } from './screens/LeadScreen'
@@ -223,6 +225,25 @@ const themeRoute = createRoute({
     ])
   },
   component: ThemeScreen,
+})
+
+// Шапка и меню — владельцу и редактору, как тема. Главное — шапка с целями меню; черновик главной
+// и медиатека для предпросмотра и логотипа — второстепенное (allSettled): без них предпросмотр
+// покажет пример лендинга
+const headerRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/header',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await Promise.all([
+      queryClient.ensureQueryData(headerQuery(siteId)),
+      Promise.allSettled([
+        queryClient.ensureQueryData(pageQuery(siteId, MAIN_PAGE_SLUG)),
+        queryClient.ensureQueryData(mediaQuery(siteId)),
+      ]),
+    ])
+  },
+  component: HeaderScreen,
 })
 
 const mediaRoute = createRoute({
@@ -414,6 +435,7 @@ const routeTree = rootRoute.addChildren([
     overviewRoute,
     pagesRoute,
     themeRoute,
+    headerRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
     notificationsRoute,

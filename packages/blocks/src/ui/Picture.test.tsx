@@ -26,7 +26,7 @@ const lowerAttributes = (html: string) =>
 
 // Имена атрибутов HTML не зависят от регистра, а React пишет их как в JSX (srcSet): сравниваем
 // их в нижнем регистре
-const render = (media: MediaMap, priority = false) =>
+const render = (media: MediaMap, priority = false, eager = false) =>
   lowerAttributes(
     renderToStaticMarkup(
       <Picture
@@ -34,6 +34,7 @@ const render = (media: MediaMap, priority = false) =>
         media={media}
         sizes="100vw"
         priority={priority}
+        eager={eager}
       />,
     ),
   )
@@ -66,6 +67,12 @@ describe('Picture', () => {
     const eager = render({ [mediaId]: jpegFile }, true)
     expect(eager).toContain('loading="eager"')
     expect(eager).toContain('fetchpriority="high"')
+  })
+
+  it('логотип шапки — сразу, но не в первую очередь: первым грузится фото первого экрана', () => {
+    const logo = render({ [mediaId]: jpegFile }, false, true)
+    expect(logo).toContain('loading="eager"')
+    expect(logo).not.toContain('fetchpriority')
   })
 
   it('исходник WebP: запасной формат — WebP, отдельного источника WebP нет', () => {

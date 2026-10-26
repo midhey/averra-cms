@@ -254,6 +254,26 @@ describe('все данные сайта', () => {
     expect(readme).toContain('golos-text')
   })
 
+  it('шапка и меню: на сайте и черновик, README их описывает', async () => {
+    const { headers } = await api.loginAs('owner')
+    const before = JSON.parse(
+      decode((await unzip(await api.app.request(url('data'), { headers })))['site.json']),
+    )
+    expect(before.site.header).toBeNull()
+    const menu = [{ label: 'Связаться', page: 'index', block: 'contact' }]
+    const saved = await api.app.request(`/api/sites/${api.demoSiteId}/header`, {
+      method: 'PUT',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ menu }),
+    })
+    expect(saved.status).toBe(200)
+    const files = await unzip(await api.app.request(url('data'), { headers }))
+    const site = JSON.parse(decode(files['site.json'])).site
+    expect(site.header).toBeNull()
+    expect(site.headerDraft.menu).toEqual(menu)
+    expect(decode(files['README.txt'])).toContain('headerDraft')
+  })
+
   it('site.json потоком: заявки порциями с курсором — все, по одному разу; пустой сайт — валидный JSON', async () => {
     // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
     const siteId = await api.createSite('Выгрузка порциями')

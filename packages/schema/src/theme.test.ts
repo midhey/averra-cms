@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { contrastRatio, mixColors } from './contrast'
 import {
+  coverScrim,
   defaultTheme,
   derivedBorder,
   legacyTheme,
@@ -7,9 +9,11 @@ import {
   sameTheme,
   Theme,
   ThemeColor,
+  type ThemeColors,
   ThemeInput,
   themeContrast,
 } from './theme'
+import { themePresets } from './theme-presets'
 
 /** Тема в формате до редактора тем — так она лежит в базе у существующих сайтов */
 const legacy = {
@@ -189,5 +193,39 @@ describe('sameTheme', () => {
     const upper = { ...defaultTheme, colors: { ...defaultTheme.colors, accent: '#2F5BEA' } }
     expect(sameTheme(upper, defaultTheme)).toBe(true)
     expect(sameTheme({ ...defaultTheme, radius: 'none' }, defaultTheme)).toBe(false)
+  })
+})
+
+describe('coverScrim — затемнение «Первого экрана» на фото', () => {
+  /** Контраст текста поверх фото (цвет фона темы) над пикселем фото под слоем */
+  const worst = (colors: { text: string; background: string }, pixel: string) =>
+    contrastRatio(colors.background, mixColors(colors.text, pixel, coverScrim(colors)))
+
+  const themes: [string, ThemeColors][] = [
+    ['тема по умолчанию', defaultTheme.colors],
+    ...themePresets.map((preset): [string, ThemeColors] => [preset.title, preset.theme.colors]),
+  ]
+
+  it.each(themes)('%s: текст читается над любым пикселем фото', (_, colors) => {
+    const share = coverScrim(colors)
+    expect(share).toBeGreaterThan(0)
+    expect(share).toBeLessThanOrEqual(1)
+    for (const pixel of ['#ffffff', '#000000', '#808080', '#ff0000', colors.background]) {
+      expect(worst(colors, pixel), pixel).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('тёмная тема — слой светлый, текст поверх тёмный', () => {
+    const dark = { text: '#f2f2f2', background: '#121212' }
+    expect(worst(dark, '#000000')).toBeGreaterThanOrEqual(4.5)
+    expect(worst(dark, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('пара на пределе 4,5 — слой сплошной: фото не видно, но текст читается', () => {
+    expect(coverScrim({ text: '#767676', background: '#ffffff' })).toBe(1)
+  })
+
+  it('у темы по умолчанию фото видно: слой не сплошной', () => {
+    expect(coverScrim(defaultTheme.colors)).toBeLessThan(0.8)
   })
 })

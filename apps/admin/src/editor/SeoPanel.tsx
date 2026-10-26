@@ -40,6 +40,9 @@ type SeoPanelProps = {
   /** Медиатека сайта: превью картинки страницы и сайта */
   library: readonly MediaItem[] | undefined
   onChange: (seo: PageSeo) => void
+  /** Скрыть шапку сайта на этой странице — для промо-лендинга */
+  hideHeader: boolean
+  onHideHeaderChange: (hidden: boolean) => void
 }
 
 const engines = [
@@ -67,6 +70,8 @@ export function SeoPanel({
   checks,
   library,
   onChange,
+  hideHeader,
+  onHideHeaderChange,
 }: SeoPanelProps) {
   const ids = useId()
   const [engine, setEngine] = useState<SearchEngine>('yandex')
@@ -225,6 +230,18 @@ export function SeoPanel({
           />
         </section>
       )}
+
+      <section className={panel.group} aria-labelledby={`${ids}-header`}>
+        <h3 id={`${ids}-header`} className={panel.heading}>
+          Шапка сайта
+        </h3>
+        <Checkbox
+          checked={hideHeader}
+          onChange={(event) => onHideHeaderChange(event.target.checked)}
+          label="Скрыть шапку на этой странице"
+          hint="Для промо-страницы: на ней не будет шапки и меню сайта. Сама шапка — в разделе «Шапка и подвал»"
+        />
+      </section>
     </aside>
   )
 }

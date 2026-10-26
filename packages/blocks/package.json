@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./base.css": "./src/base.css",
     "./cookie-consent": "./src/cookie/consent-dom.ts",
+    "./site-header": "./src/header/header-dom.ts",
     "./video-player": "./src/video/player-dom.ts"
   },
   "devEngines": {

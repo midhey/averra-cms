@@ -49,5 +49,12 @@ export function defineBlock<const Type extends string, Props extends z.ZodObject
  * значение → какой рисунок показать на карточке варианта. Набор рисунков — у админки, поэтому
  * здесь только их имена
  */
-export const ENUM_SKETCHES = ['centered', 'left', 'split', 'image-left', 'image-right'] as const
+export const ENUM_SKETCHES = [
+  'centered',
+  'left',
+  'split',
+  'cover',
+  'image-left',
+  'image-right',
+] as const
 export type EnumSketch = (typeof ENUM_SKETCHES)[number]

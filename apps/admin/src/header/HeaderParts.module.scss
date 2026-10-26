@@ -1,0 +1,184 @@
+@use "@averra/ui" as ui;
+
+// Миниатюра раскладки: полосы логотипа, меню и кнопки, как в концепте
+
+.sketch {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(5);
+  justify-content: center;
+  width: 100%;
+  min-height: ui.rem(42);
+  padding: ui.rem(8) ui.rem(10);
+  background: var(--color-background);
+  border-radius: var(--radius-inner);
+
+  // Контрастная тема: рисунок — системными цветами, иначе фон сбросится и рамка опустеет
+  @media (forced-colors: active) {
+    background: Canvas;
+    border: ui.rem(1) solid GrayText;
+    forced-color-adjust: none;
+  }
+}
+
+.sketchTopbar {
+  height: ui.rem(4);
+  background: var(--color-border);
+  border-radius: ui.rem(2);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
+}
+
+.sketchRow {
+  display: flex;
+  gap: ui.rem(5);
+  align-items: center;
+
+  .sketch[data-layout="center"] & {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+.sketchBar {
+  height: ui.rem(6);
+  background: var(--color-border-strong);
+  border-radius: ui.rem(2);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+  }
+}
+
+.sketchLogo {
+  width: 22%;
+}
+
+.sketchMenu {
+  flex: 1;
+  height: ui.rem(4);
+  background: var(--color-border);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
+
+  // Меню по центру — строкой под логотипом
+  .sketch[data-layout="center"] & {
+    flex: 0 0 70%;
+    order: 1;
+  }
+}
+
+.sketchButton {
+  width: 16%;
+  margin-inline-start: auto;
+  background: var(--color-action);
+
+  @media (forced-colors: active) {
+    background: Highlight;
+  }
+
+  .sketch[data-layout="center"] & {
+    margin-inline-start: 0;
+  }
+}
+
+// Редактор меню
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.menuHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.menuHeading {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.count {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+// Пункт: ручка, поля подписи и цели, стрелки и удаление
+.item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-control);
+
+  // Ошибка в пункте — не только цветом рамки: у поля текст ошибки
+  &[data-invalid] {
+    border-color: var(--color-danger-indicator);
+  }
+
+  &[data-dragging="true"] {
+    position: relative;
+    z-index: 1;
+    box-shadow: var(--shadow-overlay);
+  }
+
+  @include ui.breakpoint-down(small) {
+    grid-template-columns: auto minmax(0, 1fr);
+
+    .actions {
+      flex-direction: row;
+      grid-column: 2;
+      justify-content: flex-end;
+    }
+  }
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(ui.rem(160), 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+}
+
+.menu .add {
+  justify-content: center;
+  width: 100%;
+  color: var(--color-text);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+}

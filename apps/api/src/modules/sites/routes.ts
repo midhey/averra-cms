@@ -1,5 +1,6 @@
 import {
   ExistingPageSlug,
+  headerPageUses,
   MAIN_PAGE_SLUG,
   NewPage,
   PageContent,
@@ -18,6 +19,7 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { headerRepo } from '../header/repo'
 import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
@@ -197,6 +199,26 @@ export function sitesRoutes({
           const { siteId, slug } = c.req.valid('param')
           if (slug === MAIN_PAGE_SLUG) {
             return c.json(conflict('Главную страницу удалить нельзя'), 409)
+          }
+          // Страница в шапке (на сайте или в черновике) — как логотип в медиатеке: иначе пункт
+          // меню молча пропал бы с сайта при следующей сборке
+          const header = await headerRepo(db).read(siteId)
+          const uses = [
+            ...new Set(
+              [header?.published, header?.draft].flatMap((item) =>
+                item ? headerPageUses(item, slug) : [],
+              ),
+            ),
+          ]
+          if (uses.length > 0) {
+            const message = `Страница в шапке сайта: ${uses.join(', ')}. Уберите её оттуда в разделе «Шапка и подвал» и опубликуйте шапку, тогда страницу можно будет удалить`
+            return c.json(
+              conflict(
+                message,
+                uses.map((use) => ({ path: 'header', message: use })),
+              ),
+              409,
+            )
           }
           const deleted = await repo.deletePage(siteId, slug)
           if (!deleted) return c.json(notFound('Страница не найдена'), 404)

@@ -1,11 +1,10 @@
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import { extname, join, normalize } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { publishDir } from '../urls'
 import { expect, sites, test } from './fixtures'
+import { serveRelease } from './release-server'
 
 // Cookie-уведомление на собранном сайте: владелец включает Метрику, сайт собирается на «сервере»
 // (PUBLISH_DIR), и посетитель открывает версию из папки релиза — как её отдал бы Caddy. Запросы к
@@ -13,45 +12,6 @@ import { expect, sites, test } from './fixtures'
 
 const METRIKA = '98765432'
 const METRIKA_SCRIPT = 'script[src="https://mc.yandex.ru/metrika/tag.js"]'
-
-const types: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.xml': 'application/xml',
-}
-
-/** Статический сервер папки релиза: /адрес → адрес/index.html, нет файла — 404.html */
-async function serveRelease(root: string) {
-  const fileFor = async (path: string) => {
-    const clean = normalize(decodeURIComponent(path)).replace(/^([/\\])+/, '')
-    for (const candidate of [clean, join(clean, 'index.html')]) {
-      const file = join(root, candidate)
-      if (!file.startsWith(root)) return undefined
-      if (existsSync(file) && (await stat(file)).isFile()) return file
-    }
-    return undefined
-  }
-  const server: Server = createServer((req, res) => {
-    void (async () => {
-      const path = new URL(req.url ?? '/', 'http://localhost').pathname
-      const file = await fileFor(path)
-      const status = file ? 200 : 404
-      const body = await readFile(file ?? join(root, '404.html'))
-      res.writeHead(status, {
-        'content-type': types[extname(file ?? '.html')] ?? 'application/octet-stream',
-      })
-      res.end(body)
-    })().catch(() => {
-      res.writeHead(500)
-      res.end()
-    })
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const { port } = server.address() as AddressInfo
-  return { url: `http://127.0.0.1:${port}`, close: () => server.close() }
-}
 
 /** Посетитель: свой браузер без входа, счётчики отвечают пустым скриптом */
 async function visitor(browser: Browser, options: { javaScriptEnabled?: boolean } = {}) {

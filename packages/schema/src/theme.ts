@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { contrastRatio, formatContrast, mixColors } from './contrast'
+import { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
 
 // Строго #RRGGBB: значения темы попадают прямо в CSS страницы, поэтому произвольную строку
 // (например, с `}</style>`) сюда не пропускаем
@@ -198,6 +198,32 @@ export const ThemeInput = Theme.superRefine((theme, ctx) => {
     })
   }
 })
+
+/** Контраст текста на затемнённом фото: 4,5 по WCAG и запас на округление смешения в браузере */
+const COVER_CONTRAST = 4.6
+
+/**
+ * Затемнение фото у «Первого экрана» на фото (cover) — непрозрачность слоя цвета текста темы над
+ * фото, 0…1. Текст поверх — цветом фона темы. Фото может быть любым, поэтому считаем худший
+ * случай: под слоем самый светлый пиксель (белый, если текст поверх светлый) или самый тёмный.
+ * Берём наименьшую непрозрачность, при которой и тогда контраст не меньше 4,5 (с запасом на
+ * округление браузера). Слой цвета текста целиком (1) — это пара «текст на фоне», она уже
+ * проверена темой: так ответ есть у любой темы
+ */
+export function coverScrim(colors: Pick<ThemeColors, 'text' | 'background'>) {
+  const light = relativeLuminance(colors.background)
+  const lightOnPhoto = light > relativeLuminance(colors.text)
+  const extreme = lightOnPhoto ? '#ffffff' : '#000000'
+  for (let step = 0; step < 100; step += 1) {
+    const share = step / 100
+    const under = relativeLuminance(mixColors(colors.text, extreme, share))
+    // Слой должен увести фото от цвета текста поверх, а не только отличаться от него
+    const away = lightOnPhoto ? under < light : under > light
+    const ratio = (Math.max(under, light) + 0.05) / (Math.min(under, light) + 0.05)
+    if (away && ratio >= COVER_CONTRAST) return share
+  }
+  return 1
+}
 
 /** Линии темы, у которой их нет (тема до роли «Линии»): немного текста в фоне */
 export const derivedBorder = (colors: Pick<ThemeColors, 'text' | 'background'>) =>

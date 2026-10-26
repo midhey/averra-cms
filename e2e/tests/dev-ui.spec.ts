@@ -318,7 +318,7 @@ test.describe('витрина компонентов', () => {
 
     const nav = page.getByRole('navigation', { name: 'Разделы витрины' })
     await expect(nav).toBeHidden()
-    const menu = page.getByRole('button', { name: 'Меню' })
+    const menu = page.getByRole('button', { name: 'Меню', exact: true })
     await menu.click()
     await expect(page.getByRole('button', { name: 'Закрыть меню' })).toHaveAttribute(
       'aria-expanded',

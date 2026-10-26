@@ -33,6 +33,7 @@ import {
   sanitizeSvg,
 } from '../../media/svg'
 import { validate } from '../../validate'
+import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
 
@@ -331,6 +332,15 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
             }))
             const message = `Картинка используется на страницах: ${list}. Уберите её оттуда и опубликуйте страницы, тогда её можно будет удалить`
             return c.json(conflict(message, issues), 409)
+          }
+
+          // Логотип шапки — на каждой странице сайта (или в её черновике)
+          const header = await headerRepo(db).read(siteId)
+          const inHeader = [header?.draft, header?.published].some((item) => item?.logo === mediaId)
+          if (inHeader) {
+            const message =
+              'Картинка — логотип шапки сайта. Замените его в разделе «Шапка и подвал», тогда её можно будет удалить'
+            return c.json(conflict(message, [{ path: 'header', message: 'логотип шапки' }]), 409)
           }
 
           // Картинка в настройках SEO (иконка, картинка для соцсетей, логотип) — тоже на сайте

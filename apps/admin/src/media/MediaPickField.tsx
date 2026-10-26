@@ -22,6 +22,8 @@ type MediaPickFieldProps = {
   square?: boolean
   /** SVG можно: логотип и иконка. Картинке для соцсетей — нет, её SVG соцсети не покажут */
   allowSvg?: boolean
+  /** Только просмотр: картинку видно, выбрать и убрать нельзя (у кого нет права менять) */
+  disabled?: boolean
 }
 
 /**
@@ -38,6 +40,7 @@ export function MediaPickField({
   name,
   square,
   allowSvg = false,
+  disabled = false,
 }: MediaPickFieldProps) {
   const { data: library } = useQuery(mediaQuery(siteId))
   const chosen = library?.items.find((media) => media.id === value)
@@ -70,9 +73,11 @@ export function MediaPickField({
                 : 'Загружаю…'
         }
         action={
-          <Button size="small" name={name} onClick={() => setPicking(true)}>
-            {value ? 'Заменить' : 'Выбрать картинку'}
-          </Button>
+          disabled ? undefined : (
+            <Button size="small" name={name} onClick={() => setPicking(true)}>
+              {value ? 'Заменить' : 'Выбрать картинку'}
+            </Button>
+          )
         }
       />
       {error && (
@@ -80,7 +85,7 @@ export function MediaPickField({
           {error}
         </p>
       )}
-      {value && (
+      {value && !disabled && (
         <Button
           variant="ghost"
           size="small"

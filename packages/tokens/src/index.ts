@@ -1,4 +1,4 @@
-import { defaultTheme, Theme } from '@averra/schema'
+import { coverScrim, defaultTheme, Theme } from '@averra/schema'
 import { fontCatalog, fontStack } from './fonts'
 
 export {
@@ -52,6 +52,8 @@ export function themeToCss(theme: Theme): string {
     '--color-accent': colors.accent,
     '--color-on-accent': colors.onAccent,
     '--color-border': colors.border,
+    // Затемнение фото «Первого экрана» на фото: посчитано так, чтобы текст читался над любым фото
+    '--cover-scrim': String(coverScrim(colors)),
     '--font-heading': fontStack(fonts.heading),
     '--font-body': fontStack(fonts.body),
     '--font-heading-weight': String(fontCatalog[fonts.heading].headingWeight),

@@ -33,6 +33,7 @@ const siteLinks = {
   overview: { to: '/', exact: true },
   pages: { to: '/pages', exact: false },
   theme: { to: '/theme', exact: false },
+  header: { to: '/header', exact: false },
   media: { to: '/media', exact: false },
   leads: { to: '/leads', exact: false },
   notifications: { to: '/notifications', exact: false },

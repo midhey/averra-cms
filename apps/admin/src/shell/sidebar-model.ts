@@ -1,4 +1,5 @@
 import {
+  canEditHeader,
   canEditSeo,
   canEditTheme,
   canSeeLeads,
@@ -14,6 +15,7 @@ export type SiteSectionId =
   | 'overview'
   | 'pages'
   | 'theme'
+  | 'header'
   | 'media'
   | 'leads'
   | 'notifications'
@@ -31,7 +33,7 @@ export type SiteSection = {
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
  * (у редактора и токена newLeads — null), «Уведомления» — им же. «Тема» — владельцу и редактору
- * (клиент тему не меняет), «SEO и аналитика» — только владельцу
+ * (клиент тему не меняет), «Шапка и подвал» — им же, «SEO и аналитика» — только владельцу
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [
@@ -39,6 +41,9 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
     { id: 'pages', label: 'Страницы', icon: 'pages' },
   ]
   if (canEditTheme(site.access)) sections.push({ id: 'theme', label: 'Тема', icon: 'palette' })
+  if (canEditHeader(site.access)) {
+    sections.push({ id: 'header', label: 'Шапка и подвал', icon: 'header' })
+  }
   sections.push({ id: 'media', label: 'Медиатека', icon: 'media' })
   if (canSeeLeads(site.access) && site.newLeads !== null) {
     sections.push({ id: 'leads', label: 'Заявки', icon: 'leads', badge: site.newLeads })

@@ -9,6 +9,7 @@ describe('разделы сайта в панели', () => {
       'overview',
       'pages',
       'theme',
+      'header',
       'media',
       'leads',
       'notifications',
@@ -28,11 +29,12 @@ describe('разделы сайта в панели', () => {
     ).toEqual({ id: 'leads', label: 'Заявки', icon: 'leads', badge: 0 })
   })
 
-  it('редактор заявок не видит, а тему меняет; клиенту темы нет', () => {
+  it('редактор заявок не видит, а тему, шапку и меню меняет; клиенту их нет', () => {
     expect(ids({ access: 'editor', newLeads: null })).toEqual([
       'overview',
       'pages',
       'theme',
+      'header',
       'media',
       'settings',
     ])

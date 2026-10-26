@@ -1,9 +1,24 @@
 ---
-import { cookieNoticeView, LegalFooter, Page } from '@averra/blocks'
+import {
+  cookieNoticeView,
+  headerRowButton,
+  headerScriptNeeded,
+  LegalFooter,
+  Page,
+  SiteHeader,
+  siteHeaderView,
+} from '@averra/blocks'
 import '@averra/blocks/base.css'
-import { findRedirect, MAIN_PAGE_SLUG, NOT_FOUND_PAGE_SLUG, redirectLocation } from '@averra/schema'
+import {
+  findRedirect,
+  headerContacts,
+  MAIN_PAGE_SLUG,
+  NOT_FOUND_PAGE_SLUG,
+  redirectLocation,
+} from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import CookieConsent from '../components/CookieConsent.astro'
+import SiteHeaderScript from '../components/SiteHeaderScript.astro'
 import VideoPlayer from '../components/VideoPlayer.astro'
 import { siteFontCss, siteFontFiles } from '../lib/fonts'
 import { analyticsHead, faqJsonLd, headTags, organizationJsonLd } from '../lib/seo'
@@ -59,11 +74,27 @@ const cookies = cookieNoticeView(
   site.settings,
   pages.map((candidate) => candidate.slug),
 )
+// Шапка сайта: опубликованная, если страница её не скрыла. Ссылки меню — только на опубликованные
+// страницы и блоки, телефон и адрес — из «SEO → Организация»
+const header = siteHeaderView({
+  header: site.header,
+  siteName: site.name,
+  page,
+  pages: pages.map((candidate) => ({
+    slug: candidate.slug,
+    blockIds: candidate.content.blocks.map((block) => block.id),
+  })),
+  contacts: headerContacts(site.settings.organization),
+})
 // Скрипт плеера — только на страницах с блоком «Видео»
 const hasVideo = page.content.blocks.some((block) => block.type === 'video')
 ---
 
-<html lang={site.settings.language}>
+<html
+  lang={site.settings.language}
+  data-sticky-header={header?.sticky ? header.layout : undefined}
+  data-sticky-header-row={header?.sticky && headerRowButton(header) ? '' : undefined}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -72,9 +103,11 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
     <Fragment set:html={scripts.join('\n')} />
   </head>
   <body>
+    {header && <SiteHeader view={header} media={media} />}
     <Page content={page.content} media={media} formAction={formActionFor(site.id, page.slug)} />
     <LegalFooter {...cookies.footer} />
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
+    {headerScriptNeeded(header) && <SiteHeaderScript />}
   </body>
 </html>

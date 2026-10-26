@@ -4,7 +4,15 @@ import { defineBlock, type EnumSketch } from '../define-block'
 import { Image } from '../media'
 
 /** Подписи вариантов первого экрана для людей: их видят карточки вариантов в редакторе */
-const heroVariantTitles = { centered: 'По центру', left: 'Слева', split: 'С картинкой' }
+const heroVariantTitles = {
+  centered: 'По центру',
+  left: 'Слева',
+  split: 'С картинкой',
+  cover: 'На фото',
+}
+
+/** Варианты, в которых у первого экрана есть картинка: сбоку (split) или фоном (cover) */
+const withImage = new Set(['split', 'cover'])
 
 export const hero = defineBlock({
   type: 'hero',
@@ -14,7 +22,7 @@ export const hero = defineBlock({
   props: z
     .strictObject({
       variant: z
-        .enum(['centered', 'left', 'split'])
+        .enum(['centered', 'left', 'split', 'cover'])
         .default('centered')
         .meta({
           title: 'Вариант',
@@ -23,6 +31,7 @@ export const hero = defineBlock({
             centered: 'centered',
             left: 'left',
             split: 'split',
+            cover: 'cover',
           } satisfies Record<string, EnumSketch>,
         }),
       title: z
@@ -36,26 +45,27 @@ export const hero = defineBlock({
       image: Image.optional().meta({
         title: 'Картинка',
         description:
-          'Только для варианта «С картинкой» (split): текст слева, картинка справа. Там она обязательна, в других вариантах её не должно быть',
+          'Только для вариантов «С картинкой» (split: текст слева, картинка справа) и «На фото» (cover: фото на весь блок под затемнением, текст поверх). Там она обязательна, в других вариантах её не должно быть',
       }),
     })
     // Путь — само поле: в редакторе ошибка встанет прямо у выбора картинки.
     // Картинка в другом варианте не выводится, но считалась бы «используемой»: медиатека не дала
     // бы её удалить и сослалась бы на страницу, где её не видно. Поэтому данные = то, что на экране
     .superRefine((props, ctx) => {
-      if (props.variant === 'split' && !props.image) {
+      const needsImage = withImage.has(props.variant)
+      if (needsImage && !props.image) {
         ctx.addIssue({
           code: 'custom',
           path: ['image'],
-          message: 'В варианте «С картинкой» (split) нужна картинка: выберите её в медиатеке',
+          message: `В варианте «${heroVariantTitles[props.variant]}» (${props.variant}) нужна картинка: выберите её в медиатеке`,
         })
       }
-      if (props.variant !== 'split' && props.image) {
+      if (!needsImage && props.image) {
         ctx.addIssue({
           code: 'custom',
           path: ['image'],
           message:
-            'Картинка выводится только в варианте «С картинкой» (split): уберите её или выберите этот вариант',
+            'Картинка выводится только в вариантах «С картинкой» (split) и «На фото» (cover): уберите её или выберите один из них',
         })
       }
     }),

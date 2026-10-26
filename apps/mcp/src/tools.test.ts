@@ -255,3 +255,34 @@ describe('тема сайта', () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe('шапка сайта', () => {
+  it('get_header: шапки на сайте ещё нет — так и говорит; менять её токену нельзя', async () => {
+    const result = await tools.getHeader({})
+    expect(result.header).toBeNull()
+    expect(result.note).toMatch(/Шапку ещё не публиковали/)
+    expect(result.draft).toMatchObject({ layout: 'classic', layoutTitle: 'Классика', menu: [] })
+    const res = await clientWith(token).api.sites[':siteId'].header.$put({
+      param: { siteId: site.id },
+      json: { layout: 'minimal' },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('get_header: пункты меню — с адресами на сайте', async () => {
+    const owner = await api.loginAs('owner')
+    const menu = [{ label: 'Связаться', page: 'index', block: 'contact' }]
+    const headers = { ...owner.headers, 'content-type': 'application/json' }
+    const url = `/api/sites/${site.id}/header`
+    expect(
+      (await api.app.request(url, { method: 'PUT', headers, body: JSON.stringify({ menu }) }))
+        .status,
+    ).toBe(200)
+    expect(
+      (await api.app.request(`${url}/publish`, { method: 'POST', headers: owner.headers })).status,
+    ).toBe(200)
+    const result = await tools.getHeader({})
+    expect(result.header?.menu).toEqual([{ ...menu[0], href: '/#contact' }])
+    expect(result.unpublishedDraft).toBe(false)
+  })
+})

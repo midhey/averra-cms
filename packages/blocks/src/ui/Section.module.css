@@ -20,3 +20,14 @@
   max-width: var(--container);
   margin-inline: auto;
 }
+
+/* Фон на весь блок: содержимое — над ним, фон не выходит за блок */
+.section[data-backdrop] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.section[data-backdrop] > .inner {
+  position: relative;
+}

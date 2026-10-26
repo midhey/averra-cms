@@ -14,6 +14,11 @@ type PictureProps = {
   sizes: string
   /** Картинка первого экрана: грузить сразу и в первую очередь, а не лениво */
   priority: boolean
+  /**
+   * Грузить сразу, но без первоочередности: логотип шапки виден сразу, а первым грузится фото
+   * первого экрана — по нему браузер меряет скорость страницы
+   */
+  eager?: boolean
   className?: string
 }
 
@@ -22,13 +27,15 @@ type PictureProps = {
  * остальных, у каждого формата — набор ширин. width и height — размеры исходника: по ним
  * браузер заранее оставляет место под картинку, и вёрстка не прыгает при загрузке
  */
-export function Picture({ image, media, sizes, priority, className }: PictureProps) {
+export function Picture({ image, media, sizes, priority, eager, className }: PictureProps) {
   const file = media[image.mediaId]
   // Ссылку на картинку не из медиатеки сайта не пропустит API. Если всё же нет — без картинки
   if (!file) return null
 
-  // SVG — один файл без вариантов (логотип для будущей шапки). В блоки API его не пускает, но
-  // если он здесь окажется, выводим его как есть, а не пустое место
+  const loading = priority || eager ? 'eager' : 'lazy'
+
+  // SVG — один файл без вариантов (логотип шапки). В блоки API его не пускает, но если он там
+  // окажется, выводим его как есть, а не пустое место
   const vector = file.variants.find((variant) => variant.format === 'svg')
   if (vector) {
     return (
@@ -39,7 +46,7 @@ export function Picture({ image, media, sizes, priority, className }: PicturePro
           width={file.width}
           height={file.height}
           alt={image.alt}
-          loading={priority ? 'eager' : 'lazy'}
+          loading={loading}
           decoding="async"
         />
       </picture>
@@ -74,7 +81,7 @@ export function Picture({ image, media, sizes, priority, className }: PicturePro
         width={file.width}
         height={file.height}
         alt={image.alt}
-        loading={priority ? 'eager' : 'lazy'}
+        loading={loading}
         fetchPriority={priority ? 'high' : undefined}
         decoding="async"
       />

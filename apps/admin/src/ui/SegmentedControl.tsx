@@ -33,6 +33,11 @@ type SegmentedControlProps<T extends string> = {
    * с длинными подписями («Средние», «Большие») на телефоне иначе не прочитать
    */
   wrap?: boolean
+  /**
+   * Карточки ровно в две колонки: четыре варианта встают сеткой 2×2, а не 3 + 1 (раскладки шапки,
+   * как в концепте). Без пропа число колонок решает ширина
+   */
+  columns?: 2
   /** Имя радиокнопок в форме: по нему focusField ставит фокус на группу с ошибкой */
   name?: string
   /** Описания группы (ошибка, подсказка рядом): диктор прочитает их, войдя в группу */
@@ -53,6 +58,7 @@ export function SegmentedControl<T extends string>({
   disabled,
   fill,
   wrap,
+  columns,
   name: formName,
   'aria-describedby': describedBy,
 }: SegmentedControlProps<T>) {
@@ -60,7 +66,13 @@ export function SegmentedControl<T extends string>({
   const name = formName ?? ownName
   return (
     <fieldset
-      className={cx(styles.group, styles[appearance], fill && styles.fill, wrap && styles.wrap)}
+      className={cx(
+        styles.group,
+        styles[appearance],
+        fill && styles.fill,
+        wrap && styles.wrap,
+        columns === 2 && styles.columns2,
+      )}
       disabled={disabled}
       aria-describedby={describedBy}
     >
@@ -92,15 +104,28 @@ export function SegmentedControl<T extends string>({
 
 /**
  * Схематичная миниатюра варианта блока для вида «карточки»: строки текста по центру или слева
- * и, у варианта с картинкой, картинка справа. Имена рисунков — из пометки x-enum-sketches схемы
+ * и, у варианта с картинкой, картинка справа или фоном. Имена рисунков — из пометки
+ * x-enum-sketches схемы
  */
 export function LayoutThumbnail({ sketch = 'left' }: { sketch?: EnumSketch }) {
   // Картинка рядом с текстом: справа у первого экрана «С картинкой» и у «Текста с картинкой»
-  // справа, слева — у «Текста с картинкой» слева
+  // справа, слева — у «Текста с картинкой» слева. «На фото» — картинка фоном, строки поверх
   const media = sketch === 'split' || sketch === 'image-right' || sketch === 'image-left'
+  const cover = sketch === 'cover'
   return (
-    <span className={cx(styles.sketch, sketch === 'image-left' && styles.sketchMediaFirst)}>
-      <span className={cx(styles.sketchLines, sketch === 'centered' && styles.sketchCentered)}>
+    <span
+      className={cx(
+        styles.sketch,
+        sketch === 'image-left' && styles.sketchMediaFirst,
+        cover && styles.sketchCover,
+      )}
+    >
+      <span
+        className={cx(
+          styles.sketchLines,
+          (sketch === 'centered' || cover) && styles.sketchCentered,
+        )}
+      >
         <span className={styles.sketchLine} />
         <span className={cx(styles.sketchLine, styles.sketchLineShort)} />
       </span>

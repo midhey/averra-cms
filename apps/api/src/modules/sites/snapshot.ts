@@ -1,5 +1,12 @@
-import { collectMediaRefs, MAIN_PAGE_SLUG, Organization, settingsMediaIds } from '@averra/schema'
+import {
+  collectMediaRefs,
+  headerMediaIds,
+  MAIN_PAGE_SLUG,
+  Organization,
+  settingsMediaIds,
+} from '@averra/schema'
 import type { Db } from '../../db/client'
+import { publishedHeader } from '../header/read'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
@@ -11,7 +18,9 @@ import { sitesRepo } from './repo'
  * страницы. Снимок открыт без входа (auth/middleware.ts): в нём только то, что и так попадает на
  * сайт. Коды проверки, счётчики и редиректы видны на любой опубликованной странице или по ответу
  * сервера. Организация (телефон, адрес, ИНН — у ИП это его личные данные) — только в разметке
- * главной, поэтому до публикации главной в снимке её нет. siteUrl — адрес установки (SITE_URL),
+ * главной, поэтому до публикации главной в снимке её нет. Шапка — опубликованная (null — её не
+ * публиковали, на сайте шапки нет); телефон и адрес в неё рендерер берёт из той же организации.
+ * siteUrl — адрес установки (SITE_URL),
  * если своего в настройках нет. undefined — сайта нет
  */
 export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | undefined) {
@@ -24,15 +33,18 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
   const settings = mainPublished ? stored : { ...stored, organization: Organization.parse({}) }
   // Справочник картинок — только тех, что стоят на опубликованных страницах и в настройках:
   // рендереру нужны их варианты, а остальная медиатека снаружи не видна
+  const header = publishedHeader(found)
   const mediaIds = [
     ...pages.flatMap((page) => collectMediaRefs(page.content).map((ref) => ref.mediaId)),
     ...settingsMediaIds(settings),
+    ...headerMediaIds(header),
   ]
   return {
     site: {
       id: found.id,
       name: found.name,
       theme: publishedTheme(found),
+      header,
       url: effectiveSiteUrl(settings, siteUrl),
       settings,
     },

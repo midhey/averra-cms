@@ -3,16 +3,19 @@ import {
   BLOCK_CATEGORIES,
   blocks,
   describeApiError,
+  headerLayoutTitles,
   PageContent,
   PageSlug,
   PageTitle,
   pageSeoChecks,
+  readHeader,
   readTheme,
   SEO_DESCRIPTION_RANGE,
   SEO_TITLE_RANGE,
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,
+  siteLinkHref,
   themeFontTitles,
   Uuid,
 } from '@averra/schema'
@@ -63,6 +66,16 @@ const SiteThemeView = z.object({
   unpublished: z.boolean().catch(false),
 })
 
+/**
+ * Шапка из GET /api/sites/:siteId/header: что на сайте (null — шапку не публиковали) и черновик.
+ * Читает readHeader: установка новее MCP могла добавить поле, и это не повод для ошибки
+ */
+const SiteHeaderView = z.object({
+  published: z.unknown().transform((header) => (header ? readHeader(header) : null)),
+  draft: z.unknown().transform((header) => readHeader(header)),
+  unpublished: z.boolean().catch(false),
+})
+
 const SiteRef = z.object({
   siteId: Uuid()
     .optional()
@@ -95,7 +108,7 @@ const rules = [
   'Главный заголовок страницы (h1) получает первый блок hero, поэтому начинай страницу с него.',
   'Ссылки только https://, http://, /, #, mailto: и tel:.',
   'Лишних полей быть не должно: используй только поля из схем блоков.',
-  'Картинка — { mediaId, alt }: mediaId из медиатеки этого сайта (её пополняют в админке), alt обязателен — коротко, что на картинке. Чужой или выдуманный mediaId API не примет. hero в варианте split («С картинкой») без картинки не пройдёт, в других вариантах картинки быть не должно. SVG из медиатеки (mimeType image/svg+xml) — только для логотипа и иконки сайта и для логотипов клиентов (clients, поле logo — { mediaId } без alt): в остальные картинки блоков и seo.image его ставить нельзя.',
+  'Картинка — { mediaId, alt }: mediaId из медиатеки этого сайта (её пополняют в админке), alt обязателен — коротко, что на картинке. Чужой или выдуманный mediaId API не примет. hero в вариантах split («С картинкой», картинка сбоку) и cover («На фото», фото на весь блок, прозрачная шапка ложится на него) без картинки не пройдёт, в других вариантах картинки быть не должно. SVG из медиатеки (mimeType image/svg+xml) — только для логотипа и иконки сайта и для логотипов клиентов (clients, поле logo — { mediaId } без alt): в остальные картинки блоков и seo.image его ставить нельзя.',
   'Видео (video) — ссылка url на ролик YouTube, Rutube или VK Видео (из адресной строки или «Поделиться»; другие адреса не пройдут), title обязателен, caption и cover — необязательны. cover — своя обложка { mediaId, alt }, лучше 16:9: без неё на странице заглушка в цветах сайта, обложку площадки страница не грузит. Плеер включается по клику, без JavaScript — ссылка на ролик.',
   'Форма заявки (form): у каждого поля уникальный ключ name (латиница, цифры, _; website и consent заняты), тип из списка, у select — варианты options. policyUrl — ссылка на политику конфиденциальности, обязательна; consentUrl — ссылка на текст согласия на обработку персональных данных (/consent), необязательна, но с 2025 года согласие — отдельный документ. Форма работает без JavaScript, заявки видны только в админке: через MCP их не прочитать (персональные данные).',
   'Текст (text) — заголовок и текст с лёгкой разметкой: пустая строка — новый абзац, строка с «- » — пункт списка, с «## » — подзаголовок. HTML не работает, он покажется как текст.',
@@ -109,6 +122,7 @@ const rules = [
   'get_page и save_draft возвращают seoChecks — советы по SEO черновика (warning — стоит поправить, problem — важно). Публиковать они не мешают, но поправь их, если можешь.',
   'Страница с адресом 404 — служебная: её показывают на адресах, где страницы нет. Делай её из блоков, как обычную, с кнопкой на главную.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
+  'Шапка и меню — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. hideHeader: true рядом с blocks скрывает шапку на этой странице — только для промо-страницы и если человек об этом просил.',
 ]
 
 /** Каталог блоков для нейронки: те же Zod-схемы, что в API, но в виде JSON Schema */
@@ -156,7 +170,14 @@ export function cmsTools(client: Api | undefined) {
     const fail = async (): Promise<never> => {
       throw new Error(missingTokenMessage)
     }
-    return { listSites: fail, getPage: fail, saveDraft: fail, publishPage: fail, getTheme: fail }
+    return {
+      listSites: fail,
+      getPage: fail,
+      saveDraft: fail,
+      publishPage: fail,
+      getTheme: fail,
+      getHeader: fail,
+    }
   }
   const sites = client.api.sites
   const page = sites[':siteId'].pages[':slug']
@@ -225,6 +246,28 @@ export function cmsTools(client: Api | undefined) {
       return {
         theme: view.published,
         fonts: { heading: themeFontTitles[heading], body: themeFontTitles[body] },
+        unpublishedDraft: view.unpublished,
+      }
+    },
+    /**
+     * Шапка и меню на сайте: раскладка, пункты меню с адресами и черновик — чтобы не ломать
+     * ссылки меню правкой страниц. Только чтение: шапку меняют в админке
+     */
+    getHeader: async ({ siteId }: SiteRef) => {
+      const param = { siteId: await siteOf(siteId) }
+      const view = SiteHeaderView.parse(await unwrap(() => sites[':siteId'].header.$get({ param })))
+      const describe = (header: NonNullable<typeof view.published>) => ({
+        ...header,
+        layoutTitle: headerLayoutTitles[header.layout],
+        menu: header.menu.map((item) => ({ ...item, href: siteLinkHref(item) })),
+        button: header.button && { ...header.button, href: siteLinkHref(header.button) },
+      })
+      return {
+        header: view.published && describe(view.published),
+        note: view.published
+          ? undefined
+          : 'Шапку ещё не публиковали: на сайте её нет. Её настраивают в админке, «Шапка и подвал»',
+        draft: describe(view.draft),
         unpublishedDraft: view.unpublished,
       }
     },
@@ -305,6 +348,18 @@ export function registerTools(server: McpServer, api: Api | undefined) {
       annotations: { readOnlyHint: true },
     },
     async (args) => asText(await tools.getTheme(args)),
+  )
+
+  server.registerTool(
+    'get_header',
+    {
+      title: 'Шапка и меню сайта',
+      description:
+        'Шапка сайта и меню, как они на сайте сейчас: раскладка, пункты меню (страница и блок, на которые они ведут), кнопка, черновик. Чтобы не ломать ссылки меню правкой страниц. Менять шапку через MCP нельзя — это делают в админке, «Шапка и подвал».',
+      inputSchema: SiteRef,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.getHeader(args)),
   )
 
   server.registerTool(

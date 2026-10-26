@@ -1,5 +1,6 @@
 import {
   collectMediaRefs,
+  headerMediaIds,
   legacyTheme,
   MAIN_PAGE_SLUG,
   newSiteSettings,
@@ -13,6 +14,7 @@ import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
+import { publishedHeader } from '../header/read'
 import { readStoredSettings } from '../settings/read'
 
 /**
@@ -258,7 +260,8 @@ export function sitesRepo(db: Db) {
 
     /**
      * Картинки опубликованного сайта — id из полей-картинок блоков опубликованных страниц
-     * (collectMediaRefs) и картинки настроек (OG, логотип, иконка), как в снимке для рендерера.
+     * (collectMediaRefs), картинки настроек (OG, логотип, иконка) и логотип шапки, как в снимке
+     * для рендерера.
      * По ним сборка решает, какие файлы картинок класть в релиз
      */
     async publishedMediaIds(siteId: string) {
@@ -267,7 +270,7 @@ export function sitesRepo(db: Db) {
         .from(pages)
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
       const [site] = await db
-        .select({ settings: sites.settings })
+        .select({ settings: sites.settings, headerPublished: sites.headerPublished })
         .from(sites)
         .where(eq(sites.id, siteId))
       return new Set([
@@ -275,6 +278,7 @@ export function sitesRepo(db: Db) {
           content ? collectMediaRefs(content).map((ref) => ref.mediaId) : [],
         ),
         ...(site ? settingsMediaIds(readStoredSettings(site.settings)) : []),
+        ...(site ? headerMediaIds(publishedHeader(site)) : []),
       ])
     },
   }

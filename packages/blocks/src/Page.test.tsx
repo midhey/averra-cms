@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import {
   demoPage,
   legalPageContent,
@@ -90,6 +91,36 @@ describe('Page', () => {
     const html = render({ blocks: [splitHero('a', 'Мастер кладёт плитку')] }, media)
     expect(html).toMatch(/<picture[^>]*>.*<\/picture>/)
     expect(html).toContain('alt="Мастер кладёт плитку"')
+  })
+
+  it('первый экран на фото: фото на весь блок под затемнением, текст поверх, грузится первым', () => {
+    const cover = {
+      id: 'top',
+      type: 'hero',
+      props: { variant: 'cover', title: 'Ремонт кухонь', image: { mediaId, alt: 'Новая кухня' } },
+    }
+    document.body.innerHTML = render({ blocks: [cover] }, media)
+    const section = document.querySelector('section#top')
+    const backdrop = section?.querySelector('[data-hero-cover]')
+    expect(section?.hasAttribute('data-backdrop')).toBe(true)
+    // Фото — до содержимого и не в нём: текст лежит поверх
+    expect(backdrop?.querySelector('img')?.getAttribute('alt')).toBe('Новая кухня')
+    expect(backdrop?.querySelector('img')?.getAttribute('sizes')).toBe('100vw')
+    expect(backdrop?.querySelector('img')?.getAttribute('fetchpriority')).toBe('high')
+    expect(backdrop?.querySelector('span')?.getAttribute('aria-hidden')).toBe('true')
+    expect(backdrop?.contains(section?.querySelector('h1') ?? null)).toBe(false)
+    expect(section?.querySelector('h1')?.textContent).toBe('Ремонт кухонь')
+  })
+
+  it('первый экран на фото без файла в справочнике — просто текст, без пустого фона', () => {
+    const cover = {
+      id: 'top',
+      type: 'hero',
+      props: { variant: 'cover', title: 'Ремонт', image: { mediaId, alt: 'Кухня' } },
+    }
+    const html = render({ blocks: [cover] })
+    expect(html).toContain('Ремонт')
+    expect(html).not.toContain('data-backdrop')
   })
 
   it('картинку первого блока грузит сразу, картинки ниже — лениво', () => {

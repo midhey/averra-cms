@@ -1,0 +1,96 @@
+@use "@averra/ui" as ui;
+
+// Две колонки по концепту, как на экране «Тема»: настройки слева, предпросмотр справа и шире.
+// Места на обе не хватает — предпросмотр под настройками
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.settings {
+  flex: 1 1 ui.rem(420);
+  min-width: 0;
+  max-width: ui.rem(480);
+
+  @include ui.breakpoint-down(small) {
+    max-width: none;
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.buttonFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(ui.rem(170), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.text {
+  margin: 0;
+}
+
+// Предпросмотр держится в поле зрения, пока листают настройки
+.preview {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex: 999 1 ui.rem(420);
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+
+  @include ui.breakpoint-down(small) {
+    position: static;
+  }
+}
+
+.previewBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.frame {
+  height: min(ui.rem(760), calc(100vh - ui.rem(64)));
+  min-height: ui.rem(420);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}
+
+// Кнопки прилипают к низу экрана, пока видна форма
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  background: var(--color-background);
+  border-top: ui.rem(1) solid var(--color-border);
+
+  &:empty {
+    display: none;
+  }
+}

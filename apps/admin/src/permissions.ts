@@ -56,5 +56,11 @@ export const canEditSeo = (access: SiteAccess) => access === 'owner'
  */
 export const canEditTheme = (access: SiteAccess) => access !== 'client'
 
+/**
+ * Шапка сайта и меню (экран «Шапка и подвал») — как тема: владелец и редактор, публикация
+ * пересобирает весь сайт (apps/api/src/auth/access.ts, header.edit)
+ */
+export const canEditHeader = (access: SiteAccess) => access !== 'client'
+
 /** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки: владелец и клиент */
 export const canExportData = (access: SiteAccess) => access !== 'editor'

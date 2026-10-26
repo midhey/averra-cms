@@ -51,16 +51,22 @@ describe('Image', () => {
 describe('hero с картинкой', () => {
   const props = (extra: object) => ({ title: 'Ремонт', ...extra })
 
-  it('в варианте split без картинки — ошибка у поля image', () => {
-    const result = hero.props.safeParse(props({ variant: 'split' }))
+  it.each([
+    ['split', 'С картинкой'],
+    ['cover', 'На фото'],
+  ])('в варианте %s без картинки — ошибка у поля image', (variant, title) => {
+    const result = hero.props.safeParse(props({ variant }))
     expect(result.error?.issues).toEqual([
-      expect.objectContaining({ path: ['image'], message: expect.stringMatching(/split/) }),
+      expect.objectContaining({
+        path: ['image'],
+        message: `В варианте «${title}» (${variant}) нужна картинка: выберите её в медиатеке`,
+      }),
     ])
   })
 
-  it('в варианте split с картинкой проходит', () => {
+  it.each(['split', 'cover'])('в варианте %s с картинкой проходит', (variant) => {
     const image = { mediaId, alt: 'Фото' }
-    expect(hero.props.safeParse(props({ variant: 'split', image })).success).toBe(true)
+    expect(hero.props.safeParse(props({ variant, image })).success).toBe(true)
   })
 
   it('в остальных вариантах картинка не нужна', () => {
@@ -75,7 +81,7 @@ describe('hero с картинкой', () => {
       expect(hero.props.safeParse(props({ variant, image })).error?.issues).toEqual([
         expect.objectContaining({
           path: ['image'],
-          message: expect.stringMatching(/только в варианте «С картинкой» \(split\)/),
+          message: expect.stringMatching(/только в вариантах «С картинкой» \(split\) и «На фото»/),
         }),
       ])
     },

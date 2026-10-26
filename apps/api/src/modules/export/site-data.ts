@@ -3,6 +3,7 @@ import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
 import { type MediaStorage, mediaKey } from '../../media/storage'
 import { notificationSettingsRepo } from '../../notifications/settings'
+import { draftHeader, publishedHeader } from '../header/read'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
 import { readStoredSettings } from '../settings/read'
 import { draftTheme, publishedTheme } from '../theme/read'
@@ -25,7 +26,11 @@ site.json — все данные сайта (формат averra-site-export, �
               #RRGGBB), шрифты заголовков и текста (fonts: heading, body — id шрифта, например
               golos-text, lora или system — шрифт устройства), скругления (radius: none, small,
               medium, large); черновик темы с экрана «Тема» (themeDraft, в том же формате; null —
-              тему там не сохраняли); настройки заявок (leadSettings:
+              тему там не сохраняли); шапка сайта и меню (header: раскладка layout, липкая
+              sticky, собирается при прокрутке condense, прозрачная на первом экране overlay,
+              телефон phone, кнопка button и пункты меню menu — подпись label, страница page и
+              блок на ней block, логотип logo — id картинки; null — шапку не публиковали) и её
+              черновик (headerDraft; null — такой же, как на сайте); настройки заявок (leadSettings:
               recipients — адреса почты для заявок, notificationRecipients — все получатели
               уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
               и SEO (settings:
@@ -134,6 +139,9 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       theme: publishedTheme(site),
       // Черновик темы, если его ещё не опубликовали: правки с экрана «Тема» тоже данные сайта
       themeDraft: site.themeDraft ? draftTheme(site) : null,
+      // Шапка и меню на сайте и черновик с экрана «Шапка и подвал»
+      header: publishedHeader(site),
+      headerDraft: site.headerDraft ? draftHeader(site) : null,
       createdAt: site.createdAt.toISOString(),
       leadSettings: {
         recipients: recipients

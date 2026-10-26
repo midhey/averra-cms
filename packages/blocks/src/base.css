@@ -43,3 +43,29 @@ p {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Липкая шапка не закрывает раздел, к которому перешли по якорю из меню. Атрибут — раскладка
+   липкой шапки, его ставит сборка сайта. Шапки «по центру» и «двухэтажная» на широком экране в
+   две строки — около 7,2rem, отступ им больше */
+html[data-sticky-header] {
+  scroll-padding-top: 6rem;
+}
+
+html[data-sticky-header="center"],
+html[data-sticky-header="double"] {
+  scroll-padding-top: 8.5rem;
+}
+
+/* Без меню кнопка на телефоне — своей строкой под логотипом (data-row-button у шапки), и липкая
+   шапка там 9–12rem высотой: две-три строки подписи, длинное название сайта. Отступ — с запасом
+   на самую высокую, чтобы заголовок раздела не ушёл под неё. Признак ставит сборка сайта: без
+   :has(), которого нет у старых iOS */
+@media (max-width: 39.99rem) {
+  html[data-sticky-header][data-sticky-header-row] {
+    scroll-padding-top: 12.5rem;
+  }
+
+  html[data-sticky-header="double"][data-sticky-header-row] {
+    scroll-padding-top: 14.5rem;
+  }
+}

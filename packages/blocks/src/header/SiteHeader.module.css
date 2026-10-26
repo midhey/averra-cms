@@ -1,0 +1,580 @@
+/* Шапка сайта: только переменные темы. Широкий экран — с 64rem: восемь пунктов меню, телефон и
+   кнопка встают в строку на ноутбуке; уже — меню в <details> */
+
+/* «К содержимому»: невидима, пока на неё не пришли с клавиатуры */
+.skip {
+  position: absolute;
+  z-index: 1002;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip:focus {
+  transform: none;
+}
+
+/* Метки прокрутки: дальняя ушла из окна — страницу прокрутили, и скрипт собирает шапку;
+   разворачивает её только ближняя, у самого верха (гистерезис, см. header-dom.ts) */
+.sentinel,
+.sentinelTop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 7rem;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.sentinelTop {
+  height: 0.5rem;
+}
+
+.header {
+  position: relative;
+  z-index: 100;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.header[data-sticky] {
+  position: sticky;
+  top: 0;
+}
+
+/* Прозрачная поверх первого экрана: лежит на «Первом экране», тот начинается ниже неё. Без
+   скрипта не липнет — прозрачная липкая шапка легла бы поверх текста страницы */
+.header[data-overlay] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-bottom-color: transparent;
+  background: transparent;
+}
+
+.header[data-overlay] ~ main > :first-child {
+  padding-top: calc(5rem + var(--space-12));
+}
+
+.header[data-overlay][data-layout="double"] ~ main > :first-child {
+  padding-top: calc(7.5rem + var(--space-12));
+}
+
+/* На фото «Первого экрана»: текст — цветом фона темы, как текст блока на затемнённом фото
+   (контраст посчитан темой, --cover-scrim). Своё меню и рамки — тем же цветом */
+.header[data-overlay]:not([data-stuck]) {
+  color: var(--color-background);
+}
+
+.header[data-overlay]:not([data-stuck]) :focus-visible {
+  outline-color: currentcolor;
+}
+
+/* Со скриптом прозрачная липкая шапка, как только страницу прокрутили, встаёт сверху с фоном */
+.header[data-overlay][data-stuck] {
+  position: fixed;
+  border-bottom-color: var(--color-border);
+  background: var(--color-background);
+  box-shadow: 0 0.375rem 1.25rem color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.header[data-sticky][data-condensed] {
+  box-shadow: 0 0.375rem 1.25rem color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+/* Верхняя строка двухэтажной шапки: адрес и телефон, мелко и на поверхности */
+.topbar {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.topbarInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-6);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-4);
+}
+
+.topbarPhone {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header[data-overlay] .topbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  color: inherit;
+}
+
+.header[data-condensed] .topbar {
+  display: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--container);
+  min-height: 4rem;
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+.header[data-condensed] .row {
+  padding-block: var(--space-1);
+}
+
+/* Логотип и название ужимаются, а не уходят под трубку и «Меню» на узком экране */
+.brand {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  margin-right: auto;
+  color: inherit;
+  text-decoration: none;
+}
+
+.name {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-heading-weight, 700);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.header[data-condensed] .name {
+  font-size: var(--text-base);
+}
+
+.logo {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Логотип по высоте строки, ширина своя: и вытянутый, и квадратный — одного веса. Не шире
+   места в строке: на узком экране вытянутый логотип ужимается, сохраняя пропорции */
+.logo img {
+  width: auto;
+  max-width: min(12rem, 100%);
+  height: 2.5rem;
+  border-radius: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.header[data-condensed] .logo img {
+  height: 2rem;
+}
+
+.list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* Текущий пункт — не только цветом: подчёркнут и жирнее */
+.link[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.35em;
+}
+
+/* Без меню сжимается вместе с логотипом: длинная подпись кнопки переносится, а не выталкивает
+   шапку за край экрана */
+.actions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* С меню на телефоне здесь только трубка и «Меню» — их не сжимать, ужимается логотип */
+.header[data-panel] .actions {
+  flex: none;
+}
+
+/* Трубка и «Меню» не сжимаются: ужимаются логотип и подпись кнопки */
+.phone,
+.menu {
+  flex: none;
+}
+
+.phone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* В двухэтажной шапке номер — в верхней строке, и на телефоне тоже: в строке логотипа он
+   появляется, только когда шапка собралась и верхняя строка спряталась */
+.phone[data-in-topbar] {
+  display: none;
+}
+
+.header[data-condensed] .phone[data-in-topbar] {
+  display: inline-flex;
+}
+
+.icon {
+  display: block;
+  flex: none;
+}
+
+/* На телефоне — значок, номер слышит диктор */
+.phoneText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.button,
+.panelButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* Подпись до 40 символов переносится по словам, а слово длиннее строки — где угодно */
+.button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.button:hover,
+.panelButton:hover {
+  filter: brightness(1.08);
+}
+
+/* С меню кнопка на телефоне — в раскрытом меню: в строке ей места нет */
+.header[data-panel] .button {
+  display: none;
+}
+
+/* Без меню (промо-шапка «Минимум») кнопка — главное действие, прятать её некуда. На телефоне —
+   своей строкой во всю ширину под логотипом и трубкой: рядом с ними на 320 px умещается только
+   короткая подпись. Высота строки известна заранее, поэтому прозрачной шапке ниже задан отступ
+   первого экрана без скрипта */
+@media (max-width: 39.99rem) {
+  .header[data-row-button] .row {
+    flex-wrap: wrap;
+    row-gap: var(--space-3);
+  }
+
+  .header[data-row-button] .brand {
+    flex: 1 1 0;
+  }
+
+  .header[data-row-button] .actions {
+    display: contents;
+  }
+
+  .header[data-row-button] .button {
+    flex: 1 1 100%;
+  }
+
+  .header[data-overlay][data-row-button] ~ main > :first-child {
+    padding-top: calc(10rem + var(--space-12));
+  }
+
+  .header[data-overlay][data-row-button][data-layout="double"] ~ main > :first-child {
+    padding-top: calc(12.5rem + var(--space-12));
+  }
+}
+
+.menu {
+  /* Панель меню — под всей шапкой, а не под кнопкой */
+  position: static;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+/* На фото рамка «Меню» — цветом текста шапки: линии темы на затемнённом фото не видно */
+.header[data-overlay]:not([data-stuck]) .summary {
+  border-color: currentcolor;
+}
+
+.menu[open] .burgerLines,
+.menu:not([open]) .burgerClose {
+  display: none;
+}
+
+.panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  max-height: calc(100vh - 5rem);
+  overflow-y: auto;
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-4) var(--space-6);
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: 0 0.75rem 1.5rem color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.panelNav .list {
+  flex-direction: column;
+}
+
+.panelNav .link {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-lg);
+}
+
+.panelActions {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* Номер — контурной кнопкой под основной, как в концепте телефона: рамка акцентом, текст —
+   цветом текста (его контраст с фоном тема уже проверила) */
+.panelPhone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: calc(var(--space-2) - 2px) var(--space-4);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.panelPhone:hover {
+  background: var(--color-surface);
+}
+
+.panelAddress {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.nav {
+  display: none;
+}
+
+@media (min-width: 64rem) {
+  .row {
+    gap: var(--space-6);
+    padding-block: var(--space-4);
+  }
+
+  .header[data-condensed] .row {
+    padding-block: var(--space-2);
+  }
+
+  /* Длинное меню переносится, а логотип не тает: у бренда есть нижняя граница ширины */
+  .brand {
+    min-width: min(8rem, 30%);
+    margin-right: 0;
+  }
+
+  .nav {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Меню посередине между логотипом и телефоном с кнопкой, как в концепте */
+  .nav .list {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2) var(--space-6);
+  }
+
+  .actions {
+    margin-left: auto;
+  }
+
+  .phoneText {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .phone .icon {
+    display: none;
+  }
+
+  .header[data-panel] .button {
+    display: inline-flex;
+  }
+
+  .menu {
+    display: none;
+  }
+
+  .logo img {
+    height: 2.75rem;
+  }
+
+  /* Меню по центру: логотип по центру, кнопка справа, меню строкой ниже */
+  .header[data-layout="center"] .row {
+    display: grid;
+    grid-template-areas:
+      ". brand button"
+      "nav nav nav";
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    row-gap: var(--space-3);
+  }
+
+  .header[data-layout="center"] .brand {
+    grid-area: brand;
+    justify-content: center;
+  }
+
+  .header[data-layout="center"] .nav {
+    grid-area: nav;
+  }
+
+  /* Над меню — линия по ширине пунктов, как в концепте: меню отдельной строкой под логотипом */
+  .header[data-layout="center"]:not([data-condensed]) .nav .list {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* На фото линия темы не видна — цветом текста шапки, приглушённо */
+  .header[data-layout="center"][data-overlay]:not([data-stuck]) .nav .list {
+    border-top-color: color-mix(in srgb, currentcolor 45%, transparent);
+  }
+
+  .header[data-layout="center"] .actions {
+    display: contents;
+  }
+
+  /* Полная шапка по центру — без телефона (концепт): логотип, меню и кнопка */
+  .header[data-layout="center"] .phone {
+    display: none;
+  }
+
+  .header[data-layout="center"] .button {
+    grid-area: button;
+    justify-self: end;
+  }
+
+  /* Собранная шапка «по центру» — одна строка: логотип, меню, телефон и кнопка */
+  .header[data-layout="center"][data-condensed] .row {
+    grid-template-areas: "brand nav phone button";
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    column-gap: var(--space-6);
+  }
+
+  .header[data-layout="center"][data-condensed] .phone {
+    display: inline-flex;
+    grid-area: phone;
+  }
+
+  .header[data-overlay] ~ main > :first-child {
+    padding-top: calc(5.5rem + var(--space-16));
+  }
+
+  .header[data-overlay][data-layout="center"] ~ main > :first-child {
+    padding-top: calc(8.5rem + var(--space-16));
+  }
+
+  .header[data-overlay][data-layout="double"] ~ main > :first-child {
+    padding-top: calc(8rem + var(--space-16));
+  }
+}
+
+/* Анимацию включает скрипт, и только если в системе не просили уменьшить движение */
+.header[data-animate],
+.header[data-animate] .row,
+.header[data-animate] .logo img,
+.header[data-animate] .name {
+  transition:
+    padding 0.24s ease,
+    height 0.24s ease,
+    font-size 0.24s ease,
+    box-shadow 0.24s ease,
+    background-color 0.24s ease;
+}
+
+.header[data-animate][data-overlay][data-stuck] {
+  animation: slide-in 0.24s ease;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header[data-animate],
+  .header[data-animate] * {
+    transition: none;
+    animation: none;
+  }
+}

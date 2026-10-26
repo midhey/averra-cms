@@ -65,6 +65,11 @@ export const PageContent = z
   .strictObject({
     blocks: z.array(BlockInstance).max(PAGE_MAX_BLOCKS),
     seo: PageSeo.optional(),
+    // Скрыть шапку сайта на этой странице (промо-лендинг): часть черновика, на сайт — с публикацией
+    hideHeader: z.boolean().optional().meta({
+      title: 'Скрыть шапку сайта',
+      description: 'Для промо-страницы: на ней не будет шапки и меню сайта',
+    }),
   })
   .refine((page) => new Set(page.blocks.map((block) => block.id)).size === page.blocks.length, {
     error: 'Id блоков на странице должны быть уникальными',

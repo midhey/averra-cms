@@ -16,6 +16,29 @@ export function Hero({ id, data, headingLevel, media, priority }: BlockComponent
       {data.button && <ButtonLink {...data.button} />}
     </div>
   )
+  // На фото: снимок на весь блок, над ним — слой цвета текста темы (непрозрачность --cover-scrim
+  // посчитана темой под любое фото), текст поверх — цветом фона темы
+  if (data.variant === 'cover' && data.image && media[data.image.mediaId]) {
+    return (
+      <Section
+        id={id}
+        backdrop={
+          <div className={styles.backdrop} data-hero-cover="">
+            <Picture
+              image={data.image}
+              media={media}
+              sizes="100vw"
+              priority={priority}
+              className={styles.photo}
+            />
+            <span className={styles.scrim} aria-hidden="true" />
+          </div>
+        }
+      >
+        <div className={styles.cover}>{text}</div>
+      </Section>
+    )
+  }
   return (
     <Section id={id}>
       {data.variant === 'split' && data.image ? (

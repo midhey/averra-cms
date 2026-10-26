@@ -11,6 +11,7 @@ import { Faq } from './faq/Faq'
 import { Features } from './features/Features'
 import { Form } from './form/Form'
 import { Gallery } from './gallery/Gallery'
+import { CONTENT_ID } from './header/view'
 import { Hero } from './hero/Hero'
 import { Pricing } from './pricing/Pricing'
 import { Reviews } from './reviews/Reviews'
@@ -34,7 +35,8 @@ export function Page({ content, media = {}, formAction }: PageProps) {
   // проверки SEO в редакторе говорят, есть ли h1
   const mainHeroId = mainHeadingBlock(content.blocks)?.id
   return (
-    <main>
+    // id — цель «К содержимому» в шапке сайта (SiteHeader)
+    <main id={CONTENT_ID}>
       {content.blocks.map((block, index) => (
         <Block
           key={block.id}

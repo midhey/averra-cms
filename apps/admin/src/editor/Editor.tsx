@@ -70,8 +70,18 @@ type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 /** Колонка редактора; на узком экране — вкладка */
 type Column = 'blocks' | 'preview' | 'fields'
 
-const snapshotOf = (title: string, blocks: readonly EditorBlock[], seo: PageSeo) =>
-  JSON.stringify({ title, blocks, seo: normalizedSeo(seo) ?? null })
+const snapshotOf = (
+  title: string,
+  blocks: readonly EditorBlock[],
+  seo: PageSeo,
+  hideHeader: boolean | undefined,
+) =>
+  JSON.stringify({
+    title,
+    blocks,
+    seo: normalizedSeo(seo) ?? null,
+    hideHeader: hideHeader === true,
+  })
 
 /** Что из ответа API нужно плашке состояния: черновик и опубликованная версия */
 const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
@@ -87,9 +97,11 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
   // SEO страницы (панель «SEO»): заголовок, описание, картинка, canonical, noindex — в черновике
   const [seo, setSeo] = useState<PageSeo>(page.draft.seo ?? {})
+  // Скрыть шапку сайта на этой странице (промо) — тоже часть черновика, флажок в панели «SEO»
+  const [hideHeader, setHideHeader] = useState(page.draft.hideHeader === true)
   const [selectedId, setSelectedId] = useState(page.draft.blocks[0]?.id ?? null)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    snapshotOf(page.title, page.draft.blocks, page.draft.seo ?? {}),
+    snapshotOf(page.title, page.draft.blocks, page.draft.seo ?? {}, page.draft.hideHeader),
   )
   // Страница, какой её последний раз отдал API: по ней плашка говорит, опубликовано ли
   const [server, setServer] = useState<ServerPage>(() => serverPageOf(page))
@@ -148,13 +160,17 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     if (validation.content) setPreviewContent(validation.content)
   }, [validation.content])
 
-  const dirty = snapshotOf(title, blocks, seo) !== savedSnapshot
+  const dirty = snapshotOf(title, blocks, seo, hideHeader) !== savedSnapshot
   // SEO страницы — по той же схеме, что у API: кривой canonical или длинное описание не сохранить
   const seoResult = checkPageSeo(seo)
   const seoErrorField = Object.keys(seoResult.errors)[0] as SeoField | undefined
   const seoError = seoErrorField && seoResult.errors[seoErrorField]
   const content: PageContent | null = validation.content
-    ? { ...validation.content, ...(seoResult.seo ? { seo: seoResult.seo } : {}) }
+    ? {
+        ...validation.content,
+        ...(seoResult.seo ? { seo: seoResult.seo } : {}),
+        ...(hideHeader ? { hideHeader: true } : {}),
+      }
     : null
   // Советы SEO по черновику как есть: видны на кнопке «SEO» до публикации и публиковать не мешают
   const seoChecks = useMemo(
@@ -267,7 +283,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
       const saved = await saveDraft.mutateAsync({ title, content })
-      setSavedSnapshot(snapshotOf(title, blocks, seo))
+      setSavedSnapshot(snapshotOf(title, blocks, seo, hideHeader))
       setServer(serverPageOf(saved))
       // Итог сохранения — сама плашка: «Сохранено · правки не опубликованы» и подобное
       setStatus({ kind: 'idle' })
@@ -307,7 +323,15 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       setTitle(restored.title)
       setBlocks(restored.draft.blocks)
       setSeo(restored.draft.seo ?? {})
-      setSavedSnapshot(snapshotOf(restored.title, restored.draft.blocks, restored.draft.seo ?? {}))
+      setHideHeader(restored.draft.hideHeader === true)
+      setSavedSnapshot(
+        snapshotOf(
+          restored.title,
+          restored.draft.blocks,
+          restored.draft.seo ?? {},
+          restored.draft.hideHeader,
+        ),
+      )
       setServer(serverPageOf(restored))
       setSelectedId(restored.draft.blocks[0]?.id ?? null)
       setPreviewContent(restored.draft)
@@ -629,6 +653,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               checks={seoChecks}
               library={library.data?.items}
               onChange={setSeo}
+              hideHeader={hideHeader}
+              onHideHeaderChange={setHideHeader}
             />
           ) : (
             <Inspector

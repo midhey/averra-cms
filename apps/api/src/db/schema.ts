@@ -40,6 +40,11 @@ export const sites = pgTable(
     // «Тема». NULL у опубликованной — тема из theme; у черновика — такой же, как опубликованная
     themePublished: jsonb().$type<Record<string, unknown>>(),
     themeDraft: jsonb().$type<Record<string, unknown>>(),
+    // Шапка сайта и меню (схема Header, читает readHeader): опубликованная — на сайте, черновик —
+    // на экране «Шапка и подвал». NULL у опубликованной — шапки на сайте нет (сайты до шага 3.25
+    // не меняются сами); у черновика — такой же, как опубликованная
+    headerPublished: jsonb().$type<Record<string, unknown>>(),
+    headerDraft: jsonb().$type<Record<string, unknown>>(),
     // Устарело: адреса уведомлений о заявках живут в notification_recipients (модуль уведомлений,
     // миграция 0016 перенесла их туда). Колонку пишет модуль, пока прежняя версия API может
     // читать её при откате; удаляется вторым шагом
@@ -64,6 +69,14 @@ export const sites = pgTable(
     check(
       'sites_theme_draft_object',
       sql`${table.themeDraft} IS NULL OR jsonb_typeof(${table.themeDraft}) = 'object'`,
+    ),
+    check(
+      'sites_header_published_object',
+      sql`${table.headerPublished} IS NULL OR jsonb_typeof(${table.headerPublished}) = 'object'`,
+    ),
+    check(
+      'sites_header_draft_object',
+      sql`${table.headerDraft} IS NULL OR jsonb_typeof(${table.headerDraft}) = 'object'`,
     ),
   ],
 )
