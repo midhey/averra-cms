@@ -110,6 +110,7 @@ sidebar:
 | `colors.border` | рамки карточек «Преимуществ» и окон cookie (декор, без проверки контраста) | `--color-border` |
 | `fonts.heading`, `fonts.body` | id из `themeFontIds` | `--font-heading`, `--font-body`, `--font-heading-weight` |
 | `radius` | `none`, `small`, `medium`, `large` (0, 4, 8, 16 px) | `--radius` |
+| — (из `text` и `background`) | затемнение фото «Первого экрана» на фото: `coverScrim(colors)` | `--cover-scrim` |
 
 - **Контраст** — `themeContrast(colors)` в `@averra/schema`: пары, пороги и какие блокируют
   (`contrastPairs`). `ThemeInput` — `Theme` плюс блокирующие пары: им проверяют и админка, и API
