@@ -1,5 +1,6 @@
 import type {
   FormFieldType,
+  LeadSource,
   LeadStatus,
   LegacyTheme,
   MediaFormat,
@@ -45,6 +46,10 @@ export const sites = pgTable(
     // не меняются сами); у черновика — такой же, как опубликованная
     headerPublished: jsonb().$type<Record<string, unknown>>(),
     headerDraft: jsonb().$type<Record<string, unknown>>(),
+    // Подвал сайта (схема Footer, читает readFooter): опубликованный и черновик, как у шапки.
+    // NULL у опубликованного — на сайте прежняя полоса с политикой и «Настройками cookie»
+    footerPublished: jsonb().$type<Record<string, unknown>>(),
+    footerDraft: jsonb().$type<Record<string, unknown>>(),
     // Устарело: адреса уведомлений о заявках живут в notification_recipients (модуль уведомлений,
     // миграция 0016 перенесла их туда). Колонку пишет модуль, пока прежняя версия API может
     // читать её при откате; удаляется вторым шагом
@@ -77,6 +82,14 @@ export const sites = pgTable(
     check(
       'sites_header_draft_object',
       sql`${table.headerDraft} IS NULL OR jsonb_typeof(${table.headerDraft}) = 'object'`,
+    ),
+    check(
+      'sites_footer_published_object',
+      sql`${table.footerPublished} IS NULL OR jsonb_typeof(${table.footerPublished}) = 'object'`,
+    ),
+    check(
+      'sites_footer_draft_object',
+      sql`${table.footerDraft} IS NULL OR jsonb_typeof(${table.footerDraft}) = 'object'`,
     ),
   ],
 )
@@ -328,6 +341,8 @@ export const leads = pgTable(
     pageId: uuid().references(() => pages.id, { onDelete: 'set null' }),
     pageSlug: text().notNull(),
     blockId: text().notNull(),
+    // Откуда заявка: блок «Форма» на странице (block) или форма подвала (footer, blockId — ~footer)
+    source: text().$type<LeadSource>().notNull().default('block'),
     formTitle: text().notNull(),
     data: jsonb().$type<StoredLeadField[]>().notNull(),
     // Размер data в байтах (UTF-8 JSON) — для дневного предела объёма: сумма по колонке, а не
@@ -347,6 +362,7 @@ export const leads = pgTable(
     index('leads_site_created_idx').on(table.siteId, table.createdAt),
     index('leads_created_at_idx').on(table.createdAt),
     check('leads_status_valid', sql`${table.status} IN ('new', 'processed')`),
+    check('leads_source_valid', sql`${table.source} IN ('block', 'footer')`),
     // Обработанная знает, когда её обработали, а новая не притворяется обработанной
     check(
       'leads_processed_at_valid',

@@ -141,6 +141,13 @@
       "when": 1792993278980,
       "tag": "0019_site_header",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793011250825,
+      "tag": "0020_site_footer",
+      "breakpoints": true
     }
   ]
 }

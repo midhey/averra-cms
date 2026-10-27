@@ -922,6 +922,7 @@ const showcasePages: HeaderTargetPage[] = [
     title: 'Ремонт квартир',
     published: true,
     hideHeader: false,
+    hideFooter: false,
     overlay: false,
     blocks: [
       { id: 'pricing-1', type: 'pricing', label: 'Цены', draft: true, published: true },
@@ -933,6 +934,7 @@ const showcasePages: HeaderTargetPage[] = [
     title: 'Работы',
     published: false,
     hideHeader: false,
+    hideFooter: false,
     overlay: false,
     blocks: [],
   },

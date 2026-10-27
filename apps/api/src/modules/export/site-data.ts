@@ -3,6 +3,7 @@ import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
 import { type MediaStorage, mediaKey } from '../../media/storage'
 import { notificationSettingsRepo } from '../../notifications/settings'
+import { draftFooter, publishedFooter } from '../footer/read'
 import { draftHeader, publishedHeader } from '../header/read'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
 import { readStoredSettings } from '../settings/read'
@@ -30,7 +31,10 @@ site.json — все данные сайта (формат averra-site-export, �
               sticky, собирается при прокрутке condense, прозрачная на первом экране overlay,
               телефон phone, кнопка button и пункты меню menu — подпись label, страница page и
               блок на ней block, логотип logo — id картинки; null — шапку не публиковали) и её
-              черновик (headerDraft; null — такой же, как на сайте); настройки заявок (leadSettings:
+              черновик (headerDraft; null — такой же, как на сайте); подвал (footer: вид layout —
+              simple, columns, big, фон tone — surface или accent, строка о компании about,
+              разделы из меню sections, тексты формы «Перезвоните мне» callback; null — подвал
+              не публиковали) и его черновик (footerDraft); настройки заявок (leadSettings:
               recipients — адреса почты для заявок, notificationRecipients — все получатели
               уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
               и SEO (settings:
@@ -40,7 +44,8 @@ site.json — все данные сайта (формат averra-site-export, �
               с заголовками; блоки страницы — JSON по схемам блоков Averra;
               revisions — история публикаций страницы;
   media     — картинки: исходное имя, тип, размеры и путь к оригиналу в этом архиве (file);
-  leads     — заявки с форм: поля с подписями, согласие на обработку персональных данных
+  leads     — заявки с форм: источник (source: block — блок «Форма» на странице, footer —
+              форма подвала), поля с подписями, согласие на обработку персональных данных
               (текст, политика, версия страницы, время), состояние;
   missingFiles — картинки, файла которых не оказалось в хранилище при выгрузке.
 
@@ -142,6 +147,9 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       // Шапка и меню на сайте и черновик с экрана «Шапка и подвал»
       header: publishedHeader(site),
       headerDraft: site.headerDraft ? draftHeader(site) : null,
+      // Подвал на сайте и его черновик
+      footer: publishedFooter(site),
+      footerDraft: site.footerDraft ? draftFooter(site) : null,
       createdAt: site.createdAt.toISOString(),
       leadSettings: {
         recipients: recipients
@@ -229,6 +237,7 @@ async function* siteJson(
           id: lead.id,
           pageSlug: lead.pageSlug,
           blockId: lead.blockId,
+          source: lead.source,
           formTitle: lead.formTitle,
           data: lead.data,
           consentText: lead.consentText,

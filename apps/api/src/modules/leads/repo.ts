@@ -1,4 +1,4 @@
-import type { LeadSettings, LeadStatus } from '@averra/schema'
+import type { LeadSettings, LeadSource, LeadStatus } from '@averra/schema'
 import { and, count, desc, eq, gt, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { leads, type StoredLeadField, sites } from '../../db/schema'
@@ -30,6 +30,8 @@ export type NewLead = {
   pageId: string
   pageSlug: string
   blockId: string
+  /** Блок «Форма» на странице или форма подвала */
+  source: LeadSource
   formTitle: string
   data: StoredLeadField[]
   consentText: string
@@ -42,6 +44,7 @@ const leadColumns = {
   id: leads.id,
   pageSlug: leads.pageSlug,
   blockId: leads.blockId,
+  source: leads.source,
   formTitle: leads.formTitle,
   data: leads.data,
   consentText: leads.consentText,
@@ -99,6 +102,7 @@ export function leadsRepo(db: Db) {
         .select({
           id: leads.id,
           pageSlug: leads.pageSlug,
+          source: leads.source,
           formTitle: leads.formTitle,
           data: leads.data,
           status: leads.status,

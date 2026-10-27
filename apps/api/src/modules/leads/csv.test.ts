@@ -26,13 +26,14 @@ describe('CSV заявок', () => {
 
   // Порядок колонок выбирает выгрузка (exportLabels в repo.ts, проверен в leads.test.ts),
   // здесь — как строка заявки ложится под заданные подписи
-  it('строка под заголовком: флажок — «да»/«нет», дата по Москве, нет поля — пустая ячейка', () => {
+  it('строка под заголовком: флажок — «да»/«нет», дата по Москве, нет поля — пустая ячейка, форма подвала подписана', () => {
     const labels = ['Имя', 'Перезвонить', 'Город']
     const first = leadCsvRow(
       {
         createdAt: new Date('2026-10-15T09:30:00.000Z'),
         status: 'processed',
         pageSlug: 'o-nas',
+        source: 'block',
         formTitle: 'Заявка',
         data: [
           { name: 'name', label: 'Имя', type: 'name', value: 'Анна' },
@@ -46,6 +47,7 @@ describe('CSV заявок', () => {
         createdAt: new Date('2026-10-14T09:30:00.000Z'),
         status: 'new',
         pageSlug: 'index',
+        source: 'footer',
         formTitle: 'Другая',
         data: [{ name: 'city', label: 'Город', type: 'text', value: 'Тверь' }],
       },
@@ -54,7 +56,7 @@ describe('CSV заявок', () => {
     expect(CSV_BOM + csvLine(leadsCsvHeader(labels)) + csvLine(first) + csvLine(second)).toBe(
       '\uFEFF"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город"\r\n' +
         '"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";""\r\n' +
-        '"14.10.2026, 12:30";"новая";"/";"Другая";"";"";"Тверь"\r\n',
+        '"14.10.2026, 12:30";"новая";"/";"Другая (подвал сайта)";"";"";"Тверь"\r\n',
     )
   })
 })

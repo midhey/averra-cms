@@ -31,7 +31,7 @@ const stateOf = (row: { headerPublished: unknown; headerDraft: unknown }): Heade
 const typeTitles = new Map<string, string>(blockCatalog.map((block) => [block.type, block.title]))
 
 type StoredBlock = { id?: unknown; type?: unknown; props?: unknown }
-type StoredContent = { blocks?: StoredBlock[]; hideHeader?: unknown } | null
+type StoredContent = { blocks?: StoredBlock[]; hideHeader?: unknown; hideFooter?: unknown } | null
 
 /** Заголовок блока, если он есть: «Наши цены» понятнее, чем #pricing-1 */
 function blockLabel(block: StoredBlock) {
@@ -81,6 +81,7 @@ async function targetsOf(db: Db | Tx, siteId: string): Promise<HeaderTargetPage[
       title: row.title,
       published: published !== null,
       hideHeader: published?.hideHeader === true,
+      hideFooter: published?.hideFooter === true,
       overlay: overlayFits(
         (published?.blocks ?? []).map((block) => ({
           type: String(block.type),

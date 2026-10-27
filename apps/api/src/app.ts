@@ -13,6 +13,7 @@ import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
 import { buildsRoutes } from './modules/builds/routes'
 import { exportRoutes, type PublishedSite } from './modules/export/routes'
+import { footerRoutes } from './modules/footer/routes'
 import { headerRoutes } from './modules/header/routes'
 import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/routes'
 import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
@@ -171,6 +172,8 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/theme', themeRoutes({ db, publisher: deps.publisher, log }))
     // Шапка сайта и меню: черновик и публикация (modules/header)
     .route('/sites/:siteId/header', headerRoutes({ db, publisher: deps.publisher, log }))
+    // Подвал сайта: черновик и публикация (modules/footer)
+    .route('/sites/:siteId/footer', footerRoutes({ db, publisher: deps.publisher, log }))
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке
     .route('/sites/:siteId', ogRoutes({ db, siteUrl: deps.siteUrl, cards: deps.ogCards }))

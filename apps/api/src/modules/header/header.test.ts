@@ -310,7 +310,7 @@ describe('права', () => {
     const res = await save({ menu }, bearer)
     expect(res.status).toBe(403)
     expect((await problemOf(res)).message).toBe(
-      'Шапку и меню сайта меняют в админке: токену API они доступны только для чтения',
+      'Шапку, меню и подвал сайта меняют в админке: токену API они доступны только для чтения',
     )
     expect((await publish(bearer)).status).toBe(403)
   })

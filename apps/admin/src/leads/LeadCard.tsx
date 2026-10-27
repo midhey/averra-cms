@@ -1,4 +1,4 @@
-import type { LeadStatus } from '@averra/schema'
+import type { LeadSource, LeadStatus } from '@averra/schema'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useId, useState } from 'react'
@@ -28,6 +28,7 @@ import {
 type Lead = {
   id: string
   pageSlug: string
+  source: LeadSource
   formTitle: string
   data: unknown
   consentText: string
@@ -137,7 +138,8 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
         <p className={styles.meta}>
           <time dateTime={lead.createdAt}>{created}</time> · страница{' '}
           {pageTitle && <>«{pageTitle}» </>}
-          <code className={styles.mono}>{pagePath(lead.pageSlug)}</code>, форма «{lead.formTitle}»
+          <code className={styles.mono}>{pagePath(lead.pageSlug)}</code>,{' '}
+          {lead.source === 'footer' ? 'форма в подвале сайта' : 'форма'} «{lead.formTitle}»
         </p>
         {lead.status === 'processed' && lead.processedAt && (
           <p className={styles.meta}>

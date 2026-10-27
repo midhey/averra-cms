@@ -13,6 +13,7 @@ import { legacySiteTarget } from './legacy-paths'
 import { canInvite, canManageChannels, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
+  footerQuery,
   headerQuery,
   invitationsQuery,
   leadQuery,
@@ -227,9 +228,9 @@ const themeRoute = createRoute({
   component: ThemeScreen,
 })
 
-// Шапка и меню — владельцу и редактору, как тема. Главное — шапка с целями меню; черновик главной
-// и медиатека для предпросмотра и логотипа — второстепенное (allSettled): без них предпросмотр
-// покажет пример лендинга
+// Шапка, меню и подвал — владельцу и редактору, как тема. Главное — шапка с целями меню и подвал;
+// черновик главной и медиатека для предпросмотра и логотипа — второстепенное (allSettled): без них
+// предпросмотр покажет пример лендинга
 const headerRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/header',
@@ -237,6 +238,7 @@ const headerRoute = createRoute({
     const { siteId } = await loadSite(queryClient)
     await Promise.all([
       queryClient.ensureQueryData(headerQuery(siteId)),
+      queryClient.ensureQueryData(footerQuery(siteId)),
       Promise.allSettled([
         queryClient.ensureQueryData(pageQuery(siteId, MAIN_PAGE_SLUG)),
         queryClient.ensureQueryData(mediaQuery(siteId)),
@@ -367,6 +369,7 @@ const cookiesRoute = createRoute({
       queryClient.ensureQueryData(siteSettingsQuery(siteId)),
       queryClient.ensureQueryData(pagesQuery(siteId)),
       queryClient.ensureQueryData(siteQuery(siteId)),
+      queryClient.ensureQueryData(footerQuery(siteId)),
     ])
   },
   component: CookiesScreen,

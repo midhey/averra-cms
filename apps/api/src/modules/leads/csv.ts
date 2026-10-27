@@ -1,4 +1,4 @@
-import type { LeadStatus } from '@averra/schema'
+import { type LeadSource, type LeadStatus, leadFormLabel } from '@averra/schema'
 import type { StoredLeadField } from '../../db/schema'
 import { displayValue, pagePath } from './service'
 
@@ -33,6 +33,7 @@ type CsvLead = {
   createdAt: Date
   status: LeadStatus
   pageSlug: string
+  source: LeadSource
   formTitle: string
   data: StoredLeadField[]
 }
@@ -53,7 +54,7 @@ export function leadCsvRow(lead: CsvLead, labels: readonly string[]) {
     dateFormat.format(lead.createdAt),
     statusLabels[lead.status],
     pagePath(lead.pageSlug),
-    lead.formTitle,
+    leadFormLabel(lead),
     ...labels.map((label) => byLabel.get(label) ?? ''),
   ]
 }

@@ -2,6 +2,7 @@ import {
   BlockId,
   CONSENT_FIELD,
   ExistingPageSlug,
+  FOOTER_FORM_ID,
   FORM_MAX_FIELDS,
   fieldRules,
   HONEYPOT_FIELD,
@@ -68,7 +69,12 @@ const LEAD_LIMITS: LeadLimits = {
  */
 export const LEAD_BODY_LIMIT = FORM_MAX_FIELDS * fieldRules.textarea.max * 9 + 16 * 1024
 
-const FormParams = z.object({ siteId: Uuid(), slug: ExistingPageSlug, blockId: BlockId })
+/** Форма — блок страницы по его id или форма подвала (~footer: в id блока «~» не бывает) */
+const FormParams = z.object({
+  siteId: Uuid(),
+  slug: ExistingPageSlug,
+  blockId: z.union([BlockId, z.literal(FOOTER_FORM_ID)]),
+})
 
 /** Якорь текста успеха в блоке формы — как sentAnchor из @averra/blocks (API их не импортирует) */
 const sentAnchor = (blockId: string) => `${blockId}-sent`
@@ -138,7 +144,8 @@ type FormsDeps = {
 }
 
 /**
- * Открытый приём заявок с форм опубликованного сайта: POST /api/forms/:siteId/:slug/:blockId,
+ * Открытый приём заявок с форм опубликованного сайта: POST /api/forms/:siteId/:slug/:blockId
+ * (у формы подвала вместо id блока — ~footer, slug — страница, где её отправили),
  * application/x-www-form-urlencoded. Входа нет — это посетитель сайта (маршрут в списке открытых
  * в auth/middleware.ts). Сайт без JavaScript, поэтому ответ — для браузера: 303 обратно на страницу
  * с якорем успеха или понятная HTML-страница ошибки. Кто просит только JSON — ApiError

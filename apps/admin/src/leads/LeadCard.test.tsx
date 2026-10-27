@@ -15,6 +15,7 @@ const site = { id: 'd0000000-0000-4000-8000-000000000001', name: 'Ремонт �
 const lead = (email: string) => ({
   id: 'a0000000-0000-4000-8000-000000000001',
   pageSlug: 'index',
+  source: 'block' as const,
   formTitle: 'Замер',
   data: [
     { name: 'name', label: 'Имя', type: 'name', value: 'Мария' },

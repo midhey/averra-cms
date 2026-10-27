@@ -1,17 +1,25 @@
 import {
+  FOOTER_CONSENT_TEXT,
+  FOOTER_FORM_ID,
   type FormField,
+  footerFormFields,
   form,
+  type LeadSource,
   type LeadValue,
+  leadFormLabel,
   MAIN_PAGE_SLUG,
   type MailAddress,
 } from '@averra/schema'
 import { and, eq, gt, isNotNull, max } from 'drizzle-orm'
+import type { z } from 'zod'
 import type { Db } from '../../db/client'
 import { mailOutbox, pageRevisions, pages, type StoredLeadField, sites } from '../../db/schema'
 import { mailboxKey } from '../../mail/mailbox-key'
 import { type DbOrTx, enqueueMail } from '../../mail/outbox'
 import { toMailLine } from '../../mail/templates/line'
 import { type NotifyDeps, notify } from '../../notifications/notify'
+import { publishedFooter } from '../footer/read'
+import { policyOf } from '../footer/repo'
 import { leadsRepo } from './repo'
 
 // Приём заявки: поиск формы в опубликованной версии страницы и запись заявки вместе
@@ -24,8 +32,29 @@ const CONFIRMATION_PERIOD_MS = 24 * 60 * 60 * 1000
 /** Адрес страницы на сайте: главная открывается по корню */
 export const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
 
-/** Форма из опубликованной версии страницы и всё, что нужно, чтобы принять по ней заявку */
-export type PublishedForm = NonNullable<Awaited<ReturnType<typeof findPublishedForm>>>
+type FormProps = z.output<typeof form.props>
+
+/**
+ * Форма на сайте — блок «Форма» опубликованной страницы или форма подвала — и всё, что нужно,
+ * чтобы принять по ней заявку
+ */
+export type PublishedForm = {
+  site: { id: string; name: string; confirmation: boolean }
+  page: { id: string; slug: string; version: number | null }
+  blockId: string
+  /** Блок «Форма» на странице или форма «Перезвоните мне» в подвале */
+  source: LeadSource
+  props: Pick<FormProps, 'title' | 'fields' | 'successText' | 'consentText' | 'policyUrl'>
+}
+
+/** Последняя версия опубликованной страницы — её номер пишется в согласие заявки */
+async function publishedVersion(db: Db, pageId: string) {
+  const [revision] = await db
+    .select({ version: max(pageRevisions.version) })
+    .from(pageRevisions)
+    .where(eq(pageRevisions.pageId, pageId))
+  return revision?.version ?? null
+}
 
 /**
  * Блок «Форма» с этим id в ОПУБЛИКОВАННОЙ версии страницы — не в черновике: принимаем то, что
@@ -38,7 +67,8 @@ export async function findPublishedForm(
   slug: string,
   blockId: string,
   log?: (message: string) => void,
-) {
+): Promise<PublishedForm | undefined> {
+  if (blockId === FOOTER_FORM_ID) return findFooterForm(db, siteId, slug)
   const [row] = await db
     .select({
       siteName: sites.name,
@@ -63,19 +93,56 @@ export async function findPublishedForm(
     )
     return undefined
   }
-  const [revision] = await db
-    .select({ version: max(pageRevisions.version) })
-    .from(pageRevisions)
-    .where(eq(pageRevisions.pageId, row.pageId))
   return {
     site: {
       id: siteId,
       name: row.siteName,
       confirmation: row.confirmation,
     },
-    page: { id: row.pageId, slug, version: revision?.version ?? null },
+    page: { id: row.pageId, slug, version: await publishedVersion(db, row.pageId) },
     blockId,
+    source: 'block',
     props: props.data,
+  }
+}
+
+/**
+ * Форма «Перезвоните мне» подвала — такая, какой её видит посетитель этой страницы: подвал
+ * опубликован и большой, страница опубликована и подвал на ней не скрыт, политика
+ * конфиденциальности опубликована (без неё форма на сайт не выводится). undefined — формы нет
+ */
+async function findFooterForm(
+  db: Db,
+  siteId: string,
+  slug: string,
+): Promise<PublishedForm | undefined> {
+  const [row] = await db
+    .select({
+      siteName: sites.name,
+      confirmation: sites.leadConfirmation,
+      footerPublished: sites.footerPublished,
+      pageId: pages.id,
+      published: pages.published,
+    })
+    .from(pages)
+    .innerJoin(sites, eq(sites.id, pages.siteId))
+    .where(and(eq(pages.siteId, siteId), eq(pages.slug, slug), isNotNull(pages.published)))
+  const footer = row && publishedFooter(row)
+  if (!row || footer?.layout !== 'big' || row.published?.hideFooter === true) return undefined
+  const policy = await policyOf(db, siteId)
+  if (!policy?.published) return undefined
+  return {
+    site: { id: siteId, name: row.siteName, confirmation: row.confirmation },
+    page: { id: row.pageId, slug, version: await publishedVersion(db, row.pageId) },
+    blockId: FOOTER_FORM_ID,
+    source: 'footer',
+    props: {
+      title: footer.callback.title,
+      fields: [...footerFormFields],
+      successText: footer.callback.successText,
+      consentText: FOOTER_CONSENT_TEXT,
+      policyUrl: pagePath(policy.slug),
+    },
   }
 }
 
@@ -157,6 +224,7 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       pageId: page.id,
       pageSlug: page.slug,
       blockId: published.blockId,
+      source: published.source,
       formTitle: props.title,
       data,
       consentText: props.consentText,
@@ -169,7 +237,11 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       event: 'lead.new',
       data: {
         siteName,
-        formTitle: toMailLine(props.title, 120, 'Форма'),
+        formTitle: toMailLine(
+          leadFormLabel({ source: published.source, formTitle: props.title }),
+          140,
+          'Форма',
+        ),
         pagePath: pagePath(page.slug),
         fields: data.map((field) => ({
           label: toMailLine(field.label, 80, field.name),

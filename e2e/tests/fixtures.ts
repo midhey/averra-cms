@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises'
 import type { AppType } from '@averra/api'
 import {
+  defaultFooter,
   defaultHeader,
   defaultTheme,
   demoPage,
   demoPageTitle,
+  type Footer,
   type Header,
   MAIN_PAGE_SLUG,
+  sameFooter,
   sameHeader,
   sameTheme,
   type Theme,
@@ -80,6 +83,7 @@ async function resetDemoSite() {
   const site = { ...found, name: DEMO_SITE_NAME }
   await resetTheme(site.id)
   await resetHeader(site.id)
+  await resetFooter(site.id)
   const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })
@@ -125,6 +129,23 @@ async function resetHeader(siteId: string) {
   }
   if (!sameHeader(view.draft, defaultHeader)) {
     expect((await header.$put({ param: { siteId }, json: defaultHeader })).status).toBe(200)
+  }
+}
+
+/**
+ * Подвала на демо-сайте нет (внизу прежняя полоса), черновик — по умолчанию
+ * (tests/footer.spec.ts его публикует). Убрать с сайта — пересборка, поэтому только если он там
+ */
+async function resetFooter(siteId: string) {
+  const footer = sites[':siteId'].footer
+  const res = await footer.$get({ param: { siteId } })
+  expect(res.status, 'подвал демо-сайта').toBe(200)
+  const view = (await res.json()) as { published: Footer | null; draft: Footer }
+  if (view.published !== null) {
+    expect((await footer.$delete({ param: { siteId } })).status, 'убрать подвал').toBe(200)
+  }
+  if (!sameFooter(view.draft, defaultFooter)) {
+    expect((await footer.$put({ param: { siteId }, json: defaultFooter })).status).toBe(200)
   }
 }
 

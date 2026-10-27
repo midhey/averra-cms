@@ -120,11 +120,13 @@ describe('карточка и список заявок', () => {
     )
   })
 
-  it('откуда заявка', () => {
-    expect(leadSource({ pageSlug: 'index', formTitle: 'Замер' })).toBe('/ · форма «Замер»')
-    expect(leadSource({ pageSlug: 'index', formTitle: 'Замер' }, 'Главная')).toBe(
-      'Главная · форма «Замер»',
-    )
+  it('откуда заявка: форма подвала помечена', () => {
+    const block = { pageSlug: 'index', formTitle: 'Замер', source: 'block' as const }
+    expect(leadSource(block)).toBe('/ · форма «Замер»')
+    expect(leadSource(block, 'Главная')).toBe('Главная · форма «Замер»')
+    expect(
+      leadSource({ pageSlug: 'o-nas', formTitle: 'Остались вопросы?', source: 'footer' }, 'О нас'),
+    ).toBe('О нас · подвал, форма «Остались вопросы?»')
   })
 
   it('куда уходят уведомления и сколько хранятся заявки', () => {

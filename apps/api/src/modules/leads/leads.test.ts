@@ -844,7 +844,7 @@ describe('раздел «Заявки» в админке', () => {
       'Вторая',
     ])
     expect(Object.keys(items[0] ?? {}).sort()).toEqual(
-      ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'status'].sort(),
+      ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'source', 'status'].sort(),
     )
 
     const one = (await (await recent('?limit=1')).json()) as { items: unknown[] }

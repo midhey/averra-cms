@@ -43,6 +43,9 @@ type SeoPanelProps = {
   /** Скрыть шапку сайта на этой странице — для промо-лендинга */
   hideHeader: boolean
   onHideHeaderChange: (hidden: boolean) => void
+  /** Скрыть подвал сайта на этой странице: останутся только ссылки на документы */
+  hideFooter: boolean
+  onHideFooterChange: (hidden: boolean) => void
 }
 
 const engines = [
@@ -72,6 +75,8 @@ export function SeoPanel({
   onChange,
   hideHeader,
   onHideHeaderChange,
+  hideFooter,
+  onHideFooterChange,
 }: SeoPanelProps) {
   const ids = useId()
   const [engine, setEngine] = useState<SearchEngine>('yandex')
@@ -240,6 +245,18 @@ export function SeoPanel({
           onChange={(event) => onHideHeaderChange(event.target.checked)}
           label="Скрыть шапку на этой странице"
           hint="Для промо-страницы: на ней не будет шапки и меню сайта. Сама шапка — в разделе «Шапка и подвал»"
+        />
+      </section>
+
+      <section className={panel.group} aria-labelledby={`${ids}-footer`}>
+        <h3 id={`${ids}-footer`} className={panel.heading}>
+          Подвал сайта
+        </h3>
+        <Checkbox
+          checked={hideFooter}
+          onChange={(event) => onHideFooterChange(event.target.checked)}
+          label="Скрыть подвал на этой странице"
+          hint="Внизу останутся только ссылки на политику и настройки cookie. Сам подвал — в разделе «Шапка и подвал»"
         />
       </section>
     </aside>

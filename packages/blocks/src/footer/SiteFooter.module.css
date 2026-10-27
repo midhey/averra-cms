@@ -1,0 +1,336 @@
+/* Подвал сайта: только роли темы. Палитра — переменные --footer-*, по одной на часть подвала;
+   какие роли за ними стоят, записано в схеме (footerPalette), и тест сверяет с ней этот файл.
+   Ниже палитры цвета берутся только из --footer-*: так любая пара на подвале — проверенная темой */
+
+/* Палитра: фон «Поверхность» */
+.footer {
+  --footer-bg: var(--color-surface);
+  --footer-text: var(--color-text);
+  --footer-muted: var(--color-muted);
+  --footer-focus: var(--color-accent);
+  --footer-button-bg: var(--color-accent);
+  --footer-button-text: var(--color-on-accent);
+  --footer-line: var(--color-border);
+}
+
+/* Палитра: фон «Акцент» (в светлых темах — тёмный). Весь текст, рамки и фокус — «текст на
+   акценте», кнопка — наоборот: пара «текст на акценте» проверена темой (4,5) */
+.footer[data-tone="accent"] {
+  --footer-bg: var(--color-accent);
+  --footer-text: var(--color-on-accent);
+  --footer-muted: var(--color-on-accent);
+  --footer-focus: var(--color-on-accent);
+  --footer-button-bg: var(--color-on-accent);
+  --footer-button-text: var(--color-accent);
+  --footer-line: var(--color-on-accent);
+}
+
+.footer {
+  padding: var(--space-12) var(--space-4) var(--space-6);
+  border-top: 1px solid var(--footer-line);
+  background: var(--footer-bg);
+  color: var(--footer-text);
+  font-size: var(--text-sm);
+}
+
+.footer[data-layout="simple"] {
+  padding-block: var(--space-6);
+}
+
+/* Фокус клавиатуры — цветом, который виден на фоне подвала (на акценте акцентом не нарисовать) */
+.footer :focus-visible {
+  outline-color: var(--footer-focus);
+}
+
+.inner {
+  display: grid;
+  gap: var(--space-8);
+  max-width: var(--container);
+  margin-inline: auto;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-12);
+}
+
+/* Колонки: на телефоне друг под другом, шире — по 12rem и больше в строку */
+.columns {
+  display: grid;
+  flex: 1 1 22rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.column {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.heading {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.brand {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-heading-weight, 700);
+  line-height: 1.3;
+}
+
+.muted {
+  color: var(--footer-muted);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Разделы — без подчёркивания, как в концепте: в колонке «Разделы» их узнают по месту.
+   Подчёркнуты при наведении и у текущей страницы — не только цветом */
+.link {
+  color: var(--footer-muted);
+  text-decoration: none;
+}
+
+.link:hover,
+.link[aria-current="page"] {
+  color: var(--footer-text);
+  text-decoration: underline;
+}
+
+/* Почта стоит рядом с адресом-текстом: без подчёркивания ссылку от него не отличить */
+.email {
+  color: var(--footer-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.contacts {
+  display: grid;
+  gap: var(--space-1);
+  font-style: normal;
+}
+
+.phone {
+  color: var(--footer-text);
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.phone:hover {
+  text-decoration: underline;
+}
+
+.socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Значок соцсети: квадрат 2.75rem — удобная цель касания. Рамка цветом текста подвала: значок
+   отличается от фона не только оттенком */
+.social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--footer-muted);
+  border-radius: var(--radius);
+  color: var(--footer-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.social:hover {
+  background: var(--footer-text);
+  color: var(--footer-bg);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Нижняя строка: реквизиты слева, документы справа; на телефоне — друг под другом */
+.bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-6);
+  color: var(--footer-muted);
+}
+
+.footer:not([data-layout="simple"]) .bottom {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--footer-line);
+}
+
+.legalText {
+  min-width: 0;
+}
+
+.legalLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-6);
+}
+
+/* Документы — ссылками с подчёркиванием; высота касания 2.75rem */
+.legalLink,
+.legalButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.legalButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ── Форма «Перезвоните мне» ───────────────────────────────────────────────────────────── */
+
+.callback {
+  display: grid;
+  flex: 1 1 22rem;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.callbackTitle {
+  font-size: var(--text-xl);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.field {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.label {
+  font-weight: 600;
+}
+
+/* Поле на фоне подвала: рамка — приглушённым цветом подвала (на поверхности — пара «приглушённый
+   на поверхности», 4,5 > 3 для границы поля) */
+.input {
+  width: 100%;
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--footer-muted);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--footer-text);
+  font: inherit;
+  font-size: var(--text-base);
+}
+
+.submit {
+  min-height: 3rem;
+  padding: var(--space-3) var(--space-6);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--footer-button-bg);
+  color: var(--footer-button-text);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:hover {
+  filter: brightness(1.08);
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.consent input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--footer-button-bg);
+}
+
+.inlineLink {
+  color: inherit;
+}
+
+/* Ловушка для ботов: вне экрана, но не display: none — его боты узнают и пропускают */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Текст успеха виден только после возврата из API на #~footer-sent, форма тогда прячется */
+.sent {
+  display: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--footer-text);
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+}
+
+.sent:target {
+  display: block;
+}
+
+.sent:target ~ .form {
+  display: none;
+}
+
+/* Атрибут hidden главнее display у классов выше: без JS кнопка «Настройки cookie» скрыта */
+.footer [hidden] {
+  display: none;
+}

@@ -16,6 +16,7 @@ const page = (overrides: Partial<HeaderTargetPage>): HeaderTargetPage => ({
   title: 'Ремонт',
   published: true,
   hideHeader: false,
+  hideFooter: false,
   overlay: false,
   blocks: [],
   ...overrides,

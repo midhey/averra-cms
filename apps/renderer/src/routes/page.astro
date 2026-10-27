@@ -5,12 +5,16 @@ import {
   headerScriptNeeded,
   LegalFooter,
   Page,
+  SiteFooter,
   SiteHeader,
+  siteFooterView,
   siteHeaderView,
 } from '@averra/blocks'
 import '@averra/blocks/base.css'
 import {
+  FOOTER_FORM_ID,
   findRedirect,
+  footerContacts,
   headerContacts,
   MAIN_PAGE_SLUG,
   NOT_FOUND_PAGE_SLUG,
@@ -69,7 +73,7 @@ const scripts = [
 ]
 // Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы
 const themeCss = siteFontCss(await siteFontFiles(site.theme)) + themeToCss(site.theme)
-// Cookie-уведомление и подвал с документами: ссылка на политику — только на опубликованную страницу
+// Cookie-уведомление и ссылки на документы: ссылка на политику — только на опубликованную страницу
 const cookies = cookieNoticeView(
   site.settings,
   pages.map((candidate) => candidate.slug),
@@ -85,6 +89,24 @@ const header = siteHeaderView({
     blockIds: candidate.content.blocks.map((block) => block.id),
   })),
   contacts: headerContacts(site.settings.organization),
+})
+// Подвал: опубликованный, если страница его не скрыла (иначе — прежняя полоса с документами).
+// Разделы — пункты опубликованного меню шапки, реквизиты и контакты — из «SEO → Организация»,
+// форма «Перезвоните мне» шлёт заявку в API с адресом этой страницы. Год — год сборки
+const footer = siteFooterView({
+  footer: site.footer,
+  siteName: site.name,
+  page,
+  header: site.header,
+  pages: pages.map((candidate) => ({
+    slug: candidate.slug,
+    blockIds: candidate.content.blocks.map((block) => block.id),
+  })),
+  contacts: footerContacts(site.settings.organization),
+  legal: cookies.footer,
+  // Стандартной 404 нет в базе — API заявку с неё не примет, поэтому формы на ней нет (null)
+  formAction: pages.includes(page) ? formActionFor(site.id, page.slug)(FOOTER_FORM_ID) : null,
+  year: new Date().getFullYear(),
 })
 // Скрипт плеера — только на страницах с блоком «Видео»
 const hasVideo = page.content.blocks.some((block) => block.type === 'video')
@@ -105,7 +127,7 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
   <body>
     {header && <SiteHeader view={header} media={media} />}
     <Page content={page.content} media={media} formAction={formActionFor(site.id, page.slug)} />
-    <LegalFooter {...cookies.footer} />
+    {footer ? <SiteFooter view={footer} /> : <LegalFooter {...cookies.footer} />}
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}

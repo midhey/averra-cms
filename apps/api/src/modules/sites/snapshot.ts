@@ -6,6 +6,7 @@ import {
   settingsMediaIds,
 } from '@averra/schema'
 import type { Db } from '../../db/client'
+import { publishedFooter } from '../footer/read'
 import { publishedHeader } from '../header/read'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
@@ -20,6 +21,8 @@ import { sitesRepo } from './repo'
  * сервера. Организация (телефон, адрес, ИНН — у ИП это его личные данные) — только в разметке
  * главной, поэтому до публикации главной в снимке её нет. Шапка — опубликованная (null — её не
  * публиковали, на сайте шапки нет); телефон и адрес в неё рендерер берёт из той же организации.
+ * Подвал — опубликованный (null — на сайте прежняя полоса с документами); реквизиты, контакты и
+ * соцсети в него — тоже из организации.
  * siteUrl — адрес установки (SITE_URL),
  * если своего в настройках нет. undefined — сайта нет
  */
@@ -45,6 +48,7 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
       name: found.name,
       theme: publishedTheme(found),
       header,
+      footer: publishedFooter(found),
       url: effectiveSiteUrl(settings, siteUrl),
       settings,
     },

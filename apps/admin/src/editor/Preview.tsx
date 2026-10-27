@@ -79,6 +79,12 @@ type PreviewProps = {
   extra?: ReactNode
   /** Подпись iframe для диктора */
   title?: string
+  /**
+   * Прокрутить к низу страницы: на вкладке «Подвал» смотрят подвал, а не первый экран. Значение —
+   * ключ того, что внизу (например, данные подвала): прокручиваем при открытии и при его смене,
+   * а не на каждую перерисовку — иначе человека, прокрутившего предпросмотр вверх, вернёт вниз
+   */
+  scrollToEnd?: string | undefined
 }
 
 /** Роли темы админки для подсветки: их значения читаем из её документа */
@@ -173,6 +179,18 @@ export function Preview(props: PreviewProps) {
     const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
     view.scrollTo({ top: view.scrollY + top, behavior: calm ? 'auto' : 'smooth' })
   }, [frameDocument, selectedId, interactive])
+
+  // Вкладка «Подвал»: низ страницы в окне — при открытии и при смене ключа (подвал меняет
+  // высоту, пока его настраивают)
+  const scrollToEnd = props.scrollToEnd
+  useEffect(() => {
+    const view = frameDocument?.defaultView
+    if (!view || scrollToEnd === undefined) return
+    const frame = view.requestAnimationFrame(() =>
+      view.scrollTo({ top: frameDocument.documentElement.scrollHeight }),
+    )
+    return () => view.cancelAnimationFrame(frame)
+  }, [frameDocument, scrollToEnd])
 
   // Ссылки в предпросмотре никуда не уводят, кроме якорей внутри страницы. Щелчок по блоку
   // выбирает его. Элементы iframe — из другого окна, поэтому не instanceof Element, а closest

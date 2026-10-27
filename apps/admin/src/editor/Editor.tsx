@@ -70,18 +70,19 @@ type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 /** Колонка редактора; на узком экране — вкладка */
 type Column = 'blocks' | 'preview' | 'fields'
 
-const snapshotOf = (
-  title: string,
-  blocks: readonly EditorBlock[],
-  seo: PageSeo,
-  hideHeader: boolean | undefined,
-) =>
-  JSON.stringify({
-    title,
-    blocks,
-    seo: normalizedSeo(seo) ?? null,
-    hideHeader: hideHeader === true,
-  })
+/** Скрыть шапку и подвал сайта на этой странице (флажки в панели «SEO») */
+type Chrome = { hideHeader: boolean; hideFooter: boolean }
+
+const chromeOf = (content: {
+  hideHeader?: boolean | undefined
+  hideFooter?: boolean | undefined
+}) => ({
+  hideHeader: content.hideHeader === true,
+  hideFooter: content.hideFooter === true,
+})
+
+const snapshotOf = (title: string, blocks: readonly EditorBlock[], seo: PageSeo, chrome: Chrome) =>
+  JSON.stringify({ title, blocks, seo: normalizedSeo(seo) ?? null, ...chrome })
 
 /** Что из ответа API нужно плашке состояния: черновик и опубликованная версия */
 const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
@@ -97,11 +98,12 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
   // SEO страницы (панель «SEO»): заголовок, описание, картинка, canonical, noindex — в черновике
   const [seo, setSeo] = useState<PageSeo>(page.draft.seo ?? {})
-  // Скрыть шапку сайта на этой странице (промо) — тоже часть черновика, флажок в панели «SEO»
-  const [hideHeader, setHideHeader] = useState(page.draft.hideHeader === true)
+  // Скрыть шапку и подвал сайта на этой странице (промо) — тоже часть черновика, флажки в панели
+  // «SEO»
+  const [chrome, setChrome] = useState<Chrome>(() => chromeOf(page.draft))
   const [selectedId, setSelectedId] = useState(page.draft.blocks[0]?.id ?? null)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    snapshotOf(page.title, page.draft.blocks, page.draft.seo ?? {}, page.draft.hideHeader),
+    snapshotOf(page.title, page.draft.blocks, page.draft.seo ?? {}, chromeOf(page.draft)),
   )
   // Страница, какой её последний раз отдал API: по ней плашка говорит, опубликовано ли
   const [server, setServer] = useState<ServerPage>(() => serverPageOf(page))
@@ -160,7 +162,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     if (validation.content) setPreviewContent(validation.content)
   }, [validation.content])
 
-  const dirty = snapshotOf(title, blocks, seo, hideHeader) !== savedSnapshot
+  const dirty = snapshotOf(title, blocks, seo, chrome) !== savedSnapshot
   // SEO страницы — по той же схеме, что у API: кривой canonical или длинное описание не сохранить
   const seoResult = checkPageSeo(seo)
   const seoErrorField = Object.keys(seoResult.errors)[0] as SeoField | undefined
@@ -169,7 +171,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     ? {
         ...validation.content,
         ...(seoResult.seo ? { seo: seoResult.seo } : {}),
-        ...(hideHeader ? { hideHeader: true } : {}),
+        ...(chrome.hideHeader ? { hideHeader: true } : {}),
+        ...(chrome.hideFooter ? { hideFooter: true } : {}),
       }
     : null
   // Советы SEO по черновику как есть: видны на кнопке «SEO» до публикации и публиковать не мешают
@@ -283,7 +286,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
       const saved = await saveDraft.mutateAsync({ title, content })
-      setSavedSnapshot(snapshotOf(title, blocks, seo, hideHeader))
+      setSavedSnapshot(snapshotOf(title, blocks, seo, chrome))
       setServer(serverPageOf(saved))
       // Итог сохранения — сама плашка: «Сохранено · правки не опубликованы» и подобное
       setStatus({ kind: 'idle' })
@@ -323,13 +326,13 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
       setTitle(restored.title)
       setBlocks(restored.draft.blocks)
       setSeo(restored.draft.seo ?? {})
-      setHideHeader(restored.draft.hideHeader === true)
+      setChrome(chromeOf(restored.draft))
       setSavedSnapshot(
         snapshotOf(
           restored.title,
           restored.draft.blocks,
           restored.draft.seo ?? {},
-          restored.draft.hideHeader,
+          chromeOf(restored.draft),
         ),
       )
       setServer(serverPageOf(restored))
@@ -653,8 +656,10 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
               checks={seoChecks}
               library={library.data?.items}
               onChange={setSeo}
-              hideHeader={hideHeader}
-              onHideHeaderChange={setHideHeader}
+              hideHeader={chrome.hideHeader}
+              onHideHeaderChange={(hideHeader) => setChrome({ ...chrome, hideHeader })}
+              hideFooter={chrome.hideFooter}
+              onHideFooterChange={(hideFooter) => setChrome({ ...chrome, hideFooter })}
             />
           ) : (
             <Inspector

@@ -1,6 +1,9 @@
-import { SiteHeader, siteHeaderView } from '@averra/blocks'
+import { SiteFooter, SiteHeader, siteFooterView, siteHeaderView } from '@averra/blocks'
 import {
   demoPage,
+  emptyFooterContacts,
+  type Footer,
+  type FooterContacts,
   HEADER_LABEL_MAX,
   Header,
   HeaderLayout,
@@ -13,19 +16,22 @@ import {
   sameHeader,
 } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
+import { FooterFields } from '../footer/FooterFields'
+import { footerHiddenOnText, footerStatus } from '../footer/footer-format'
+import { useFooterEditor } from '../footer/use-footer-editor'
 import { type FieldErrors, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
 import { HeaderLayoutSketch, LinkSelect, MenuEditor } from '../header/HeaderParts'
 import { headerStatus, hiddenOnText, newHeaderButton, overlayHint } from '../header/header-format'
 import { MediaPickField } from '../media/MediaPickField'
 import { mediaMapOf } from '../media/media-format'
+import { pagePath } from '../pages-format'
 import { canEditHeader, canEditSeo } from '../permissions'
-import { headerQuery, mediaQuery, pageQuery, queryKeys, siteQuery } from '../queries'
+import { footerQuery, headerQuery, mediaQuery, pageQuery, queryKeys, siteQuery } from '../queries'
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { Checkbox, TextInput } from '../ui/Field'
@@ -53,20 +59,23 @@ const fieldName = (path: string) => path.replace(/\.(page|block)$/, '.target')
 
 /**
  * «Шапка и подвал» по концепту: вкладки «Шапка» (раскладка, поведение, кнопка, логотип), «Меню»
- * (пункты с перетаскиванием) и «Подвал»; справа — предпросмотр на главной теми же компонентами,
- * что собирают сайт. «Сохранить» — черновик, «Опубликовать» — шапка на сайте (пересборка)
+ * (пункты с перетаскиванием) и «Подвал» (вид, фон, колонки, форма); справа — предпросмотр на
+ * главной теми же компонентами, что собирают сайт. «Сохранить» — черновик, «Опубликовать» — на
+ * сайт (пересборка). У шапки с меню и у подвала публикации свои: кнопки внизу — той вкладки,
+ * что открыта
  */
 export function HeaderScreen() {
   const siteId = useSiteId()
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
   const { data: view } = useSuspenseQuery(headerQuery(siteId))
+  const { data: footer } = useSuspenseQuery(footerQuery(siteId))
   usePageTitle('Шапка и подвал', site.name)
   return (
     <Screen>
       <PageHeader
         eyebrow={site.name}
         title="Шапка и подвал"
-        meta="Одни на весь сайт; на отдельной странице шапку можно скрыть"
+        meta="Одни на весь сайт; на отдельной странице шапку и подвал можно скрыть"
       />
       <UnsavedChangesGuard>
         <HeaderEditor
@@ -79,7 +88,8 @@ export function HeaderScreen() {
           pages={view.targets}
           contacts={view.contacts}
           readOnly={!canEditHeader(site.access)}
-          cookiesLink={canEditSeo(site.access)}
+          seoLinks={canEditSeo(site.access)}
+          footer={footer}
         />
       </UnsavedChangesGuard>
     </Screen>
@@ -100,8 +110,17 @@ type EditorProps = {
    */
   contacts: { phone: string; address: string } | null
   readOnly: boolean
-  /** Экран «Cookie и согласие» — владельцу: ссылка на него только ему */
-  cookiesLink: boolean
+  /** Экраны «SEO» («Организация», «Cookie и согласие») — владельцу: ссылки на них только ему */
+  seoLinks: boolean
+  /** Подвал с сервера: черновик, что на сайте, политика, «Настройки cookie», контакты */
+  footer: {
+    draft: Footer
+    published: Footer | null
+    unpublished: boolean
+    policy: { slug: string; published: boolean }
+    cookieSettings: boolean
+    contacts: FooterContacts | null
+  }
 }
 
 function HeaderEditor(props: EditorProps) {
@@ -111,6 +130,15 @@ function HeaderEditor(props: EditorProps) {
   const [form, setForm] = useState<Header>(draft)
   const [tab, setTab] = useState<Tab>('header')
   const [notice, setNotice] = useState<Notice>()
+  const footer = useFooterEditor({
+    siteId,
+    draft: props.footer.draft,
+    onNotice: setNotice,
+    onFieldError: (name) => {
+      setTab('footer')
+      focusLater(name)
+    },
+  })
   // Черновик сменился на сервере (сохранили в другой вкладке): форма без правок берёт новый,
   // правки человека не трогаем — как на экране «Тема»
   const [base, setBase] = useState(draft)
@@ -166,15 +194,26 @@ function HeaderEditor(props: EditorProps) {
   })
   const pending = save.isPending || publish.isPending || takeDown.isPending
 
+  /** Фокус на поле по имени — после того, как его вкладка отрисуется */
+  function focusLater(name: string) {
+    requestAnimationFrame(() => {
+      const field = formRef.current?.elements.namedItem(name)
+      // Группа радиокнопок (вид подвала) — RadioNodeList: фокус на выбранную
+      const target =
+        field instanceof RadioNodeList
+          ? ([...field].find((node) => node instanceof HTMLInputElement && node.checked) ??
+            field[0])
+          : field
+      if (target instanceof HTMLElement) target.focus()
+    })
+  }
+
   /** Ошибка у поля: открыть его вкладку и перевести фокус на него */
   function focusError(fieldErrors: FieldErrors) {
     const path = Object.keys(fieldErrors)[0]
     if (!path) return
     setTab(path.startsWith('menu') ? 'menu' : 'header')
-    requestAnimationFrame(() => {
-      const field = formRef.current?.elements.namedItem(fieldName(path))
-      if (field instanceof HTMLElement) field.focus()
-    })
+    focusLater(fieldName(path))
   }
 
   const showError = (error: unknown, action: string) => {
@@ -214,6 +253,11 @@ function HeaderEditor(props: EditorProps) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Enter в поле вкладки «Подвал» сохраняет подвал: у него своя кнопка и своя публикация
+    if (tab === 'footer') {
+      if (!footer.pending) await footer.save()
+      return
+    }
     setNotice(undefined)
     if (await saveDraft()) {
       setNotice({ kind: 'done', text: 'Шапка сохранена. На сайте она появится после публикации' })
@@ -258,6 +302,11 @@ function HeaderEditor(props: EditorProps) {
   }
 
   const status = headerStatus({ unsaved, unpublished, onSite })
+  const footerState = footerStatus({
+    unsaved: footer.unsaved,
+    unpublished: props.footer.unpublished,
+    onSite: props.footer.published !== null,
+  })
   const errorOf = (path: string) => errors.errors[path]
   const hidden = hiddenOnText(pages)
 
@@ -272,7 +321,8 @@ function HeaderEditor(props: EditorProps) {
       >
         {readOnly && (
           <InlineAlert tone="info">
-            Шапку и меню меняют владелец и редактор сайта: публикация шапки пересобирает весь сайт.
+            Шапку, меню и подвал меняют владелец и редактор сайта: их публикация пересобирает весь
+            сайт.
           </InlineAlert>
         )}
         <Tabs
@@ -460,24 +510,19 @@ function HeaderEditor(props: EditorProps) {
           )}
 
           {tab === 'footer' && (
-            <div className={styles.panel}>
-              <Section title="Подвал" card>
-                <p className={styles.text}>
-                  Сейчас внизу каждой страницы — ссылки «Политика конфиденциальности» и «Настройки
-                  cookie» (если на сайте есть счётчики). Их настраивает владелец сайта на экране{' '}
-                  {props.cookiesLink ? (
-                    <Link to="/seo/cookies">«Cookie и согласие»</Link>
-                  ) : (
-                    '«Cookie и согласие»'
-                  )}
-                  .
-                </p>
-                <p className={styles.note}>
-                  Виды подвала с колонками, контактами и реквизитами появятся в следующем
-                  обновлении.
-                </p>
-              </Section>
-            </div>
+            <FooterFields
+              editor={footer}
+              contacts={props.footer.contacts}
+              policy={props.footer.policy}
+              menuSize={shown.current.menu.length}
+              hiddenOn={footerHiddenOnText(
+                pages
+                  .filter((page) => page.published)
+                  .map((page) => ({ title: page.title, hidden: page.hideFooter })),
+              )}
+              seoLinks={props.seoLinks}
+              readOnly={readOnly}
+            />
           )}
         </Tabs>
 
@@ -489,7 +534,51 @@ function HeaderEditor(props: EditorProps) {
               {notice.text}
             </InlineAlert>
           )}
-          {!readOnly && (
+          {!readOnly && tab === 'footer' && (
+            <FormActions>
+              <Button
+                loading={footer.saving}
+                aria-disabled={footer.pending ? true : undefined}
+                onClick={() => {
+                  if (!footer.pending) void footer.save()
+                }}
+              >
+                Сохранить подвал
+              </Button>
+              <Button
+                variant="primary"
+                loading={footer.publishing}
+                aria-disabled={
+                  footer.pending || (!footer.unsaved && !props.footer.unpublished)
+                    ? true
+                    : undefined
+                }
+                onClick={() => {
+                  if (!footer.pending && (footer.unsaved || props.footer.unpublished)) {
+                    void footer.publish()
+                  }
+                }}
+              >
+                Опубликовать подвал
+              </Button>
+              <StatusPill tone={footerState.tone} appearance="dot">
+                {footerState.text}
+              </StatusPill>
+              {props.footer.published !== null && (
+                <Button
+                  variant="ghost"
+                  loading={footer.takingDown}
+                  aria-disabled={footer.pending ? true : undefined}
+                  onClick={() => {
+                    if (!footer.pending) void footer.takeDown()
+                  }}
+                >
+                  Убрать с сайта
+                </Button>
+              )}
+            </FormActions>
+          )}
+          {!readOnly && tab !== 'footer' && (
             <FormActions>
               <Button type="submit" loading={save.isPending && !publish.isPending}>
                 Сохранить
@@ -530,6 +619,14 @@ function HeaderEditor(props: EditorProps) {
         header={shown.current}
         pages={pages}
         contacts={contacts ?? { phone: '', address: '' }}
+        footer={{
+          footer: footer.shown,
+          contacts: props.footer.contacts ?? emptyFooterContacts,
+          // Политика — ссылкой, только если опубликована: как на сайте
+          policyHref: props.footer.policy.published ? pagePath(props.footer.policy.slug) : null,
+          cookieSettings: props.footer.cookieSettings,
+        }}
+        focus={tab === 'footer' ? 'footer' : 'header'}
       />
     </div>
   )
@@ -542,13 +639,23 @@ type PreviewProps = {
   header: Header
   pages: readonly HeaderTargetPage[]
   contacts: { phone: string; address: string }
+  footer: {
+    footer: Footer
+    contacts: FooterContacts
+    policyHref: string | null
+    cookieSettings: boolean
+  }
+  /** Что сейчас настраивают: на вкладке «Подвал» предпросмотр прокручен к низу страницы */
+  focus: 'header' | 'footer'
 }
 
 /**
- * Предпросмотр шапки на главной — с темой сайта и теми же компонентами, что на сайте. Пустая
- * главная — пример лендинга. Ссылки меню ведут и на неопубликованное: так видно черновик целиком
+ * Предпросмотр шапки и подвала на главной — с темой сайта и теми же компонентами, что на сайте.
+ * Пустая главная — пример лендинга. Ссылки меню ведут и на неопубликованное: так видно черновик
+ * целиком. Подвал — черновик вкладки «Подвал», разделы в нём — пункты меню из черновика шапки
  */
-function HeaderPreview({ siteId, siteName, theme, header, pages, contacts }: PreviewProps) {
+function HeaderPreview(props: PreviewProps) {
+  const { siteId, siteName, theme, header, pages, contacts, focus } = props
   const [device, setDevice] = useState<Device>(initialDevice)
   const main = useQuery(pageQuery(siteId, MAIN_PAGE_SLUG))
   const library = useQuery(mediaQuery(siteId))
@@ -556,40 +663,59 @@ function HeaderPreview({ siteId, siteName, theme, header, pages, contacts }: Pre
   const draft = main.data?.draft
   const empty = draft === undefined || draft.blocks.length === 0
   const content = useMemo(
-    // На главной шапка может быть скрыта, но здесь смотрят именно шапку
-    () => ({ ...(empty ? PageContent.parse(demoPage) : draft), hideHeader: false }),
+    // На главной шапка и подвал могут быть скрыты, но здесь смотрят именно их
+    () => ({
+      ...(empty ? PageContent.parse(demoPage) : draft),
+      hideHeader: false,
+      hideFooter: false,
+    }),
     [draft, empty],
   )
-  const view = siteHeaderView({
-    header,
+  const linkable = pages.map((page) => ({
+    slug: page.slug,
+    blockIds: page.blocks.map((block) => block.id),
+  }))
+  const page = { slug: MAIN_PAGE_SLUG, content }
+  const view = siteHeaderView({ header, siteName, page, pages: linkable, contacts })
+  const footerView = siteFooterView({
+    footer: props.footer.footer,
     siteName,
-    page: { slug: MAIN_PAGE_SLUG, content },
-    pages: pages.map((page) => ({
-      slug: page.slug,
-      blockIds: page.blocks.map((block) => block.id),
-    })),
-    contacts,
+    page,
+    header,
+    pages: linkable,
+    contacts: props.footer.contacts,
+    legal: { policyHref: props.footer.policyHref, cookieSettings: props.footer.cookieSettings },
+    year: new Date().getFullYear(),
   })
+  const subject = focus === 'footer' ? 'подвал' : 'шапка'
+  // На вкладке «Подвал» предпросмотр прокручивается вниз при смене подвала или устройства,
+  // а не на каждую перерисовку
+  const scrollKey = focus === 'footer' ? JSON.stringify([device, footerView]) : undefined
   return (
-    <section aria-label="Предпросмотр шапки" className={styles.preview}>
+    <section
+      aria-label={focus === 'footer' ? 'Предпросмотр подвала' : 'Предпросмотр шапки'}
+      className={styles.preview}
+    >
       <div className={styles.previewBar}>
         <p className={styles.note}>
           {empty
-            ? 'Главная пока пустая — шапка показана над примером лендинга. '
+            ? `Главная пока пустая — ${subject} показан${focus === 'footer' ? '' : 'а'} с примером лендинга. `
             : 'Предпросмотр на главной — с настоящей темой сайта. '}
-          На сайт шапка попадёт после публикации.
+          На сайт {subject} попадёт после публикации.
         </p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
       <div className={styles.frame}>
         <Preview
-          title="Предпросмотр шапки"
+          title={focus === 'footer' ? 'Предпросмотр подвала' : 'Предпросмотр шапки'}
           content={content}
           theme={theme}
           media={media}
           device={device}
           selectedId={null}
           before={view && <SiteHeader view={view} media={media} />}
+          extra={footerView && <SiteFooter view={footerView} preview />}
+          scrollToEnd={scrollKey}
         />
       </div>
     </section>

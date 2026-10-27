@@ -138,7 +138,7 @@ test('обзор берёт только последние заявки и то
   await expect(section.getByRole('link').filter({ hasText: name })).toBeVisible()
   expect(body.items.length).toBeLessThanOrEqual(3)
   expect(Object.keys(body.items[0] ?? {}).sort()).toEqual(
-    ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'status'].sort(),
+    ['createdAt', 'data', 'formTitle', 'id', 'pageSlug', 'source', 'status'].sort(),
   )
   // Загрузчик и экран могут спросить дважды, но только последние, а не весь список
   expect(requests.length).toBeGreaterThan(0)

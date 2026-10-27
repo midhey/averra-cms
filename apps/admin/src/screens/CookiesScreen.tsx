@@ -1,4 +1,10 @@
-import { CookieNotice, cookieNoticeView, LegalFooter } from '@averra/blocks'
+import {
+  CookieNotice,
+  cookieNoticeView,
+  LegalFooter,
+  SiteFooter,
+  siteFooterView,
+} from '@averra/blocks'
 import {
   COOKIE_TEXT_MAX,
   CookieLook,
@@ -8,8 +14,12 @@ import {
   cookieModeTitles,
   cookieNoticeShown,
   defaultCookieText,
+  emptyFooterContacts,
+  type Footer,
+  type FooterContacts,
   type LegalDocument,
   legalPages,
+  MAIN_PAGE_SLUG,
   PageContent,
 } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
@@ -18,7 +28,7 @@ import { useMemo, useState } from 'react'
 import { api } from '../api'
 import { type Device, DeviceSwitch, Preview } from '../editor/Preview'
 import { apiRequestError, messageOf } from '../errors'
-import { pagesQuery, queryKeys, siteQuery, siteSettingsQuery } from '../queries'
+import { footerQuery, pagesQuery, queryKeys, siteQuery, siteSettingsQuery } from '../queries'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { legalPageOf, policyOptions, policyProblem, previewAnalytics } from '../seo/cookies-format'
 import { SettingsCardActions } from '../seo/SettingsCard'
@@ -58,6 +68,7 @@ export function CookiesScreen() {
   const { data: view } = useSuspenseQuery(siteSettingsQuery(siteId))
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
   const { data: site } = useSuspenseQuery(siteQuery(siteId))
+  const { data: siteFooter } = useSuspenseQuery(footerQuery(siteId))
   usePageTitle('Cookie и согласие', view.settings.name)
 
   const [values, setValues] = useState<CookieSettings>(view.settings.cookies)
@@ -204,6 +215,8 @@ export function CookiesScreen() {
             theme={site.theme}
             siteName={view.settings.name}
             shown={shown}
+            siteFooter={siteFooter.published}
+            contacts={siteFooter.contacts ?? emptyFooterContacts}
           />
         </div>
       </UnsavedChangesGuard>
@@ -219,6 +232,13 @@ type PreviewProps = {
   siteName: string
   /** На сайте есть счётчик: иначе уведомления на сайте нет, предпросмотр — на будущее */
   shown: boolean
+  /**
+   * Подвал на сайте: если он опубликован, политика и «Настройки cookie» стоят в его нижней
+   * строке — предпросмотр показывает их там же, где их видит посетитель
+   */
+  siteFooter: Footer | null
+  /** Реквизиты и контакты «Организации» для подвала в предпросмотре */
+  contacts: FooterContacts
 }
 
 /**
@@ -226,7 +246,7 @@ type PreviewProps = {
  * сайте. Без счётчиков уведомления нет, виден только подвал со ссылкой на политику
  */
 function CookiePreview(props: PreviewProps) {
-  const { cookies, analytics, published, theme, siteName, shown } = props
+  const { cookies, analytics, published, theme, siteName, shown, siteFooter, contacts } = props
   const [device, setDevice] = useState<Device>('phone')
   // Предпросмотр показывает уведомление и без счётчиков: видно, как оно встанет, когда их добавят
   const { notice, footer } = cookieNoticeView(
@@ -250,6 +270,17 @@ function CookiePreview(props: PreviewProps) {
       }),
     [siteName],
   )
+  // Опубликованный подвал — с документами в нижней строке; разделы меню здесь не нужны
+  const footerView = siteFooterView({
+    footer: siteFooter,
+    siteName,
+    page: { slug: MAIN_PAGE_SLUG, content },
+    header: null,
+    pages: [],
+    contacts,
+    legal: footer,
+    year: new Date().getFullYear(),
+  })
   return (
     <div className={styles.aside}>
       <Section title="Как увидят посетители" card>
@@ -264,7 +295,11 @@ function CookiePreview(props: PreviewProps) {
             toolbar={<DeviceSwitch value={device} onChange={setDevice} />}
             extra={
               <>
-                <LegalFooter {...footer} />
+                {footerView ? (
+                  <SiteFooter view={footerView} preview />
+                ) : (
+                  <LegalFooter {...footer} />
+                )}
                 {notice && <CookieNotice {...notice} preview />}
               </>
             }

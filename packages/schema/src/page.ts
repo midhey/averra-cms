@@ -70,6 +70,12 @@ export const PageContent = z
       title: 'Скрыть шапку сайта',
       description: 'Для промо-страницы: на ней не будет шапки и меню сайта',
     }),
+    // Скрыть подвал сайта на этой странице: остаётся только строка с политикой и cookie
+    hideFooter: z.boolean().optional().meta({
+      title: 'Скрыть подвал сайта',
+      description:
+        'Для промо-страницы: внизу останутся только ссылки на политику и настройки cookie',
+    }),
   })
   .refine((page) => new Set(page.blocks.map((block) => block.id)).size === page.blocks.length, {
     error: 'Id блоков на странице должны быть уникальными',

@@ -246,6 +246,7 @@ describe('headerLinkIssues', () => {
       title: 'Ремонт',
       published: true,
       hideHeader: false,
+      hideFooter: false,
       overlay: false,
       blocks: [
         block('hero', true, true),
@@ -258,6 +259,7 @@ describe('headerLinkIssues', () => {
       title: 'Акции',
       published: false,
       hideHeader: false,
+      hideFooter: false,
       overlay: false,
       blocks: [],
     },

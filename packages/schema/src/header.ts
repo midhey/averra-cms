@@ -226,6 +226,8 @@ export type HeaderTargetPage = {
   published: boolean
   /** Шапка скрыта на опубликованной странице (hideHeader) */
   hideHeader: boolean
+  /** Подвал скрыт на опубликованной странице (hideFooter) */
+  hideFooter: boolean
   /** Опубликованная страница начинается с «Первого экрана» на фото (overlayFits) */
   overlay: boolean
   /** Блоки черновика, потом — те, что остались только на сайте */

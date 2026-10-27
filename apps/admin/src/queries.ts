@@ -27,6 +27,7 @@ export const queryKeys = {
   siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
   theme: (siteId: string) => ['sites', siteId, 'theme'] as const,
   header: (siteId: string) => ['sites', siteId, 'header'] as const,
+  footer: (siteId: string) => ['sites', siteId, 'footer'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   notifications: ['notifications'] as const,
@@ -92,6 +93,20 @@ export const headerQuery = (siteId: string) =>
     queryKey: queryKeys.header(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].header.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Подвал сайта: черновик, что на сайте, страница политики, есть ли «Настройки cookie» и контакты
+ * «Организации» для предпросмотра
+ */
+export const footerQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.footer(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].footer.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

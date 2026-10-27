@@ -1,4 +1,10 @@
-import { type LeadStatus, MailAddress, PHONE_PATTERN, patternRegExp } from '@averra/schema'
+import {
+  type LeadSource,
+  type LeadStatus,
+  MailAddress,
+  PHONE_PATTERN,
+  patternRegExp,
+} from '@averra/schema'
 import { pluralRu } from '../format/plural'
 import type { FieldErrors } from '../forms/field-errors'
 import { pagePath } from '../pages-format'
@@ -106,11 +112,14 @@ export function replyMailto(email: string, siteName: string) {
 }
 
 /**
- * Откуда заявка: «Главная · форма «Замер»». Заголовок страницы — если экран его знает
- * (страницу могли и удалить), иначе адрес
+ * Откуда заявка: «Главная · форма «Замер»», у формы подвала — «Главная · подвал, форма «…»».
+ * Заголовок страницы — если экран его знает (страницу могли и удалить), иначе адрес
  */
-export const leadSource = (lead: { pageSlug: string; formTitle: string }, pageTitle?: string) =>
-  `${pageTitle ?? pagePath(lead.pageSlug)} · форма «${lead.formTitle}»`
+export const leadSource = (
+  lead: { pageSlug: string; formTitle: string; source: LeadSource },
+  pageTitle?: string,
+) =>
+  `${pageTitle ?? pagePath(lead.pageSlug)} · ${lead.source === 'footer' ? 'подвал, ' : ''}форма «${lead.formTitle}»`
 
 /** Адреса уведомлений из поля формы: через запятую, точку с запятой, пробел или с новой строки */
 export const parseRecipients = (text: string) =>
