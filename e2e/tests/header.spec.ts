@@ -924,7 +924,7 @@ test('«Минимум» с самой длинной кнопкой, телеф
   }
 })
 
-test('кнопка липкой шапки без меню (320–800 px) и длинное меню (1024–1440 px) ведут к разделу, его заголовок не под шапкой', async ({
+test('кнопка липкой шапки без меню (320–1024 px) и длинное меню (1024–1440 px) ведут к разделу, его верх не под шапкой', async ({
   browser,
   demoSite,
 }, testInfo) => {
@@ -988,7 +988,8 @@ test('кнопка липкой шапки без меню (320–800 px) и д�
       .toContain(`data-layout="${layout}"`)
     const site = await serveRelease(release(demoSite.id))
     try {
-      for (const width of [320, 375, 640, 800]) {
+      // 1024 — шапка в одну строку, но с длинным названием без логотипа «Минимум» выше 6rem
+      for (const width of [320, 375, 640, 800, 1024]) {
         for (const javaScriptEnabled of [false, true]) {
           const where = `${layout}, ${width} px, ${javaScriptEnabled ? 'с JS' : 'без JS'}`
           const visit = await visitor(browser, width, javaScriptEnabled)
@@ -996,16 +997,15 @@ test('кнопка липкой шапки без меню (320–800 px) и д�
           const siteHeader = visit.page.locator('header[data-site-header]')
           await siteHeader.getByRole('link', { name: label }).click()
           await expect(visit.page).toHaveURL(/#calc$/)
-          const title = visit.page.locator('section#calc h2')
-          // Раздел прокручен к верху окна, а его заголовок — ниже низа липкой шапки
+          // Раздел прокручен к верху окна, и сам его верх (цель якоря), а не только заголовок, —
+          // ниже низа липкой шапки: заголовок стоит ниже верха раздела и недобор отступа скрыл бы
+          const section = visit.page.locator('section#calc')
           await expect
-            .poll(async () => (await title.boundingBox())?.y ?? 0, { message: where })
+            .poll(async () => (await section.boundingBox())?.y ?? 0, { message: where })
             .toBeLessThan(400)
-          const headerBox = await siteHeader.boundingBox()
-          const titleBox = await title.boundingBox()
           expect(
-            (titleBox?.y ?? 0) - ((headerBox?.y ?? 0) + (headerBox?.height ?? 0)),
-            `заголовок раздела под шапкой: ${where}`,
+            await gapBelowHeader(siteHeader, section),
+            `верх раздела под шапкой: ${where}`,
           ).toBeGreaterThanOrEqual(0)
           await visit.page.screenshot({
             path: testInfo.outputPath(
@@ -1021,9 +1021,10 @@ test('кнопка липкой шапки без меню (320–800 px) и д�
   }
 
   // Длинное меню своей строкой (data-sticky-header-menu-row): восемь пунктов по 40 знаков, без
-  // логотипа с длинным названием — самая высокая шапка с меню на ноутбуке и большом экране
+  // логотипа с длинным названием — самая высокая шапка с меню на ноутбуке и большом экране.
+  // Прописные шире строчных: на 1024 px меню в четыре строки, а не в три
   const menu = Array.from({ length: 8 }, (_, index) => ({
-    label: `${index + 1}. ${'Расчёт за день '.repeat(3)}`.trim().slice(0, HEADER_LABEL_MAX),
+    label: `${index + 1}. ${'РАСЧЁТ ЗА ДЕНЬ '.repeat(3)}`.trim().slice(0, HEADER_LABEL_MAX),
     page: slug,
     ...(index === 3 ? { block: 'calc' } : {}),
   }))
@@ -1041,7 +1042,7 @@ test('кнопка липкой шапки без меню (320–800 px) и д�
       .poll(
         async () => {
           const html = await servedHtml(demoSite.id, slug)
-          return html.includes(`data-layout="${layout}"`) && html.includes('8. Расчёт')
+          return html.includes(`data-layout="${layout}"`) && html.includes('8. РАСЧЁТ')
         },
         { timeout: 120_000 },
       )
@@ -1058,15 +1059,20 @@ test('кнопка липкой шапки без меню (320–800 px) и д�
             '',
           )
           const siteHeader = visit.page.locator('header[data-site-header]')
+          // На 1024 px меню в четыре строки: у center и double шапка выше 14rem (отступа «Классики»),
+          // иначе случай, ради которого им отступ 16,5rem, тест бы не проверял
+          if (width === 1024 && layout !== 'classic') {
+            expect((await siteHeader.boundingBox())?.height ?? 0, where).toBeGreaterThan(14 * 16)
+          }
           await siteHeader.locator('nav a[href$="#calc"]:visible').first().click()
           await expect(visit.page).toHaveURL(/#calc$/)
-          const title = visit.page.locator('section#calc h2')
+          const section = visit.page.locator('section#calc')
           await expect
-            .poll(async () => (await title.boundingBox())?.y ?? 0, { message: where })
+            .poll(async () => (await section.boundingBox())?.y ?? 0, { message: where })
             .toBeLessThan(500)
           expect(
-            await gapBelowHeader(siteHeader, title),
-            `заголовок раздела под шапкой: ${where}`,
+            await gapBelowHeader(siteHeader, section),
+            `верх раздела под шапкой: ${where}`,
           ).toBeGreaterThanOrEqual(0)
           await visit.page.screenshot({
             path: testInfo.outputPath(
