@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!apps/api/drizzle"]
+    "includes": ["**", "!apps/api/drizzle", "!.release-please-manifest.json", "!CHANGELOG.md"]
   },
   "formatter": {
     "enabled": true,
