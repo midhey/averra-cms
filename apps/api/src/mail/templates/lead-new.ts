@@ -3,12 +3,23 @@ import { z } from 'zod'
 import { html } from '../html'
 import { button, fieldTable, note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
+import { toMailLine } from './line'
 
 const createdAtFormat = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'long',
   timeStyle: 'short',
   timeZone: 'Europe/Moscow',
 })
+
+/**
+ * Подпись формы в письме: заголовок блока (до 120) или подвала с пометкой «(подвал сайта)». Приём
+ * заявки режет строку этой же функцией и до того же предела, что проверяет шаблон: письмо не упадёт
+ * на проверке, если у формы поднимут предел заголовка
+ */
+export const LEAD_FORM_TITLE_MAX = 120
+
+/** Подпись формы для данных письма «Новая заявка»: одна строка, не длиннее LEAD_FORM_TITLE_MAX */
+export const leadFormLine = (label: string) => toMailLine(label, LEAD_FORM_TITLE_MAX, 'Форма')
 
 /**
  * Новая заявка с формы сайта — владельцу или менеджеру (адреса из настроек заявок сайта).
@@ -24,7 +35,7 @@ export const leadNewTemplate = defineMailTemplate({
     'Уходит на адреса уведомлений сайта (по умолчанию — владельцам), когда посетитель отправил форму',
   schema: z.strictObject({
     siteName: MailLine(80),
-    formTitle: MailLine(120),
+    formTitle: MailLine(LEAD_FORM_TITLE_MAX),
     // Адрес страницы на сайте: «/» или «/o-nas»
     pagePath: MailLine(70),
     // Подписи полей формы и что ввёл посетитель. Многострочное значение сохраняет переводы строк

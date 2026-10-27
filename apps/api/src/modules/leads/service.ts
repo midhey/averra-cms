@@ -16,6 +16,7 @@ import type { Db } from '../../db/client'
 import { mailOutbox, pageRevisions, pages, type StoredLeadField, sites } from '../../db/schema'
 import { mailboxKey } from '../../mail/mailbox-key'
 import { type DbOrTx, enqueueMail } from '../../mail/outbox'
+import { leadFormLine } from '../../mail/templates/lead-new'
 import { toMailLine } from '../../mail/templates/line'
 import { type NotifyDeps, notify } from '../../notifications/notify'
 import { publishedFooter } from '../footer/read'
@@ -237,10 +238,8 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       event: 'lead.new',
       data: {
         siteName,
-        formTitle: toMailLine(
+        formTitle: leadFormLine(
           leadFormLabel({ source: published.source, formTitle: props.title }),
-          140,
-          'Форма',
         ),
         pagePath: pagePath(page.slug),
         fields: data.map((field) => ({
