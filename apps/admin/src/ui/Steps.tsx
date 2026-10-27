@@ -3,8 +3,8 @@ import { cx } from './cx'
 import { Icon } from './Icon'
 import styles from './Steps.module.scss'
 
-/** Шаг: пройден, идёт сейчас, впереди или не прошёл */
-export type StepState = 'done' | 'current' | 'pending' | 'failed'
+/** Шаг: пройден, идёт сейчас, впереди, не прошёл или уже не начнётся (операция кончилась раньше) */
+export type StepState = 'done' | 'current' | 'pending' | 'failed' | 'skipped'
 
 export type StepItem = { id: string; label: string; state: StepState; hint?: ReactNode }
 
@@ -14,12 +14,14 @@ const stateWords: Record<StepState, string> = {
   current: 'идёт',
   pending: 'впереди',
   failed: 'не прошло',
+  skipped: 'не начиналось',
 }
 
 /**
  * Ход долгой операции по шагам (обновление установки). Нумерованный список: пройденный шаг —
  * галочка, текущий — кольцо и слово «идёт», не прошедший — значок предупреждения и слова «не
- * прошло», впереди — номер. Текущий отмечен aria-current="step"
+ * прошло», впереди — номер, не начавшийся — номер в пунктирном круге и слова «не начиналось».
+ * Текущий отмечен aria-current="step"
  */
 export function Steps({ items, label }: { items: readonly StepItem[]; label: string }) {
   return (
@@ -43,7 +45,7 @@ export function Steps({ items, label }: { items: readonly StepItem[]; label: str
           </span>
           <span className={styles.text}>
             <span className={styles.label}>{item.label}</span>
-            {item.state === 'current' || item.state === 'failed' ? (
+            {item.state === 'current' || item.state === 'failed' || item.state === 'skipped' ? (
               <span className={styles.state}>{stateWords[item.state]}</span>
             ) : (
               <span className="visually-hidden">, {stateWords[item.state]}</span>

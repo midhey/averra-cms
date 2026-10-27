@@ -38,8 +38,8 @@ export const UNAVAILABLE_TEXT: Record<Exclude<AdminUpdateMode, 'ready'>, string>
 const STEPS_AFTER_FINISH_MS = 60 * 60 * 1000
 
 /**
- * Шаги обновления: пройденные, текущий, впереди; на чём не прошло. Нет обновления (заявка ещё ждёт
- * сервер) — всё впереди
+ * Шаги обновления: пройденные, текущий, впереди; на чём не прошло. После непрошедшего — «не
+ * начиналось»: обновление на нём кончилось. Нет обновления (заявка ещё ждёт сервер) — всё впереди
  */
 export function updateSteps(run: UpdateRun | null): StepItem[] {
   const current = run?.step ?? null
@@ -49,9 +49,15 @@ export function updateSteps(run: UpdateRun | null): StepItem[] {
   const items: StepItem[] = UPDATE_STEPS.map((step, i) => {
     if (!run) return { id: step.id, label: step.label, state: 'pending' }
     if (result === 'updated') return { id: step.id, label: step.label, state: 'done' }
-    // Откат начинается, когда новая версия не прошла проверку: всё до неё пройдено
+    // Откат: не прошёл шаг, записанный сервером (запуск и миграции или проверка), до него всё
+    // пройдено, после — не начнётся. Прежний averra.sh шаг не пишет — тогда проверка
     if (current === 'rollback') {
-      return { id: step.id, label: step.label, state: step.id === 'verify' ? 'failed' : 'done' }
+      const failed = UPDATE_STEPS.findIndex((s) => s.id === (run.failedStep ?? 'verify'))
+      return {
+        id: step.id,
+        label: step.label,
+        state: i < failed ? 'done' : i === failed ? 'failed' : 'skipped',
+      }
     }
     if (i < index) return { id: step.id, label: step.label, state: 'done' }
     if (i === index) {
@@ -61,7 +67,11 @@ export function updateSteps(run: UpdateRun | null): StepItem[] {
         state: result === 'in-progress' ? 'current' : 'failed',
       }
     }
-    return { id: step.id, label: step.label, state: 'pending' }
+    return {
+      id: step.id,
+      label: step.label,
+      state: result === 'in-progress' ? 'pending' : 'skipped',
+    }
   })
   const rollback = current === 'rollback'
   const last: StepItem = rollback
@@ -71,7 +81,16 @@ export function updateSteps(run: UpdateRun | null): StepItem[] {
         state:
           result === 'in-progress' ? 'current' : result === 'rollback-failed' ? 'failed' : 'done',
       }
-    : { id: 'finish', label: 'Готово', state: result === 'updated' ? 'done' : 'pending' }
+    : {
+        id: 'finish',
+        label: 'Готово',
+        state:
+          result === 'updated'
+            ? 'done'
+            : result === null || result === 'in-progress'
+              ? 'pending'
+              : 'skipped',
+      }
   return [...items, last]
 }
 
@@ -81,8 +100,11 @@ export type UpdateOutcome = {
   text: string
 }
 
-/** Итог последнего обновления для владельца: что случилось и что делать */
-export function updateOutcome(run: UpdateRun): UpdateOutcome | null {
+/**
+ * Итог последнего обновления для владельца: что случилось и что делать. retryExplained — рядом уже
+ * сказано, почему кнопки на эту версию нет (updateBlock rolled-back): то же не повторять
+ */
+export function updateOutcome(run: UpdateRun, retryExplained = false): UpdateOutcome | null {
   const kept = run.keptDatabase
     ? ` Данные, принятые после бэкапа (заявки), сохранены в базе ${run.keptDatabase}: студия перенесёт нужное.`
     : ''
@@ -99,7 +121,7 @@ export function updateOutcome(run: UpdateRun): UpdateOutcome | null {
         title: `Обновление до ${run.to} не прошло — работает прежняя версия ${run.from}`,
         text:
           `Сервер сам вернул прежнюю версию${run.dbRestored ? ' и базу из бэкапа перед обновлением' : ''}: сайт и админка работают, данные на месте. ` +
-          `Сообщите студии — причина в журнале обновления на сервере (update.log). Повторить можно, когда студия её устранит.${kept}`,
+          `Сообщите студии — причина в журнале обновления на сервере (update.log).${retryExplained ? '' : ' Повторить из админки можно будет со следующей версией, а эту студия поставит по SSH, когда устранит причину.'}${kept}`,
       }
     case 'rollback-failed':
       return {
@@ -133,6 +155,8 @@ const BLOCK_TEXT = {
     `Версия ${version} требует шага на сервере (смотрите заметки к релизу): её ставит студия по SSH. Сообщите студии, что хотите обновиться.`,
   'rollback-failed': () =>
     'Прошлое обновление закончилось неудачным откатом: пока студия не починит установку, обновлять из админки нельзя. Дальше студия обновит её по SSH.',
+  'rolled-back': (version: string) =>
+    `Обновление до ${version} уже не прошло и откатилось. Повторная попытка снова оставила бы админку без работы на минуту-две, поэтому из админки — со следующей версией, а эту студия поставит по SSH, когда устранит причину.`,
 } as const
 
 export type UpdateView = {
@@ -143,7 +167,10 @@ export type UpdateView = {
   steps: StepItem[] | null
   /** Итог последнего обновления, если он свежий (неделя, как проблемы в состоянии) */
   outcome: UpdateOutcome | null
-  /** Сервер отклонил последнюю заявку (после последнего обновления) — почему, с большой буквы */
+  /**
+   * Сервер отклонил последнюю заявку (после последнего обновления) — почему, с большой буквы, и
+   * менялась ли версия
+   */
   rejected: string | null
   /** Прошлую заявку сервер не забрал за 10 минут: служба заявок, похоже, не работает */
   stale: string | null
@@ -175,24 +202,38 @@ export function updateView(status: InstallationStatus, now: Date): UpdateView {
     activity === 'idle' &&
     request?.result === 'rejected' &&
     (!update || Date.parse(request.at) > Date.parse(update.finishedAt ?? update.startedAt))
-      ? capitalize(request.error ?? 'причина не записана')
+      ? `${capitalize(request.error ?? 'причина не записана')}.${
+          // Перед отказом сервер мог довести прерванное прошлое обновление — тогда версия могла
+          // смениться, и «ничего не менялось» было бы неправдой
+          update &&
+          Date.parse(update.finishedAt ?? update.startedAt) >
+            Date.parse(request.requestedAt ?? request.at)
+            ? ''
+            : ' Версия прежняя, ничего не менялось.'
+        }`
       : null
   const stale =
     activity === 'idle' && release.pending && pendingStale(release, now)
       ? `Сервер не забрал заявку на обновление до ${release.pending.version} за 10 минут: служба заявок на сервере, похоже, не работает. Сообщите студии (averra.sh install-units) — или отправьте заявку снова.`
       : null
   const block = updateBlock({ update, release })
-  const blocked =
-    block === 'breaking' && release.available
+  const blocked = !release.available
+    ? null
+    : block === 'breaking'
       ? BLOCK_TEXT.breaking(release.available)
-      : block === 'rollback-failed' && release.available
+      : block === 'rollback-failed'
         ? BLOCK_TEXT['rollback-failed']()
-        : null
+        : block === 'rolled-back'
+          ? BLOCK_TEXT['rolled-back'](release.available)
+          : null
   return {
     activity,
     target,
     steps: activity !== 'idle' || fresh ? updateSteps(run) : null,
-    outcome: activity === 'idle' && update && recent ? updateOutcome(update) : null,
+    outcome:
+      activity === 'idle' && update && recent
+        ? updateOutcome(update, release.mode === 'ready' && block === 'rolled-back')
+        : null,
     rejected,
     stale,
     blocked: release.mode === 'ready' ? blocked : null,

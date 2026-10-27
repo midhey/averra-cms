@@ -193,7 +193,7 @@ describe('POST /api/status/update: заявка', () => {
     expect(readdirNames()).toEqual([REQUEST_FILE])
   })
 
-  it('ломающий релиз и неудачный откат прошлого обновления — 409 без заявки', async () => {
+  it('ломающий релиз, неудачный откат и откат до этой же версии — 409 без заявки', async () => {
     hostState('releaseLatest', {
       version: '0.7.0',
       publishedAt: null,
@@ -222,6 +222,24 @@ describe('POST /api/status/update: заявка', () => {
     expect(await failed.json()).toMatchObject({
       error: { message: expect.stringContaining('неудачным откатом') },
     })
+    // Обновление до этой же версии уже откатилось — повтор только со следующей версией
+    hostState('updateLast', {
+      from: '0.6.0',
+      to: '0.7.0',
+      startedAt: new Date(Date.now() - 600_000).toISOString(),
+      finishedAt: new Date(Date.now() - 300_000).toISOString(),
+      result: 'rolled-back',
+      step: 'rollback',
+      failedStep: 'migrate',
+      dbRestored: false,
+      keptDatabase: null,
+      error: 'версия 0.7.0 не прошла проверку готовности',
+    })
+    const rolledBack = await request(owner.headers)
+    expect(rolledBack.status).toBe(409)
+    expect(await rolledBack.json()).toMatchObject({
+      error: { code: 'update_unavailable', message: expect.stringContaining('уже откатилось') },
+    })
     expect(existsSync(requestPath)).toBe(false)
   })
 
@@ -233,6 +251,7 @@ describe('POST /api/status/update: заявка', () => {
       finishedAt: null,
       result: 'in-progress',
       step: 'backup',
+      failedStep: null,
       dbRestored: false,
       keptDatabase: null,
       error: null,

@@ -580,6 +580,14 @@ export function UiShowcase() {
                 { id: 'finish', label: 'Откат на прежнюю версию', state: 'current' },
               ]}
             />
+            <Steps
+              label="Шаги: откат закончен"
+              items={[
+                { id: 'migrate', label: 'Запуск и миграции базы', state: 'failed' },
+                { id: 'verify', label: 'Проверка админки и сайта', state: 'skipped' },
+                { id: 'finish', label: 'Откат на прежнюю версию', state: 'done' },
+              ]}
+            />
           </div>
         </Section>
 

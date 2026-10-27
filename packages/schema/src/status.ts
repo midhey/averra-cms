@@ -87,6 +87,11 @@ export const UpdateRun = z.object({
    */
   step: UpdateStep.nullable().default(null).catch(null),
   /**
+   * Откат: шаг, на котором новая версия не прошла (запуск и миграции или проверка). Нет — файл
+   * прежнего averra.sh: тогда считается проверка
+   */
+  failedStep: UpdateStep.exclude(['rollback']).nullable().default(null).catch(null),
+  /**
    * При откате база восстановлена из бэкапа перед обновлением: миграции новой версии успели пройти
    */
   dbRestored: z.boolean(),
@@ -169,11 +174,20 @@ export const ReleaseLatest = z.object({
   version: ReleaseVersion,
   publishedAt: IsoTime.nullable(),
   /**
-   * В заметках есть раздел BREAKING CHANGES: релиз требует шага на сервере (новая строка .env,
-   * ручная команда). Такой обновляет студия по SSH, кнопки в админке нет
+   * У этого или пропущенного релиза (между установленной версией и этой) есть раздел BREAKING
+   * CHANGES: обновление требует шага на сервере (новая строка .env, ручная команда). Ещё — когда
+   * промежуток виден не целиком. Такое обновляет студия по SSH, кнопки в админке нет
    */
   breaking: z.boolean().default(false),
-  /** Заметки к релизу простым текстом: без разметки и HTML, обрезаны до RELEASE_NOTES_MAX */
+  /**
+   * Сколько релизов в заметках: все, что новее установленной на момент проверки (пропущенные
+   * версии тоже). Файл прежней версии без поля — один
+   */
+  releases: z.number().int().min(1).max(1000).default(1),
+  /**
+   * Заметки к релизу простым текстом: без разметки и HTML, за все релизы новее установленной
+   * (новые сверху), обрезаны до RELEASE_NOTES_MAX
+   */
   notes: z.string().max(RELEASE_NOTES_MAX + 1),
 })
 export type ReleaseLatest = z.infer<typeof ReleaseLatest>
@@ -258,15 +272,20 @@ export function pendingStale(release: Pick<ReleaseState, 'pending'>, now: Date) 
 /**
  * Почему обновлять из админки нельзя, хотя новая версия есть: breaking — релиз требует шага на
  * сервере; rollback-failed — прошлое обновление кончилось неудачным откатом, установку сначала
- * чинит человек, а дальше обновляет по SSH (averra.sh update запишет новый итог). Хост
+ * чинит человек, а дальше обновляет по SSH (averra.sh update запишет новый итог); rolled-back —
+ * обновление до этой же версии уже откатилось: повтор — та же минута-две без админки и ещё одна
+ * отложенная база, поэтому до следующей версии (или до обновления студией по SSH) кнопки нет. Хост
  * (averra.sh update-request) проверяет то же
  */
 export function updateBlock(facts: {
   update: UpdateRun | null
   release: ReleaseState
-}): 'breaking' | 'rollback-failed' | null {
-  if (facts.update?.result === 'rollback-failed') return 'rollback-failed'
-  if (facts.release.available && facts.release.latest?.breaking) return 'breaking'
+}): 'breaking' | 'rollback-failed' | 'rolled-back' | null {
+  const { update, release } = facts
+  if (update?.result === 'rollback-failed') return 'rollback-failed'
+  if (!release.available) return null
+  if (release.latest?.breaking) return 'breaking'
+  if (update?.result === 'rolled-back' && update.to === release.available) return 'rolled-back'
   return null
 }
 

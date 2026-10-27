@@ -48,6 +48,7 @@ const ready: ReleaseState = {
     version: '0.7.0',
     publishedAt: '2026-10-20T10:00:00Z',
     breaking: false,
+    releases: 1,
     notes: 'Features\n\n• <script>alert(1)</script> обновление из админки',
   },
   available: '0.7.0',
@@ -60,6 +61,7 @@ const run = (overrides: Partial<UpdateRun> = {}): UpdateRun => ({
   finishedAt: null,
   result: 'in-progress',
   step: 'backup',
+  failedStep: null,
   dbRestored: false,
   keptDatabase: null,
   error: null,
@@ -184,16 +186,33 @@ describe('раздел «Обновление»', () => {
     )
   })
 
-  it('откат — что случилось и что делать', async () => {
+  it('откат — что случилось, на каком шаге и что делать; повторить ту же версию нельзя', async () => {
     await render(
       status({
-        update: run({ result: 'rolled-back', step: 'rollback', finishedAt: ago(30_000) }),
+        update: run({
+          result: 'rolled-back',
+          step: 'rollback',
+          failedStep: 'migrate',
+          finishedAt: ago(30_000),
+        }),
       }),
     )
     expect(
       screen.getByText('Обновление до 0.7.0 не прошло — работает прежняя версия 0.6.0'),
     ).toBeTruthy()
     expect(screen.getByText(/Сообщите студии/)).toBeTruthy()
+    const steps = within(screen.getByRole('list', { name: 'Шаги обновления' })).getAllByRole(
+      'listitem',
+    )
+    expect(steps[2]?.textContent).toContain('Запуск и миграции базы')
+    expect(steps[2]?.textContent).toContain('не прошло')
+    expect(steps[3]?.textContent).toContain('не начиналось')
+    // Та же версия — без кнопки, с объяснением; доступная версия видна
+    expect(screen.queryByRole('button', { name: /Обновить до/ })).toBeNull()
+    expect(screen.getByText(/уже не прошло и откатилось/)).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Обновление' }).textContent).toContain(
+      'Установлена 0.6.0 · доступна 0.7.0',
+    )
   })
 
   it('нет хостовой части (разработка) — подсказка вместо кнопки', async () => {
@@ -215,7 +234,10 @@ describe('раздел «Обновление»', () => {
         },
       }),
     )
-    expect(screen.getByText(/Не удалось проверить новые версии/).textContent).toContain('нет сети')
+    const text = screen.getByText(/Проверка новых версий не удалась/).textContent
+    expect(text).toContain('нет сети')
+    // Причина не повторяет «не удалось» после «не удалось проверить»
+    expect(text).not.toContain('Не удалось проверить')
   })
 
   it('проверка выключена (UPDATE_SOURCE=off) — не «не удалось», а настройка', async () => {
@@ -233,7 +255,7 @@ describe('раздел «Обновление»', () => {
         },
       }),
     )
-    expect(screen.queryByText(/Не удалось проверить/)).toBeNull()
+    expect(screen.queryByText(/не удалась/)).toBeNull()
     expect(screen.getByText(/Проверка новых версий выключена на сервере/)).toBeTruthy()
   })
 
@@ -277,5 +299,23 @@ describe('раздел «Обновление»', () => {
     )
     expect(screen.queryByRole('button', { name: /Обновить до/ })).toBeNull()
     expect(screen.getByText(/требует шага на сервере/)).toBeTruthy()
+    // Кнопки нет, а доступная версия — в строке версий, как и заметки к ней
+    expect(screen.getByRole('region', { name: 'Обновление' }).textContent).toContain(
+      'Установлена 0.6.0 · доступна 0.7.0',
+    )
+  })
+
+  it('заметки за несколько пропущенных версий — заголовок говорит, с какой', async () => {
+    await render(
+      status({
+        release: {
+          ...ready,
+          latest: { ...(ready.latest as NonNullable<ReleaseState['latest']>), releases: 3 },
+        },
+      }),
+    )
+    expect(
+      screen.getByRole('region', { name: /^Что нового после 0\.6\.0 \(до 0\.7\.0\)/ }),
+    ).toBeTruthy()
   })
 })

@@ -18,6 +18,7 @@ const run = (overrides: Partial<UpdateRun> = {}): UpdateRun => ({
   finishedAt: null,
   result: 'in-progress',
   step: 'backup',
+  failedStep: null,
   dbRestored: false,
   keptDatabase: null,
   error: null,
@@ -35,7 +36,7 @@ const ready: ReleaseState = {
     adminUpdate: true,
     requestsWatched: true,
   },
-  latest: { version: '0.7.0', publishedAt: null, breaking: false, notes: 'Новое' },
+  latest: { version: '0.7.0', publishedAt: null, breaking: false, releases: 1, notes: 'Новое' },
   available: '0.7.0',
 }
 
@@ -101,9 +102,19 @@ describe('updateSteps', () => {
     expect(broken.at(-1)?.state).toBe('failed')
   })
 
-  it('не началось (образы не скачались) — тот шаг не прошёл, остальные впереди', () => {
+  it('откат после запуска: не прошёл запуск и миграции, проверка не начиналась', () => {
+    const steps = updateSteps(
+      run({ step: 'rollback', failedStep: 'migrate', result: 'rolled-back', finishedAt: ago(1) }),
+    )
+    expect(states(steps)).toEqual(['done', 'done', 'failed', 'skipped', 'done'])
+    expect(
+      states(updateSteps(run({ step: 'rollback', failedStep: 'verify', finishedAt: null }))),
+    ).toEqual(['done', 'done', 'done', 'failed', 'current'])
+  })
+
+  it('не началось (образы не скачались) — тот шаг не прошёл, остальные уже не начнутся', () => {
     const steps = updateSteps(run({ step: 'pull', result: 'failed', finishedAt: ago(1) }))
-    expect(states(steps)).toEqual(['failed', 'pending', 'pending', 'pending', 'pending'])
+    expect(states(steps)).toEqual(['failed', 'skipped', 'skipped', 'skipped', 'skipped'])
   })
 
   it('заявка ещё ждёт сервер — всё впереди', () => {
@@ -137,6 +148,13 @@ describe('updateOutcome', () => {
       'Образы новой версии не скачались. Версия прежняя, ничего не менялось — можно повторить позже.',
     )
     expect(updateOutcome(run())).toBeNull()
+  })
+
+  it('откат, а почему кнопки на ту же версию нет, сказано рядом — без повтора', () => {
+    const rolled = run({ result: 'rolled-back', step: 'rollback', finishedAt: ago(1) })
+    expect(updateOutcome(rolled)?.text).toContain('Повторить из админки можно будет')
+    expect(updateOutcome(rolled, true)?.text).not.toContain('Повторить')
+    expect(updateOutcome(rolled, true)?.text).toContain('Сообщите студии')
   })
 })
 
@@ -210,9 +228,48 @@ describe('updateView', () => {
     })
     // Причина с хоста — со строчной: на экране она начинает предложение
     expect(updateView(rejected, now)).toMatchObject({
-      rejected: 'Заявка не по формату',
+      rejected: 'Заявка не по формату. Версия прежняя, ничего не менялось.',
       canUpdate: '0.7.0',
     })
+  })
+
+  it('перед отказом сервер довёл прерванное обновление — без «ничего не менялось»', () => {
+    const requestedAt = ago(120_000)
+    const view = updateView(
+      status({
+        version: '0.7.0',
+        release: {
+          ...ready,
+          available: null,
+          request: {
+            at: ago(1000),
+            version: '0.7.0',
+            requestedAt,
+            result: 'rejected',
+            error: 'версия 0.7.0 уже стоит: до неё довелось прерванное прошлое обновление',
+          },
+        },
+        update: run({
+          result: 'updated',
+          step: 'verify',
+          startedAt: ago(3_600_000),
+          finishedAt: ago(60_000),
+        }),
+      }),
+      now,
+    )
+    expect(view.rejected).toBe(
+      'Версия 0.7.0 уже стоит: до неё довелось прерванное прошлое обновление.',
+    )
+  })
+
+  it('откат на ту же версию — объяснение одно: в блоке, а не ещё и в итоге', () => {
+    const view = updateView(
+      status({ update: run({ result: 'rolled-back', step: 'rollback', finishedAt: ago(60_000) }) }),
+      now,
+    )
+    expect(view.blocked).toContain('уже не прошло и откатилось')
+    expect(view.outcome?.text).not.toContain('Повторить')
   })
 
   it('заявку сервер не забрал за 10 минут — предупреждение, кнопка вернулась, опроса нет', () => {
@@ -246,6 +303,23 @@ describe('updateView', () => {
       outcome: { tone: 'danger' },
     })
     expect(updateView(failed, now).blocked).toContain('неудачным откатом')
+  })
+
+  it('откат обновления до этой же версии — кнопки нет до следующей версии', () => {
+    const rolledBack = run({ result: 'rolled-back', step: 'rollback', finishedAt: ago(60_000) })
+    const same = updateView(status({ update: rolledBack }), now)
+    expect(same).toMatchObject({ canUpdate: null, outcome: { tone: 'warning' } })
+    expect(same.blocked).toContain('Обновление до 0.7.0 уже не прошло и откатилось')
+    // Вышла следующая версия — кнопка вернулась
+    const next = status({
+      update: rolledBack,
+      release: {
+        ...ready,
+        latest: { ...(ready.latest as NonNullable<ReleaseState['latest']>), version: '0.7.1' },
+        available: '0.7.1',
+      },
+    })
+    expect(updateView(next, now)).toMatchObject({ canUpdate: '0.7.1', blocked: null })
   })
 
   it('UPDATE_SOURCE=off — не сбой, а настройка', () => {

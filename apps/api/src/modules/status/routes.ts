@@ -124,6 +124,14 @@ export function statusRoutes({
             409,
           )
         }
+        if (block === 'rolled-back') {
+          return c.json(
+            updateUnavailable(
+              `Обновление до ${release.available} уже откатилось: из админки — со следующей версией, раньше — студия по SSH, когда устранит причину`,
+            ),
+            409,
+          )
+        }
         if (!release.available) {
           return c.json(conflict(`Новой версии нет: установлена ${version}`), 409)
         }

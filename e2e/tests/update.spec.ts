@@ -161,6 +161,8 @@ test('откат: новая версия не прошла проверку —
     updateRun({
       startedAt,
       step: 'rollback',
+      // Не прошёл уже запуск с миграциями: проверка не начиналась
+      failedStep: 'migrate',
       result: 'rolled-back',
       dbRestored: true,
       finishedAt: new Date().toISOString(),
@@ -175,11 +177,16 @@ test('откат: новая версия не прошла проверку —
   await expect(section).toContainText('Сообщите студии')
   const steps = section.getByRole('list', { name: 'Шаги обновления' })
   await expect(
-    steps.getByRole('listitem').filter({ hasText: 'Проверка админки и сайта' }),
+    steps.getByRole('listitem').filter({ hasText: 'Запуск и миграции базы' }),
   ).toContainText('не прошло')
+  await expect(
+    steps.getByRole('listitem').filter({ hasText: 'Проверка админки и сайта' }),
+  ).toContainText('не начиналось')
   await expect(steps.getByRole('listitem').last()).toContainText('Откат на прежнюю версию')
-  // Повторить можно: кнопка вернулась
-  await expect(section.getByRole('button', { name: 'Обновить до 0.2.0' })).toBeVisible()
+  // Ту же версию из админки не повторить: кнопки нет, объяснение есть, доступная версия видна
+  await expect(section.getByRole('button', { name: /Обновить до/ })).toHaveCount(0)
+  await expect(section).toContainText('Обновление до 0.2.0 уже не прошло и откатилось')
+  await expect(section).toContainText(`Установлена ${e2eVersion} · доступна 0.2.0`)
 })
 
 test('без хостовой части (разработка, сервер не через install.sh) — подсказка вместо кнопки', async ({

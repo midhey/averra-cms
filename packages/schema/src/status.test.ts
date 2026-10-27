@@ -113,6 +113,7 @@ describe('statusProblems', () => {
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
       step: null,
+      failedStep: null,
       dbRestored: true,
       keptDatabase: null,
       error: 'API новой версии не ответил',
@@ -139,6 +140,7 @@ describe('statusProblems', () => {
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
       step: null,
+      failedStep: null,
       dbRestored: true,
       keptDatabase: 'averra_rolled_back_20261016_100000',
       error: null,
@@ -157,6 +159,7 @@ describe('statusProblems', () => {
       finishedAt: null,
       result: 'in-progress',
       step: null,
+      failedStep: null,
       dbRestored: false,
       keptDatabase: null,
       error: null,
@@ -191,6 +194,7 @@ describe('statusProblems', () => {
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
       step: null,
+      failedStep: null,
       dbRestored: true,
       keptDatabase: kept,
       error: null,
@@ -343,6 +347,7 @@ describe('новая версия и обновление из админки', 
     finishedAt: null,
     result: 'in-progress',
     step: 'backup',
+    failedStep: null,
     dbRestored: false,
     keptDatabase: null,
     error: null,
@@ -416,7 +421,7 @@ describe('новая версия и обновление из админки', 
   })
 
   it('updateBlock: ломающий релиз и неудачный откат — кнопки нет', () => {
-    const latest = { version: '0.7.0', publishedAt: null, breaking: false, notes: '' }
+    const latest = { version: '0.7.0', publishedAt: null, breaking: false, releases: 1, notes: '' }
     const ready = { ...NO_RELEASE_STATE, mode: 'ready' as const, latest, available: '0.7.0' }
     expect(updateBlock({ update: null, release: ready })).toBeNull()
     expect(
@@ -435,10 +440,21 @@ describe('новая версия и обновление из админки', 
     expect(
       updateBlock({ update: run({ result: 'updated', finishedAt: ago(1000) }), release: ready }),
     ).toBeNull()
-    // Прежний release-latest.json без поля — не ломающий
-    expect(ReleaseLatest.parse({ version: '0.7.0', publishedAt: null, notes: '' }).breaking).toBe(
-      false,
+    // Откатилось обновление до этой же версии — повтор только со следующей; до другой — можно
+    const rolledBack = run({ result: 'rolled-back', finishedAt: ago(1000), step: 'rollback' })
+    expect(updateBlock({ update: { ...rolledBack, to: '0.7.0' }, release: ready })).toBe(
+      'rolled-back',
     )
+    expect(updateBlock({ update: { ...rolledBack, to: '0.6.9' }, release: ready })).toBeNull()
+    // Прежний release-latest.json без полей — не ломающий, один релиз
+    expect(ReleaseLatest.parse({ version: '0.7.0', publishedAt: null, notes: '' })).toMatchObject({
+      breaking: false,
+      releases: 1,
+    })
+    // Прежний update-last.json без failedStep — null; шаг, которого нет, — тоже null
+    expect(UpdateRun.parse({ ...rolledBack }).failedStep).toBeNull()
+    expect(UpdateRun.parse({ ...rolledBack, failedStep: 'migrate' }).failedStep).toBe('migrate')
+    expect(UpdateRun.parse({ ...rolledBack, failedStep: 'rollback' }).failedStep).toBeNull()
   })
 
   it('UpdateRun: шаг, которого версия не знает, — без шага, а не «не читается»', () => {

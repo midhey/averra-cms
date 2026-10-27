@@ -58,11 +58,12 @@ export function UpdateSection({ status, now, loadedVersion, offline }: UpdateSec
     <Section title="Обновление" card>
       <p className={styles.versions}>
         Установлена <span className={styles.version}>{status.version}</span>
-        {view.canUpdate ? (
+        {/* Доступную версию видно и когда кнопки нет (ломающий релиз, обновление выключено) */}
+        {release.available ? (
           <>
-            {' · '}доступна <span className={styles.version}>{view.canUpdate}</span>
+            {' · '}доступна <span className={styles.version}>{release.available}</span>
           </>
-        ) : release.mode !== 'no-host' && latest && !release.available && check ? (
+        ) : release.mode !== 'no-host' && latest && check ? (
           ' · это последняя версия'
         ) : null}
       </p>
@@ -86,8 +87,9 @@ export function UpdateSection({ status, now, loadedVersion, offline }: UpdateSec
             </>
           ) : (
             <>
-              Не удалось проверить новые версии <RelativeTime iso={check.checkedAt} />:{' '}
-              {check.error ?? 'причина не записана'}.{latest && ' Ниже — что сервер нашёл раньше.'}
+              Проверка новых версий не удалась (<RelativeTime iso={check.checkedAt} />
+              ): {check.error ?? 'причина не записана'}.
+              {latest && release.available && ' Ниже — что сервер нашёл раньше.'}
             </>
           )}{' '}
           Сервер проверяет раз в сутки.
@@ -136,7 +138,7 @@ export function UpdateSection({ status, now, loadedVersion, offline }: UpdateSec
 
       {view.rejected && (
         <InlineAlert tone="warning" title="Сервер отклонил заявку на обновление">
-          {view.rejected}. Версия прежняя, ничего не менялось.
+          {view.rejected}
         </InlineAlert>
       )}
 
@@ -157,7 +159,10 @@ export function UpdateSection({ status, now, loadedVersion, offline }: UpdateSec
       {latest && release.available && (
         <div className={styles.notes}>
           <h3 id={notesId} className={styles.notesTitle}>
-            Что нового в {latest.version}
+            {/* Заметки — за все версии новее установленной: пропущенные тоже */}
+            {latest.releases > 1
+              ? `Что нового после ${status.version} (до ${latest.version})`
+              : `Что нового в ${latest.version}`}
             {latest.publishedAt && (
               <span className={styles.published}> · {formatDateTime(latest.publishedAt)}</span>
             )}
