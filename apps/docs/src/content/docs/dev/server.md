@@ -96,25 +96,42 @@ sidebar:
 - **Хост разбирает заявку без выполнения** (`averra.sh update-request`): `mv` в свою папку, не
   ссылка, обычный файл до 1 КБ, без нулевых байтов, вся строка — по `REQUEST_RE`, версия равна
   `release-latest.json` и новее `AVERRA_VERSION`, релиз не ломающий (`"breaking":true`), прошлое
-  обновление не кончилось `rollback-failed`, замок свободен. Заявка удаляется до запуска,
-  дальше — `start_worker`, тот же update (с `--request <время>`: не взял замок — пишет отказ в
-  `update-request.json`, а не молчит). Отказ — строка `---- … отклонена` в `update.log` и
-  `state/update-request.json`; текст кривой заявки никуда не копируется.
+  обновление не кончилось `rollback-failed` и не откатилось на этой же версии (`rolled-back` с
+  `"to"` этой версии — так же решает `updateBlock` в схеме), замок свободен. Заявка удаляется до
+  запуска, дальше — `start_worker`, тот же update (с `--request <время>`: не взял замок или так и
+  не начал своё обновление — прерванное прошлое кончилось откатом — пишет отказ в
+  `update-request.json`, а не молчит). `accepted` пишется до запуска (время заявки раньше начала
+  её обновления), не запустился процесс — отказ поверх. Отказ — строка `---- … отклонена` в
+  `update.log` и `state/update-request.json`, код 0: отказ — штатный итог, служба не помечается
+  упавшей. Предел запусков у службы снят (`StartLimitIntervalSec=0`: systemd считает запуски, а
+  не падения, и частые заявки остановили бы path-юнит); упавший path-юнит видно по `is-active`.
+  Текст кривой заявки никуда не копируется.
 - **Файлы проверки версии** (пишет только `averra.sh`): `release-check.json` — последняя попытка
-  (`ReleaseCheck`: время, версия, ok, причина, `adminUpdate`, `requestsWatched` — включён ли
-  path-юнит заявок, `systemctl is-enabled`), `release-latest.json` — последний найденный релиз
-  (`ReleaseLatest`, версия первым полем — по ней хост сверяет заявку; `breaking` — раздел
-  BREAKING CHANGES в заметках, перед заметками; при сбое сети не стирается), `update-request.json` — решение по последней заявке
-  (`UpdateRequestDecision`). В `update-last.json` — `step` (`UpdateStep`): шаг для показа хода;
-  решения при обрыве по-прежнему принимает `PHASE` в `.update-run`.
+  (`ReleaseCheck`: время, версия, ok, причина, `adminUpdate`, `requestsWatched` — включён и
+  работает ли path-юнит заявок, `systemctl is-enabled` и `is-active`), `release-latest.json` —
+  последний найденный релиз (`ReleaseLatest`, версия первым полем — по ней хост сверяет заявку;
+  `breaking` — раздел BREAKING CHANGES у любого релиза новее установленной или промежуток виден
+  не целиком, перед заметками; `releases` — сколько релизов в заметках; при сбое сети не
+  стирается), `update-request.json` — решение по последней заявке (`UpdateRequestDecision`). В
+  `update-last.json` — `step` (`UpdateStep`): шаг для показа хода, и `failedStep` — на каком шаге
+  новая версия не прошла перед откатом (`FAILED_STEP` в `.update-run`); решения при обрыве
+  по-прежнему принимает `PHASE` в `.update-run`.
 - **Ответ источника релизов — чужие данные.** `check-update` качает его `curl` (только https,
-  30 секунд, до 2 МБ) и разбирает `node dist/server/release-info.js` в образе установленной версии
-  (`--network none --read-only --cap-drop ALL`); на хост возвращается одна строка JSON, которую
-  скрипт проверяет ещё раз. Новый источник — ветка в `release_source_url` и формат в
+  30 секунд, до 2 МБ) и разбирает `node dist/server/release-info.js --current <установленная>` в
+  образе установленной версии (`--network none --read-only --cap-drop ALL`); на хост возвращается
+  одна строка JSON, которую скрипт проверяет ещё раз. Источник — список релизов
+  (`/releases?per_page=30`): заметки и `breaking` считаются за все версии новее установленной.
+  Версия новее установленной записывается, только если её образы api и web есть в реестре
+  (`docker manifest inspect`). Всё, что зависит от источника (формат, адрес, заголовки запроса), —
+  в `release_source`, `check_update` общий; новый источник — ветка там и формат в
   `apps/api/src/release/release-info.ts`.
 - **Службы systemd — в `averra.sh install-units`**, а не в `install.sh`: `averra-backup.service`
   (`ExecStartPre=-… check-update`) и `.timer`, `averra-update-request.path` (`PathExists`) и
-  `.service` (`ExecStopPost` удаляет заявку). У прежнего скрипта с новым **два договора — команды
+  `.service` (`ExecStopPost` удаляет заявку), `averra-update-resume.service`
+  (`ConditionPathExists=…/.update-run`, `Before=averra-backup.service`, включается без
+  `--now`): при старте сервера `update-resume` доводит прерванное обновление (`update-worker
+  --resume` — только `recover_update`, нового не начинает; замок ждёт до 30 минут, а не уходит
+  сразу; откат — штатный итог, код 0). У прежнего скрипта с новым **два договора — команды
   не переименовывать**: `ensure-dirs` — перед запуском новой версии прежний скрипт копирует новый
   `averra.sh` из `.next` в папку установки (`.averra-next.sh`: папку установки скрипт берёт по
   своему месту) и зовёт его `ensure-dirs`, так папки для нового `compose.yaml` встают до

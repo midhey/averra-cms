@@ -12,7 +12,8 @@
 #   sudo /opt/averra/averra.sh check-update         проверить, есть ли новая версия
 #
 # Бэкап и проверку новой версии по расписанию запускает таймер systemd averra-backup.timer,
-# заявку на обновление из админки забирает averra-update-request.path. Их ставит install-units
+# заявку на обновление из админки забирает averra-update-request.path, прерванное перезагрузкой
+# обновление доводит averra-update-resume при старте сервера. Их ставит install-units
 # (его зовут install.sh и обновление).
 # Подробно — документация: https://midhey.github.io/averra-cms/install/
 
@@ -71,8 +72,9 @@ averra-update-request забирает её и запускает тот же up
 (по умолчанию github:midhey/averra-cms), off — не проверять.
 
 Обновление идёт в фоне на сервере, отвязанным от SSH: обрыв связи его не прервёт, лог — update.log
-рядом. Если процесс всё же оборвался (перезагрузка), повторите ту же команду update: она доведёт
-прерванное до конца — закончит обновление или откатит.
+рядом. Если процесс всё же оборвался (перезагрузка), прерванное доводит до конца служба
+averra-update-resume при старте сервера — закончит обновление или откатит; без systemd — повторите
+ту же команду update.
 
 Настройки бэкапов — в .env рядом: BACKUP_KEEP (по умолчанию 7: столько последних бэкапов и не
 старше стольких дней), внешнее хранилище — BACKUP_S3_ENDPOINT, BACKUP_S3_REGION, BACKUP_S3_BUCKET,
@@ -773,10 +775,11 @@ update_state() {
   # из отметки. Итог in-progress — обновление идёт, времени конца нет
   local finished=null
   [[ "$1" == in-progress ]] || finished="$(json_str "$(now_iso)")"
-  write_state update-last.json "$(printf '{"from":%s,"to":%s,"startedAt":%s,"finishedAt":%s,"result":%s,"step":%s,"dbRestored":%s,"keptDatabase":%s,"error":%s}' \
+  write_state update-last.json "$(printf '{"from":%s,"to":%s,"startedAt":%s,"finishedAt":%s,"result":%s,"step":%s,"failedStep":%s,"dbRestored":%s,"keptDatabase":%s,"error":%s}' \
     "$(json_str "$(run_get FROM)")" "$(json_str "$(run_get TO)")" "$(json_str "$(run_get STARTED)")" \
-    "$finished" "$(json_str "$1")" "$(json_or_null "$(run_get STEP)")" "$2" \
-    "$(json_or_null "${4:-}")" "$(json_or_null "$3")")"
+    "$finished" "$(json_str "$1")" "$(json_or_null "$(run_get STEP)")" \
+    "$(json_or_null "$(run_get FAILED_STEP)")" "$2" "$(json_or_null "${4:-}")" \
+    "$(json_or_null "$3")")"
 }
 
 # Шаг обновления для админки (схема UpdateStep в API): pull, backup, migrate, verify, rollback.
@@ -853,6 +856,10 @@ rollback_update() {
   before="$(run_get BEFORE)"
   kept="$(run_get KEPT)"
   [[ "$(run_get RESTORED)" != 1 ]] || db_restored=true
+  # На каком шаге новая версия не прошла (запуск и миграции или проверка) — для админки. Повтор
+  # отката (обрыв посреди него) шаг не переписывает
+  [[ -n "$(run_get FAILED_STEP)" || "$(run_get STEP)" == rollback ]] ||
+    run_set FAILED_STEP "$(run_get STEP)"
   run_set PHASE rollback
   update_step rollback
   step "Версия $to не прошла проверку (API или Caddy не работают) — откатываю на $from"
@@ -968,14 +975,21 @@ recover_update() {
 # Само обновление (в процессе update-worker, под замком)
 update_run() {
   local target="$1" current api_image next before
-  [[ ! -f "$UPDATE_RUN" ]] || recover_update
+  if [[ -f "$UPDATE_RUN" ]]; then
+    # Кончится откатом — процесс выйдет, и отказ по заявке скажет почему
+    REQUEST_NOTE='сначала пришлось довести прерванное прошлое обновление, и оно кончилось откатом (итог — на экране состояния): заявка не выполнена'
+    recover_update
+    REQUEST_NOTE=''
+  fi
   current="$(env_get AVERRA_VERSION)"
   [[ -n "$current" ]] || fail "в $ENV_FILE нет AVERRA_VERSION: это папка установки?"
   if [[ "$current" == "$target" ]]; then
     say "Уже версия $target"
+    REQUEST_NOTE="версия $target уже стоит: до неё довелось прерванное прошлое обновление"
     return 0
   fi
   (umask 077 && : >"$UPDATE_RUN")
+  RUN_STARTED=1
   run_set FROM "$current"
   run_set TO "$target"
   run_set STARTED "$(now_iso)"
@@ -1057,33 +1071,90 @@ update_run() {
   rollback_update
 }
 
-# Процесс обновления, отвязанный от терминала: вывод — в update.log, итог — код в .update-exit
+# Процесс обновления по заявке: время заявки и версия. Процесс, который так и не начал своё
+# обновление (RUN_STARTED), — например, прерванное прошлое кончилось откатом, — пишет на выходе
+# отказ по заявке: иначе админка до срока показывала бы «сервер запускает обновление»
+REQUESTED_AT=''
+REQUESTED_VERSION=''
+REQUEST_NOTE=''
+RUN_STARTED=0
+# Сколько доведение после перезагрузки ждёт замок, секунд
+RESUME_LOCK_WAIT="${AVERRA_RESUME_LOCK_WAIT:-1800}"
+
+# Процесс обновления, отвязанный от терминала: вывод — в update.log, итог — код в .update-exit.
+# --resume — только довести прерванное обновление (после перезагрузки сервера), нового не начинать
 cmd_update_worker() {
-  local requested=''
-  [[ ($# -eq 2 || $# -eq 4) && "$1" == --version && "$2" =~ $VERSION_RE ]] ||
-    fail 'update-worker --version <версия> [--request <время заявки>]'
-  if [[ $# -eq 4 ]]; then
-    [[ "$3" == --request && "$4" =~ $REQUESTED_AT_RE ]] || fail 'update-worker: --request <время заявки>'
-    requested="$4"
+  local resume=0
+  if [[ $# -eq 1 && "$1" == --resume ]]; then
+    resume=1
+  else
+    [[ ($# -eq 2 || $# -eq 4) && "$1" == --version && "$2" =~ $VERSION_RE ]] ||
+      fail 'update-worker --version <версия> [--request <время заявки>] | --resume'
+    if [[ $# -eq 4 ]]; then
+      [[ "$3" == --request && "$4" =~ $REQUESTED_AT_RE ]] || fail 'update-worker: --request <время заявки>'
+      REQUESTED_AT="$4"
+      REQUESTED_VERSION="$2"
+    fi
   fi
   # Терминала у процесса нет, но и случайный HUP или закрытый канал его не остановят
   trap '' HUP PIPE
   exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
+  # Доведение после перезагрузки ждёт замок (бэкап, запущенный руками, кончится сам): уйти ни с чем
+  # значило бы оставить API остановленным до SSH. Код 3 — замок так и не дали
+  if [[ $resume -eq 1 ]] && ! flock -w "$RESUME_LOCK_WAIT" 9; then
+    printf 'Ошибка: замок .averra.lock занят дольше %s с — прерванное обновление не доведено\n' "$RESUME_LOCK_WAIT" >&2
+    exit 3
+  fi
+  if [[ $resume -ne 1 ]] && ! flock -n 9; then
     # Между проверкой заявки и этой минутой замок взял другой (ночной бэкап): админка должна
     # узнать, что заявка не выполнена, а не ждать «запускается» до срока
-    [[ -z "$requested" ]] ||
-      request_state rejected "$2" "$requested" 'сервер был занят бэкапом или восстановлением: заявка не выполнена, отправьте её снова через несколько минут'
+    [[ -z "$REQUESTED_AT" ]] ||
+      request_state rejected "$REQUESTED_VERSION" "$REQUESTED_AT" 'сервер был занят бэкапом или восстановлением: заявка не выполнена, отправьте её снова через несколько минут'
     fail 'уже идёт бэкап, восстановление или обновление (замок .averra.lock). Подождите'
   fi
   # Номер и итог пишет только процесс, взявший замок: второй, одновременный, не затирает их
   printf '%s\n' "$$" >"$UPDATE_PID"
   trap 'update_exit $?' EXIT
+  if [[ $resume -eq 1 ]]; then
+    if [[ -f "$UPDATE_RUN" ]]; then
+      recover_update
+    else
+      say 'Прерванного обновления нет'
+    fi
+    return 0
+  fi
   update_run "$2"
 }
 
 update_exit() {
+  if [[ -n "$REQUESTED_AT" && $RUN_STARTED -ne 1 ]]; then
+    request_state rejected "$REQUESTED_VERSION" "$REQUESTED_AT" "${REQUEST_NOTE:-обновление не началось, причина — в update.log на сервере: сообщите студии}" || true
+  fi
   printf '%s\n' "$1" >"$UPDATE_EXIT.tmp" && mv -f "$UPDATE_EXIT.tmp" "$UPDATE_EXIT"
+}
+
+# Обновление после перезагрузки или kill: служба averra-update-resume при старте сервера (есть
+# отметка .update-run) доводит прерванное — иначе API, остановленный на время бэкапа, так и лежал
+# бы, а у владельца нет SSH. Тот же процесс обновления под замком, вывод — в update.log
+cmd_update_resume() {
+  [[ $# -eq 0 ]] || fail "непонятный аргумент: $1"
+  [[ -f "$UPDATE_RUN" ]] || return 0
+  if update_worker_pid >/dev/null; then
+    say 'Обновление уже идёт'
+    return 0
+  fi
+  rotate_update_log
+  (umask 077 && printf '\n==== %s update-resume: довожу прерванное обновление ====\n' "$(now_iso)" >>"$UPDATE_LOG")
+  rm -f "$UPDATE_EXIT" "$UPDATE_PID"
+  local code=0
+  "$BASH" "$AVERRA_DIR/averra.sh" update-worker --resume </dev/null >>"$UPDATE_LOG" 2>&1 || code=$?
+  # Откат (код 1) — штатный итог доведения: он записан в update-last.json, админка его покажет, а
+  # служба не помечается упавшей при каждой такой загрузке. Неудачный откат (2) и замок (3) — сбой
+  if ((code == 1)); then
+    say 'Прерванное обновление откатилось: итог — в update-last.json'
+    return 0
+  fi
+  return "$code"
 }
 
 # Чем отвязать процесс: transient-служба systemd (вне сессии SSH: её не убьёт и закрытие сессии
@@ -1293,18 +1364,40 @@ update_source() {
   printf '%s' "${source:-$DEFAULT_UPDATE_SOURCE}"
 }
 
-# Источник → «формат адрес». Формат — как разбирать ответ (release-info в образе API знает его).
-# Новый источник — ветка здесь и формат в apps/api/src/release. Код 1 — источник не понят
-release_source_url() {
+# Источник → как его спрашивать: SOURCE_FORMAT (как разбирать ответ — release-info в образе API
+# знает его), SOURCE_URL и заголовки запроса SOURCE_HEADERS. Всё, что зависит от источника, —
+# здесь; check_update общий. Новый источник — ветка здесь и формат в apps/api/src/release. Код 1 —
+# источник не понят
+SOURCE_FORMAT=''
+SOURCE_URL=''
+SOURCE_HEADERS=()
+
+release_source() {
   local source="$1" repo
   case "$source" in
     github:*)
       repo="${source#github:}"
       [[ "$repo" =~ ^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$ ]] || return 1
-      printf 'github https://api.github.com/repos/%s/releases/latest' "$repo"
+      SOURCE_FORMAT=github
+      # Список, а не только последний: ломающий релиз между установленной и последней версией
+      # (пропущенный) тоже должен убрать кнопку
+      SOURCE_URL="https://api.github.com/repos/$repo/releases?per_page=30"
+      SOURCE_HEADERS=(-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
       ;;
     *) return 1 ;;
   esac
+}
+
+# Образы версии уже в реестре: релиз на GitHub появляется раньше, чем release.yml соберёт образы
+# (минуты), а сборка может и упасть. Без образов кнопка вела бы к отказу на загрузке. Код 1 — нет
+# (или реестр не ответил)
+release_images_published() {
+  # release_images_published <версия> <образ> ...
+  local version="$1" image
+  shift
+  for image in "$@"; do
+    timeout 60 docker manifest inspect "$image:$version" >/dev/null 2>&1 || return 1
+  done
 }
 
 # Итог попытки проверки для админки: когда, какая версия стоит, удалась ли, включено ли обновление
@@ -1319,11 +1412,13 @@ release_check_state() {
     "$(json_or_null "$2")" "$admin" "$watched")"
 }
 
-# Заявки есть кому забирать: path-юнит включён. Без systemd, с ADMIN_UPDATE=off или с юнитом,
-# который выключили руками, кнопки в админке нет — иначе заявка лежала бы, пока её не заметят
+# Заявки есть кому забирать: path-юнит включён и работает. Без systemd, с ADMIN_UPDATE=off, с
+# юнитом, который выключили руками или который упал (например, упёрся в предел запусков службы),
+# кнопки в админке нет — иначе заявка лежала бы, пока её не заметят
 requests_watched() {
   command -v systemctl >/dev/null 2>&1 &&
-    systemctl is-enabled --quiet averra-update-request.path 2>/dev/null
+    systemctl is-enabled --quiet averra-update-request.path 2>/dev/null &&
+    systemctl is-active --quiet averra-update-request.path 2>/dev/null
 }
 
 # Проверка новой версии. Ответ источника — чужие данные: его разбирает node из образа
@@ -1333,7 +1428,7 @@ requests_watched() {
 check_update() {
   # Диапазоны в шаблонах — по байтам, а не по правилам языка системы
   local LC_ALL=C
-  local current source spec format url api_image tmp out error='' version
+  local current source api_image web_image tmp out error='' version
   current="$(env_get AVERRA_VERSION)"
   if [[ ! "$current" =~ $VERSION_RE ]]; then
     say "в $ENV_FILE нет AVERRA_VERSION: это папка установки?"
@@ -1345,21 +1440,21 @@ check_update() {
     say 'Проверка новых версий выключена: UPDATE_SOURCE=off в .env'
     return 0
   fi
-  if ! spec="$(release_source_url "$source")"; then
+  if ! release_source "$source"; then
     release_check_state false 'источник релизов не понят: UPDATE_SOURCE в .env'
     say "UPDATE_SOURCE=$source в .env — не источник. Нужен вид github:владелец/репозиторий или off"
     return 1
   fi
-  format="${spec%% *}"
-  url="${spec#* }"
   api_image="$(env_get AVERRA_API_IMAGE)"
   [[ -n "$api_image" ]] || api_image='ghcr.io/midhey/averra-api'
+  web_image="$(env_get AVERRA_WEB_IMAGE)"
+  [[ -n "$web_image" ]] || web_image='ghcr.io/midhey/averra-web'
   tmp="$(mktemp -d)"
   local code=0
   if command -v curl >/dev/null 2>&1; then
     curl -fsS --proto '=https' --max-time 30 --max-filesize "$SOURCE_MAX_BYTES" \
-      -H 'Accept: application/vnd.github+json' -H 'User-Agent: averra-cms' \
-      -o "$tmp/body" "$url" 2>/dev/null || code=$?
+      "${SOURCE_HEADERS[@]}" -H 'User-Agent: averra-cms' \
+      -o "$tmp/body" "$SOURCE_URL" 2>/dev/null || code=$?
   fi
   if ! command -v curl >/dev/null 2>&1; then
     error='на сервере нет curl'
@@ -1376,7 +1471,8 @@ check_update() {
     code=0
     out="$(docker run --rm -i --network none --read-only --cap-drop ALL \
       --security-opt no-new-privileges:true --memory 256m --entrypoint node \
-      "$api_image:$current" dist/server/release-info.js --format "$format" <"$tmp/body" 2>/dev/null)" ||
+      "$api_image:$current" dist/server/release-info.js --format "$SOURCE_FORMAT" --current "$current" \
+      <"$tmp/body" 2>/dev/null)" ||
       code=$?
     if [[ $code -eq 2 ]]; then
       error='в ответе источника нет подходящего релиза'
@@ -1384,6 +1480,14 @@ check_update() {
       error='не удалось разобрать ответ: образ установленной версии не запустился (docker)'
     elif [[ ${#out} -gt $LATEST_MAX_BYTES || "$out" == *$'\n'* || ! "$out" =~ $LATEST_RE ]]; then
       error='ответ разбора релиза не по формату'
+    else
+      # Новая версия — только с образами в реестре: прежний найденный релиз остаётся, админка
+      # покажет причину, а следующая проверка найдёт версию, когда образы соберутся
+      version="${BASH_REMATCH[1]}"
+      if version_gt "$version" "$current" &&
+        ! release_images_published "$version" "$api_image" "$web_image"; then
+        error="образы версии $version в реестре не найдены или реестр не ответил: релиз только что вышел, его сборка не прошла или нет связи с реестром"
+      fi
     fi
   fi
   rm -rf "$tmp"
@@ -1423,29 +1527,33 @@ request_rejected() {
   rotate_update_log
   (umask 077 && printf -- '---- %s заявка из админки отклонена: %s\n' "$(now_iso)" "$3" >>"$UPDATE_LOG")
   printf 'Заявка на обновление отклонена: %s\n' "$3" >&2
-  return 1
+  return 0
 }
 
 # Заявка из админки (её зовёт служба averra-update-request, когда в папке заявок появился файл).
 # Разбор строгий и без выполнения: заявка сразу уходит из папки API в свою (подменить её посреди
 # разбора API уже не может), должна быть обычным файлом до 1 КБ ровно одного вида, версия — X.Y.Z,
 # равна найденной check-update и новее установленной. Любое «не так» — отказ в update.log и в
-# состояние, без обновления. Заявка удаляется до запуска; дальше — тот же update
+# состояние, без обновления. Заявка удаляется до запуска; дальше — тот же update. Отказ — штатный
+# итог (код 0): служба не помечается упавшей и не засоряет systemctl --failed. Предел запусков
+# службе снят в юните (StartLimitIntervalSec=0): systemd считает запуски, а не падения, и без этого
+# частые заявки остановили бы path-юнит; упавший path-юнит видно по is-active (requests_watched)
 cmd_update_request() {
   [[ $# -eq 0 ]] || fail "непонятный аргумент: $1"
   local LC_ALL=C
-  local taken="$AVERRA_DIR/.update-request" size text content version requested current available latest
+  local taken="$AVERRA_DIR/.update-request" size text content version requested current available
+  local latest last
   [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]] || return 0
   rm -rf "$taken"
   if ! mv -f "$REQUEST_FILE" "$taken" 2>/dev/null; then
     rm -rf "$REQUEST_FILE" 2>/dev/null || true
     request_rejected '' '' 'заявку не удалось забрать из папки заявок'
-    exit 1
+    exit 0
   fi
   if [[ -L "$taken" || ! -f "$taken" ]]; then
     rm -rf "$taken"
     request_rejected '' '' 'заявка — не обычный файл'
-    exit 1
+    exit 0
   fi
   size="$(wc -c <"$taken" | tr -d ' ')"
   # Нулевые байты в переменную bash не попадают: считаем, сколько их было, а не молча выкидываем
@@ -1454,37 +1562,37 @@ cmd_update_request() {
   rm -f "$taken"
   if [[ ! "$size" =~ ^[0-9]+$ ]] || ((size == 0 || size > REQUEST_MAX_BYTES)); then
     request_rejected '' '' 'заявка пустая или больше 1 КБ'
-    exit 1
+    exit 0
   fi
   if [[ "$text" != "$size" ]]; then
     request_rejected '' '' 'заявка не по формату'
-    exit 1
+    exit 0
   fi
   if [[ ! "$content" =~ $REQUEST_RE ]]; then
     request_rejected '' '' 'заявка не по формату'
-    exit 1
+    exit 0
   fi
   version="${BASH_REMATCH[1]}"
   requested="${BASH_REMATCH[2]}"
   if ! admin_update_enabled; then
     request_rejected "$version" "$requested" 'обновление из админки выключено на сервере (ADMIN_UPDATE=off)'
-    exit 1
+    exit 0
   fi
   if update_worker_pid >/dev/null; then
     request_rejected "$version" "$requested" "уже идёт обновление до $(run_get TO)"
-    exit 1
+    exit 0
   fi
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
     request_rejected "$version" "$requested" 'уже идёт обновление, бэкап или восстановление: повторите через несколько минут'
-    exit 1
+    exit 0
   fi
   exec 9>&-
   # Прошлое обновление кончилось неудачным откатом: установку сначала чинит человек, а дальше
   # обновляет по SSH (update запишет новый итог). Так же решает и админка (updateBlock)
   if grep -q '"result":"rollback-failed"' "$STATE_DIR/update-last.json" 2>/dev/null; then
     request_rejected "$version" "$requested" 'прошлое обновление кончилось неудачным откатом: сначала нужен человек на сервере, дальше — обновление по SSH'
-    exit 1
+    exit 0
   fi
   current="$(env_get AVERRA_VERSION)"
   available=''
@@ -1494,26 +1602,37 @@ cmd_update_request() {
   fi
   if [[ -z "$available" ]]; then
     request_rejected "$version" "$requested" 'сервер ещё не нашёл ни одной версии: averra.sh check-update'
-    exit 1
+    exit 0
   fi
   if [[ "$version" != "$available" ]]; then
     request_rejected "$version" "$requested" "версия $version — не та, что найдена доступной ($available)"
-    exit 1
+    exit 0
   fi
   if ! version_gt "$version" "$current"; then
     request_rejected "$version" "$requested" "версия $version не новее установленной ${current:-?}"
-    exit 1
+    exit 0
+  fi
+  # Обновление до этой версии уже откатилось: повтор — снова минута-две без админки и ещё одна
+  # отложенная база. Из админки — со следующей версией, эту ставит студия по SSH (updateBlock)
+  last="$(head -c 4096 "$STATE_DIR/update-last.json" 2>/dev/null || true)"
+  if [[ "$last" == *'"result":"rolled-back"'* && "$last" == *"\"to\":\"$version\","* ]]; then
+    request_rejected "$version" "$requested" "обновление до $version уже откатилось: из админки — со следующей версией, эту ставит студия по SSH"
+    exit 0
   fi
   # Ломающий релиз (раздел BREAKING CHANGES: шаг на сервере) — только по SSH. Признак пишет разбор
   # релиза до заметок; кавычки в заметках экранированы, текстом релиза его не подделать
   if [[ "$latest" == *'"breaking":true'* ]]; then
     request_rejected "$version" "$requested" "версия $version требует шага на сервере: её ставит студия по SSH"
-    exit 1
+    exit 0
   fi
+  # «Принята» — до запуска: процесс обновления пишет свой ход сразу, и время заявки должно быть
+  # раньше его начала. Не запустился — отказ поверх, иначе админка ждала бы «запускается» до срока
   request_state accepted "$version" "$requested" ''
   say "Заявка из админки: обновляю $current → $version. Обновление идёт в фоне, лог — $UPDATE_LOG"
-  start_worker "$version" "Заявка из админки от $requested: обновить $current → $version" "$requested" ||
+  if ! start_worker "$version" "Заявка из админки от $requested: обновить $current → $version" "$requested"; then
+    request_rejected "$version" "$requested" 'процесс обновления на сервере не запустился: сообщите студии'
     fail 'не удалось запустить процесс обновления'
+  fi
 }
 
 # Служба и таймер бэкапа (заодно — проверка новой версии раз в сутки) и path-юнит заявок из
@@ -1536,7 +1655,7 @@ cmd_install_units() {
     check_update || true
     return 0
   fi
-  step 'Ставлю службы systemd: бэкап и проверка версии по расписанию, заявки из админки'
+  step 'Ставлю службы systemd: бэкап и проверка версии по расписанию, заявки из админки, доведение прерванного обновления'
   # Persistent — пропущенный, пока сервер был выключен, бэкап сделается при старте.
   # Проверка версии — перед бэкапом и с «-»: без сети она не удастся, а бэкап всё равно пойдёт
   write_unit averra-backup.service <<UNIT
@@ -1582,14 +1701,37 @@ UNIT
 Description=Обновление Averra по заявке из админки
 Requires=docker.service
 After=docker.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 ExecStart=$AVERRA_DIR/averra.sh update-request
 ExecStopPost=/bin/rm -f $REQUEST_FILE
 UNIT
+  # Обновление, оборванное перезагрузкой, доводится при старте сервера: API мог остаться
+  # остановленным на время бэкапа, а у владельца нет SSH. Условие — отметка .update-run, без неё
+  # служба не запускается. Включается без --now: идущее сейчас обновление она не трогает. Раньше
+  # пропущенного ночного бэкапа (Persistent=true запускает его при старте): иначе бэкап мог взять
+  # замок первым, и прерванное так и осталось бы с остановленным API
+  write_unit averra-update-resume.service <<UNIT
+[Unit]
+Description=Довести обновление Averra, прерванное перезагрузкой
+Requires=docker.service
+After=docker.service network-online.target
+Before=averra-backup.service
+Wants=network-online.target
+ConditionPathExists=$UPDATE_RUN
+
+[Service]
+Type=oneshot
+ExecStart=$AVERRA_DIR/averra.sh update-resume
+
+[Install]
+WantedBy=multi-user.target
+UNIT
   systemctl daemon-reload
   systemctl enable --now averra-backup.timer
+  systemctl enable averra-update-resume.service
   if admin_update_enabled; then
     systemctl enable --now averra-update-request.path
   else
@@ -1656,8 +1798,10 @@ case "$command" in
   verify) cmd_verify "$@" ;;
   restore) cmd_restore "$@" ;;
   update) cmd_update "$@" ;;
-  # Служебная: процесс обновления, который запускает update (см. start_worker)
+  # Служебные: процесс обновления, который запускает update (см. start_worker), и доведение
+  # прерванного обновления после перезагрузки (служба averra-update-resume)
   update-worker) cmd_update_worker "$@" ;;
+  update-resume) cmd_update_resume "$@" ;;
   status) cmd_status "$@" ;;
   check-update) cmd_check_update "$@" ;;
   # Служебные: заявка из админки (служба averra-update-request) и службы systemd (install.sh,

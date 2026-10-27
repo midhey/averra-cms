@@ -122,7 +122,7 @@ sidebar:
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | внешнее хранилище бэкапов |
 | `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_PREFIX` | по умолчанию `https://storage.yandexcloud.net`, `ru-central1`, `averra/<домен сайта>` |
 | `UPDATE_SOURCE` | откуда `averra.sh check-update` узнаёт о новых версиях: `github:владелец/репозиторий`, по умолчанию `github:midhey/averra-cms`; `off` — не проверять |
-| `ADMIN_UPDATE` | `off` — обновление из админки выключено: служба заявок не ставится, лежащая заявка удаляется, новые не принимаются. После смены — `averra.sh install-units` |
+| `ADMIN_UPDATE` | `off` — обновление из админки выключено: path-юнит заявок выключается (юниты пишутся, но заявки никто не забирает), лежащая заявка удаляется, новые не принимаются. После смены — `averra.sh install-units` |
 
 Переменные окружения процесса (не строки `.env`):
 

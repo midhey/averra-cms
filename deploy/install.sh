@@ -535,9 +535,10 @@ step 'Поднимаю Caddy (сертификаты он выпустит са�
 compose up -d
 
 # Службы systemd ставит сам averra.sh (install-units): бэкап и проверка новой версии раз в сутки
-# (averra-backup.timer, около 03:30) и заявки на обновление из админки
-# (averra-update-request.path). Тем же он переставляет их после обновления — юниты новой версии
-# доезжают без ручного шага. Журнал: journalctl -u averra-backup -u averra-update-request
+# (averra-backup.timer, около 03:30), заявки на обновление из админки (averra-update-request.path)
+# и доведение обновления, прерванного перезагрузкой (averra-update-resume.service). Тем же он
+# переставляет их после обновления — юниты новой версии доезжают без ручного шага. Журнал:
+# journalctl -u averra-backup -u averra-update-request -u averra-update-resume
 "$BASH" "$INSTALL_DIR/averra.sh" install-units ||
   say "Службы systemd не встали (сообщение выше): повторите $INSTALL_DIR/averra.sh install-units"
 

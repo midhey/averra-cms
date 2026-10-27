@@ -73,10 +73,10 @@ function fakeBin(root: string, fakes: Fakes) {
   // chmod — настоящий, но вызов записан: права .env видны и на Windows, где NTFS их не держит
   write('chmod', `printf '%s\\n' "$*" >> "${posix(chmodLog)}"\nexec /usr/bin/chmod "$@"`)
   // systemctl — подделка: таймер бэкапов ставится в свою папку теста, а не в /etc/systemd
-  // is-enabled — «включён» и без записи: так averra.sh узнаёт, есть ли кому забирать заявки
+  // is-enabled и is-active — «да» и без записи: так averra.sh узнаёт, есть ли кому забирать заявки
   write(
     'systemctl',
-    `[[ "$1" != is-enabled ]] || exit 0\nprintf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`,
+    `[[ "$1" != is-enabled && "$1" != is-active ]] || exit 0\nprintf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`,
   )
   // chown — подделка: владелец папки заявок (пользователь API) виден и без root
   write('chown', `printf '%s\\n' "$*" >> "${posix(join(root, 'chown.log'))}"`)
@@ -479,7 +479,7 @@ describe('полная установка (подделки docker и сети)'
       /^PathExists=\S*\/inst\/requests\/update\.json$/m,
     )
     expect(run.systemctl()).toBe(
-      'daemon-reload\nenable --now averra-backup.timer\nenable --now averra-update-request.path\n',
+      'daemon-reload\nenable --now averra-backup.timer\nenable averra-update-resume.service\nenable --now averra-update-request.path\n',
     )
     // Сети нет — проверка версии «не удалась», это видно админке, а установка прошла
     expect(

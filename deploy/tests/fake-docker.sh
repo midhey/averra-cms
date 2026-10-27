@@ -121,6 +121,9 @@ printf '%s (up -d: %s, папка: %s)\n' "$*" "$(grep -c 'up -d' "$FAKE_STATE/c
 NEXT
         ;;
     esac ;;
+  "manifest inspect "*)
+    # Образ версии в реестре; FAKE_NO_MANIFEST — образов этой версии там ещё нет
+    [[ -z "${FAKE_NO_MANIFEST:-}" || "$args" != *":$FAKE_NO_MANIFEST" ]] || exit 1 ;;
   *"release-info.js"*)
     # Разбор ответа источника релизов в образе API: что пришло на stdin — в файл, ответ — из
     # FAKE_RELEASE_OUT (по умолчанию — релиз 0.7.0)
