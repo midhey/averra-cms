@@ -46,7 +46,11 @@ COPY deploy/package.json deploy/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --filter "@averra/api..." --filter "@averra/admin..."
 COPY . .
-RUN pnpm --filter @averra/api build && pnpm --filter @averra/admin build
+# Версия установки вшивается и в админку: после обновления она видит, что API уже новее её, и
+# предлагает обновить страницу (InstallationScreen). Тот же build-arg, что у образа API
+ARG AVERRA_VERSION=dev
+RUN pnpm --filter @averra/api build \
+  && VITE_AVERRA_VERSION="$AVERRA_VERSION" pnpm --filter @averra/admin build
 
 # ── Prod-зависимости API и рендерера, раскладка как в репозитории ───────────────────────────
 FROM pnpm AS runtime-tree

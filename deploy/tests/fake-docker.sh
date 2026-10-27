@@ -111,8 +111,23 @@ case "$args" in
     image="$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /averra-api:/) print $i}' <<<"$args")"
     case "$args" in
       *compose.yaml) echo "# compose $image" ;;
-      *averra.sh) printf '#!/usr/bin/env bash\n# averra.sh %s\n' "$image" ;;
+      # averra.sh новой версии: запоминает, с какими командами его позвали (передача управления),
+      # сколько раз к этой минуте поднимали сервисы и из какой папки его запустили
+      *averra.sh)
+        printf '#!/usr/bin/env bash\n# averra.sh %s\n' "$image"
+        cat <<'NEXT'
+printf '%s (up -d: %s, папка: %s)\n' "$*" "$(grep -c 'up -d' "$FAKE_STATE/calls.log" 2>/dev/null)" \
+  "$(basename "$(dirname "$0")")" >> "$FAKE_STATE/next-averra.log"
+NEXT
+        ;;
     esac ;;
+  *"release-info.js"*)
+    # Разбор ответа источника релизов в образе API: что пришло на stdin — в файл, ответ — из
+    # FAKE_RELEASE_OUT (по умолчанию — релиз 0.7.0)
+    cat > "$S/release-body"
+    [[ -z "${FAKE_RELEASE_FAILS:-}" ]] || exit "$FAKE_RELEASE_FAILS"
+    release='{"version":"0.7.0","publishedAt":"2026-10-20T10:00:00Z","notes":"Новое"}'
+    printf '%s\n' "${FAKE_RELEASE_OUT:-$release}" ;;
   *"rclone/rclone"*" obscure -"*)
     read -r secret
     printf 'secret-on-stdin=%s\n' "$([[ -n "$secret" ]] && echo yes)" >> "$S/calls.log"

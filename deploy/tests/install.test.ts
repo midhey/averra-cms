@@ -73,7 +73,15 @@ function fakeBin(root: string, fakes: Fakes) {
   // chmod — настоящий, но вызов записан: права .env видны и на Windows, где NTFS их не держит
   write('chmod', `printf '%s\\n' "$*" >> "${posix(chmodLog)}"\nexec /usr/bin/chmod "$@"`)
   // systemctl — подделка: таймер бэкапов ставится в свою папку теста, а не в /etc/systemd
-  write('systemctl', `printf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`)
+  // is-enabled — «включён» и без записи: так averra.sh узнаёт, есть ли кому забирать заявки
+  write(
+    'systemctl',
+    `[[ "$1" != is-enabled ]] || exit 0\nprintf '%s\\n' "$*" >> "${posix(join(root, 'systemctl.log'))}"`,
+  )
+  // chown — подделка: владелец папки заявок (пользователь API) виден и без root
+  write('chown', `printf '%s\\n' "$*" >> "${posix(join(root, 'chown.log'))}"`)
+  // curl — сети нет: проверка новой версии при установке «не удалась», установка идёт дальше
+  write('curl', 'exit 7')
   if (fakes.failEnvMove) {
     write(
       'mv',
@@ -131,7 +139,9 @@ function install(args: string[], options: { fakes?: Fakes; env?: Record<string, 
   const chmods = () => (existsSync(chmodLog) ? readFileSync(chmodLog, 'utf8') : '')
   const systemctl = () =>
     existsSync(join(root, 'systemctl.log')) ? readFileSync(join(root, 'systemctl.log'), 'utf8') : ''
-  return { ...run, calls, chmods, systemd, systemctl }
+  const chowns = () =>
+    existsSync(join(root, 'chown.log')) ? readFileSync(join(root, 'chown.log'), 'utf8') : ''
+  return { ...run, calls, chmods, chowns, systemd, systemctl }
 }
 
 const required = [
@@ -304,7 +314,8 @@ describe('.env установки', () => {
       .trim()
       .split('\n')
       .filter((line) => !line.startsWith('600 '))
-    expect(notPrivate).toEqual([])
+    // Кроме .env — только папка заявок (700): в неё пишет один API
+    expect(notPrivate).toEqual([expect.stringMatching(/^700 \S+\/requests$/)])
     if (process.platform !== 'win32') {
       expect(statSync(join(dir, '.env')).mode & 0o777).toBe(0o600)
     }
@@ -447,16 +458,33 @@ describe('полная установка (подделки docker и сети)'
     )
     expect(existsSync(join(dir, 'backups'))).toBe(true)
     expect(existsSync(join(dir, 'state'))).toBe(true)
+    // Папка заявок из админки — до запуска API и пользователю API (node, uid 1000)
+    expect(existsSync(join(dir, 'requests'))).toBe(true)
+    expect(run.chowns()).toContain(`1000:1000 ${posix(dir)}/requests\n`)
+    expect(run.chmods()).toContain(`700 ${posix(dir)}/requests`)
     if (process.platform !== 'win32') {
       expect(statSync(join(dir, 'averra.sh')).mode & 0o777).toBe(0o700)
       expect(statSync(join(dir, 'backups')).mode & 0o777).toBe(0o700)
+      expect(statSync(join(dir, 'requests')).mode & 0o777).toBe(0o700)
     }
+    // Службы ставит сам averra.sh (install-units): бэкап с проверкой версии и заявки из админки
+    // Путь — как его видит bash averra.sh (в Git Bash временная папка — /tmp/…)
     const service = readFileSync(join(run.systemd, 'averra-backup.service'), 'utf8')
-    expect(service).toContain(`ExecStart=${posix(dir)}/averra.sh backup --kind scheduled`)
+    expect(service).toMatch(/^ExecStart=\S*\/inst\/averra\.sh backup --kind scheduled$/m)
+    expect(service).toMatch(/^ExecStartPre=-\S*\/inst\/averra\.sh check-update$/m)
     expect(readFileSync(join(run.systemd, 'averra-backup.timer'), 'utf8')).toContain(
       'Persistent=true',
     )
-    expect(run.systemctl()).toBe('daemon-reload\nenable --now averra-backup.timer\n')
+    expect(readFileSync(join(run.systemd, 'averra-update-request.path'), 'utf8')).toMatch(
+      /^PathExists=\S*\/inst\/requests\/update\.json$/m,
+    )
+    expect(run.systemctl()).toBe(
+      'daemon-reload\nenable --now averra-backup.timer\nenable --now averra-update-request.path\n',
+    )
+    // Сети нет — проверка версии «не удалась», это видно админке, а установка прошла
+    expect(
+      JSON.parse(readFileSync(join(dir, 'state', 'release-check.json'), 'utf8')),
+    ).toMatchObject({ ok: false, adminUpdate: true, requestsWatched: true })
     expect(readEnv(dir).BACKUP_PASSPHRASE).toMatch(/^[A-Za-z0-9+/]{43}=$/)
     expect(run.output).toContain('Сохраните BACKUP_PASSPHRASE')
   })
@@ -761,6 +789,14 @@ describe('контейнеры не от root и без лишних прав', 
     expect(service('api')).toContain('- ./state:/data/state:ro')
     expect(service('api')).toContain('STATE_DIR: /data/state')
     expect(compose).not.toContain('backups')
+    // На хосте API пишет только в папку заявок: ни сокета Docker, ни других папок хоста
+    expect(service('api')).toContain('- ./requests:/data/requests\n')
+    expect(service('api')).toContain('REQUESTS_DIR: /data/requests')
+    const hostMounts = [...service('api').matchAll(/^\s+- (\.\/[^:\s]+):(\S+)$/gm)].map(
+      (m) => `${m[1]}:${m[2]}`,
+    )
+    expect(hostMounts).toEqual(['./state:/data/state:ro', './requests:/data/requests'])
+    expect(compose).not.toContain('docker.sock')
   })
 
   it('список серверов студии не попадает в контекст сборки образа', () => {

@@ -8,6 +8,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -69,7 +70,41 @@ type Fakes = {
   mvFailsOn?: string
   /** Возврат этой записи из .averra-before-restore в корень тома падает */
   mvBackFailsOn?: string
+  /**
+   * curl не достучался до источника релизов (нет сети); http — источник ответил 4xx/5xx;
+   * too-big — ответ больше предела
+   */
+  curlFails?: boolean | 'http' | 'too-big'
+  /** Что ответил разбор релиза в образе API (по умолчанию — релиз 0.7.0) */
+  releaseOut?: string
+  /** Разбор релиза в образе API не нашёл подходящего релиза; docker — сам контейнер не запустился */
+  releaseFails?: boolean | 'docker'
+  /** Path-юнит заявок выключен (systemctl is-enabled — нет), хотя install-units его не выключал */
+  noWatch?: boolean
 }
+
+/** curl: запоминает аргументы и кладёт в файл из -o ответ GitHub о последнем релизе */
+const FAKE_CURL = `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$FAKE_STATE/curl.log"
+[[ -z "\${FAKE_CURL_FAILS:-}" ]] || exit "\${FAKE_CURL_FAILS}"
+out=''
+while [[ $# -gt 0 ]]; do [[ "$1" != -o ]] || out="$2"; shift; done
+printf '%s' '{"tag_name":"v0.7.0","body":"## Новое"}' > "$out"
+`
+
+/**
+ * systemctl: запоминает команды. is-enabled path-юнита заявок — «да», пока последней командой для
+ * него не было disable (или FAKE_NO_WATCH: юнит выключили руками); в журнал is-enabled не пишется
+ */
+const FAKE_SYSTEMCTL = String.raw`#!/usr/bin/env bash
+if [[ "$1" == is-enabled ]]; then
+  [[ -z "${'$'}{FAKE_NO_WATCH:-}" ]] || exit 1
+  last="$(grep 'averra-update-request.path' "$FAKE_STATE/systemctl.log" 2>/dev/null | tail -n 1)"
+  [[ "$last" != disable* ]]
+  exit $?
+fi
+printf '%s\n' "$*" >> "$FAKE_STATE/systemctl.log"
+`
 
 /**
  * systemd-run: запоминает аргументы и запускает команду в фоне с выводом в файл из StandardOutput.
@@ -134,7 +169,9 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
   const bin = join(root, 'bin')
   // Тома media и sites: по ним по-настоящему ходят tar и sh «контейнера» API
   const volumes = [join(fake, 'data', 'media', 'site'), join(fake, 'data', 'sites')]
-  for (const path of [dir, fake, bin, ...volumes]) {
+  // Юниты systemd — в свою папку теста, а не в /etc/systemd
+  const systemd = join(root, 'systemd')
+  for (const path of [dir, fake, bin, systemd, ...volumes]) {
     mkdirSync(path, { recursive: true })
   }
   copyFileSync(script, join(dir, 'averra.sh'))
@@ -154,6 +191,10 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
   write('setsid', '#!/usr/bin/env bash\nexec "$@"\n')
   write('systemd-run', FAKE_SYSTEMD_RUN)
   write('mv', FAKE_MV)
+  write('curl', FAKE_CURL)
+  // systemctl и chown — только запоминают: тесты не трогают systemd машины и владельцев файлов
+  write('systemctl', FAKE_SYSTEMCTL)
+  write('chown', '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$FAKE_STATE/chown.log"\n')
 
   function run(args: string[], fakes: Fakes = {}) {
     const inBash = fakes.headLines
@@ -164,7 +205,15 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
       AVERRA_FAKE_BIN: pathEntry(bin),
       FAKE_STATE: posix(fake),
       AVERRA_READY_TIMEOUT: '6',
+      AVERRA_SYSTEMD_DIR: posix(systemd),
     }
+    if (fakes.curlFails) {
+      env.FAKE_CURL_FAILS =
+        fakes.curlFails === 'http' ? '22' : fakes.curlFails === 'too-big' ? '63' : '6'
+    }
+    if (fakes.releaseOut) env.FAKE_RELEASE_OUT = fakes.releaseOut
+    if (fakes.releaseFails) env.FAKE_RELEASE_FAILS = fakes.releaseFails === 'docker' ? '125' : '2'
+    if (fakes.noWatch) env.FAKE_NO_WATCH = '1'
     if (fakes.pullFails) env.FAKE_PULL_FAILS = '1'
     if (fakes.dumpFails) env.FAKE_DUMP_FAILS = '1'
     if (fakes.restoreFailsInto) env.FAKE_RESTORE_FAILS_INTO = fakes.restoreFailsInto
@@ -232,9 +281,22 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
     (existsSync(join(fake, 'builds.log')) ? readFileSync(join(fake, 'builds.log'), 'utf8') : '')
       .split('\n')
       .filter(Boolean)
+  /** Что записала подделка (curl.log, systemctl.log, next-averra.log…); нет файла — пусто */
+  const log = (name: string) =>
+    existsSync(join(fake, name)) ? readFileSync(join(fake, name), 'utf8') : ''
+  /** Заявка из админки — как её кладёт API в папку заявок */
+  function request(content: string | Buffer) {
+    mkdirSync(join(dir, 'requests'), { recursive: true })
+    writeFileSync(join(dir, 'requests', 'update.json'), content)
+  }
+  const hasState = (file: string) => existsSync(join(dir, 'state', file))
   return {
     dir,
     fake,
+    systemd,
+    log,
+    request,
+    hasState,
     run,
     calls,
     state,
@@ -618,12 +680,44 @@ describe('обновление', () => {
       from: '0.6.0',
       to: '0.7.0',
       result: 'updated',
+      // Последний шаг перед итогом — проверка: его админка показывает пройденным
+      step: 'verify',
       dbRestored: false,
       keptDatabase: null,
       error: null,
     })
     // Состояние бэкапа записано после обновления (внешняя копия — тоже после)
     expect(srv.state('backup-last-ok.json').name).toBe(srv.backups()[0])
+    // Новый averra.sh готовит свои папки до запуска новой версии (ни одного «up -d» до него) и из
+    // папки установки, а не из .next. После проверки управление — ему: он ставит свои службы
+    // systemd и папки (а с ними и проверку версии), прежний скрипт этого за него не делает
+    expect(srv.log('next-averra.log')).toBe(
+      'ensure-dirs (up -d: 0, папка: averra)\ninstall-units (up -d: 2, папка: averra)\n',
+    )
+    expect(existsSync(join(srv.dir, '.averra-next.sh'))).toBe(false)
+    expect(existsSync(join(srv.dir, 'requests'))).toBe(true)
+  })
+
+  it('шаги для админки: загрузка образов, бэкап, миграции, проверка — по ходу обновления', () => {
+    const srv = server()
+    // Убиваем процесс на каждом шаге и смотрим, какой шаг записан в состоянии к этой минуте
+    const cases = [
+      ['pg_dump', 'backup'],
+      ['up -d api', 'migrate'],
+      ['ps --status running', 'verify'],
+    ] as const
+    for (const [killOn, step] of cases) {
+      const fresh = server()
+      fresh.run(['update', '--version', '0.7.0', '--yes'], { killOn })
+      expect(fresh.state('update-last.json'), killOn).toMatchObject({
+        result: 'in-progress',
+        step,
+        finishedAt: null,
+      })
+    }
+    const failed = srv.run(['update', '--version', '0.7.0', '--yes'], { pullFails: true })
+    expect(failed.status).toBe(1)
+    expect(srv.state('update-last.json')).toMatchObject({ result: 'failed', step: 'pull' })
   })
 
   it('внешняя копия бэкапа перед обновлением выгружается после запуска новой версии', () => {
@@ -641,6 +735,14 @@ describe('обновление', () => {
     const lastUp = calls.findLastIndex((line) => line.startsWith('docker compose up -d'))
     expect(upload).toBeGreaterThan(lastUp)
     expect(srv.state('backup-last.json')).toMatchObject({ kind: 'pre-update', remote: 'uploaded' })
+  })
+
+  it('по SSH: заявка из админки, которую никто не забрал, удаляется — решение студии главнее', () => {
+    const srv = server()
+    srv.request(requestLine())
+    const run = srv.run(['update', '--version', '0.7.0', '--yes'])
+    expect(run.status, run.output).toBe(0)
+    expect(existsSync(join(srv.dir, 'requests', 'update.json'))).toBe(false)
   })
 
   it('уже эта версия — ничего не делает', () => {
@@ -696,10 +798,13 @@ describe('обновление', () => {
         .at(-1),
     ).toBe('compose.yaml=# compose прежний')
     expect(readFileSync(join(srv.fake, 'running'), 'utf8').trim()).toBe('0.6.0')
-    // Скрипт не заменён на новую версию
+    // Скрипт не заменён на новую версию, и управление новому не передавалось: он только успел
+    // подготовить свои папки перед запуском
     expect(readFileSync(join(srv.dir, 'averra.sh'), 'utf8')).toBe(readFileSync(script, 'utf8'))
+    expect(srv.log('next-averra.log')).toBe('ensure-dirs (up -d: 0, папка: averra)\n')
     expect(srv.state('update-last.json')).toMatchObject({
       result: 'rolled-back',
+      step: 'rollback',
       dbRestored: false,
       keptDatabase: null,
     })
@@ -1416,5 +1521,399 @@ describe('состояние', () => {
     const body = JSON.parse(down.stdout)
     expect(body).toMatchObject({ apiDown: true, configuredVersion: '0.6.0' })
     expect(body.backupLast).toMatchObject({ ok: true })
+  })
+})
+
+/** Заявка ровно того вида, что пишет API (apps/api/src/status/host.ts) */
+const requestLine = (version = '0.7.0') =>
+  `{"version":"${version}","requestedAt":"2026-10-27T10:00:00.000Z","requestedBy":"0b3f2c4e-1d2a-4c5b-8e9f-0a1b2c3d4e5f"}\n`
+
+describe('проверка новой версии', () => {
+  it('ответ источника разбирается в образе без сети, итог и релиз — в состоянии', () => {
+    const srv = server()
+    const run = srv.run(['check-update'])
+    expect(run.status, run.output).toBe(0)
+    expect(run.stdout).toContain('Доступна версия 0.7.0 (установлена 0.6.0)')
+    const curl = srv.log('curl.log')
+    expect(curl).toContain('https://api.github.com/repos/midhey/averra-cms/releases/latest')
+    expect(curl).toContain('--proto =https')
+    expect(curl).toContain('--max-time 30')
+    // Ответ — чужие данные: разбирает node в образе установленной версии без сети и прав
+    expect(srv.calls()).toEqual([
+      'docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --memory 256m --entrypoint node ghcr.io/midhey/averra-api:0.6.0 dist/server/release-info.js --format github',
+    ])
+    expect(srv.log('release-body')).toBe('{"tag_name":"v0.7.0","body":"## Новое"}')
+    expect(srv.state('release-latest.json')).toEqual({
+      version: '0.7.0',
+      publishedAt: '2026-10-20T10:00:00Z',
+      notes: 'Новое',
+    })
+    expect(srv.state('release-check.json')).toMatchObject({
+      current: '0.6.0',
+      ok: true,
+      error: null,
+      adminUpdate: true,
+      // Path-юнит заявок включён: заявку есть кому забрать
+      requestsWatched: true,
+    })
+  })
+
+  it('path-юнит заявок выключен руками — админка узнаёт, что заявки забирать некому', () => {
+    const srv = server()
+    expect(srv.run(['check-update'], { noWatch: true }).status).toBe(0)
+    expect(srv.state('release-check.json')).toMatchObject({
+      ok: true,
+      adminUpdate: true,
+      requestsWatched: false,
+    })
+  })
+
+  it('последняя версия уже стоит — «новых версий нет»', () => {
+    const srv = server({ env: ['AVERRA_VERSION=0.7.0'] })
+    const run = srv.run(['check-update'])
+    expect(run.status, run.output).toBe(0)
+    expect(run.stdout).toContain('Новых версий нет: установлена 0.7.0')
+  })
+
+  it('сеть недоступна — «не удалось проверить», найденный раньше релиз не стирается', () => {
+    const srv = server()
+    expect(srv.run(['check-update']).status).toBe(0)
+    const run = srv.run(['check-update'], { curlFails: true })
+    expect(run.status).toBe(1)
+    expect(run.stdout).toContain('Не удалось проверить новую версию')
+    expect(srv.state('release-check.json')).toMatchObject({
+      ok: false,
+      error: 'не удалось связаться с источником релизов: нет сети или источник недоступен',
+    })
+    expect(srv.state('release-latest.json').version).toBe('0.7.0')
+  })
+
+  it('ответ без релиза или разбор не по формату — не удалось, релиз не записан', () => {
+    const cases: [Fakes, string][] = [
+      // GitHub ответил 404 (релизов ещё нет) или 403 (лимит запросов) — curl -f, код 22
+      [
+        { curlFails: 'http' },
+        'источник релизов ответил ошибкой: релизов ещё нет или превышен лимит запросов',
+      ],
+      [{ releaseFails: true }, 'в ответе источника нет подходящего релиза'],
+      // Ответ больше предела (curl --max-filesize, код 63) — не «нет сети»
+      [{ curlFails: 'too-big' }, 'ответ источника релизов слишком большой: это не релиз'],
+      // Не запустился сам контейнер разбора (нет образа установленной версии) — не «нет релиза»
+      [
+        { releaseFails: 'docker' },
+        'не удалось разобрать ответ: образ установленной версии не запустился (docker)',
+      ],
+      [
+        { releaseOut: '{"version":"0.7.0$(reboot)","notes":""}' },
+        'ответ разбора релиза не по формату',
+      ],
+      [{ releaseOut: '{"version":"v0.7.0","notes":""}' }, 'ответ разбора релиза не по формату'],
+      [{ releaseOut: 'не JSON' }, 'ответ разбора релиза не по формату'],
+    ]
+    for (const [fakes, error] of cases) {
+      const srv = server()
+      const run = srv.run(['check-update'], fakes)
+      expect(run.status, JSON.stringify(fakes)).toBe(1)
+      expect(srv.state('release-check.json')).toMatchObject({ ok: false, error })
+      expect(srv.hasState('release-latest.json')).toBe(false)
+    }
+  })
+
+  it('источник — из UPDATE_SOURCE: свой репозиторий, off — не проверять, мусор — отказ', () => {
+    const fork = server({ env: ['UPDATE_SOURCE=github:studio/averra-fork'] })
+    expect(fork.run(['check-update']).status).toBe(0)
+    expect(fork.log('curl.log')).toContain(
+      'https://api.github.com/repos/studio/averra-fork/releases/latest',
+    )
+
+    const off = server({ env: ['UPDATE_SOURCE=off'] })
+    expect(off.run(['check-update']).status).toBe(0)
+    expect(off.log('curl.log')).toBe('')
+    expect(off.state('release-check.json')).toMatchObject({
+      ok: false,
+      error: 'проверка новых версий выключена (UPDATE_SOURCE=off)',
+    })
+
+    for (const source of ['http://evil.example/releases', 'github:a/b;reboot', 'github:a/b/c']) {
+      const bad = server({ env: [`UPDATE_SOURCE=${source}`] })
+      const run = bad.run(['check-update'])
+      expect(run.status, source).toBe(1)
+      expect(bad.log('curl.log'), source).toBe('')
+      expect(bad.state('release-check.json').error).toBe(
+        'источник релизов не понят: UPDATE_SOURCE в .env',
+      )
+    }
+  })
+
+  it('ADMIN_UPDATE=off — админка узнаёт, что кнопки нет', () => {
+    const srv = server({ env: ['ADMIN_UPDATE=off'] })
+    expect(srv.run(['check-update']).status).toBe(0)
+    expect(srv.state('release-check.json').adminUpdate).toBe(false)
+  })
+})
+
+describe('заявка из админки', () => {
+  /** Установка, где проверка уже нашла 0.7.0 */
+  function checked(options: Parameters<typeof server>[0] = {}) {
+    const srv = server(options)
+    expect(srv.run(['check-update']).status).toBe(0)
+    srv.clearCalls()
+    return srv
+  }
+
+  it('валидная — заявка удаляется до запуска, дальше тот же update с бэкапом', () => {
+    const srv = checked()
+    srv.request(requestLine())
+    const run = srv.run(['update-request'])
+    expect(run.status, run.output).toBe(0)
+    expect(run.stdout).toContain('обновляю 0.6.0 → 0.7.0')
+    expect(existsSync(join(srv.dir, 'requests', 'update.json'))).toBe(false)
+    expect(existsSync(join(srv.dir, '.update-request'))).toBe(false)
+    expect(srv.state('update-request.json')).toMatchObject({
+      version: '0.7.0',
+      requestedAt: '2026-10-27T10:00:00.000Z',
+      result: 'accepted',
+      error: null,
+    })
+    expect(srv.waitWorker()).toBe(0)
+    expect(srv.running()).toBe('0.7.0')
+    expect(srv.backups()[0]).toMatch(/-pre-update$/)
+    expect(srv.state('update-last.json')).toMatchObject({ result: 'updated', to: '0.7.0' })
+    const log = readFileSync(join(srv.dir, 'update.log'), 'utf8')
+    expect(log).toMatch(/^==== \S+ update --version 0\.7\.0 ====$/m)
+    expect(log).toContain('Заявка из админки от 2026-10-27T10:00:00.000Z: обновить 0.6.0 → 0.7.0')
+  })
+
+  it('нет заявки — ничего не делает', () => {
+    const srv = checked()
+    const run = srv.run(['update-request'])
+    expect(run.status).toBe(0)
+    expect(srv.calls()).toEqual([])
+    expect(srv.hasState('update-request.json')).toBe(false)
+  })
+
+  /** Отказ: обновления нет, заявки нет, причина — в состоянии и в update.log */
+  function expectRejected(srv: ReturnType<typeof server>, error: string | RegExp) {
+    const run = srv.run(['update-request'])
+    expect(run.status, run.output).toBe(1)
+    expect(existsSync(join(srv.dir, 'requests', 'update.json'))).toBe(false)
+    expect(existsSync(join(srv.dir, '.update-request'))).toBe(false)
+    expect(srv.calls().join('\n')).not.toMatch(/pull|stop api|pg_dump/)
+    expect(srv.env()).toMatch(/^AVERRA_VERSION=0\.6\.0$/m)
+    const state = srv.state('update-request.json')
+    expect(state.result).toBe('rejected')
+    expect(state.error).toMatch(error)
+    expect(readFileSync(join(srv.dir, 'update.log'), 'utf8')).toMatch(
+      /^---- \S+ заявка из админки отклонена: /m,
+    )
+    return state
+  }
+
+  it('чужая версия — не та, что найдена доступной', () => {
+    const srv = checked()
+    srv.request(requestLine('0.8.0'))
+    const state = expectRejected(srv, 'версия 0.8.0 — не та, что найдена доступной (0.7.0)')
+    expect(state.version).toBe('0.8.0')
+  })
+
+  it('старая версия или та же, что стоит, — не новее установленной', () => {
+    for (const version of ['0.6.0', '0.5.9']) {
+      const srv = checked()
+      writeFileSync(
+        join(srv.dir, 'state', 'release-latest.json'),
+        `{"version":"${version}","publishedAt":null,"notes":""}\n`,
+      )
+      srv.request(requestLine(version))
+      expectRejected(srv, `версия ${version} не новее установленной 0.6.0`)
+    }
+  })
+
+  it('проверка ещё ничего не нашла — отказ', () => {
+    const srv = server()
+    srv.request(requestLine())
+    expectRejected(srv, 'сервер ещё не нашёл ни одной версии: averra.sh check-update')
+  })
+
+  it('мусор, пустой файл, лишняя строка, нулевой байт, больше 1 КБ, инъекция в версии — отказ без выполнения', () => {
+    const pwned = posix(join(tempDir(), 'pwned'))
+    const line = requestLine()
+    const bad: (string | Buffer)[] = [
+      '',
+      'не JSON',
+      '{"version":"0.7.0"}',
+      // Порядок и набор полей — ровно как пишет API
+      '{"requestedAt":"2026-10-27T10:00:00.000Z","version":"0.7.0","requestedBy":"0b3f2c4e-1d2a-4c5b-8e9f-0a1b2c3d4e5f"}',
+      line.replace('}\n', ',"extra":1}\n'),
+      `${line}reboot\n`,
+      requestLine(`0.7.0$(touch ${pwned})`),
+      requestLine(`0.7.0\`touch ${pwned}\``),
+      requestLine(`0.7.0;touch ${pwned}`),
+      requestLine('0.7.0\n0.8.0'),
+      requestLine('v0.7.0'),
+      requestLine('0.7.0-beta'),
+      Buffer.concat([
+        Buffer.from(line.slice(0, 20)),
+        Buffer.from([0]),
+        Buffer.from(line.slice(20)),
+      ]),
+      line.replace('}\n', `,"pad":"${'x'.repeat(1100)}"}\n`),
+    ]
+    for (const content of bad) {
+      const srv = checked()
+      srv.request(content)
+      const state = expectRejected(srv, /^заявка (пустая или больше 1 КБ|не по формату)$/)
+      // Текст кривой заявки в состояние не попадает
+      expect(state.version, String(content)).toBeNull()
+      expect(existsSync(pwned)).toBe(false)
+    }
+  })
+
+  it('не обычный файл (папка, ссылка) — отказ, по ссылке ничего не читается и не удаляется', () => {
+    const srv = checked()
+    mkdirSync(join(srv.dir, 'requests', 'update.json'), { recursive: true })
+    writeFileSync(join(srv.dir, 'requests', 'update.json', 'x'), 'x')
+    expectRejected(srv, 'заявка — не обычный файл')
+    if (process.platform !== 'win32') {
+      const other = checked()
+      const target = join(other.dir, '.env')
+      symlinkSync(target, join(other.dir, 'requests', 'update.json'))
+      expectRejected(other, 'заявка — не обычный файл')
+      expect(existsSync(target)).toBe(true)
+    }
+  })
+
+  it('идёт обновление, бэкап или восстановление (замок занят) — отказ', () => {
+    const srv = checked()
+    srv.request(requestLine())
+    const run = srv.run(['update-request'], { lockHeld: true })
+    expect(run.status).toBe(1)
+    expect(srv.state('update-request.json')).toMatchObject({
+      result: 'rejected',
+      version: '0.7.0',
+      error: 'уже идёт обновление, бэкап или восстановление: повторите через несколько минут',
+    })
+    expect(existsSync(join(srv.dir, 'requests', 'update.json'))).toBe(false)
+    expect(srv.calls()).toEqual([])
+  })
+
+  it('ADMIN_UPDATE=off — заявка не принимается', () => {
+    const srv = checked({ env: ['ADMIN_UPDATE=off'] })
+    srv.request(requestLine())
+    expectRejected(srv, 'обновление из админки выключено на сервере (ADMIN_UPDATE=off)')
+  })
+
+  it('прошлое обновление кончилось неудачным откатом — отказ: сначала человек на сервере', () => {
+    const srv = checked()
+    writeFileSync(
+      join(srv.dir, 'state', 'update-last.json'),
+      '{"from":"0.5.0","to":"0.6.0","startedAt":"2026-10-26T10:00:00Z","finishedAt":"2026-10-26T10:05:00Z","result":"rollback-failed","step":"rollback","dbRestored":false,"keptDatabase":null,"error":"прежняя версия тоже не прошла проверку готовности"}\n',
+    )
+    srv.request(requestLine())
+    expectRejected(srv, /^прошлое обновление кончилось неудачным откатом/)
+  })
+
+  it('ломающий релиз (шаг на сервере) — отказ: только по SSH; «breaking» в заметках не обманет', () => {
+    const srv = checked()
+    writeFileSync(
+      join(srv.dir, 'state', 'release-latest.json'),
+      '{"version":"0.7.0","publishedAt":null,"breaking":true,"notes":"⚠ BREAKING CHANGES"}\n',
+    )
+    srv.request(requestLine())
+    expectRejected(srv, 'версия 0.7.0 требует шага на сервере: её ставит студия по SSH')
+
+    const quoted = checked()
+    writeFileSync(
+      join(quoted.dir, 'state', 'release-latest.json'),
+      '{"version":"0.7.0","publishedAt":null,"breaking":false,"notes":"\\"breaking\\":true"}\n',
+    )
+    quoted.request(requestLine())
+    expect(quoted.run(['update-request']).status).toBe(0)
+    expect(quoted.waitWorker()).toBe(0)
+  })
+
+  it('замок взяли между проверкой заявки и запуском (ночной бэкап) — админка узнаёт отказ', () => {
+    const srv = checked()
+    const run = srv.run(
+      ['update-worker', '--version', '0.7.0', '--request', '2026-10-27T10:00:00.000Z'],
+      { lockHeld: true },
+    )
+    expect(run.status).toBe(1)
+    expect(srv.state('update-request.json')).toMatchObject({
+      result: 'rejected',
+      version: '0.7.0',
+      requestedAt: '2026-10-27T10:00:00.000Z',
+      error: expect.stringContaining('сервер был занят'),
+    })
+    expect(srv.calls()).toEqual([])
+    // Время заявки — только по шаблону
+    const bad = srv.run(['update-worker', '--version', '0.7.0', '--request', '$(reboot)'])
+    expect(bad.status).toBe(1)
+    expect(bad.output).toContain('--request <время заявки>')
+  })
+})
+
+describe('службы systemd и папки (install-units)', () => {
+  it('бэкап с проверкой версии раз в сутки и path-юнит заявок; папка заявок — пользователю API', () => {
+    const srv = server()
+    const run = srv.run(['install-units'])
+    expect(run.status, run.output).toBe(0)
+    const unit = (name: string) => readFileSync(join(srv.systemd, name), 'utf8')
+    // Папка установки — как её видит bash (в Git Bash временная папка — /tmp/…)
+    const dir = /ExecStart=(\S+\/averra)\/averra\.sh backup --kind scheduled$/m.exec(
+      unit('averra-backup.service'),
+    )?.[1]
+    expect(dir).toMatch(/\/averra$/)
+    // Проверка версии — заодно с ночным бэкапом и с «-»: без сети бэкап всё равно идёт
+    expect(unit('averra-backup.service')).toContain(`ExecStartPre=-${dir}/averra.sh check-update`)
+    expect(unit('averra-backup.timer')).toContain('Persistent=true')
+    expect(unit('averra-update-request.path')).toContain(`PathExists=${dir}/requests/update.json`)
+    expect(unit('averra-update-request.service')).toContain(
+      `ExecStart=${dir}/averra.sh update-request`,
+    )
+    // Заявка не переживает службу: иначе PathExists запускал бы её по кругу
+    expect(unit('averra-update-request.service')).toContain(
+      `ExecStopPost=/bin/rm -f ${dir}/requests/update.json`,
+    )
+    expect(srv.log('systemctl.log')).toBe(
+      'daemon-reload\nenable --now averra-backup.timer\nenable --now averra-update-request.path\n',
+    )
+    expect(srv.log('chown.log')).toBe(`1000:1000 ${dir}/requests\n`)
+    expect(existsSync(join(srv.dir, 'state'))).toBe(true)
+    // И сразу проверка версии: админка видит её, не дожидаясь ночи
+    expect(srv.state('release-check.json')).toMatchObject({ ok: true })
+    // Временных файлов юнитов не остаётся
+    expect(readdirSync(srv.systemd).sort()).toEqual([
+      'averra-backup.service',
+      'averra-backup.timer',
+      'averra-update-request.path',
+      'averra-update-request.service',
+    ])
+  })
+
+  it('ADMIN_UPDATE=off — path-юнит выключается; сеть недоступна — юниты всё равно встают', () => {
+    const srv = server({ env: ['ADMIN_UPDATE=off'] })
+    // Заявка, отправленная до выключения, не остаётся висеть «отправленной»
+    srv.request(requestLine())
+    const run = srv.run(['install-units'], { curlFails: true })
+    expect(existsSync(join(srv.dir, 'requests', 'update.json'))).toBe(false)
+    expect(run.status, run.output).toBe(0)
+    expect(srv.log('systemctl.log')).toContain('disable --now averra-update-request.path')
+    expect(srv.log('systemctl.log')).not.toContain('enable --now averra-update-request.path')
+    expect(srv.state('release-check.json')).toMatchObject({
+      ok: false,
+      adminUpdate: false,
+      requestsWatched: false,
+    })
+  })
+
+  it('ensure-dirs — папки этой версии, из папки установки (договор с прежним averra.sh)', () => {
+    const srv = server()
+    const run = srv.run(['ensure-dirs'])
+    expect(run.status, run.output).toBe(0)
+    for (const dir of ['state', 'backups', 'requests']) {
+      expect(existsSync(join(srv.dir, dir)), dir).toBe(true)
+    }
+    expect(srv.log('chown.log')).toMatch(/^1000:1000 \S+\/averra\/requests\n$/)
+    expect(srv.run(['ensure-dirs', 'лишнее']).status).toBe(1)
   })
 })

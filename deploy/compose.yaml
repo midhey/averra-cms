@@ -56,6 +56,8 @@ services:
       MEDIA_DIR: /data/media
       # Итоги бэкапов и обновлений от averra.sh — для «Состояния» в админке
       STATE_DIR: /data/state
+      # Заявка на обновление из админки: API кладёт файл, обновляет хост (averra.sh update-request)
+      REQUESTS_DIR: /data/requests
       # Свой адрес Bot API Telegram (локальный сервер Bot API, зеркало), если api.telegram.org
       # недоступен с VPS. Пусто — настоящий Telegram (https://midhey.github.io/averra-cms/install/telegram/)
       TELEGRAM_API_URL: ${TELEGRAM_API_URL:-}
@@ -68,6 +70,9 @@ services:
       # Папка состояния установки (/opt/averra/state): пишет её только averra.sh на хосте,
       # API читает. Бэкапы (/opt/averra/backups) в контейнер не попадают
       - ./state:/data/state:ro
+      # Папка заявок (/opt/averra/requests, владелец — node, права 700): единственное, что API
+      # пишет на хосте. Ни Docker, ни команд хоста у API нет — заявку разбирает и решает averra.sh
+      - ./requests:/data/requests
     # Node — PID 1 и запускает сборщик сайта, у которого свои потомки (esbuild): init (tini)
     # пожинает осиротевших после таймаута сборки, зомби не копятся
     init: true

@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { InstallationStatus } from '@averra/schema'
+import { type InstallationStatus, NO_RELEASE_STATE } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
   describeOutcome,
@@ -44,6 +44,7 @@ function status(overrides: Partial<InstallationStatus> = {}): InstallationStatus
     },
     update: null,
     updateUnreadable: false,
+    release: NO_RELEASE_STATE,
     publish: { enabled: true, last: null, failedSites: 0 },
     mail: {
       enabled: true,

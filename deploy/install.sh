@@ -445,9 +445,15 @@ if [[ "$SCRIPT_DIR" != "$(cd "$INSTALL_DIR" 2>/dev/null && pwd || true)" ]]; the
   # Скрипт управления установкой: бэкапы, восстановление, обновление, состояние. Только root
   install -m 700 "$SCRIPT_DIR/averra.sh" "$INSTALL_DIR/averra.sh"
 fi
-# Бэкапы (в них персональные данные) — только root; состояние читает API в контейнере
+# Бэкапы (в них персональные данные) — только root; состояние читает API в контейнере. Заявки на
+# обновление из админки пишет только API — пользователь node образа (uid 1000); папка должна быть
+# до запуска API: иначе Docker создаст её сам от root, и API в неё не напишет
 (umask 077 && mkdir -p "$INSTALL_DIR/backups")
 (umask 022 && mkdir -p "$INSTALL_DIR/state")
+(umask 077 && mkdir -p "$INSTALL_DIR/requests")
+chmod 700 "$INSTALL_DIR/requests"
+chown 1000:1000 "$INSTALL_DIR/requests" ||
+  say 'Не удалось отдать папку заявок пользователю API (uid 1000): кнопка «Обновить» в админке не сработает'
 write_env
 if [[ ${#NEW_SECRETS[@]} -gt 0 ]]; then
   say "Созданы секреты: ${NEW_SECRETS[*]} (в $ENV_FILE, права 600)"
@@ -528,41 +534,12 @@ fi
 step 'Поднимаю Caddy (сертификаты он выпустит сам)'
 compose up -d
 
-# Бэкап по расписанию: таймер systemd раз в сутки. Persistent — пропущенный, пока сервер был
-# выключен, сделается при старте. Журнал: journalctl -u averra-backup
-install_backup_timer() {
-  local units="${AVERRA_SYSTEMD_DIR:-/etc/systemd/system}"
-  if ! command -v systemctl >/dev/null 2>&1; then
-    say "Нет systemd: бэкап по расписанию не поставлен. Добавьте в cron: $INSTALL_DIR/averra.sh backup --kind scheduled"
-    return
-  fi
-  step 'Ставлю бэкап по расписанию (averra-backup.timer, каждый день около 03:30)'
-  cat >"$units/averra-backup.service" <<UNIT
-[Unit]
-Description=Бэкап установки Averra (база и медиа, с проверкой восстановлением)
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=$INSTALL_DIR/averra.sh backup --kind scheduled
-UNIT
-  cat >"$units/averra-backup.timer" <<UNIT
-[Unit]
-Description=Бэкап установки Averra раз в сутки
-
-[Timer]
-OnCalendar=*-*-* 03:30:00
-RandomizedDelaySec=30min
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-UNIT
-  systemctl daemon-reload
-  systemctl enable --now averra-backup.timer
-}
-install_backup_timer
+# Службы systemd ставит сам averra.sh (install-units): бэкап и проверка новой версии раз в сутки
+# (averra-backup.timer, около 03:30) и заявки на обновление из админки
+# (averra-update-request.path). Тем же он переставляет их после обновления — юниты новой версии
+# доезжают без ручного шага. Журнал: journalctl -u averra-backup -u averra-update-request
+"$BASH" "$INSTALL_DIR/averra.sh" install-units ||
+  say "Службы systemd не встали (сообщение выше): повторите $INSTALL_DIR/averra.sh install-units"
 
 step 'Готово'
 say "Админка: https://$ADMIN_DOMAIN (вход: $OWNER_EMAIL)"
@@ -570,5 +547,6 @@ say "Сайт:    https://$SITE_DOMAIN — появится после перв�
 say 'Дальше: задайте SMTP на странице «Почта» в админке и проверьте подключение.'
 say "Сохраните BACKUP_PASSPHRASE из $ENV_FILE в менеджер паролей студии: без него копии бэкапов"
 say 'во внешнем хранилище не расшифровать, если сервер пропадёт вместе с .env.'
-say "Бэкап руками: $INSTALL_DIR/averra.sh backup. Обновление: $INSTALL_DIR/averra.sh update --version <версия>"
+say "Бэкап руками: $INSTALL_DIR/averra.sh backup. Обновление: кнопкой в «Состоянии установки» в"
+say "админке или $INSTALL_DIR/averra.sh update --version <версия>"
 say "Повторный запуск с теми же флагами безопасен. Логи: docker compose --project-directory $INSTALL_DIR logs -f"
