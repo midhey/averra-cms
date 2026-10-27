@@ -3,7 +3,7 @@ import { Header, type HeaderInput, type MediaMap } from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { SiteHeader } from './SiteHeader'
-import { headerRowButton, headerScriptNeeded, siteHeaderView } from './view'
+import { headerMenuRow, headerRowButton, headerScriptNeeded, siteHeaderView } from './view'
 
 // Шапка сайта: каждая раскладка, меню без JS (<details>), текущий пункт, «К содержимому»,
 // прозрачная — только над «Первым экраном» на фото, скрипт — только когда он что-то делает
@@ -164,6 +164,40 @@ describe('шапка на странице', () => {
     expect(headerRowButton(view({ menu: [{ label: 'Акции', page: 'akcii' }], button }))).toBe(true)
     expect(headerRowButton(view({ menu, button }))).toBe(false)
     expect(headerRowButton(view({ layout: 'minimal' }))).toBe(false)
+  })
+
+  it('длинное меню — своей строкой на широком экране; у «Минимума» признака нет', () => {
+    const page = (label: string) => ({ label, page: 'index' })
+    const view = (header: HeaderInput, siteName?: string) => {
+      const result = viewOf(header)
+      if (!result) throw new Error('Шапки нет')
+      return siteName === undefined ? result : { ...result, siteName }
+    }
+    const short = Array.from({ length: 6 }, (_, index) => page(`Раздел ${index + 1}`))
+    expect(headerMenuRow(view({ menu: short }))).toBe(false)
+    // Один пункт длиннее 24 знаков
+    expect(headerMenuRow(view({ menu: [page('Ремонт ванных комнат под ключ')] }))).toBe(true)
+    // Пункты короткие, но вместе с подписью кнопки — больше 100 знаков
+    const many = Array.from({ length: 8 }, (_, index) => page(`Пункт меню ${index + 1}`))
+    expect(headerMenuRow(view({ logo: logoId, menu: many }))).toBe(false)
+    const button = { label: 'Записаться на бесплатный замер и расчёт!', page: 'index' }
+    expect(headerMenuRow(view({ logo: logoId, menu: many, button }))).toBe(true)
+    expect(headerMenuRow(view({ layout: 'double', logo: logoId, menu: many, button }))).toBe(true)
+    // «По центру»: меню и так своей строкой, но длинное переносится — признак ради отступов
+    expect(headerMenuRow(view({ layout: 'center', logo: logoId, menu: many, button }))).toBe(true)
+    expect(headerMenuRow(view({ layout: 'center', logo: logoId, menu: short }))).toBe(false)
+    expect(headerMenuRow(view({ layout: 'minimal', menu: many, button }))).toBe(false)
+    // Без логотипа в строке с меню — название сайта: длинное считается вместе с пунктами
+    const four = Array.from({ length: 4 }, (_, index) => page(`${index + 1}. Ремонт под ключ`))
+    expect(headerMenuRow(view({ logo: logoId, menu: four }))).toBe(false)
+    expect(
+      headerMenuRow(view({ menu: four }, 'Ремонт квартир и ванных под ключ в Перми и крае')),
+    ).toBe(true)
+    const header = render({ menu: many, button }).querySelector('header')
+    expect(header?.hasAttribute('data-menu-row')).toBe(true)
+    expect(render({ menu: short }).querySelector('header')?.hasAttribute('data-menu-row')).toBe(
+      false,
+    )
   })
 
   it('меню по центру — та же разметка, раскладку решает CSS', () => {

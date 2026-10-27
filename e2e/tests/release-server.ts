@@ -13,6 +13,18 @@ const types: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  // Картинки и шрифты — с настоящим типом, как у Caddy: SVG с application/octet-stream Chrome в
+  // <img> не покажет, и тест логотипа прошёл бы по рамке пустой картинки
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
 }
 
 /** Статический сервер папки релиза: /адрес → адрес/index.html, нет файла — 404.html */

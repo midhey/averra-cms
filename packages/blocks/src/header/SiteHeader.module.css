@@ -1,5 +1,6 @@
-/* Шапка сайта: только переменные темы. Широкий экран — с 64rem: восемь пунктов меню, телефон и
-   кнопка встают в строку на ноутбуке; уже — меню в <details> */
+/* Шапка сайта: только переменные темы. Широкий экран — с 64rem: меню, телефон и кнопка встают в
+   строку с логотипом; длинное меню (data-menu-row, решает сборка по длине подписей) — своей
+   строкой под ними. Уже 64rem — меню в <details> */
 
 /* «К содержимому»: невидима, пока на неё не пришли с клавиатуры */
 .skip {
@@ -296,11 +297,12 @@
   display: none;
 }
 
-/* Без меню (промо-шапка «Минимум») кнопка — главное действие, прятать её некуда. На телефоне —
+/* Без меню (промо-шапка «Минимум») кнопка — главное действие, прятать её некуда. До 48rem —
    своей строкой во всю ширину под логотипом и трубкой: рядом с ними на 320 px умещается только
-   короткая подпись. Высота строки известна заранее, поэтому прозрачной шапке ниже задан отступ
-   первого экрана без скрипта */
-@media (max-width: 39.99rem) {
+   короткая подпись, а на 640 px длинная подпись рядом с длинным названием сжималась в столбик в
+   4–5 строк. Высота строки известна заранее, поэтому прозрачной шапке ниже задан отступ первого
+   экрана без скрипта */
+@media (max-width: 47.99rem) {
   .header[data-row-button] .row {
     flex-wrap: wrap;
     row-gap: var(--space-3);
@@ -323,7 +325,17 @@
   }
 
   .header[data-overlay][data-row-button][data-layout="double"] ~ main > :first-child {
-    padding-top: calc(12.5rem + var(--space-12));
+    padding-top: calc(14rem + var(--space-12));
+  }
+}
+
+/* С 48rem кнопка шапки без меню — снова в строке. Трубка с кнопкой не уже 21rem (или половины
+   строки): иначе рядом с длинным названием они сжимались бы наравне с ним и подпись шла бы в 4–5
+   строк. Граница — у .actions: проценты считаются от строки, а не от сжатого .actions */
+@media (min-width: 48rem) {
+  .header[data-row-button] .actions {
+    min-width: min(21rem, 50%);
+    justify-content: flex-end;
   }
 }
 
@@ -452,6 +464,11 @@
     margin-left: auto;
   }
 
+  /* С 64rem у трубки виден номер целиком — кнопке без меню нужно больше места рядом с ним */
+  .header[data-row-button] .actions {
+    min-width: min(32rem, 50%);
+  }
+
   .phoneText {
     position: static;
     width: auto;
@@ -476,13 +493,43 @@
     height: 2.75rem;
   }
 
-  /* Меню по центру: логотип по центру, кнопка справа, меню строкой ниже */
+  /* Длинное меню — своей строкой под логотипом, телефоном и кнопкой, на всю ширину. Пункт не
+     переносится внутри себя: переносится список, по целым пунктам. Самый длинный пункт (40
+     знаков) уже ширины строки и на 64rem */
+  .header[data-menu-row] .row {
+    display: grid;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--space-3);
+  }
+
+  .header[data-menu-row] .brand {
+    grid-area: brand;
+  }
+
+  .header[data-menu-row] .actions {
+    grid-area: actions;
+  }
+
+  .header[data-menu-row] .nav {
+    grid-area: nav;
+  }
+
+  .header[data-menu-row] .nav .link {
+    white-space: nowrap;
+  }
+
+  /* Меню по центру: логотип по центру, кнопка справа, меню строкой ниже. Боковые колонки не уже
+     17rem (или 28% строки): иначе длинное название без логотипа забирало всю ширину, и
+     кнопка сжималась в столбик в 5–9 строк */
   .header[data-layout="center"] .row {
     display: grid;
     grid-template-areas:
       ". brand button"
       "nav nav nav";
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(min(17rem, 28%), 1fr) auto minmax(min(17rem, 28%), 1fr);
     row-gap: var(--space-3);
   }
 
@@ -523,16 +570,31 @@
     justify-self: end;
   }
 
-  /* Собранная шапка «по центру» — одна строка: логотип, меню, телефон и кнопка */
+  /* Собранная шапка «по центру» раскладывается как «Классика»: логотип, меню, телефон и кнопка
+     одной строкой, длинное меню — своей строкой ниже. Сеткой в одну строку колонка меню
+     сжималась до нуля рядом с длинным названием, и пункты ложились на телефон и кнопку */
   .header[data-layout="center"][data-condensed] .row {
-    grid-template-areas: "brand nav phone button";
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    column-gap: var(--space-6);
+    display: flex;
+  }
+
+  .header[data-layout="center"][data-condensed] .brand {
+    justify-content: flex-start;
+  }
+
+  .header[data-layout="center"][data-condensed] .actions {
+    display: flex;
   }
 
   .header[data-layout="center"][data-condensed] .phone {
     display: inline-flex;
-    grid-area: phone;
+  }
+
+  .header[data-layout="center"][data-condensed][data-menu-row] .row {
+    display: grid;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .header[data-overlay] ~ main > :first-child {
@@ -545,6 +607,16 @@
 
   .header[data-overlay][data-layout="double"] ~ main > :first-child {
     padding-top: calc(8rem + var(--space-16));
+  }
+
+  /* Прозрачной шапке с меню своей строкой — отступ первого экрана как у «по центру», с запасом
+     на третью строку меню; двухэтажной — ещё и на верхнюю строку */
+  .header[data-overlay][data-menu-row] ~ main > :first-child {
+    padding-top: calc(10rem + var(--space-16));
+  }
+
+  .header[data-overlay][data-menu-row][data-layout="double"] ~ main > :first-child {
+    padding-top: calc(12.5rem + var(--space-16));
   }
 }
 

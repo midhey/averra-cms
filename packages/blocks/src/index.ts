@@ -6,6 +6,7 @@ export { sentAnchor } from './form/Form'
 export { SiteHeader } from './header/SiteHeader'
 export {
   CONTENT_ID,
+  headerMenuRow,
   headerRowButton,
   headerScriptNeeded,
   type SiteHeaderLink,

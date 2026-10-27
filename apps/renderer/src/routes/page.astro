@@ -1,6 +1,7 @@
 ---
 import {
   cookieNoticeView,
+  headerMenuRow,
   headerRowButton,
   headerScriptNeeded,
   LegalFooter,
@@ -116,6 +117,7 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
   lang={site.settings.language}
   data-sticky-header={header?.sticky ? header.layout : undefined}
   data-sticky-header-row={header?.sticky && headerRowButton(header) ? '' : undefined}
+  data-sticky-header-menu-row={header?.sticky && headerMenuRow(header) ? '' : undefined}
 >
   <head>
     <meta charset="utf-8" />

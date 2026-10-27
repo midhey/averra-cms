@@ -13,7 +13,7 @@ import { InlineAlert } from '../ui/InlineAlert'
 import { Section } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import styles from './FooterFields.module.scss'
-import { organizationNote, policyNote } from './footer-format'
+import { organizationNote, policyNote, sectionsNote } from './footer-format'
 import type { FooterEditor } from './use-footer-editor'
 
 type FooterFieldsProps = {
@@ -21,8 +21,13 @@ type FooterFieldsProps = {
   /** Контакты «Организации»; null — главная не опубликована, на сайте их ещё нет */
   contacts: FooterContacts | null
   policy: { slug: string; published: boolean }
-  /** Пункты меню в шапке — разделы подвала */
-  menuSize: number
+  /**
+   * Пунктов в меню опубликованной шапки (null — шапки на сайте нет): разделы на сайте — из неё,
+   * а не из черновика меню
+   */
+  menuOnSite: number | null
+  /** Меню в черновике шапки не такое, как на сайте */
+  menuEdited: boolean
   /** Страницы, где подвал скрыт: «Подвал скрыт на страницах: «Промо»» */
   hiddenOn: string | undefined
   /** Экраны «SEO» — только владельцу: ссылки на них только ему */
@@ -129,11 +134,7 @@ export function FooterFields(props: FooterFieldsProps) {
             )}
             <Checkbox
               label="Разделы — пункты меню шапки"
-              hint={
-                props.menuSize === 0
-                  ? 'В меню шапки пока нет пунктов — колонки «Разделы» не будет'
-                  : 'Те же пункты, что в меню шапки: правьте их на вкладке «Меню»'
-              }
+              hint={sectionsNote({ menuOnSite: props.menuOnSite, menuEdited: props.menuEdited })}
               checked={form.sections}
               disabled={readOnly}
               onChange={(event) => editor.change({ ...form, sections: event.target.checked })}

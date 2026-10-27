@@ -3,6 +3,7 @@ import { Picture } from '../ui/Picture'
 import styles from './SiteHeader.module.css'
 import {
   CONTENT_ID,
+  headerMenuRow,
   headerRowButton,
   headerWatchesScroll,
   type SiteHeaderLink,
@@ -47,6 +48,8 @@ export function SiteHeader({ view, media }: SiteHeaderProps) {
         data-panel={hasPanel ? '' : undefined}
         // Без меню кнопке на телефоне место — своей строкой под логотипом (промо-шапка «Минимум»)
         data-row-button={headerRowButton(view) ? '' : undefined}
+        // Длинное меню на широком экране — своей строкой под логотипом (headerMenuRow)
+        data-menu-row={headerMenuRow(view) ? '' : undefined}
       >
         {topbar && (
           <div className={styles.topbar}>

@@ -80,6 +80,23 @@ test('большой подвал: публикация с политикой, �
     previewFooter.getByRole('navigation', { name: 'Разделы сайта' }).getByRole('link'),
   ).toHaveText(['Почему мы', 'Связаться'])
   await expect(previewFooter.getByRole('link', { name: '+7 (342) 200-10-10' })).toBeVisible()
+  // На «Подвале» предпросмотр прокручен вниз, а вернулись на «Шапку» — снова к началу страницы:
+  // обычная шапка иначе осталась бы за верхним краем окна. Телефон — без масштаба: на десктопе
+  // уменьшенная страница целиком помещается в окно и прокручивать нечего
+  const device = (name: string) =>
+    page.getByRole('group', { name: 'Ширина предпросмотра' }).getByRole('radio', { name })
+  await device('Телефон').check({ force: true })
+  const scrolled = (title: string) =>
+    page
+      .frameLocator(`iframe[title="${title}"]`)
+      .locator('html')
+      .evaluate((node) => node.ownerDocument.defaultView?.scrollY ?? -1)
+  await expect.poll(() => scrolled('Предпросмотр подвала')).toBeGreaterThan(0)
+  await page.getByRole('tab', { name: 'Шапка' }).click()
+  await expect.poll(() => scrolled('Предпросмотр шапки')).toBe(0)
+  await page.getByRole('tab', { name: 'Подвал' }).click()
+  await expect.poll(() => scrolled('Предпросмотр подвала')).toBeGreaterThan(0)
+  await device('Десктоп').check({ force: true })
 
   // Без опубликованной политики большой подвал не опубликовать: понятная ошибка, фокус на виде
   await page.getByRole('button', { name: 'Опубликовать подвал' }).click()
@@ -183,6 +200,44 @@ test('большой подвал: публикация с политикой, �
   await expect(item).toContainText('подвал, форма «Есть вопросы?»')
   await item.click()
   await expect(page.getByText(/форма в подвале сайта «Есть вопросы\?»/)).toBeVisible()
+})
+
+test('подсказка у «Разделов» — о меню шапки на сайте, а не о черновике', async ({
+  page,
+  demoSite,
+}) => {
+  const param = { siteId: demoSite.id }
+  const header = sites[':siteId'].header
+  const sections = page.getByRole('checkbox', { name: 'Разделы — пункты меню шапки' })
+  const openFooterTab = async () => {
+    await page.goto('/header')
+    await page.getByRole('tab', { name: 'Подвал' }).click()
+    await page.getByRole('radio', { name: /^С колонками/ }).check()
+  }
+  // Меню есть только в черновике шапки: на сайте колонки «Разделы» не будет
+  const menu = [{ label: 'Почему мы', page: 'index', block: 'benefits' }]
+  expect((await header.$put({ param, json: { menu } })).status).toBe(200)
+  await openFooterTab()
+  await expect(sections).toHaveAccessibleDescription(
+    /^Шапка не опубликована — на сайте колонки «Разделы» пока не будет/,
+  )
+  // Опубликовали — то же меню на сайте
+  expect((await header.publish.$post({ param })).status).toBe(200)
+  await openFooterTab()
+  await expect(sections).toHaveAccessibleDescription(/^Те же пункты, что в меню шапки/)
+  // Меню поменяли, но шапку не опубликовали: на сайте разделы прежние
+  expect(
+    (
+      await header.$put({
+        param,
+        json: { menu: [...menu, { label: 'Связаться', page: 'index', block: 'contact' }] },
+      })
+    ).status,
+  ).toBe(200)
+  await openFooterTab()
+  await expect(sections).toHaveAccessibleDescription(
+    /правки меню попадут в подвал, когда вы опубликуете шапку$/,
+  )
 })
 
 test('простой подвал: «Настройки cookie» из подвала открывают окно, скрытый на странице — только документы', async ({

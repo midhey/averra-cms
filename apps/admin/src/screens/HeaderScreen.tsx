@@ -84,6 +84,7 @@ export function HeaderScreen() {
           theme={site.theme}
           draft={view.draft}
           onSite={view.published !== null}
+          publishedMenu={view.published?.menu ?? null}
           unpublished={view.unpublished}
           pages={view.targets}
           contacts={view.contacts}
@@ -102,6 +103,8 @@ type EditorProps = {
   theme: Parameters<typeof Preview>[0]['theme']
   draft: Header
   onSite: boolean
+  /** Меню опубликованной шапки (null — её нет на сайте): из него разделы подвала на сайте */
+  publishedMenu: Header['menu'] | null
   unpublished: boolean
   pages: HeaderTargetPage[]
   /**
@@ -122,6 +125,10 @@ type EditorProps = {
     contacts: FooterContacts | null
   }
 }
+
+/** Меню по смыслу, без порядка ключей: пункты из формы и с сервера сравниваются честно */
+const menuKey = (menu: Header['menu']) =>
+  JSON.stringify(menu.map((item) => [item.label, item.page, item.block ?? '']))
 
 function HeaderEditor(props: EditorProps) {
   const { siteId, draft, onSite, unpublished, pages, contacts, readOnly } = props
@@ -514,7 +521,8 @@ function HeaderEditor(props: EditorProps) {
               editor={footer}
               contacts={props.footer.contacts}
               policy={props.footer.policy}
-              menuSize={shown.current.menu.length}
+              menuOnSite={props.publishedMenu?.length ?? null}
+              menuEdited={menuKey(shown.current.menu) !== menuKey(props.publishedMenu ?? [])}
               hiddenOn={footerHiddenOnText(
                 pages
                   .filter((page) => page.published)

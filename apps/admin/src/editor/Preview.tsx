@@ -181,13 +181,18 @@ export function Preview(props: PreviewProps) {
   }, [frameDocument, selectedId, interactive])
 
   // Вкладка «Подвал»: низ страницы в окне — при открытии и при смене ключа (подвал меняет
-  // высоту, пока его настраивают)
+  // высоту, пока его настраивают). Ушли с «Подвала» (ключ пропал) — обратно к началу страницы:
+  // на «Шапке» и «Меню» смотрят шапку, а обычная шапка внизу страницы осталась бы за краем окна
   const scrollToEnd = props.scrollToEnd
+  const wasAtEnd = useRef(false)
   useEffect(() => {
     const view = frameDocument?.defaultView
-    if (!view || scrollToEnd === undefined) return
+    if (!view) return
+    const atEnd = scrollToEnd !== undefined
+    if (!atEnd && !wasAtEnd.current) return
+    wasAtEnd.current = atEnd
     const frame = view.requestAnimationFrame(() =>
-      view.scrollTo({ top: frameDocument.documentElement.scrollHeight }),
+      view.scrollTo({ top: atEnd ? frameDocument.documentElement.scrollHeight : 0 }),
     )
     return () => view.cancelAnimationFrame(frame)
   }, [frameDocument, scrollToEnd])

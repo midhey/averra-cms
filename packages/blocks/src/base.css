@@ -56,16 +56,34 @@ html[data-sticky-header="double"] {
   scroll-padding-top: 8.5rem;
 }
 
-/* Без меню кнопка на телефоне — своей строкой под логотипом (data-row-button у шапки), и липкая
-   шапка там 9–12rem высотой: две-три строки подписи, длинное название сайта. Отступ — с запасом
-   на самую высокую, чтобы заголовок раздела не ушёл под неё. Признак ставит сборка сайта: без
-   :has(), которого нет у старых iOS */
-@media (max-width: 39.99rem) {
+/* Без меню кнопка до 48rem — своей строкой под логотипом (data-row-button у шапки), и липкая
+   шапка там 9–12rem высотой: две-три строки подписи, длинное название сайта. Двухэтажной — ещё
+   верхняя строка, адрес в ней на телефоне бывает в две строки. Отступ — по замеру самой высокой
+   шапки при допустимых длинах (название 80 знаков, кнопка 40, адрес в две строки) с небольшим
+   запасом. С 48rem кнопка в строке, и отступа по раскладке хватает: при тех же длинах на 768–1000
+   px «Минимум» — 92 px (меньше 6rem), двухэтажная — 132 px (меньше 8,5rem). Признак ставит сборка
+   сайта: без :has(), которого нет у старых iOS */
+@media (max-width: 47.99rem) {
   html[data-sticky-header][data-sticky-header-row] {
     scroll-padding-top: 12.5rem;
   }
 
   html[data-sticky-header="double"][data-sticky-header-row] {
-    scroll-padding-top: 14.5rem;
+    scroll-padding-top: 17rem;
+  }
+}
+
+/* Длинное меню на широком экране — своей строкой (data-menu-row у шапки): шапка в две-четыре
+   строки. Отступ — по замеру самой высокой при восьми пунктах по 40 знаков на 1024 px:
+   «Классика» с логотипом — 215 px (14rem = 224), «по центру» без логотипа с длинным названием —
+   252 px, двухэтажная — выше (16,5rem = 264) */
+@media (min-width: 64rem) {
+  html[data-sticky-header][data-sticky-header-menu-row] {
+    scroll-padding-top: 14rem;
+  }
+
+  html[data-sticky-header="center"][data-sticky-header-menu-row],
+  html[data-sticky-header="double"][data-sticky-header-menu-row] {
+    scroll-padding-top: 16.5rem;
   }
 }

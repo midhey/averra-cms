@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { HEADER_LABEL_MAX } from '@averra/schema'
+import { HEADER_LABEL_MAX, SITE_NAME_MAX } from '@averra/schema'
 import type { Browser, Locator, Page } from '@playwright/test'
 import sharp from 'sharp'
 import { publishDir } from '../urls'
@@ -30,11 +30,92 @@ async function visitor(browser: Browser, width: number, javaScriptEnabled: boole
   return { context, page: await context.newPage() }
 }
 
+/** Самое длинное допустимое название сайта: без логотипа шапка с ним выше всего */
+const LONG_SITE_NAME =
+  'Ремонт квартир, ванных комнат и кухонь под ключ в Перми и крае — бригада Ивана'
+    .padEnd(SITE_NAME_MAX, '!')
+    .slice(0, SITE_NAME_MAX)
+
+/** Самый длинный заголовок первого экрана (120 знаков) */
+const TALL_HERO_TITLE =
+  'Ванная под ключ за 14 дней: плитка, сантехника, тёплый пол и вентиляция, гарантия на все работы три года, без предоплаты'
+
+/** Сколько пикселей между низом шапки и верхом заголовка (меньше нуля — заголовок под шапкой) */
+async function gapBelowHeader(header: Locator, title: Locator) {
+  const headerBox = await header.boundingBox()
+  const titleBox = await title.boundingBox()
+  return (titleBox?.y ?? 0) - ((headerBox?.y ?? 0) + (headerBox?.height ?? 0))
+}
+
 /** Нет горизонтальной прокрутки: страница не шире окна */
 const noHorizontalScroll = async (page: Page) =>
   (await page.evaluate(
     'document.documentElement.scrollWidth - document.documentElement.clientWidth',
   )) === 0
+
+/** Рамки не пересекаются */
+const apart = (a: Box, b: Box) =>
+  a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y
+
+type Box = { x: number; y: number; width: number; height: number }
+
+/**
+ * Шапка «по центру», собранная после прокрутки (с JS): пункты меню целиком внутри меню и не лежат на
+ * названии, телефоне и кнопке, а собранная шапка не выше полной — иначе она не «компактная строка»
+ */
+async function expectCondensedCenter(
+  browser: Browser,
+  url: string,
+  width: number,
+  where: string,
+  buttonLabel: string | null,
+) {
+  const visit = await visitor(browser, width, true)
+  await visit.page.goto(url)
+  const siteHeader = visit.page.locator('header[data-site-header]')
+  await expect(siteHeader).not.toHaveAttribute('data-condensed', '')
+  const fullHeight = (await siteHeader.boundingBox())?.height ?? 0
+  await visit.page.evaluate('window.scrollTo(0, 900)')
+  await expect(siteHeader).toHaveAttribute('data-condensed', '')
+  // Сборка анимируется: меряем, когда высота перестала меняться
+  await expect
+    .poll(async () => {
+      const before = (await siteHeader.boundingBox())?.height
+      await visit.page.waitForTimeout(300)
+      return before === (await siteHeader.boundingBox())?.height
+    })
+    .toBe(true)
+  const condensedHeight = (await siteHeader.boundingBox())?.height ?? 0
+  expect(condensedHeight, `собранная не выше полной: ${where}`).toBeLessThanOrEqual(fullHeight)
+  const others: Record<string, Box | null> = {
+    название: await siteHeader.locator('a[href="/"]').first().boundingBox(),
+    телефон: await siteHeader
+      .getByRole('link', { name: '+7 (342) 000-00-00' })
+      .first()
+      .boundingBox(),
+  }
+  if (buttonLabel !== null) {
+    others.кнопка = await siteHeader.getByRole('link', { name: buttonLabel }).first().boundingBox()
+  }
+  const nav = await siteHeader.locator('nav').first().boundingBox()
+  if (!nav) throw new Error(`нет меню: ${where}`)
+  for (const item of await siteHeader.locator('nav').first().locator('a').all()) {
+    const box = await item.boundingBox()
+    if (!box) throw new Error(`нет рамки пункта: ${where}`)
+    const name = await item.textContent()
+    expect(box.x, `«${name}» внутри меню слева: ${where}`).toBeGreaterThanOrEqual(nav.x - 1)
+    expect(box.x + box.width, `«${name}» внутри меню справа: ${where}`).toBeLessThanOrEqual(
+      nav.x + nav.width + 1,
+    )
+    for (const [part, other] of Object.entries(others)) {
+      if (!other) throw new Error(`нет рамки: ${part}, ${where}`)
+      expect(apart(box, other), `«${name}» не на месте «${part}»: ${where}`).toBe(true)
+    }
+  }
+  expect(await noHorizontalScroll(visit.page)).toBe(true)
+  await visit.page.screenshot({ path: test.info().outputPath(`${where}-condensed.png`) })
+  await visit.context.close()
+}
 
 /**
  * Части шапки видны, лежат в окне шириной width, не сжаты в ноль (шире 40 px) и не накладываются
@@ -511,9 +592,13 @@ test('«Минимум» с самой длинной кнопкой, телеф
           {
             id: 'top',
             type: 'hero',
+            // Текст выше min-height первого экрана: короткий заголовок блок центрирует, и он
+            // оказался бы ниже шапки и без отступа — тест тогда ничего бы не охранял
             props: {
               variant: 'cover',
-              title: 'Ванная под ключ за 14 дней',
+              title: TALL_HERO_TITLE,
+              subtitle: 'Сами закупим материалы, вывезем мусор и дадим гарантию. '.repeat(5).trim(),
+              button: { label: 'Рассчитать стоимость', href: '#top' },
               image: { mediaId: photo, alt: 'Ванная' },
             },
           },
@@ -550,8 +635,8 @@ test('«Минимум» с самой длинной кнопкой, телеф
 
   const site = await serveRelease(release(demoSite.id))
   try {
-    // 768 и 1440 — кнопка снова в строке с логотипом, ничего не наложилось
-    for (const width of [320, 375, 768, 1440]) {
+    // С 768 (48rem) кнопка снова в строке с логотипом, ничего не наложилось
+    for (const width of [320, 375, 640, 768, 1440]) {
       for (const javaScriptEnabled of [false, true]) {
         const visit = await visitor(browser, width, javaScriptEnabled)
         for (const path of ['/', `/${slug}/`]) {
@@ -564,7 +649,7 @@ test('«Минимум» с самой длинной кнопкой, телеф
             button: siteHeader.getByRole('link', { name: label }),
           }
           await expectSideBySide(parts, width, where)
-          if (width < 640) await expectRowButton(parts, where)
+          if (width < 768) await expectRowButton(parts, where)
           // Подпись кнопки не обрезана
           expect(
             await parts.button.evaluate((node) => node.scrollWidth - node.clientWidth),
@@ -591,6 +676,70 @@ test('«Минимум» с самой длинной кнопкой, телеф
     }
   } finally {
     site.close()
+  }
+
+  // Без логотипа и с самым длинным названием сайта прозрачная шапка выше всего: отступ первого
+  // экрана (правила data-row-button) держит заголовок на фото ниже неё. У двухэтажной ещё и адрес
+  // в верхней строке — на телефоне он в две строки
+  expect(
+    (
+      await sites[':siteId'].settings.$patch({
+        param,
+        json: {
+          name: LONG_SITE_NAME,
+          organization: {
+            name: 'Ремонт у Ивана',
+            phone: '+7 (342) 000-00-00',
+            address: { city: 'Пермь', street: 'ул. Героев Хасана, д. 105, корп. 3, офис 412' },
+          },
+        },
+      })
+    ).status,
+  ).toBe(200)
+  for (const layout of ['minimal', 'double'] as const) {
+    expect(
+      (
+        await header.$put({
+          param,
+          json: { layout, phone: true, overlay: true, button: { label, page: 'index' } },
+        })
+      ).status,
+    ).toBe(200)
+    expect((await header.publish.$post({ param })).status).toBe(200)
+    await expect
+      .poll(
+        async () => {
+          const html = await servedHtml(demoSite.id, slug)
+          return html.includes(LONG_SITE_NAME) && html.includes(`data-layout="${layout}"`)
+        },
+        { timeout: 120_000 },
+      )
+      .toBe(true)
+    const longName = await serveRelease(release(demoSite.id))
+    try {
+      for (const width of layout === 'minimal' ? [320, 375, 640, 768, 1024] : [320, 375]) {
+        const visit = await visitor(browser, width, false)
+        await visit.page.goto(`${longName.url}/${slug}/`)
+        const siteHeader = visit.page.locator('header[data-site-header]')
+        const where = `${layout} без логотипа, длинное название, ${width} px`
+        expect(
+          await gapBelowHeader(siteHeader, visit.page.locator('section#top h1')),
+          `заголовок под шапкой: ${where}`,
+        ).toBeGreaterThanOrEqual(0)
+        expect(await noHorizontalScroll(visit.page), `прокрутки нет: ${where}`).toBe(true)
+        // С 48rem кнопка в строке, но не сжата в столбик рядом с длинным названием
+        if (width >= 768) {
+          const button = await siteHeader.getByRole('link', { name: label }).boundingBox()
+          expect(button?.height ?? 0, `кнопка не выше двух строк: ${where}`).toBeLessThan(80)
+        }
+        await visit.page.screenshot({
+          path: testInfo.outputPath(`${layout}-${width}-long-name.png`),
+        })
+        await visit.context.close()
+      }
+    } finally {
+      longName.close()
+    }
   }
 
   // С меню тот же вытянутый логотип ужимается и не уходит под трубку и «Меню»
@@ -635,58 +784,161 @@ test('«Минимум» с самой длинной кнопкой, телеф
     withMenu.close()
   }
 
-  // Восемь длинных пунктов на ноутбуке: переносится меню, а логотип не тает в полоску
   const longItem = (index: number) => ({
     label: `${index + 1}. ${'Пункт меню '.repeat(4)}`.trim().slice(0, HEADER_LABEL_MAX),
     page: slug,
   })
-  expect(
-    (
-      await header.$put({
-        param,
-        json: {
-          layout: 'classic',
-          phone: true,
-          logo,
-          menu: Array.from({ length: 8 }, (_, index) => longItem(index)),
-          button: { label, page: 'index' },
+  // Восемь длинных пунктов на ноутбуке: меню своей строкой под логотипом, пункты не переносятся
+  // внутри себя, логотип не тает в полоску, шапка не выше трёх-четырёх строк. Прозрачная — на
+  // фото: заголовок первого экрана ниже неё. «По центру» — без логотипа, с длинным названием:
+  // так она выше всего, а кнопка рядом с названием не сжимается в столбик
+  const longMenu = Array.from({ length: 8 }, (_, index) => longItem(index))
+  for (const layout of ['classic', 'double', 'center'] as const) {
+    const withLogo = layout !== 'center'
+    expect(
+      (
+        await header.$put({
+          param,
+          json: {
+            layout,
+            phone: true,
+            ...(withLogo ? { logo } : {}),
+            overlay: true,
+            // «По центру» собирается при прокрутке: собранная — тоже без наложений
+            condense: layout === 'center',
+            menu: longMenu,
+            button: { label, page: 'index' },
+          },
+        })
+      ).status,
+    ).toBe(200)
+    expect((await header.publish.$post({ param })).status).toBe(200)
+    await expect
+      .poll(
+        async () => {
+          const html = await servedHtml(demoSite.id)
+          return html.includes(`data-layout="${layout}"`) && html.includes('8. Пункт')
         },
-      })
-    ).status,
-  ).toBe(200)
-  expect((await header.publish.$post({ param })).status).toBe(200)
-  await expect.poll(() => servedHtml(demoSite.id), { timeout: 120_000 }).toContain('8. Пункт')
-  const longMenu = await serveRelease(release(demoSite.id))
-  try {
-    for (const width of [1024, 1440]) {
-      const visit = await visitor(browser, width, false)
-      await visit.page.goto(longMenu.url)
-      const logoBox = await visit.page
-        .locator('header[data-site-header] a[href="/"] img')
-        .boundingBox()
-      expect(logoBox?.width ?? 0, `логотип не сжат: ${width} px`).toBeGreaterThanOrEqual(120)
-      expect(await noHorizontalScroll(visit.page)).toBe(true)
-      await visit.page.screenshot({ path: testInfo.outputPath(`classic-${width}-long-menu.png`) })
-      await visit.context.close()
+        { timeout: 120_000 },
+      )
+      .toBe(true)
+    const site = await serveRelease(release(demoSite.id))
+    try {
+      for (const width of [1024, 1440]) {
+        const where = `${layout}, ${width} px`
+        const visit = await visitor(browser, width, false)
+        await visit.page.goto(`${site.url}/${slug}/`)
+        const siteHeader = visit.page.locator('header[data-site-header]')
+        await expect(siteHeader).toHaveAttribute('data-menu-row', '')
+        if (withLogo) {
+          const logoImage = siteHeader.locator('a[href="/"] img')
+          const logoBox = await logoImage.boundingBox()
+          expect(logoBox?.width ?? 0, `логотип не сжат: ${where}`).toBeGreaterThanOrEqual(120)
+          // Картинка действительно загрузилась, а не только заняла рамку по width и height
+          expect(
+            await logoImage.evaluate((node) => ('naturalWidth' in node ? node.naturalWidth : 0)),
+          ).toBeGreaterThan(0)
+        }
+        expect(await noHorizontalScroll(visit.page)).toBe(true)
+        for (const item of await siteHeader.locator('nav a').all()) {
+          expect(
+            (await item.boundingBox())?.height ?? 0,
+            `пункт в одну строку: ${where}`,
+          ).toBeLessThan(36)
+        }
+        const button = await siteHeader.getByRole('link', { name: label }).boundingBox()
+        expect(button?.height ?? 0, `кнопка не выше двух строк: ${where}`).toBeLessThan(80)
+        const headerHeight = (await siteHeader.boundingBox())?.height ?? 0
+        expect(headerHeight, `высота шапки: ${where}`).toBeLessThan(
+          layout === 'classic' ? 240 : 280,
+        )
+        expect(
+          await gapBelowHeader(siteHeader, visit.page.locator('section#top h1')),
+          `заголовок первого экрана под шапкой: ${where}`,
+        ).toBeGreaterThanOrEqual(0)
+        await visit.page.screenshot({
+          path: testInfo.outputPath(`${layout}-${width}-long-menu.png`),
+        })
+        await visit.context.close()
+        if (layout === 'center') {
+          await expectCondensedCenter(
+            browser,
+            `${site.url}/${slug}/`,
+            width,
+            `center-${width}-long-menu`,
+            label,
+          )
+        }
+      }
+    } finally {
+      site.close()
     }
-  } finally {
-    longMenu.close()
+  }
+
+  // Короткое меню рядом с длинным названием без логотипа: без кнопки меню в строке (порог не
+  // превышен), с кнопкой — своей строкой. Собранная «по центру» ни там, ни там не кладёт пункты на
+  // название и телефон
+  const shortMenu = ['Услуги', 'Цены', 'Контакты'].map((itemLabel) => ({
+    label: itemLabel,
+    page: slug,
+  }))
+  for (const withButton of [false, true]) {
+    expect(
+      (
+        await header.$put({
+          param,
+          json: {
+            layout: 'center',
+            phone: true,
+            condense: true,
+            menu: shortMenu,
+            ...(withButton ? { button: { label: 'Позвонить', page: 'index' } } : {}),
+          },
+        })
+      ).status,
+    ).toBe(200)
+    expect((await header.publish.$post({ param })).status).toBe(200)
+    await expect
+      .poll(
+        async () => {
+          const html = await servedHtml(demoSite.id)
+          return html.includes('>Контакты<') && html.includes('Позвонить') === withButton
+        },
+        { timeout: 120_000 },
+      )
+      .toBe(true)
+    const site = await serveRelease(release(demoSite.id))
+    try {
+      for (const width of [1024, 1280, 1440]) {
+        await expectCondensedCenter(
+          browser,
+          `${site.url}/${slug}/`,
+          width,
+          `center-${width}-long-name${withButton ? '-button' : ''}`,
+          withButton ? 'Позвонить' : null,
+        )
+      }
+    } finally {
+      site.close()
+    }
   }
 })
 
-test('кнопка липкой шапки без меню ведёт к разделу, и его заголовок не под шапкой на 320 и 375 px', async ({
+test('кнопка липкой шапки без меню (320–800 px) и длинное меню (1024–1440 px) ведут к разделу, его заголовок не под шапкой', async ({
   browser,
   demoSite,
 }, testInfo) => {
   test.slow()
   const param = { siteId: demoSite.id }
+  // Самая высокая шапка: длинное название без логотипа и адрес в две строки на телефоне
   const settings = await sites[':siteId'].settings.$patch({
     param,
     json: {
+      name: LONG_SITE_NAME,
       organization: {
         name: 'Ремонт у Ивана',
         phone: '+7 (342) 000-00-00',
-        address: { city: 'Пермь', street: 'ул. Ленина, 1' },
+        address: { city: 'Пермь', street: 'ул. Героев Хасана, д. 105, корп. 3, офис 412' },
       },
     },
   })
@@ -736,7 +988,7 @@ test('кнопка липкой шапки без меню ведёт к раз�
       .toContain(`data-layout="${layout}"`)
     const site = await serveRelease(release(demoSite.id))
     try {
-      for (const width of [320, 375]) {
+      for (const width of [320, 375, 640, 800]) {
         for (const javaScriptEnabled of [false, true]) {
           const where = `${layout}, ${width} px, ${javaScriptEnabled ? 'с JS' : 'без JS'}`
           const visit = await visitor(browser, width, javaScriptEnabled)
@@ -758,6 +1010,67 @@ test('кнопка липкой шапки без меню ведёт к раз�
           await visit.page.screenshot({
             path: testInfo.outputPath(
               `anchor-${layout}-${width}-${javaScriptEnabled ? 'js' : 'nojs'}.png`,
+            ),
+          })
+          await visit.context.close()
+        }
+      }
+    } finally {
+      site.close()
+    }
+  }
+
+  // Длинное меню своей строкой (data-sticky-header-menu-row): восемь пунктов по 40 знаков, без
+  // логотипа с длинным названием — самая высокая шапка с меню на ноутбуке и большом экране
+  const menu = Array.from({ length: 8 }, (_, index) => ({
+    label: `${index + 1}. ${'Расчёт за день '.repeat(3)}`.trim().slice(0, HEADER_LABEL_MAX),
+    page: slug,
+    ...(index === 3 ? { block: 'calc' } : {}),
+  }))
+  for (const layout of ['classic', 'double', 'center'] as const) {
+    expect(
+      (
+        await header.$put({
+          param,
+          json: { layout, sticky: true, phone: true, menu, button: { label, page: slug } },
+        })
+      ).status,
+    ).toBe(200)
+    expect((await header.publish.$post({ param })).status).toBe(200)
+    await expect
+      .poll(
+        async () => {
+          const html = await servedHtml(demoSite.id, slug)
+          return html.includes(`data-layout="${layout}"`) && html.includes('8. Расчёт')
+        },
+        { timeout: 120_000 },
+      )
+      .toBe(true)
+    const site = await serveRelease(release(demoSite.id))
+    try {
+      for (const width of [1024, 1440]) {
+        for (const javaScriptEnabled of [false, true]) {
+          const where = `${layout}, длинное меню, ${width} px, ${javaScriptEnabled ? 'с JS' : 'без JS'}`
+          const visit = await visitor(browser, width, javaScriptEnabled)
+          await visit.page.goto(`${site.url}/${slug}/`)
+          await expect(visit.page.locator('html')).toHaveAttribute(
+            'data-sticky-header-menu-row',
+            '',
+          )
+          const siteHeader = visit.page.locator('header[data-site-header]')
+          await siteHeader.locator('nav a[href$="#calc"]:visible').first().click()
+          await expect(visit.page).toHaveURL(/#calc$/)
+          const title = visit.page.locator('section#calc h2')
+          await expect
+            .poll(async () => (await title.boundingBox())?.y ?? 0, { message: where })
+            .toBeLessThan(500)
+          expect(
+            await gapBelowHeader(siteHeader, title),
+            `заголовок раздела под шапкой: ${where}`,
+          ).toBeGreaterThanOrEqual(0)
+          await visit.page.screenshot({
+            path: testInfo.outputPath(
+              `anchor-${layout}-menu-${width}-${javaScriptEnabled ? 'js' : 'nojs'}.png`,
             ),
           })
           await visit.context.close()

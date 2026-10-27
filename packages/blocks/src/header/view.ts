@@ -114,3 +114,29 @@ export const headerWatchesScroll = (view: SiteHeaderView) =>
  */
 export const headerRowButton = (view: SiteHeaderView) =>
   view.button !== null && view.menu.length === 0
+
+/** Самый длинный пункт, который ещё встаёт в строку с логотипом, телефоном и кнопкой */
+const INLINE_ITEM_MAX = 24
+/**
+ * Сколько знаков меню и кнопки вместе встают в строку с логотипом на ноутбуке (1024 px). Без
+ * логотипа в той же строке название сайта (до 80 знаков) — оно считается вместе с меню
+ */
+const INLINE_MENU_CHARS = 100
+
+/**
+ * Меню на широком экране — своей строкой под логотипом, телефоном и кнопкой. В одной строке с
+ * ними длинное меню (восемь пунктов по 40 знаков) сжималось в столбик, каждый пункт — в две
+ * строки, и липкая шапка занимала полэкрана. Своей строкой меню получает всю ширину, пункты не
+ * переносятся внутри себя. Решает сборка по длине подписей — без скрипта и без :has(). У «по
+ * центру» меню и так своей строкой, но длинное переносится на две-три строки: признак нужен ей
+ * ради отступа якорей и первого экрана и целых пунктов. У «Минимума» меню нет
+ */
+export function headerMenuRow(view: SiteHeaderView) {
+  if (view.layout === 'minimal' || view.menu.length === 0) return false
+  const labels = view.menu.map((item) => item.label.length)
+  const total =
+    labels.reduce((sum, length) => sum + length, 0) +
+    (view.button?.label.length ?? 0) +
+    (view.logo === null ? view.siteName.length : 0)
+  return Math.max(...labels) > INLINE_ITEM_MAX || total > INLINE_MENU_CHARS
+}
