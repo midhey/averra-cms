@@ -13,7 +13,13 @@ export const NotificationAudience = z.enum(['leads', 'service'])
 export type NotificationAudience = z.infer<typeof NotificationAudience>
 
 /** Служебные события установки: о них узнаёт студия, которая её сопровождает */
-export const ServiceEventId = z.enum(['backup.failed', 'disk.low', 'build.failed', 'mail.down'])
+export const ServiceEventId = z.enum([
+  'backup.failed',
+  'disk.low',
+  'build.failed',
+  'mail.down',
+  'update.requested',
+])
 export type ServiceEventId = z.infer<typeof ServiceEventId>
 
 /** События, на которые подписывают получателя */
@@ -27,6 +33,7 @@ export const NOTIFICATION_EVENT_TITLES: Record<NotificationEventId, string> = {
   'disk.low': 'Мало места на диске',
   'build.failed': 'Сборка сайта упала',
   'mail.down': 'Почта не работает',
+  'update.requested': 'Запрошено обновление',
 }
 
 /** Когда приходит служебное уведомление: для подсказок в админке */
@@ -35,6 +42,7 @@ export const SERVICE_EVENT_HINTS: Record<ServiceEventId, string> = {
   'disk.low': 'свободно меньше 1 ГБ или 10% диска',
   'build.failed': 'сайт не собрался после публикации, на сайте прежняя версия',
   'mail.down': 'письма не уходят дольше 15 минут: сервер не пускает или отказал отправителю',
+  'update.requested': 'владелец нажал «Обновить» в админке: кто и до какой версии',
 }
 
 /** Сколько адресов почты у одной аудитории: как было у адресов уведомлений о заявках */

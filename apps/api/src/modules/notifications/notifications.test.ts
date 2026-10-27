@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { PROXY_UNPARSED } from '@averra/schema'
+import { PROXY_UNPARSED, ServiceEventId } from '@averra/schema'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -454,7 +454,8 @@ describe('служебные события: владелец', () => {
       recipients: { id: string; channel: string; events: string[] }[]
     }
     const chatRow = view.recipients.find((row) => row.channel === 'telegram')
-    expect(chatRow?.events).toEqual(['backup.failed', 'disk.low', 'build.failed', 'mail.down'])
+    // Новый чат получает все служебные события
+    expect(chatRow?.events).toEqual([...ServiceEventId.options])
 
     const patched = await api.app.request(`/api/notifications/service/recipients/${chatRow?.id}`, {
       method: 'PATCH',

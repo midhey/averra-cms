@@ -3,9 +3,13 @@ import {
   type DiskSpace,
   type InstallationFacts,
   type InstallationStatus,
+  isNewerVersion,
+  NO_RELEASE_STATE,
+  type ReleaseState,
   SERVICE_DATABASE,
   type SiteBuildStatus,
   statusProblems,
+  type UpdateRequestFile,
   type UpdateRun,
 } from '@averra/schema'
 import { sql } from 'drizzle-orm'
@@ -26,11 +30,35 @@ export type BackupState = {
 /** Последнее обновление из файла состояния; unreadable — файл есть, но не читается */
 export type UpdateState = { last: UpdateRun | null; unreadable: boolean }
 
-/** Сведения с сервера, а не из базы: файлы состояния скрипта сервера и место на диске */
+/** Новая версия и заявка с сервера: всё, кроме «доступна ли» — её решает версия API */
+export type HostRelease = Omit<ReleaseState, 'available'>
+
+/** Хостовой части нет (разработка, установка без install.sh) */
+export const NO_HOST_RELEASE: HostRelease = {
+  mode: NO_RELEASE_STATE.mode,
+  check: null,
+  latest: null,
+  pending: null,
+  request: null,
+  unreadable: false,
+}
+
+/** Положили ли заявку: exists — уже лежит, no-dir — папки заявок нет или писать в неё нельзя */
+export type RequestResult = 'written' | 'exists' | 'no-dir'
+
+/**
+ * Сведения с сервера, а не из базы: файлы состояния скрипта сервера, место на диске и папка
+ * заявок на обновление — единственное, что API на сервере пишет
+ */
 export type HostStatus = {
   backup(): Promise<BackupState>
   update(): Promise<UpdateState>
   disk(): Promise<DiskSpace[]>
+  release(): Promise<HostRelease>
+  requestUpdate(
+    file: UpdateRequestFile,
+    options?: { replaceStale?: boolean },
+  ): Promise<RequestResult>
 }
 
 /** Без папки состояния и без дисков: так у API в разработке и в тестах, где не задано своё */
@@ -38,6 +66,17 @@ export const noHostStatus: HostStatus = {
   backup: async () => ({ enabled: false, unreadable: false, last: null, lastOk: null }),
   update: async () => ({ last: null, unreadable: false }),
   disk: async () => [],
+  release: async () => NO_HOST_RELEASE,
+  requestUpdate: async () => 'no-dir',
+}
+
+/** Новая версия словами схемы: доступна — только если новее версии этого API */
+export function releaseState(host: HostRelease, version: string): ReleaseState {
+  const latest = host.latest
+  return {
+    ...host,
+    available: latest && isNewerVersion(latest.version, version) ? latest.version : null,
+  }
 }
 
 export type StatusSources = {
@@ -133,11 +172,12 @@ export async function collectStatus(
   sources: StatusSources,
   now = new Date(),
 ): Promise<InstallationStatus> {
-  const [fromDb, backup, update, disk] = await Promise.all([
+  const [fromDb, backup, update, disk, release] = await Promise.all([
     dbFacts(db, now),
     sources.host.backup(),
     sources.host.update(),
     sources.host.disk(),
+    sources.host.release(),
   ])
   const facts: InstallationFacts = {
     version: sources.version,
@@ -150,6 +190,7 @@ export async function collectStatus(
     backup,
     update: update.last,
     updateUnreadable: update.unreadable,
+    release: releaseState(release, sources.version),
     publish: {
       enabled: sources.publishEnabled,
       last: fromDb.up ? fromDb.lastBuild : null,

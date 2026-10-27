@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   BackupRun,
-  type InstallationFacts,
+  InstallationFacts,
+  isNewerVersion,
+  NO_RELEASE_STATE,
+  pendingStale,
+  ReleaseLatest,
   statusProblems,
+  UPDATE_START_TIMEOUT_MS,
+  UpdateRequestDecision,
+  UpdateRequestInput,
   UpdateRun,
+  updateActivity,
+  updateBlock,
   updateResultText,
 } from './status'
 
@@ -31,6 +40,7 @@ function facts(overrides: Partial<InstallationFacts> = {}): InstallationFacts {
     backup: { enabled: true, unreadable: false, last: okBackup(3), lastOk: okBackup(3) },
     update: null,
     updateUnreadable: false,
+    release: NO_RELEASE_STATE,
     publish: { enabled: true, last: null, failedSites: 0 },
     mail: {
       enabled: true,
@@ -102,6 +112,7 @@ describe('statusProblems', () => {
       startedAt: hoursBefore(2),
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
+      step: null,
       dbRestored: true,
       keptDatabase: null,
       error: 'API новой версии не ответил',
@@ -127,6 +138,7 @@ describe('statusProblems', () => {
       startedAt: hoursBefore(2),
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
+      step: null,
       dbRestored: true,
       keptDatabase: 'averra_rolled_back_20261016_100000',
       error: null,
@@ -144,6 +156,7 @@ describe('statusProblems', () => {
       startedAt: hoursBefore(0.5),
       finishedAt: null,
       result: 'in-progress',
+      step: null,
       dbRestored: false,
       keptDatabase: null,
       error: null,
@@ -177,6 +190,7 @@ describe('statusProblems', () => {
       startedAt: hoursBefore(2),
       finishedAt: hoursBefore(2),
       result: 'rolled-back',
+      step: null,
       dbRestored: true,
       keptDatabase: kept,
       error: null,
@@ -316,5 +330,145 @@ describe('файлы состояния скрипта сервера', () => {
     expect(BackupRun.safeParse({ ...okBackup(1), name: '../etc' }).success).toBe(false)
     expect(BackupRun.safeParse({ ...okBackup(1), remote: 'maybe' }).success).toBe(false)
     expect(BackupRun.safeParse({ ...okBackup(1), error: 'x'.repeat(501) }).success).toBe(false)
+  })
+})
+
+describe('новая версия и обновление из админки', () => {
+  const now = new Date('2026-10-27T12:00:00.000Z')
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
+  const run = (overrides: Partial<UpdateRun> = {}): UpdateRun => ({
+    from: '0.6.0',
+    to: '0.7.0',
+    startedAt: ago(60_000),
+    finishedAt: null,
+    result: 'in-progress',
+    step: 'backup',
+    dbRestored: false,
+    keptDatabase: null,
+    error: null,
+    ...overrides,
+  })
+
+  it('isNewerVersion: по числам, а не строкой; не X.Y.Z — не новее', () => {
+    expect(isNewerVersion('0.10.0', '0.9.9')).toBe(true)
+    expect(isNewerVersion('1.0.0', '0.99.99')).toBe(true)
+    expect(isNewerVersion('0.7.1', '0.7.0')).toBe(true)
+    expect(isNewerVersion('0.7.0', '0.7.0')).toBe(false)
+    expect(isNewerVersion('0.6.9', '0.7.0')).toBe(false)
+    expect(isNewerVersion('0.7.0', 'dev')).toBe(false)
+    expect(isNewerVersion('v0.8.0', '0.7.0')).toBe(false)
+  })
+
+  it('updateActivity: идёт, ждёт хост, запускается, иначе — ничего', () => {
+    const idle = { update: null, release: NO_RELEASE_STATE }
+    expect(updateActivity(idle, now)).toBe('idle')
+    expect(updateActivity({ ...idle, update: run() }, now)).toBe('running')
+    // Дольше часа «идёт» — оборвалось: не мешает новой заявке
+    expect(updateActivity({ ...idle, update: run({ startedAt: ago(2 * 3_600_000) }) }, now)).toBe(
+      'idle',
+    )
+    const pending = { version: '0.7.0', requestedAt: ago(5_000) }
+    expect(updateActivity({ ...idle, release: { ...NO_RELEASE_STATE, pending } }, now)).toBe(
+      'queued',
+    )
+    const accepted = {
+      at: ago(10_000),
+      version: '0.7.0',
+      requestedAt: ago(20_000),
+      result: 'accepted' as const,
+      error: null,
+    }
+    const withRequest = { ...NO_RELEASE_STATE, request: accepted }
+    // Хост принял, а обновление ещё не записало начало — «запускается»
+    expect(updateActivity({ update: null, release: withRequest }, now)).toBe('starting')
+    // Прошлое обновление — старше заявки: всё ещё «запускается»
+    const old = run({ result: 'updated', startedAt: ago(86_400_000), finishedAt: ago(86_000_000) })
+    expect(updateActivity({ update: old, release: withRequest }, now)).toBe('starting')
+    // Обновление этой заявки кончилось — ничего не идёт
+    const done = run({ result: 'updated', startedAt: ago(9_000), finishedAt: ago(1_000) })
+    expect(updateActivity({ update: done, release: withRequest }, now)).toBe('idle')
+    // Принятая заявка без обновления дольше 10 минут — потерялась, кнопка возвращается
+    const lost = { ...accepted, at: ago(UPDATE_START_TIMEOUT_MS + 1000) }
+    expect(updateActivity({ update: null, release: { ...withRequest, request: lost } }, now)).toBe(
+      'idle',
+    )
+    // Отклонённая заявка ничего не запускает
+    const rejected = { ...accepted, result: 'rejected' as const, error: 'заявка не по формату' }
+    expect(
+      updateActivity({ update: null, release: { ...withRequest, request: rejected } }, now),
+    ).toBe('idle')
+  })
+
+  it('заявка, которую хост не забрал за 10 минут, — не «ждёт»: служба заявок не работает', () => {
+    const release = (ms: number) => ({
+      ...NO_RELEASE_STATE,
+      pending: { version: '0.7.0', requestedAt: ago(ms) },
+    })
+    expect(pendingStale(release(UPDATE_START_TIMEOUT_MS - 1000), now)).toBe(false)
+    expect(
+      updateActivity({ update: null, release: release(UPDATE_START_TIMEOUT_MS - 1000) }, now),
+    ).toBe('queued')
+    expect(pendingStale(release(UPDATE_START_TIMEOUT_MS + 1000), now)).toBe(true)
+    expect(
+      updateActivity({ update: null, release: release(UPDATE_START_TIMEOUT_MS + 1000) }, now),
+    ).toBe('idle')
+    expect(pendingStale(NO_RELEASE_STATE, now)).toBe(false)
+  })
+
+  it('updateBlock: ломающий релиз и неудачный откат — кнопки нет', () => {
+    const latest = { version: '0.7.0', publishedAt: null, breaking: false, notes: '' }
+    const ready = { ...NO_RELEASE_STATE, mode: 'ready' as const, latest, available: '0.7.0' }
+    expect(updateBlock({ update: null, release: ready })).toBeNull()
+    expect(
+      updateBlock({ update: null, release: { ...ready, latest: { ...latest, breaking: true } } }),
+    ).toBe('breaking')
+    // Ломающий, но уже стоит (не новее) — не о чем говорить
+    expect(
+      updateBlock({
+        update: null,
+        release: { ...ready, available: null, latest: { ...latest, breaking: true } },
+      }),
+    ).toBeNull()
+    const failed = run({ result: 'rollback-failed', finishedAt: ago(1000), step: 'rollback' })
+    expect(updateBlock({ update: failed, release: ready })).toBe('rollback-failed')
+    // Удачное обновление по SSH после ремонта снимает запрет
+    expect(
+      updateBlock({ update: run({ result: 'updated', finishedAt: ago(1000) }), release: ready }),
+    ).toBeNull()
+    // Прежний release-latest.json без поля — не ломающий
+    expect(ReleaseLatest.parse({ version: '0.7.0', publishedAt: null, notes: '' }).breaking).toBe(
+      false,
+    )
+  })
+
+  it('UpdateRun: шаг, которого версия не знает, — без шага, а не «не читается»', () => {
+    const parsed = UpdateRun.parse({ ...run(), step: 'reticulating' })
+    expect(parsed.step).toBeNull()
+    const { step: _, ...withoutStep } = run()
+    expect(UpdateRun.parse(withoutStep).step).toBeNull()
+  })
+
+  it('файлы хоста и заявка проверяются строго', () => {
+    expect(
+      ReleaseLatest.safeParse({ version: '0.7.0', publishedAt: null, notes: '' }).success,
+    ).toBe(true)
+    expect(
+      ReleaseLatest.safeParse({ version: '0.7.0-rc', publishedAt: null, notes: '' }).success,
+    ).toBe(false)
+    expect(UpdateRequestInput.safeParse({ version: '0.7.0' }).success).toBe(true)
+    expect(UpdateRequestInput.safeParse({ version: '0.7.0', extra: 1 }).success).toBe(false)
+    expect(UpdateRequestInput.safeParse({ version: '0.7.0;reboot' }).success).toBe(false)
+    expect(
+      UpdateRequestDecision.safeParse({
+        at: now.toISOString(),
+        version: null,
+        requestedAt: null,
+        result: 'rejected',
+        error: 'заявка не по формату',
+      }).success,
+    ).toBe(true)
+    // Ответ прежней версии API без release — как без хостовой части
+    const { release: _, ...old } = facts({})
+    expect(InstallationFacts.parse(old).release).toEqual(NO_RELEASE_STATE)
   })
 })

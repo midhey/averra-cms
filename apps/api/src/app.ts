@@ -97,8 +97,9 @@ export type AppDeps = {
   /** Версия установки (AVERRA_VERSION из образа). По умолчанию dev */
   version?: string
   /**
-   * Сведения с сервера для состояния установки: итоги бэкапов и обновлений из папки состояния
-   * (deploy/averra.sh) и место на диске. Нет — ни бэкапов, ни дисков (разработка)
+   * Сведения с сервера для состояния установки: итоги бэкапов, обновлений и проверки новой версии
+   * из папки состояния (deploy/averra.sh), место на диске и папка заявок на обновление. Нет — ни
+   * бэкапов, ни дисков, ни обновления из админки (разработка)
    */
   host?: HostStatus
 }
@@ -200,15 +201,19 @@ export function createApp(deps: AppDeps) {
         published: deps.published,
       }),
     )
-    // Состояние установки — только владельцу (modules/status)
+    // Состояние установки и «Обновить до X» — только владельцу (modules/status)
     .route(
       '/status',
       statusRoutes({
         db,
         mail,
+        notifications,
         version: deps.version ?? 'dev',
         host: deps.host ?? noHostStatus,
         publishEnabled: deps.publisher !== undefined,
+        log,
+        adminUrl,
+        siteUrl: deps.siteUrl,
       }),
     )
     // Открытый приём заявок с форм опубликованного сайта (без входа, см. auth/middleware.ts)

@@ -54,6 +54,12 @@ const permissions = {
   // Шапка сайта, меню и подвал — как тема: одни на все страницы, публикация пересобирает весь
   // сайт. Решают те, кто публикует страницы; клиент публиковать не может — и их не меняет
   'header.edit': ['owner', 'editor'],
+  // Обновить установку до новой версии кнопкой в «Состоянии установки» (POST /api/status/update).
+  // Действие не с сайтом, а с сервером: обновление останавливает админку и приём заявок, меняет код
+  // всей установки и, если не встанет, откатывает базу из бэкапа. За сервер отвечает студия —
+  // владелец установки. Редактор и клиент о сервере не решают, токену API — никогда (tokenDenied).
+  // Проверяет его requireInstallation, а не requireSite: в адресе нет сайта
+  'installation.update': ['owner'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -84,6 +90,8 @@ export const tokenDenied: Partial<Record<Permission, string>> = {
   // на телефоне, а ошибка в ней видна на каждой странице
   'header.edit':
     'Шапку, меню и подвал сайта меняют в админке: токену API они доступны только для чтения',
+  // Нейронка не решает, когда остановить сервер ради новой версии: это решение человека
+  'installation.update': 'Обновлять установку токену API нельзя: это делает владелец в админке',
 }
 
 export function can(role: SiteRole, permission: Permission) {
@@ -107,6 +115,7 @@ export const forbiddenMessages: Record<Permission, string> = {
   'site.settings': 'Настройки SEO сайта меняет владелец',
   'theme.edit': 'Тему сайта меняет владелец или редактор',
   'header.edit': 'Шапку, меню и подвал сайта меняет владелец или редактор',
+  'installation.update': 'Обновить установку может только владелец',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */
@@ -127,4 +136,18 @@ export async function siteRoleOf(
     .from(siteMembers)
     .where(and(eq(siteMembers.siteId, siteId), eq(siteMembers.userId, actor.user.id)))
   return member?.role
+}
+
+/**
+ * Роли на установке для действия без сайта в адресе (installation.*): владелец установки — owner,
+ * участник — его роли на сайтах установки, токен — editor (как на своём сайте)
+ */
+export async function installationRolesOf(db: Db, actor: Actor): Promise<SiteRole[]> {
+  if (actor.kind === 'token') return ['editor']
+  if (actor.user.role === 'owner') return ['owner']
+  const rows = await db
+    .select({ role: siteMembers.role })
+    .from(siteMembers)
+    .where(eq(siteMembers.userId, actor.user.id))
+  return rows.map((row) => row.role)
 }

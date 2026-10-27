@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { Uuid } from './id'
 import { SiteBuildStatus } from './publish'
 
 // Состояние установки: что видит владелец в админке и студия в `pnpm fleet status`.
@@ -64,6 +65,14 @@ export const UPDATE_RESULT_LABELS: Record<UpdateResult, string> = {
   'rollback-failed': 'не прошло, и откат не удался — нужен человек на сервере',
 }
 
+/**
+ * Шаг обновления — в порядке скрипта: загрузка образов (API ещё работает), бэкап (API
+ * остановлен), запуск новой версии и миграции, проверка API и Caddy; откат — если проверка не
+ * прошла. Только для показа хода в админке
+ */
+export const UpdateStep = z.enum(['pull', 'backup', 'migrate', 'verify', 'rollback'])
+export type UpdateStep = z.infer<typeof UpdateStep>
+
 /** Последнее обновление: файл state/update-last.json */
 export const UpdateRun = z.object({
   from: z.string().min(1).max(128),
@@ -72,6 +81,11 @@ export const UpdateRun = z.object({
   /** Нет, пока обновление идёт (in-progress) */
   finishedAt: IsoTime.nullable(),
   result: UpdateResult,
+  /**
+   * Шаг, на котором обновление сейчас или кончилось. Нет — файл записан averra.sh до шагов; шаг,
+   * которого эта версия не знает (новый averra.sh), — тоже нет, а не «файл не читается»
+   */
+  step: UpdateStep.nullable().default(null).catch(null),
   /**
    * При откате база восстановлена из бэкапа перед обновлением: миграции новой версии успели пройти
    */
@@ -97,6 +111,190 @@ export function updateResultText(run: Pick<UpdateRun, 'result' | 'error'>) {
   const label = UPDATE_RESULT_LABELS[run.result]
   const withReason = run.result === 'failed' || run.result === 'rollback-failed'
   return withReason && run.error ? `${label}: ${run.error}` : label
+}
+
+// ── Новая версия и обновление из админки ───────────────────────────────────────────────────
+// Доступную версию узнаёт хост (averra.sh check-update), заявку на обновление API кладёт файлом
+// в папку заявок, а разбирает и обновляет хост (averra.sh update-request). Документация:
+// Установка и сопровождение → Обновления
+
+/** Версия релиза: X.Y.Z, как их выпускает release-please. Тот же белый список — у averra.sh */
+export const ReleaseVersion = z
+  .string()
+  .regex(/^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$/, 'Версия — вида 0.2.0')
+export type ReleaseVersion = z.infer<typeof ReleaseVersion>
+
+/**
+ * candidate новее current: обе — X.Y.Z, сравнение по числам. Иначе (dev, свой тег) — «не новее»:
+ * обновлять из админки установку не с релиза не предлагаем
+ */
+export function isNewerVersion(candidate: string, current: string) {
+  const a = ReleaseVersion.safeParse(candidate)
+  const b = ReleaseVersion.safeParse(current)
+  if (!a.success || !b.success) return false
+  const left = a.data.split('.').map(Number)
+  const right = b.data.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((left[i] ?? 0) !== (right[i] ?? 0)) return (left[i] ?? 0) > (right[i] ?? 0)
+  }
+  return false
+}
+
+/** Сколько знаков заметок к релизу хранится и показывается: дальше — «…» */
+export const RELEASE_NOTES_MAX = 4000
+
+/** Последняя попытка проверки новой версии: state/release-check.json */
+export const ReleaseCheck = z.object({
+  checkedAt: IsoTime,
+  /** Версия в .env установки на момент проверки */
+  current: z.string().max(128).nullable(),
+  ok: z.boolean(),
+  /** Почему не удалось — фиксированная строка скрипта */
+  error: RunError,
+  /** Обновление из админки включено на сервере (не ADMIN_UPDATE=off) */
+  adminUpdate: z.boolean(),
+  /**
+   * Заявки есть кому забирать: включён path-юнит averra-update-request (systemd). Без него заявка
+   * пролежала бы вечно — кнопки нет
+   */
+  requestsWatched: z.boolean(),
+})
+export type ReleaseCheck = z.infer<typeof ReleaseCheck>
+
+/**
+ * Последний найденный релиз: state/release-latest.json. Пишет его разбор ответа источника
+ * (cli/release-info.ts в образе API); при сбое сети он не стирается
+ */
+export const ReleaseLatest = z.object({
+  version: ReleaseVersion,
+  publishedAt: IsoTime.nullable(),
+  /**
+   * В заметках есть раздел BREAKING CHANGES: релиз требует шага на сервере (новая строка .env,
+   * ручная команда). Такой обновляет студия по SSH, кнопки в админке нет
+   */
+  breaking: z.boolean().default(false),
+  /** Заметки к релизу простым текстом: без разметки и HTML, обрезаны до RELEASE_NOTES_MAX */
+  notes: z.string().max(RELEASE_NOTES_MAX + 1),
+})
+export type ReleaseLatest = z.infer<typeof ReleaseLatest>
+
+/** Заявка на обновление: файл requests/update.json, пишет API, читает и удаляет хост */
+export const UpdateRequestFile = z.strictObject({
+  version: ReleaseVersion,
+  requestedAt: IsoTime,
+  /** id владельца, нажавшего «Обновить»: имя и почта — в журнале API и в уведомлении студии */
+  requestedBy: Uuid(),
+})
+export type UpdateRequestFile = z.infer<typeof UpdateRequestFile>
+
+/** Что хост сделал с последней заявкой: state/update-request.json */
+export const UpdateRequestDecision = z.object({
+  at: IsoTime,
+  /** Только прошедшая белый список: текст кривой заявки сюда не попадает */
+  version: ReleaseVersion.nullable(),
+  requestedAt: IsoTime.nullable(),
+  result: z.enum(['accepted', 'rejected']),
+  error: RunError,
+})
+export type UpdateRequestDecision = z.infer<typeof UpdateRequestDecision>
+
+/** «Обновить до X» из админки: вход POST /api/status/update */
+export const UpdateRequestInput = z.strictObject({ version: ReleaseVersion })
+export type UpdateRequestInput = z.infer<typeof UpdateRequestInput>
+
+/**
+ * Можно ли обновлять из админки: ready — да; no-host — нет хостовой части (разработка или сервер
+ * не через install.sh: averra.sh ещё ни разу не проверял версию); disabled — ADMIN_UPDATE=off на
+ * сервере; no-watcher — заявки некому забирать (нет systemd или служба заявок выключена);
+ * no-requests — у API нет папки заявок или права писать в неё
+ */
+export const AdminUpdateMode = z.enum(['ready', 'no-host', 'disabled', 'no-watcher', 'no-requests'])
+export type AdminUpdateMode = z.infer<typeof AdminUpdateMode>
+
+export const ReleaseState = z.object({
+  mode: AdminUpdateMode,
+  check: ReleaseCheck.nullable(),
+  latest: ReleaseLatest.nullable(),
+  /** Версия новее установленной, если есть: на неё — кнопка «Обновить» */
+  available: ReleaseVersion.nullable(),
+  /** Заявка лежит в папке заявок: хост её ещё не забрал */
+  pending: UpdateRequestFile.pick({ version: true, requestedAt: true }).nullable(),
+  /** Что хост сделал с последней заявкой */
+  request: UpdateRequestDecision.nullable(),
+  /** Какой-то из файлов есть, но не читается */
+  unreadable: z.boolean(),
+})
+export type ReleaseState = z.infer<typeof ReleaseState>
+
+/** Хостовой части нет: так у API в разработке и у установок без install.sh */
+export const NO_RELEASE_STATE: ReleaseState = {
+  mode: 'no-host',
+  check: null,
+  latest: null,
+  available: null,
+  pending: null,
+  request: null,
+  unreadable: false,
+}
+
+/**
+ * Сколько ждать, пока хост заберёт заявку или запустит принятую (запишет update-last.json):
+ * дольше — заявка, видимо, потерялась (служба заявок на сервере не работает), и кнопка
+ * возвращается. Обычно хост забирает заявку за секунды
+ */
+export const UPDATE_START_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * Заявка лежит дольше UPDATE_START_TIMEOUT_MS: хост её не забрал. Новая заявка её заменяет, а
+ * админка говорит, что служба заявок на сервере, похоже, не работает
+ */
+export function pendingStale(release: Pick<ReleaseState, 'pending'>, now: Date) {
+  return (
+    release.pending !== null &&
+    now.getTime() - Date.parse(release.pending.requestedAt) >= UPDATE_START_TIMEOUT_MS
+  )
+}
+
+/**
+ * Почему обновлять из админки нельзя, хотя новая версия есть: breaking — релиз требует шага на
+ * сервере; rollback-failed — прошлое обновление кончилось неудачным откатом, установку сначала
+ * чинит человек, а дальше обновляет по SSH (averra.sh update запишет новый итог). Хост
+ * (averra.sh update-request) проверяет то же
+ */
+export function updateBlock(facts: {
+  update: UpdateRun | null
+  release: ReleaseState
+}): 'breaking' | 'rollback-failed' | null {
+  if (facts.update?.result === 'rollback-failed') return 'rollback-failed'
+  if (facts.release.available && facts.release.latest?.breaking) return 'breaking'
+  return null
+}
+
+/**
+ * Что сейчас с обновлением: idle — ничего; queued — заявка ждёт хост; starting — хост принял
+ * заявку, процесс запускается; running — идёт (update-last.json in-progress, ещё не «оборвалось»).
+ * Одно правило для API (409 на вторую заявку) и админки (опрос, кнопка)
+ */
+export function updateActivity(
+  facts: { update: UpdateRun | null; release: ReleaseState },
+  now: Date,
+): 'idle' | 'queued' | 'starting' | 'running' {
+  const { update, release } = facts
+  if (
+    update?.result === 'in-progress' &&
+    now.getTime() - Date.parse(update.startedAt) <= STATUS_LIMITS.updateStaleMs
+  ) {
+    return 'running'
+  }
+  if (release.pending && !pendingStale(release, now)) return 'queued'
+  const request = release.request
+  if (request?.result === 'accepted') {
+    const at = Date.parse(request.at)
+    // Обновление этой заявки началось (время — с точностью до секунды у обоих) — её итог в update
+    const started = update !== null && Date.parse(update.startedAt) >= at - 1000
+    if (!started && now.getTime() - at < UPDATE_START_TIMEOUT_MS) return 'starting'
+  }
+  return 'idle'
 }
 
 /**
@@ -162,6 +360,8 @@ export const InstallationFacts = z.object({
   update: UpdateRun.nullable(),
   /** Файл состояния обновления есть, но не читается (обрезан, записан более новым averra.sh) */
   updateUnreadable: z.boolean().default(false),
+  /** Новая версия и обновление из админки. Нет у ответов прежних версий — как без хоста */
+  release: ReleaseState.default(NO_RELEASE_STATE),
   publish: z.object({
     enabled: z.boolean(),
     /** Последняя сборка по всем сайтам установки */

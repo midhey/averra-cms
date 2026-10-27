@@ -1,8 +1,19 @@
-import { readFile, statfs } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { constants } from 'node:fs'
+import { access, link, readFile, rm, statfs, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { BackupRun, type DiskSpace, UpdateRun } from '@averra/schema'
+import {
+  type AdminUpdateMode,
+  BackupRun,
+  type DiskSpace,
+  ReleaseCheck,
+  ReleaseLatest,
+  UpdateRequestDecision,
+  UpdateRequestFile,
+  UpdateRun,
+} from '@averra/schema'
 import type { z } from 'zod'
-import type { HostStatus } from '../modules/status/service'
+import { type HostStatus, NO_HOST_RELEASE } from '../modules/status/service'
 
 // Сведения с сервера для состояния установки (modules/status): файлы, которые пишет
 // deploy/averra.sh в папку состояния (в контейнере API она только для чтения), и место на диске
@@ -12,7 +23,19 @@ export const STATE_FILES = {
   backupLast: 'backup-last.json',
   backupLastOk: 'backup-last-ok.json',
   updateLast: 'update-last.json',
+  releaseCheck: 'release-check.json',
+  releaseLatest: 'release-latest.json',
+  updateRequest: 'update-request.json',
 } as const
+
+/** Заявка на обновление в папке заявок — то же имя, что REQUEST_FILE в deploy/averra.sh */
+export const REQUEST_FILE = 'update.json'
+
+const writable = (dir: string) =>
+  access(dir, constants.W_OK).then(
+    () => true,
+    () => false,
+  )
 
 type Read<T> = { value: T | null; unreadable: boolean }
 
@@ -44,9 +67,12 @@ export type DiskTarget = { label: string; path: string }
  */
 export function hostStatus({
   stateDir,
+  requestsDir,
   disks,
 }: {
   stateDir?: string
+  /** Папка заявок на обновление (REQUESTS_DIR): не задана — обновления из админки нет */
+  requestsDir?: string | undefined
   disks: readonly DiskTarget[]
 }): HostStatus {
   return {
@@ -69,6 +95,65 @@ export function hostStatus({
       const read = await readState(join(stateDir, STATE_FILES.updateLast), UpdateRun)
       // Не читается (битый или записан более новым averra.sh) — не молчать: откат мог потеряться
       return { last: read.value, unreadable: read.unreadable }
+    },
+
+    async release() {
+      // Нет папки состояния или averra.sh ещё ни разу не проверял версию — хостовой части нет
+      if (!stateDir) return NO_HOST_RELEASE
+      const [check, latest, request, pending] = await Promise.all([
+        readState(join(stateDir, STATE_FILES.releaseCheck), ReleaseCheck),
+        readState(join(stateDir, STATE_FILES.releaseLatest), ReleaseLatest),
+        readState(join(stateDir, STATE_FILES.updateRequest), UpdateRequestDecision),
+        requestsDir
+          ? readState(join(requestsDir, REQUEST_FILE), UpdateRequestFile)
+          : Promise.resolve({ value: null, unreadable: false }),
+      ])
+      let mode: AdminUpdateMode = 'ready'
+      if (!check.value) mode = 'no-host'
+      else if (!check.value.adminUpdate) mode = 'disabled'
+      else if (!check.value.requestsWatched) mode = 'no-watcher'
+      else if (!requestsDir || !(await writable(requestsDir))) mode = 'no-requests'
+      return {
+        mode,
+        check: check.value,
+        latest: latest.value,
+        pending: pending.value
+          ? { version: pending.value.version, requestedAt: pending.value.requestedAt }
+          : null,
+        request: request.value,
+        unreadable: check.unreadable || latest.unreadable || request.unreadable,
+      }
+    },
+
+    /**
+     * Заявка — одной строкой с полями в том порядке, который ждёт averra.sh (REQUEST_RE). Ложится
+     * целиком и только одна: временный файл и жёсткая ссылка на имя заявки, которая не
+     * перезаписывает уже лежащую (EEXIST — заявка уже есть). Полузаписанной заявки хост не увидит.
+     * replaceStale — прежнюю заявку хост не забрал за отведённое время (pendingStale): она
+     * удаляется, и новая встаёт на её место
+     */
+    async requestUpdate(file, { replaceStale = false } = {}) {
+      if (!requestsDir) return 'no-dir'
+      if (replaceStale) await rm(join(requestsDir, REQUEST_FILE), { force: true }).catch(() => {})
+      const line = JSON.stringify({
+        version: file.version,
+        requestedAt: file.requestedAt,
+        requestedBy: file.requestedBy,
+      })
+      const tmp = join(requestsDir, `.update-${randomUUID()}.tmp`)
+      try {
+        await writeFile(tmp, `${line}\n`, { flag: 'wx', mode: 0o600 })
+      } catch {
+        return 'no-dir'
+      }
+      try {
+        await link(tmp, join(requestsDir, REQUEST_FILE))
+        return 'written'
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === 'EEXIST' ? 'exists' : 'no-dir'
+      } finally {
+        await rm(tmp, { force: true })
+      }
     },
 
     async disk() {

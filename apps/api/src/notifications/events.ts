@@ -190,6 +190,36 @@ export const notificationEvents = {
   }),
 
   /**
+   * Владелец нажал «Обновить» в админке (POST /api/status/update): кто и до какой версии. Разовое
+   * событие — без «снова в порядке»; чем кончилось обновление, видно в «Состоянии установки»
+   */
+  'update.requested': define({
+    audience: 'service',
+    title: NOTIFICATION_EVENT_TITLES['update.requested'],
+    schema: z.strictObject({
+      installation: MailLine(120),
+      url: MailUrl,
+      from: MailLine(128),
+      to: MailLine(40),
+      by: MailLine(100),
+      byEmail: MailAddress,
+      requestedAt: z.iso.datetime({ offset: true }),
+    }),
+    message: ({ installation, url, from, to, by, byEmail, requestedAt }) => ({
+      title: `${installation}: запрошено обновление до ${to}`,
+      lines: [
+        'Владелец нажал «Обновить» в админке. Сервер сделает бэкап, обновит установку и проверит её, а если новая версия не встанет — вернёт прежнюю. Админка и приём заявок недоступны минуту-две, сайт открыт.',
+      ],
+      fields: [
+        { label: 'Версия', value: `${from} → ${to}` },
+        { label: 'Кто', value: `${by} (${byEmail})` },
+        { label: 'Когда', value: formatMoscow(requestedAt) },
+      ],
+      link: statusLink(url),
+    }),
+  }),
+
+  /**
    * Получатели уведомлений о заявках сменились: уходит владельцам и прежним получателям. Данные —
    * как у письма lead-recipients-changed: по почте уходит оно
    */

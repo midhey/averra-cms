@@ -1,3 +1,4 @@
+import { ServiceEventId } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { notificationLinkCodes, notificationRecipients } from '../../db/schema'
@@ -158,7 +159,7 @@ describe('привязка чата Telegram', () => {
       expect.objectContaining({
         siteId: null,
         label: 'Студия: дежурные',
-        events: ['backup.failed', 'disk.low', 'build.failed', 'mail.down'],
+        events: [...ServiceEventId.options],
       }),
     ])
   })

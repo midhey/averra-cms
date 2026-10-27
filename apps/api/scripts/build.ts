@@ -37,6 +37,8 @@ const entryPoints = {
   'token-revoke': 'src/cli/token-revoke.ts',
   'mail-test': 'src/cli/mail-test.ts',
   status: 'src/cli/status.ts',
+  // Разбор ответа источника релизов: его зовёт averra.sh check-update в контейнере без сети
+  'release-info': 'src/cli/release-info.ts',
 }
 
 rmSync(outdir, { recursive: true, force: true })

@@ -238,7 +238,11 @@ const notifications: NotificationDeps = {
 }
 // Код привязки, выданный до перезапуска, ещё жив: опрос возобновляется сам
 binder.wake()
-const host = hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) })
+const host = hostStatus({
+  stateDir: config.STATE_DIR,
+  requestsDir: config.REQUESTS_DIR,
+  disks: diskTargets(config),
+})
 const serviceWatch = startServiceWatch({
   db,
   deps: () => notifyDepsOf(mailDeps, notifications),

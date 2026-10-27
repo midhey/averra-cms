@@ -5,6 +5,7 @@ import {
   type Actor,
   can,
   forbiddenMessages,
+  installationRolesOf,
   type Permission,
   personalData,
   type SiteRole,
@@ -130,6 +131,27 @@ export function requireSite(db: Db, permission: Permission) {
     if (c.var.actor.kind === 'token' && deniedToToken) return c.json(forbidden(deniedToToken), 403)
     if (!can(role, permission)) return c.json(forbidden(forbiddenMessages[permission]), 403)
     c.set('siteRole', role)
+    return next()
+  })
+}
+
+/**
+ * Действие с установкой целиком, без сайта в адресе (обновление до новой версии): решает та же
+ * таблица access.ts. Участнику подходит роль на любом сайте установки; токену отказ — те же
+ * personalData и tokenDenied, что у requireSite
+ */
+export function requireInstallation(db: Db, permission: Permission) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const { actor } = c.var
+    if (actor.kind === 'token' && personalData.has(permission)) {
+      return c.json(forbidden(TOKEN_PERSONAL_DATA_MESSAGE), 403)
+    }
+    const deniedToToken = tokenDenied[permission]
+    if (actor.kind === 'token' && deniedToToken) return c.json(forbidden(deniedToToken), 403)
+    const roles = await installationRolesOf(db, actor)
+    if (!roles.some((role) => can(role, permission))) {
+      return c.json(forbidden(forbiddenMessages[permission]), 403)
+    }
     return next()
   })
 }

@@ -22,7 +22,11 @@ await run(async () => {
     }))
     const status = await collectStatus(db, {
       version: config.AVERRA_VERSION,
-      host: hostStatus({ stateDir: config.STATE_DIR, disks: diskTargets(config) }),
+      host: hostStatus({
+        stateDir: config.STATE_DIR,
+        requestsDir: config.REQUESTS_DIR,
+        disks: diskTargets(config),
+      }),
       publishEnabled: config.PUBLISH_DIR !== undefined,
       mail:
         mail.transport === 'off'

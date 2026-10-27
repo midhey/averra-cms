@@ -1,4 +1,4 @@
-import type { BackupRun, InstallationStatus } from '@averra/schema'
+import { type BackupRun, type InstallationStatus, NO_RELEASE_STATE } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import { statusLines } from './lines'
 
@@ -28,6 +28,7 @@ function status(overrides: Partial<InstallationStatus> = {}): InstallationStatus
     backup: { enabled: true, unreadable: false, last: backup(), lastOk: backup() },
     update: null,
     updateUnreadable: false,
+    release: NO_RELEASE_STATE,
     publish: {
       enabled: true,
       last: { siteName: 'Ремонт', status: 'succeeded', at: '2026-10-16T10:00:00.000Z' },
@@ -79,6 +80,7 @@ describe('statusLines', () => {
           result: 'rolled-back',
           dbRestored: true,
           keptDatabase: null,
+          step: null,
           error: null,
         },
       }),
@@ -97,6 +99,7 @@ describe('statusLines', () => {
           result: 'in-progress',
           dbRestored: false,
           keptDatabase: null,
+          step: null,
           error: null,
         },
       }),
@@ -112,6 +115,7 @@ describe('statusLines', () => {
           result: 'failed',
           dbRestored: false,
           keptDatabase: null,
+          step: null,
           error: 'API не остановился перед бэкапом',
         },
       }),

@@ -1,4 +1,4 @@
-import { type InstallationFacts, SITE_NAME_MAX } from '@averra/schema'
+import { type InstallationFacts, NO_RELEASE_STATE, SITE_NAME_MAX } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { mailOutbox, notificationOutbox, notificationWatch, siteBuilds } from '../db/schema'
@@ -33,6 +33,7 @@ function facts(overrides: Partial<InstallationFacts> = {}): InstallationFacts {
     backup: { enabled: true, unreadable: false, last: null, lastOk: null },
     update: null,
     updateUnreadable: false,
+    release: NO_RELEASE_STATE,
     publish: { enabled: true, last: null, failedSites: 0 },
     mail: {
       enabled: true,
