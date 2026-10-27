@@ -1,0 +1,57 @@
+@use "@averra/ui" as ui;
+
+.versions {
+  font-size: var(--font-size-lead);
+  color: var(--color-text-strong);
+}
+
+.version {
+  font-family: var(--font-mono);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.notesTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
+}
+
+.published {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+// Заметки — простой текст с переводами строк; длинные листаются внутри, а не растягивают экран
+.notesText {
+  max-height: ui.rem(320);
+  padding: var(--space-3) var(--space-4);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-small);
+  white-space: pre-line;
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-inner);
+
+  &:focus-visible {
+    @include ui.focus-ring;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.consequences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-5);
+  list-style: disc;
+}

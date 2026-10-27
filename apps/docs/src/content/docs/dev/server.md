@@ -74,10 +74,55 @@ sidebar:
   (`systemd-run`, без systemd — `setsid`), с выводом в файл. Ход — отметка по шагам
   (`.update-run`): повтор команды сначала доводит прерванное.
 - **Файлы состояния** (`state/*.json`) пишет только `averra.sh`, атомарно (временный файл и `mv`);
-  API их только читает (том `:ro`) и проверяет схемами (`BackupRun`, `UpdateRun`): битый файл —
+  API их только читает (том `:ro`) и проверяет схемами (`BackupRun`, `UpdateRun`, `ReleaseCheck`,
+  `ReleaseLatest`, `UpdateRequestDecision`): битый файл —
   «не читается», а не 500. Причина сбоя в них — фиксированная строка скрипта, не вывод команд.
 - Секреты в чужой контейнер (rclone) — `-e VAR` без значения, пароль в `rclone obscure` — через
   stdin. Копия бэкапа вне сервера — только зашифрованная.
+
+## Обновление из админки
+
+Почему так — [Обновление из админки](/averra-cms/decisions/admin-update/).
+
+- **У API нет Docker, сокета Docker, root и команд хоста — и не будет.** На хосте API пишет только
+  в папку заявок `/opt/averra/requests` (в контейнере `/data/requests`, `REQUESTS_DIR`), владелец —
+  `node` образа (uid 1000), права 700. Остальное с хоста — только чтение (`state`). Это держит тест
+  `install.test.ts`.
+- **Заявка** `requests/update.json` — одна строка ровно такого вида и порядка полей:
+  `{"version":"X.Y.Z","requestedAt":"<ISO, Z>","requestedBy":"<uuid>"}`. API пишет её временным
+  файлом и жёсткой ссылкой (`requestUpdate` в `src/status/host.ts`): целиком и только одну, вторая —
+  409. Заявку, которую хост не забрал за 10 минут (`pendingStale`, `UPDATE_START_TIMEOUT_MS`),
+  новая заменяет: служба заявок могла не работать, и кнопка не должна застревать навсегда. Схема — `UpdateRequestFile`, шаблон хоста — `REQUEST_RE` в `averra.sh`: меняются вместе.
+- **Хост разбирает заявку без выполнения** (`averra.sh update-request`): `mv` в свою папку, не
+  ссылка, обычный файл до 1 КБ, без нулевых байтов, вся строка — по `REQUEST_RE`, версия равна
+  `release-latest.json` и новее `AVERRA_VERSION`, релиз не ломающий (`"breaking":true`), прошлое
+  обновление не кончилось `rollback-failed`, замок свободен. Заявка удаляется до запуска,
+  дальше — `start_worker`, тот же update (с `--request <время>`: не взял замок — пишет отказ в
+  `update-request.json`, а не молчит). Отказ — строка `---- … отклонена` в `update.log` и
+  `state/update-request.json`; текст кривой заявки никуда не копируется.
+- **Файлы проверки версии** (пишет только `averra.sh`): `release-check.json` — последняя попытка
+  (`ReleaseCheck`: время, версия, ok, причина, `adminUpdate`, `requestsWatched` — включён ли
+  path-юнит заявок, `systemctl is-enabled`), `release-latest.json` — последний найденный релиз
+  (`ReleaseLatest`, версия первым полем — по ней хост сверяет заявку; `breaking` — раздел
+  BREAKING CHANGES в заметках, перед заметками; при сбое сети не стирается), `update-request.json` — решение по последней заявке
+  (`UpdateRequestDecision`). В `update-last.json` — `step` (`UpdateStep`): шаг для показа хода;
+  решения при обрыве по-прежнему принимает `PHASE` в `.update-run`.
+- **Ответ источника релизов — чужие данные.** `check-update` качает его `curl` (только https,
+  30 секунд, до 2 МБ) и разбирает `node dist/server/release-info.js` в образе установленной версии
+  (`--network none --read-only --cap-drop ALL`); на хост возвращается одна строка JSON, которую
+  скрипт проверяет ещё раз. Новый источник — ветка в `release_source_url` и формат в
+  `apps/api/src/release/release-info.ts`.
+- **Службы systemd — в `averra.sh install-units`**, а не в `install.sh`: `averra-backup.service`
+  (`ExecStartPre=-… check-update`) и `.timer`, `averra-update-request.path` (`PathExists`) и
+  `.service` (`ExecStopPost` удаляет заявку). У прежнего скрипта с новым **два договора — команды
+  не переименовывать**: `ensure-dirs` — перед запуском новой версии прежний скрипт копирует новый
+  `averra.sh` из `.next` в папку установки (`.averra-next.sh`: папку установки скрипт берёт по
+  своему месту) и зовёт его `ensure-dirs`, так папки для нового `compose.yaml` встают до
+  `compose up`; новые папки добавлять в `ensure_dirs`. `install-units` — после удачного
+  обновления, когда новый `averra.sh` уже на месте: службы systemd и проверка версии.
+- Права — действие `installation.update` (только `owner`, токену — `tokenDenied`) через
+  `requireInstallation`: в адресе нет сайта. Что сейчас с обновлением (409 на вторую заявку, опрос
+  в админке) — одно правило `updateActivity` в схеме.
 
 ## Состояние установки
 

@@ -44,7 +44,11 @@ sudo bash install.sh --site-domain example.ru --email studio@example.com --versi
    API при первом запуске сам создаёт сайт установки с названием из `--site-name`: одна
    установка — один сайт ([почему](/averra-cms/decisions/single-site/)).
 4. Создаёт владельца.
-5. Поднимает Caddy и ставит ежедневный бэкап (`averra-backup.timer`).
+5. Поднимает Caddy и ставит службы systemd — `averra.sh install-units`: ежедневный бэкап с
+   проверкой новой версии (`averra-backup.timer`) и заявки на обновление из админки
+   (`averra-update-request.path`). Папка заявок `/opt/averra/requests` (владелец — пользователь
+   API, uid 1000, права 700) создаётся до запуска API: это единственное, что API пишет на сервере
+   ([Обновления](/averra-cms/install/updates/#обновить-из-админки)).
 
 В конце — адрес админки и что делать дальше.
 

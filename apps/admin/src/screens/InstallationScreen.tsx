@@ -1,9 +1,12 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { RelativeTime } from '../pages/PagesTable'
 import { formatDateTime } from '../pages-format'
 import { buildStatusLabels } from '../publish/build-format'
 import { statusQuery } from '../queries'
 import { describeBackup, describeDisk, describeMail, describeUpdate } from '../status/status-format'
+import { UpdateSection } from '../status/UpdateSection'
+import { shouldPoll } from '../status/update-format'
 import { Button } from '../ui/Button'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -13,15 +16,38 @@ import { usePageTitle } from '../ui/use-page-title'
 import styles from './InstallationScreen.module.scss'
 
 /**
+ * Версия этой сборки админки: её вшивает сборка образа (VITE_AVERRA_VERSION в deploy/Dockerfile).
+ * После обновления API отвечает новой версией — значит, Caddy уже раздаёт новую админку, и
+ * страницу стоит обновить. В разработке версии сборки нет — сравниваем с первым ответом API
+ */
+const ADMIN_BUILD_VERSION: string | undefined = import.meta.env.VITE_AVERRA_VERSION || undefined
+
+/** Как часто опрашивать состояние, пока идёт заявка или обновление */
+const UPDATE_POLL_MS = 3000
+
+/**
  * Состояние установки — только владельцу: версия, база, бэкапы, обновление, публикация, почта,
  * место на диске и что требует внимания. Что считать проблемой, решает API (statusProblems)
  */
 export function InstallationScreen() {
-  // Данные загрузил маршрут (fetchQuery). Обновить — по кнопке, сам экран не опрашивает.
-  // Сбой повторной проверки не прячет прошлую: она остаётся на экране с ошибкой сверху
-  const status = useSuspenseQuery(statusQuery())
+  // Данные загрузил маршрут (fetchQuery). Обновить — по кнопке; сам экран опрашивает, только пока
+  // идёт заявка или обновление. Сбой повторной проверки не прячет прошлую: она остаётся на экране.
+  // Посреди обновления API перезапускается — опрос продолжается по прошлым данным, пока он не
+  // вернётся с итогом
+  const status = useSuspenseQuery({
+    ...statusQuery(),
+    // Время — проверки API, а не часов браузера: «идёт ли» решают те же часы, что записали ход
+    refetchInterval: (query) => {
+      const data = query.state.data
+      return data && shouldPoll(data, new Date(data.checkedAt)) ? UPDATE_POLL_MS : false
+    },
+    refetchIntervalInBackground: true,
+  })
   usePageTitle('Состояние установки')
   const data = status.data
+  const [firstVersion] = useState(data.version)
+  const loadedVersion = ADMIN_BUILD_VERSION ?? firstVersion
+  const updating = shouldPoll(data, new Date(data.checkedAt))
 
   return (
     <Screen narrow>
@@ -52,7 +78,7 @@ export function InstallationScreen() {
         }
       />
 
-      {status.isRefetchError && (
+      {status.isRefetchError && !updating && (
         <InlineAlert tone="danger">
           Не удалось обновить состояние: {status.error.message}. Ниже — прошлая проверка.
         </InlineAlert>
@@ -67,6 +93,13 @@ export function InstallationScreen() {
           </ul>
         </InlineAlert>
       )}
+
+      <UpdateSection
+        status={data}
+        now={new Date(data.checkedAt)}
+        loadedVersion={loadedVersion}
+        offline={status.isRefetchError}
+      />
 
       <Section title="Сведения" card>
         <Facts

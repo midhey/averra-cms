@@ -53,6 +53,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `GET /api/health` | API жив. **Открыт** |
 | `GET /api/health/ready` | API и база готовы; база не отвечает — 503. **Открыт**, версии в ответе нет |
 | `GET /api/status` | состояние установки — только владелец, `Cache-Control: no-store`. См. [Состояние](/averra-cms/install/status/) |
+| `POST /api/status/update` | «Обновить до X»: вход `{ version }` (`UpdateRequestInput`), кладёт файл-заявку для хоста — 202 `{ version, requestedAt }`. Только владелец (`installation.update`): редактору, клиенту и токену API — 403. 409 `conflict` — заявка уже лежит или идёт обновление, версия не та, что доступна; 409 `update_unavailable` — обновлять из админки нельзя (нет хостовой части, выключено, некому забирать заявки, нет папки заявок, ломающий релиз, неудачный откат). См. [Обновление](/averra-cms/install/updates/) |
 
 ## Вход, пароль, кто я
 

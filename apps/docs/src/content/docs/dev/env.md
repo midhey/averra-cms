@@ -55,7 +55,8 @@ sidebar:
 | `PUBLISH_TIMEOUT_SECONDS` | `300` | сколько ждать сборку, от 10 до 3600 |
 | `PUBLISH_MAX_MEMORY_MB` | `768` | предел кучи процесса сборки, от 128 до 8192 |
 | `RENDERER_DIR` | `apps/renderer` рядом с API | папка пакета рендерера |
-| `STATE_DIR` | — | папка итогов бэкапов и обновлений от `averra.sh`. Не задана — бэкапов нет |
+| `STATE_DIR` | — | папка итогов бэкапов, обновлений и проверки новой версии от `averra.sh`. Не задана — бэкапов и обновления из админки нет |
+| `REQUESTS_DIR` | — | папка заявок на обновление из админки: API кладёт в неё файл-заявку, обновляет хост. Не задана — кнопки «Обновить» нет. На сервере — `/data/requests` (`compose.yaml`) |
 
 ### Почта
 
@@ -89,6 +90,7 @@ sidebar:
 |---|---|---|
 | `CMS_API_URL` | `http://localhost:4000` | куда прокси Vite отправляет `/api` в разработке |
 | `ADMIN_PORT` | `5173` | порт dev-сервера админки |
+| `VITE_AVERRA_VERSION` | — | версия, вшитая в сборку админки (`deploy/Dockerfile` передаёт `AVERRA_VERSION`): по ней «Состояние» после обновления предлагает обновить страницу. В разработке не задаётся |
 
 ## MCP (`apps/mcp/.env`)
 
@@ -119,6 +121,8 @@ sidebar:
 | `BACKUP_KEEP` | сколько бэкапов хранить и не старше скольких дней, по умолчанию 7, от 1 до 365 |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | внешнее хранилище бэкапов |
 | `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_PREFIX` | по умолчанию `https://storage.yandexcloud.net`, `ru-central1`, `averra/<домен сайта>` |
+| `UPDATE_SOURCE` | откуда `averra.sh check-update` узнаёт о новых версиях: `github:владелец/репозиторий`, по умолчанию `github:midhey/averra-cms`; `off` — не проверять |
+| `ADMIN_UPDATE` | `off` — обновление из админки выключено: служба заявок не ставится, лежащая заявка удаляется, новые не принимаются. После смены — `averra.sh install-units` |
 
 Переменные окружения процесса (не строки `.env`):
 
@@ -127,4 +131,5 @@ sidebar:
 | `GHCR_TOKEN`, `GHCR_USER` | `install.sh` | вход в ghcr.io без вопроса |
 | `AVERRA_OWNER_PASSWORD` | `install.sh` | пароль владельца без вопроса |
 | `AVERRA_READY_TIMEOUT` | `averra.sh update`, `restore` | сколько ждать готовности API, по умолчанию 180 секунд |
+| `AVERRA_SYSTEMD_DIR` | `averra.sh install-units` | куда писать юниты systemd, по умолчанию `/etc/systemd/system` (свою папку задают тесты) |
 | `AVERRA_SERVERS` | `pnpm fleet` | путь к списку серверов вместо `~/.config/averra/servers.txt` |

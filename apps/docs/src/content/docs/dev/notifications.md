@@ -100,6 +100,10 @@ sidebar:
 `mail.down` снимается, только если письмо ушло позже него (`lastMailSentAt`), — пустая очередь
 бывает и у сломанной почты, когда письма исчерпали попытки.
 
+Разовое служебное событие, без «проблема — снова в порядке», — обычный `notify` в действии, как
+`update.requested` (владелец нажал «Обновить», `modules/status/routes.ts`): в `watch.ts` его нет, в
+схеме данных нет `state`.
+
 ## Telegram
 
 - `telegram/bot-api.ts` — Bot API на `undici`: напрямую, через `ProxyAgent` (HTTP/HTTPS —

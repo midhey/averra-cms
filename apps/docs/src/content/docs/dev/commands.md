@@ -47,6 +47,7 @@ sidebar:
 | `pnpm token:revoke --id <id>` | `token-revoke.js` | отозвать токен |
 | `pnpm mail:test --to <адрес>` | `mail-test.js` | проверочное письмо напрямую, по шагам. Проверяет только SMTP из окружения |
 | `pnpm --filter @averra/api status [--json]` | `status.js` | состояние установки. На сервере его зовёт `averra.sh status` |
+| — | `release-info.js --format github` | разбор ответа источника релизов со stdin в одну строку JSON. Только для `averra.sh check-update`: тот запускает его в образе без сети |
 
 Пароль команды спрашивают скрыто или берут из переменной `CMS_USER_PASSWORD` — не аргументом: он
 не печатается и не попадает в историю и логи.
@@ -66,6 +67,10 @@ sidebar:
 | `averra.sh restore [--from-s3] <бэкап> [--yes]` | сервер | восстановить |
 | `averra.sh update --version X [--yes]` | сервер | обновить с откатом — [Обновления](/averra-cms/install/updates/) |
 | `averra.sh status [--json]` | сервер | состояние установки |
+| `averra.sh check-update` | сервер | есть ли новая версия: итог — в «Состоянии» ([Обновления](/averra-cms/install/updates/#обновить-из-админки)) |
+| `averra.sh install-units` | сервер | поставить или обновить службы systemd и папки: бэкап с проверкой версии, заявки из админки |
+| `averra.sh update-request` | сервер | служебная: разобрать заявку из админки и запустить обновление (её зовёт `averra-update-request.service`) |
+| `averra.sh ensure-dirs` | сервер | служебная: папки, которые монтирует `compose.yaml` этой версии (её зовёт прежний `averra.sh` перед запуском новой версии; договор между версиями) |
 | `pnpm fleet status [--file <список>]` | машина студии | состояние всех установок — [Несколько установок](/averra-cms/install/fleet/) |
 | `pnpm fleet update --version X [--only имя,…] [--file <список>]` | машина студии | обновить все по очереди |
 

@@ -1,0 +1,126 @@
+@use "@averra/ui" as ui;
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  color: var(--color-text-muted);
+}
+
+.marker {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: ui.rem(24);
+  height: ui.rem(24);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-pill);
+
+  svg {
+    width: ui.rem(14);
+    height: ui.rem(14);
+  }
+}
+
+.text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  padding-top: ui.rem(2);
+}
+
+.label {
+  overflow-wrap: anywhere;
+}
+
+.state {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+}
+
+.hint {
+  flex-basis: 100%;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.done {
+  color: var(--color-text);
+
+  .marker {
+    color: var(--color-success-text);
+    background: var(--color-success-surface);
+    border-color: var(--color-success-indicator);
+  }
+}
+
+.current {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-strong);
+
+  .marker {
+    border-color: var(--color-info-indicator);
+  }
+
+  .state {
+    color: var(--color-info-text);
+  }
+}
+
+.failed {
+  color: var(--color-text-strong);
+
+  .marker {
+    color: var(--color-danger-text);
+    background: var(--color-danger-surface);
+    border-color: var(--color-danger-indicator);
+  }
+
+  .state {
+    color: var(--color-danger-text);
+  }
+}
+
+// Идёт — кольцо крутится; без анимации (настройка системы) — просто кольцо
+.ring {
+  width: ui.rem(12);
+  height: ui.rem(12);
+  border: ui.rem(2) solid var(--color-info-indicator);
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: spin 0.9s linear infinite;
+
+  // Контрастная тема закрасила бы прозрачный сектор цветом рамки: кольцо — цветом текста
+  @media (forced-colors: active) {
+    border-color: currentcolor;
+    border-right-color: Canvas;
+    forced-color-adjust: none;
+  }
+
+  @include ui.reduced-motion {
+    border-right-color: currentcolor;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}

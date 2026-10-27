@@ -57,3 +57,4 @@ sidebar:
 - [Миграции только совместимые вперёд](/averra-cms/decisions/forward-migrations/)
 - [Обновление отвязано от SSH](/averra-cms/decisions/detached-update/)
 - [Состояние для студии — по SSH](/averra-cms/decisions/status-over-ssh/)
+- [Обновление из админки](/averra-cms/decisions/admin-update/)

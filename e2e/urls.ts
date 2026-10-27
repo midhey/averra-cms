@@ -53,3 +53,16 @@ export const publishDir = fileURLToPath(new URL('./.data/sites', import.meta.url
 
 /** Сессия владельца, которую сохраняет проект setup и берут остальные тесты */
 export const ownerStateFile = new URL('./.data/owner.json', import.meta.url)
+
+/**
+ * Папка состояния установки (STATE_DIR) и папка заявок (REQUESTS_DIR) API e2e: файлы, которые на
+ * сервере пишет averra.sh, тест обновления из админки кладёт сам (tests/update.spec.ts). Стираются
+ * вместе с базой перед каждым прогоном
+ */
+export const stateDir = fileURLToPath(new URL('./.data/state', import.meta.url))
+export const requestsDir = fileURLToPath(new URL('./.data/requests', import.meta.url))
+
+/**
+ * Версия API e2e (AVERRA_VERSION): релизная, а не dev — иначе «доступна новее» не с чем сравнить
+ */
+export const e2eVersion = '0.1.0'

@@ -51,6 +51,7 @@ import { PageHeader } from '../ui/PageHeader'
 import { Facts } from '../ui/Screen'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
+import { Steps } from '../ui/Steps'
 import { TabList, Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import styles from './UiShowcase.module.scss'
@@ -555,6 +556,30 @@ export function UiShowcase() {
             <StatusPill tone="neutral" appearance="dot">
               не настроено
             </StatusPill>
+          </div>
+          <div className={styles.row}>
+            <Steps
+              label="Шаги: идёт"
+              items={[
+                { id: 'pull', label: 'Загрузка новой версии', state: 'done' },
+                { id: 'backup', label: 'Бэкап базы и медиатеки', state: 'current' },
+                { id: 'migrate', label: 'Запуск и миграции базы', state: 'pending' },
+                { id: 'finish', label: 'Готово', state: 'pending' },
+              ]}
+            />
+            <Steps
+              label="Шаги: откат"
+              items={[
+                { id: 'migrate', label: 'Запуск и миграции базы', state: 'done' },
+                {
+                  id: 'verify',
+                  label: 'Проверка админки и сайта',
+                  state: 'failed',
+                  hint: 'API не ответил за 3 минуты',
+                },
+                { id: 'finish', label: 'Откат на прежнюю версию', state: 'current' },
+              ]}
+            />
           </div>
         </Section>
 

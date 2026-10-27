@@ -1,3 +1,4 @@
+import { e2eVersion } from '../urls'
 import { expect, test } from './fixtures'
 
 // Экран «Состояние установки» — только у владельца, пункт «Состояние» в панели. Что в нём
@@ -14,10 +15,11 @@ test('владелец видит состояние установки с ве�
   await expect(page).toHaveTitle('Состояние установки — Averra CMS')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Состояние установки')
   const section = page.getByRole('region', { name: 'Сведения' })
-  // API e2e без версии из образа и без папки состояния (бэкапов в разработке нет)
-  await expect(section.getByRole('definition').first()).toHaveText('dev')
+  // API e2e — с релизной версией и папкой состояния, но бэкапов в ней не было: их делает
+  // averra.sh на сервере
+  await expect(section.getByRole('definition').first()).toHaveText(e2eVersion)
   await expect(section).toContainText('работает, миграций применено')
-  await expect(section).toContainText('не ведётся на этой установке')
+  await expect(section).toContainText('ещё не было')
   await expect(section).toContainText('Почта')
 })
 

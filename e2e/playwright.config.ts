@@ -1,7 +1,18 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eOwner, ownerStateFile, ports, publishDir, smtpTest, telegramTest, urls } from './urls'
+import {
+  e2eOwner,
+  e2eVersion,
+  ownerStateFile,
+  ports,
+  publishDir,
+  requestsDir,
+  smtpTest,
+  stateDir,
+  telegramTest,
+  urls,
+} from './urls'
 
 export default defineConfig({
   testDir: './tests',
@@ -73,6 +84,11 @@ export default defineConfig({
         PUBLISH_DIR: publishDir,
         // Адрес сайта — рендерер e2e: его домен админка показывает в боковой панели
         SITE_URL: urls.renderer,
+        // Установка «как на сервере» для обновления из админки (tests/update.spec.ts): релизная
+        // версия, папка состояния (её файлы пишет тест вместо averra.sh) и папка заявок
+        AVERRA_VERSION: e2eVersion,
+        STATE_DIR: stateDir,
+        REQUESTS_DIR: requestsDir,
       },
     },
     {
