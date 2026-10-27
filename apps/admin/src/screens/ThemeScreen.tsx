@@ -41,7 +41,7 @@ import {
   formOf,
   normalizeHex,
   refusedField,
-  roleCheck,
+  rowCheck,
   type ThemeForm,
   themeOf,
   themeStatus,
@@ -275,7 +275,6 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
         >
           <div className={styles.colors}>
             {themeColorRoles.map((role) => {
-              const id = roleCheck[role]
               return (
                 <ColorRow
                   key={role}
@@ -283,7 +282,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
                   title={themeColorTitles[role]}
                   value={form.colors[role]}
                   swatch={previewTheme.colors[role]}
-                  check={id ? checks.find((check) => check.id === id) : undefined}
+                  check={rowCheck(role, checks)}
                   error={fieldError(errors.errors, `colors.${role}`)}
                   disabled={readOnly}
                   onChange={(value) => setColor(role, value)}
@@ -294,7 +293,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
           {blocking.length > 0 && (
             <InlineAlert tone="danger" title="Так сохранить нельзя">
               {blocking.map((check) => `${check.label}: ${contrastText(check)}`).join('; ')}. Текст
-              будет трудно читать — поправьте цвета.
+              или рамка фокуса будут плохо видны — поправьте цвета.
             </InlineAlert>
           )}
           {warnings.length > 0 && (

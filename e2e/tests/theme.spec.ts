@@ -42,6 +42,16 @@ test('пресет, непроходящий акцент — ошибка, пр
   await expect(card).toHaveCSS('border-top-color', 'rgb(255, 0, 170)')
   await page.getByRole('textbox', { name: 'Линии и рамки', exact: true }).fill('#2c333d')
 
+  // Строка цвета показывает худшую непрошедшую пару, а не только главную: акцент на фоне в
+  // порядке, но на поверхности того же цвета его не видно — у «Акцента» «мало», а не «ок»
+  const surface = page.getByRole('textbox', { name: 'Поверхность (карточки, полосы)', exact: true })
+  const accentRow = accent.locator('xpath=ancestor::div[contains(@class, "colorRow")][1]')
+  await expect(accentRow).toContainText(/\d,\d · ок/)
+  await surface.fill('#f2b544')
+  await expect(accentRow).toContainText(/1,0 · мало/)
+  await surface.fill('#1e232b')
+  await expect(accentRow).toContainText(/\d,\d · ок/)
+
   // Тёмный акцент на тёмном фоне: отметка «мало», сохранить нельзя, ошибка у поля
   await accent.fill('#2a2f38')
   const colors = page.getByRole('region', { name: 'Цвета' })

@@ -59,6 +59,23 @@ export const roleCheck: Record<ThemeColorRole, ContrastPair['id'] | null> = {
   border: null,
 }
 
+/**
+ * Отметка у строки цвета. Пока все пары с этим цветом в порядке — главная пара (roleCheck). Если
+ * какая-то не проходит — худшая из них: иначе у акцента стояло бы «5,5 · ок» (на фоне), а
+ * «Сохранить» отказывал бы из-за акцента на поверхности
+ */
+export function rowCheck(
+  role: ThemeColorRole,
+  checks: readonly ContrastCheck[],
+): ContrastCheck | undefined {
+  const main = roleCheck[role]
+  if (!main) return undefined
+  const failing = checks
+    .filter((check) => !check.ok && (check.foreground === role || check.background === role))
+    .sort((a, b) => a.ratio / a.min - b.ratio / b.min)
+  return failing[0] ?? checks.find((check) => check.id === main)
+}
+
 /** Проверки контраста формы; пусто, пока какой-то цвет не дописан */
 export function checksOf(form: ThemeForm): ContrastCheck[] {
   const theme = themeOf(form)

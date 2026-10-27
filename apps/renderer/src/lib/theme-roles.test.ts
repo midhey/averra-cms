@@ -42,4 +42,10 @@ describe('цвета темы в блоках сайта', () => {
   it('рамка полей формы — приглушённым: ей нужен контраст 3:1, а линии без проверки', () => {
     expect(css(join('form', 'Form.module.css'))).not.toContain('var(--color-border)')
   })
+
+  it('звёздочка обязательного поля — цветом текста: мелкому тексту акцента с порогом 3 мало', () => {
+    expect(rule(css(join('form', 'Form.module.css')), '.required')).toContain(
+      'color: var(--color-text)',
+    )
+  })
 })

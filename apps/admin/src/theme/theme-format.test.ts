@@ -8,6 +8,7 @@ import {
   formOf,
   normalizeHex,
   refusedField,
+  rowCheck,
   themeOf,
   themeStatus,
 } from './theme-format'
@@ -55,6 +56,24 @@ describe('отметки контраста', () => {
     expect(contrastTone(byId('accent-surface'))).toBe('danger')
     // Пар-предупреждений сейчас нет, но экран их умеет: поле blocking решает тон
     expect(contrastTone({ ...byId('accent-surface'), blocking: false })).toBe('warning')
+  })
+})
+
+describe('отметка у строки цвета', () => {
+  it('все пары в порядке — главная пара цвета', () => {
+    const checks = themeContrast(defaultTheme.colors)
+    expect(rowCheck('accent', checks)?.id).toBe('accent-background')
+    expect(rowCheck('border', checks)).toBeUndefined()
+  })
+
+  it('акцент годен на фоне, но бледен на поверхности — у строки «мало», а не «ок»', () => {
+    const colors = { ...defaultTheme.colors, background: '#ffffff', surface: '#3f3f3f' }
+    const checks = themeContrast({ ...colors, accent: '#1d4ed8' })
+    const accentBg = checks.find((check) => check.id === 'accent-background')
+    expect(accentBg?.ok).toBe(true)
+    const shown = rowCheck('accent', checks)
+    expect(shown?.id).toBe('accent-surface')
+    expect(shown?.ok).toBe(false)
   })
 })
 
