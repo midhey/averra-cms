@@ -1,4 +1,5 @@
 import { blocks as blockCatalog } from './blocks'
+import { samePhone } from './contact'
 import { type BlockSchemaNode, blockPropsSchema, schemaStep } from './media-svg'
 import {
   MAIN_PAGE_SLUG,
@@ -524,9 +525,7 @@ function contactsCheck(blocks: readonly SeoBlock[], org: SiteOrganization): SeoC
   const email = textProp(block.props, 'email')
   const address = textProp(block.props, 'address')
   const differs = [
-    org.phone && phone && org.phone.replace(/\D/g, '') !== phone.replace(/\D/g, '')
-      ? 'телефон'
-      : '',
+    org.phone && phone && !samePhone(org.phone, phone) ? 'телефон' : '',
     org.email && email && org.email.trim().toLowerCase() !== email.toLowerCase() ? 'почта' : '',
     org.street && address && !plainText(address).includes(plainText(org.street)) ? 'адрес' : '',
   ].filter(Boolean)

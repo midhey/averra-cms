@@ -124,6 +124,25 @@ describe('редактор', () => {
     expect((await request.publish(headers, 'editor-page')).status).toBe(200)
     expect((await request.remove(headers, 'editor-page')).status).toBe(204)
   })
+
+  it('видит организацию из «SEO» для сверки «Контактов», а токен — нет', async () => {
+    const organization = { name: 'ИП Иванов', phone: '+7 900 000-00-00', email: 'i@example.ru' }
+    const saved = await app.request(`/api/sites/${demoSiteId}/settings`, {
+      method: 'PATCH',
+      headers: json(owner.headers),
+      body: JSON.stringify({ organization }),
+    })
+    expect(saved.status).toBe(200)
+    const { headers } = await api.loginAs('editor')
+    // Саму «SEO → Организация» редактор не читает — только сверку в сайте
+    expect((await app.request(`/api/sites/${demoSiteId}/settings`, { headers })).status).toBe(403)
+    const seen = (await (await request.site(headers)).json()) as { seo: Record<string, unknown> }
+    expect(seen.seo.organization).toMatchObject(organization)
+    const { token } = await api.createToken()
+    const bearer = { authorization: `Bearer ${token}` }
+    const byToken = (await (await request.site(bearer)).json()) as { seo: Record<string, unknown> }
+    expect(byToken.seo).not.toHaveProperty('organization')
+  })
 })
 
 describe('создание сайтов', () => {

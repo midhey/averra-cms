@@ -2,6 +2,7 @@ import {
   canonicalElsewhere,
   canonicalPath,
   Ga4Id,
+  isPlaceholderText,
   isServicePageSlug,
   MAIN_PAGE_SLUG,
   type MediaFile,
@@ -309,6 +310,9 @@ export function organizationJsonLd(site: SeoSite, page: SeoPage, media: MediaMap
       coordinates: contacts.coordinates,
       address: contacts.address,
     })
+  // Заглушка из примера блока («[Город, улица…]») — не адрес: поисковику её не отдаём
+  const typedAddress = contacts?.address?.trim() ?? ''
+  const blockAddress = isPlaceholderText(typedAddress) ? '' : typedAddress
   const data = compact({
     '@context': 'https://schema.org',
     '@type': org.type,
@@ -326,7 +330,7 @@ export function organizationJsonLd(site: SeoSite, page: SeoPage, media: MediaMap
           addressRegion: org.address.region,
           postalCode: org.address.postalCode,
         })
-      : compact({ '@type': 'PostalAddress', streetAddress: contacts?.address ?? '' }),
+      : compact({ '@type': 'PostalAddress', streetAddress: blockAddress }),
     // hasMap — свойство места (Place): у «Местного бизнеса» оно есть, у организации — нет
     hasMap: org.type === 'LocalBusiness' ? (map ?? '') : '',
     sameAs: org.socials,

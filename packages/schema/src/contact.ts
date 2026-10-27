@@ -49,6 +49,18 @@ export const EmailAddress = z
   // type="email" и клавиатурой с «@», без счётчика
   .meta({ 'x-input': 'email' })
 
+/**
+ * Один ли это номер: сравниваем цифры, а российский номер с «8» в начале приводим к «+7» —
+ * «8 (342) 000-00-00» и «+7 (342) 000-00-00» в России пишут одинаково часто
+ */
+export function samePhone(a: string, b: string) {
+  const national = (phone: string) => {
+    const digits = phoneDigits(phone)
+    return digits.length === 11 && digits.startsWith('8') ? `7${digits.slice(1)}` : digits
+  }
+  return national(a) === national(b)
+}
+
 /** Ссылка «позвонить»: только цифры и «+» в начале — так номер понимают все телефоны */
 export const telHref = (phone: string) =>
   `tel:${phone.trim().startsWith('+') ? '+' : ''}${phoneDigits(phone)}`
@@ -81,10 +93,11 @@ export const mapServiceTitles = {
 } as const satisfies Record<MapService, string>
 
 /**
- * Заглушка из примера блока: «[Город, улица, дом, офис]». Настоящий адрес квадратных скобок не
- * пишет, а поиск карты по заглушке увёл бы посетителя на бессмысленную выдачу
+ * Заглушка из примера блока: «[Город, улица, дом, офис]» — весь текст в квадратных скобках. Поиск
+ * карты по заглушке увёл бы посетителя на бессмысленную выдачу. Скобки внутри настоящего адреса
+ * («Пермь, Ленина, 50 [вход со двора]») — пометка, а не заглушка: такой адрес остаётся адресом
  */
-export const isPlaceholderText = (value: string) => /\[[^\]]*\]/.test(value)
+export const isPlaceholderText = (value: string) => /^\s*\[[^\]]*\]\s*$/.test(value)
 
 /**
  * Ссылка на точку на карте: по координатам — точка, иначе поиск по адресу. Порядок в адресах

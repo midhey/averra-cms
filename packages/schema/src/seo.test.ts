@@ -327,6 +327,12 @@ describe('проверка: «Контакты» и «SEO → Организац
     expect(check('contacts', page({ blocks: [block] }), withOrg())?.level).toBe('good')
   })
 
+  it('«8 …» в «SEO» и «+7 …» в блоке — один номер, расхождения нет', () => {
+    const block = contacts({ phone: '+7 (900) 000-00-00' })
+    const eight = { ...org, phone: '8 (900) 000-00-00' }
+    expect(check('contacts', page({ blocks: [block] }), withOrg(eight))?.level).toBe('good')
+  })
+
   it('телефон, почта и адрес разошлись — предупреждение со списком', () => {
     const block = contacts({
       phone: '+7 900 111-11-11',

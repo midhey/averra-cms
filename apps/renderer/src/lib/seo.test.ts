@@ -378,6 +378,18 @@ describe('JSON-LD организации', () => {
       expect(json.hasMap).toBeUndefined()
     })
 
+    it('адрес-заглушка из примера блока в разметку не идёт', () => {
+      const s = site({ organization: { type: 'LocalBusiness', name: 'Ремонт' } })
+      const { coordinates: _, ...withoutPoint } = blockProps
+      const placeholder = { ...withoutPoint, address: '[Город, улица, дом, офис]' }
+      const json = parse(
+        organizationJsonLd(s, page('kontakty', { content: contacts(placeholder) }), media),
+      )
+      expect(json.address).toBeUndefined()
+      expect(json.hasMap).toBeUndefined()
+      expect(json.telephone).toBe('+7 342 000-00-00')
+    })
+
     it('без флажка, без названия, вне индекса — разметки на странице нет', () => {
       const s = site({ organization: { name: 'Ремонт' } })
       const off = contacts({ ...blockProps, markup: false })

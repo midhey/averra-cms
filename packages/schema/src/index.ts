@@ -41,6 +41,7 @@ export { Button, Href } from './common'
 export {
   Coordinates,
   EmailAddress,
+  isPlaceholderText,
   MapService,
   mapServiceTitles,
   mapUrl,
@@ -48,6 +49,7 @@ export {
   OptionalPhone,
   PhoneNumber,
   parseCoordinates,
+  samePhone,
   telHref,
 } from './contact'
 export { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
