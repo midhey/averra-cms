@@ -61,6 +61,7 @@ sidebar:
 - [Редактор блоков](/averra-cms/admin/editor/)
 - [Тема сайта](/averra-cms/admin/theme/)
 - [Шапка и меню](/averra-cms/admin/header/)
+- [Подвал](/averra-cms/admin/footer/)
 - [Медиатека](/averra-cms/admin/media/)
 - [Публикация и история](/averra-cms/admin/publishing/)
 - [Заявки](/averra-cms/admin/leads/)

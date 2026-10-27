@@ -27,6 +27,7 @@ sidebar:
 - [SVG-логотипы и блок видео](/averra-cms/decisions/svg-and-video/)
 - [Тема сайта и контраст](/averra-cms/decisions/theme-contrast/)
 - [Шапка сайта и меню](/averra-cms/decisions/site-header/)
+- [Подвал сайта](/averra-cms/decisions/site-footer/)
 
 ## Стек
 
