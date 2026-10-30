@@ -1,0 +1,37 @@
+<div class="goals">
+  <div class="goals__head">
+    <div class="goals__heading">
+      <h2 class="section-title">{{ title | accent }}</h2>
+      <svg width="220" height="16" viewBox="0 0 220 16" class="section-underline" aria-hidden="true"><path d="M4 10 C 60 4, 140 4, 216 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+    </div>
+    <div class="hand-aside">Нажми на карточку,<br>чтобы узнать больше ↓</div>
+  </div>
+
+  <div class="goals__board">
+    {% for card in cards %}
+    {% assign look = forloop.index0 | modulo: 4 | plus: 1 %}
+    <div class="goal-card goal-card--{{ look }}">
+      <input class="goal-card__toggle" type="checkbox" id="{{ block.id }}-flip-{{ forloop.index }}" aria-label="{{ card.title }} — перевернуть карточку">
+      <div class="goal-card__inner">
+        <div class="goal-card__front">
+          <div class="goal-card__tape"></div>
+          <div class="goal-card__number">{% if forloop.index < 10 %}0{% endif %}{{ forloop.index }}</div>
+          <h3 class="goal-card__title">{{ card.title }}</h3>
+          <p class="goal-card__text">{{ card.text | newline_to_br }}</p>
+          <div class="goal-card__photo">{% if card.photo %}{{ card.photo | image: '(min-width: 820px) 240px, (min-width: 541px) 45vw, 90vw', 'goal-card__img' }}{% endif %}</div>
+          <div class="goal-card__caption" aria-hidden="true">переверни ↻</div>
+        </div>
+        <div class="goal-card__back">
+          <div class="goal-card__back-eyebrow">как проходят занятия</div>
+          <h3 class="goal-card__back-title">{{ card.back_title }}</h3>
+          <ul class="goal-card__list" role="list">
+            {% for item in card.back_items %}<li class="goal-card__item"><span class="goal-card__check" aria-hidden="true">✓</span>{{ item.text }}</li>{% endfor %}
+          </ul>
+          <div class="goal-card__back-hint" aria-hidden="true">↻ назад</div>
+        </div>
+      </div>
+      <label class="goal-card__hit" for="{{ block.id }}-flip-{{ forloop.index }}"></label>
+    </div>
+    {% endfor %}
+  </div>
+</div>

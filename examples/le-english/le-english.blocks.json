@@ -1,0 +1,731 @@
+{
+  "format": "averra.custom-blocks",
+  "version": 1,
+  "blocks": [
+    {
+      "key": "le-hero",
+      "title": "Vallex: первый экран",
+      "description": "Заголовок с маркером, кнопка записи, преимущества и фото на полароиде со стикерами",
+      "category": "start",
+      "sketch": "hero",
+      "fields": [
+        {
+          "type": "text",
+          "name": "eyebrow",
+          "label": "Строчка над заголовком",
+          "hint": "Мелкими заглавными буквами.",
+          "required": false,
+          "maxLength": 50
+        },
+        {
+          "type": "textarea",
+          "name": "title",
+          "label": "Главный заголовок",
+          "hint": "Слова в *звёздочках* подсвечиваются маркером. Enter — перенос строки.",
+          "required": true,
+          "maxLength": 80
+        },
+        {
+          "type": "textarea",
+          "name": "lead",
+          "label": "Текст под заголовком",
+          "required": false,
+          "maxLength": 300
+        },
+        {
+          "type": "link",
+          "name": "button",
+          "label": "Главная кнопка",
+          "hint": "Обычно ведёт на страницу записи: /zapis",
+          "required": true
+        },
+        {
+          "type": "textarea",
+          "name": "note",
+          "label": "Рукописная фраза у кнопки",
+          "hint": "Enter — перенос на новую строку.",
+          "required": false,
+          "maxLength": 60
+        },
+        {
+          "type": "repeater",
+          "name": "badges",
+          "label": "Короткие преимущества",
+          "hint": "Строчки с оранжевыми точками под кнопкой.",
+          "required": false,
+          "min": 0,
+          "max": 6,
+          "fields": [
+            {
+              "type": "text",
+              "name": "text",
+              "label": "Пункт",
+              "required": true,
+              "maxLength": 30
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "name": "photo",
+          "label": "Фото",
+          "hint": "Обрезается до пропорции 4:5 по центру — лицо лучше держать посередине. Без фото — полосатая заглушка.",
+          "required": false
+        },
+        {
+          "type": "text",
+          "name": "photo_caption",
+          "label": "Подпись на полароиде",
+          "required": false,
+          "maxLength": 30
+        },
+        {
+          "type": "textarea",
+          "name": "sticker_top",
+          "label": "Розовый стикер у фото",
+          "required": false,
+          "maxLength": 50
+        },
+        {
+          "type": "textarea",
+          "name": "sticker_bottom",
+          "label": "Белый стикер под фото (только на компьютере)",
+          "required": false,
+          "maxLength": 30
+        }
+      ],
+      "template": "<div class=\"hero\">\n  <div class=\"hero__text\">\n    {% if eyebrow %}<div class=\"hero__eyebrow\">{{ eyebrow }}</div>{% endif %}\n    <h1 class=\"hero__title\">{{ title | accent }}</h1>\n    {% if lead %}<p class=\"hero__lead\">{{ lead | newline_to_br }}</p>{% endif %}\n    <div class=\"hero__actions\">\n      <a class=\"cta-dark\" href=\"{{ button | link }}\">{{ button.label }} <span aria-hidden=\"true\">→</span></a>\n      {% if note %}<div class=\"hero__note\" aria-hidden=\"true\">{{ note | newline_to_br }}</div>{% endif %}\n    </div>\n    {% if badges.size > 0 %}\n    <ul class=\"hero__badges\" role=\"list\">\n      {% for badge in badges %}<li class=\"hero__badge\"><span class=\"hero__dot\" aria-hidden=\"true\"></span>{{ badge.text }}</li>{% endfor %}\n    </ul>\n    {% endif %}\n  </div>\n\n  <div class=\"hero__visual\">\n    <svg width=\"130\" height=\"54\" viewBox=\"0 0 130 54\" class=\"hero__squiggle\" aria-hidden=\"true\"><path d=\"M6 40 C 24 8, 40 6, 46 30 S 72 50, 84 22 S 108 4, 124 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"6\" stroke-linecap=\"round\"></path></svg>\n    <div class=\"hero__polaroid\">\n      <div class=\"hero__frame\">\n        <div class=\"hero__tape\"></div>\n        {% if photo %}\n        <div class=\"hero__photo\">{{ photo | image: '(min-width: 820px) 380px, 80vw', 'hero__img' }}</div>\n        {% else %}\n        <div class=\"hero__photo hero__photo--empty\"></div>\n        {% endif %}\n        {% if photo_caption %}<div class=\"hero__caption\">{{ photo_caption }}</div>{% endif %}\n      </div>\n    </div>\n    {% if sticker_top %}\n    <div class=\"hero__sticker\"><div class=\"hero__sticker-paper\">{{ sticker_top | newline_to_br }}</div></div>\n    {% endif %}\n    {% if sticker_bottom %}\n    <div class=\"hero__sticker-alt\">\n      <div class=\"hero__sticker-alt-tape\"></div>\n      <div class=\"hero__sticker-alt-paper\">{{ sticker_bottom | newline_to_br }}</div>\n    </div>\n    {% endif %}\n    <svg width=\"110\" height=\"60\" viewBox=\"0 0 110 60\" class=\"hero__arrow\" aria-hidden=\"true\"><path d=\"M6 50 C 30 44, 62 34, 96 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path><path d=\"M78 10 L 98 10 L 92 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>\n  </div>\n</div>\n",
+      "css": "/* Первый экран Vallex English. Цвета страницы, текста, акцента и шрифты — роли темы; бумага\n   стикеров, скотч и маркер — свои цвета блока (в теме для них роли нет), поэтому они объявлены\n   один раз здесь, а ниже используются переменными. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --pink: #f1cfc5;\n  --orange: #e9782f;\n  --tape: rgba(226, 212, 182, 0.85);\n  --tape-light: rgba(226, 212, 182, 0.8);\n  --stripe-a: #e6dccb;\n  --stripe-b: #ded2be;\n  --shadow-ink: rgba(30, 43, 37, 0.18);\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  --shape-torn: polygon(\n    0 0,\n    100% 2%,\n    100% 94%,\n    92% 98%,\n    84% 94%,\n    75% 99%,\n    66% 95%,\n    57% 99%,\n    48% 94%,\n    39% 98%,\n    30% 94%,\n    21% 99%,\n    12% 95%,\n    0 98%\n  );\n  --shape-torn-fine: polygon(\n    0 2%,\n    100% 0,\n    100% 94%,\n    93% 98%,\n    86% 94%,\n    78% 99%,\n    70% 95%,\n    62% 99%,\n    54% 94%,\n    46% 98%,\n    38% 94%,\n    30% 99%,\n    22% 95%,\n    14% 99%,\n    7% 94%,\n    0 97%\n  );\n  padding: 24px 24px 72px;\n}\n\n.hero {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 48px;\n}\n\n.hero__text {\n  flex: 1 1 460px;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 28px;\n}\n\n.hero__eyebrow {\n  font-family: ui-monospace, \"JetBrains Mono\", Menlo, Consolas, monospace;\n  font-size: 12px;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--color-muted);\n}\n\n.hero__title {\n  margin: 0;\n  font-size: clamp(40px, 6.2vw, 78px);\n  line-height: 1.04;\n  letter-spacing: -0.01em;\n  text-wrap: balance;\n}\n\n/* Слова в *звёздочках* — курсив с маркером под ними */\n.hero__title em {\n  font-style: italic;\n  color: var(--color-accent);\n  background:\n    linear-gradient(100deg, transparent 1%, var(--pink) 2.5%, var(--pink) 97%, transparent 99%) 0\n    82% / 100% 42% no-repeat;\n  -webkit-box-decoration-break: clone;\n  box-decoration-break: clone;\n  padding: 0 0.12em;\n}\n\n.hero__lead {\n  margin: 0;\n  font-size: clamp(17px, 1.6vw, 20px);\n  line-height: 1.55;\n  color: var(--color-text);\n  max-width: 520px;\n  text-wrap: pretty;\n}\n\n.hero__actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 20px 28px;\n}\n\n.cta-dark {\n  display: inline-flex;\n  align-items: center;\n  gap: 12px;\n  background: var(--color-accent);\n  color: var(--color-on-accent);\n  padding: 19px 32px;\n  border-radius: 999px;\n  font-weight: 600;\n  font-size: 17px;\n  text-decoration: none;\n  box-shadow: 0 10px 24px var(--shadow-ink);\n}\n\n.cta-dark:hover {\n  filter: brightness(1.18);\n  color: var(--color-on-accent);\n}\n\n.hero__note {\n  font-family: var(--font-accent);\n  font-size: 24px;\n  line-height: 1.05;\n  color: var(--color-accent);\n  transform: rotate(-4deg);\n}\n\n.hero__badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 10px 26px;\n  margin: 0;\n  padding: 8px 0 0;\n  list-style: none;\n  font-size: 14px;\n  color: var(--color-text);\n}\n\n.hero__badge {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.hero__dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: var(--orange);\n  flex-shrink: 0;\n}\n\n.hero__visual {\n  flex: 1 1 420px;\n  min-width: 0;\n  position: relative;\n  height: clamp(440px, 52vw, 600px);\n}\n\n.hero__squiggle {\n  position: absolute;\n  left: 2%;\n  top: 0;\n  z-index: 3;\n  color: var(--orange);\n}\n\n.hero__polaroid {\n  position: absolute;\n  left: clamp(0px, 14%, 90px);\n  top: 6%;\n  width: min(380px, 76%);\n  transform: rotate(2deg);\n  filter: drop-shadow(0 16px 26px var(--shadow-ink));\n  z-index: 2;\n}\n\n.hero__frame {\n  background: var(--color-surface);\n  padding: 14px 14px 56px;\n  position: relative;\n}\n\n.hero__tape {\n  position: absolute;\n  left: 50%;\n  top: -14px;\n  width: 110px;\n  height: 30px;\n  margin-left: -55px;\n  transform: rotate(-3deg);\n  background: var(--tape-light);\n  clip-path: var(--shape-tape);\n  z-index: 1;\n}\n\n/* Фото обрезается до 4:5 по центру; без фото — полосатая заглушка */\n.hero__photo {\n  aspect-ratio: 4 / 5;\n  background: repeating-linear-gradient(135deg, var(--stripe-a) 0 10px, var(--stripe-b) 10px 20px);\n  overflow: hidden;\n}\n\n.hero__img,\n.hero__img img {\n  display: block;\n  width: 100%;\n  height: 100%;\n}\n\n.hero__img img {\n  object-fit: cover;\n}\n\n.hero__caption {\n  position: absolute;\n  left: 18px;\n  bottom: 12px;\n  font-family: var(--font-accent);\n  font-size: 26px;\n  color: var(--color-accent);\n}\n\n/* Розовый стикер справа вверху */\n.hero__sticker {\n  position: absolute;\n  right: 0;\n  top: 2%;\n  width: clamp(130px, 30%, 180px);\n  transform: rotate(5deg);\n  z-index: 3;\n  filter: drop-shadow(0 8px 14px var(--shadow-ink));\n}\n\n.hero__sticker-paper {\n  background: var(--pink);\n  padding: 20px 16px 26px;\n  font-family: var(--font-accent);\n  font-size: clamp(22px, 2.2vw, 27px);\n  line-height: 1.05;\n  color: var(--color-accent);\n  clip-path: var(--shape-torn);\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n}\n\n/* Белый стикер на скотче внизу слева (только на широком экране) */\n.hero__sticker-alt {\n  position: absolute;\n  left: -2%;\n  bottom: 10%;\n  width: 150px;\n  transform: rotate(-7deg);\n  z-index: 3;\n  filter: drop-shadow(0 8px 14px var(--shadow-ink));\n}\n\n.hero__sticker-alt-tape {\n  position: absolute;\n  left: 40px;\n  top: -12px;\n  width: 70px;\n  height: 24px;\n  transform: rotate(4deg);\n  background: var(--tape);\n  z-index: 1;\n  clip-path: var(--shape-tape);\n}\n\n.hero__sticker-alt-paper {\n  background: var(--color-surface);\n  padding: 22px 18px 28px;\n  font-family: var(--font-accent);\n  font-size: 30px;\n  line-height: 1;\n  color: var(--color-text);\n  clip-path: var(--shape-torn-fine);\n}\n\n.hero__arrow {\n  position: absolute;\n  right: 6%;\n  bottom: 6%;\n  z-index: 3;\n  color: var(--orange);\n}\n\n/* Появление: линии рисуются, стикеры садятся на место. Конечное состояние — всегда видимое,\n   поэтому без анимации (и при «уменьшить движение») страница просто стоит. */\n@keyframes wipe {\n  from {\n    clip-path: inset(0 100% 0 0);\n  }\n  to {\n    clip-path: inset(0 0 0 0);\n  }\n}\n\n@keyframes marker {\n  from {\n    background-size: 0% 42%;\n  }\n}\n\n@keyframes stick {\n  from {\n    opacity: 0;\n    scale: 1.18;\n    translate: 0 -16px;\n  }\n}\n\n@keyframes settle {\n  from {\n    rotate: -3deg;\n    translate: 0 12px;\n  }\n}\n\n@keyframes fade-up {\n  from {\n    opacity: 0;\n    translate: 0 10px;\n  }\n}\n\n@keyframes wiggle {\n  0%,\n  100% {\n    rotate: 0deg;\n  }\n  30% {\n    rotate: -3deg;\n  }\n  65% {\n    rotate: 2deg;\n  }\n}\n\n@media (prefers-reduced-motion: no-preference) {\n  .hero__squiggle {\n    animation: wipe 1s 0.35s cubic-bezier(0.6, 0, 0.3, 1) both;\n  }\n  .hero__arrow {\n    animation: wipe 0.8s 1.15s cubic-bezier(0.6, 0, 0.3, 1) both;\n  }\n  .hero__title em {\n    animation: marker 0.9s 0.5s cubic-bezier(0.6, 0, 0.2, 1) both;\n  }\n  .hero__polaroid {\n    animation: settle 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;\n  }\n  .hero__sticker {\n    animation: stick 0.6s 0.75s cubic-bezier(0.3, 1.4, 0.5, 1) both;\n  }\n  .hero__sticker-alt {\n    animation: stick 0.6s 0.95s cubic-bezier(0.3, 1.4, 0.5, 1) both;\n  }\n  .hero__note {\n    animation: fade-up 0.6s 1.2s ease-out both;\n  }\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .cta-dark {\n    transition:\n      translate 0.25s ease,\n      filter 0.2s ease;\n  }\n  .cta-dark:hover {\n    translate: 0 -2px;\n  }\n  .cta-dark > span {\n    transition: translate 0.25s ease;\n  }\n  .cta-dark:hover > span {\n    translate: 4px 0;\n  }\n  .hero__sticker:hover .hero__sticker-paper,\n  .hero__sticker-alt:hover .hero__sticker-alt-paper {\n    animation: wiggle 0.6s ease-in-out;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 20px;\n    padding-bottom: 48px;\n  }\n  .hero {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    gap: 36px;\n  }\n  .hero__text {\n    gap: 22px;\n  }\n  .hero__title {\n    font-size: clamp(38px, 7.5vw, 60px);\n    line-height: 1.08;\n  }\n  .hero__lead {\n    max-width: 620px;\n  }\n  .hero__visual {\n    width: min(100%, 430px);\n    justify-self: center;\n    height: auto;\n    padding: 20px 22px 10px;\n  }\n  .hero__polaroid {\n    position: relative;\n    left: auto;\n    top: auto;\n    width: 88%;\n    margin: 0 auto;\n  }\n  .hero__squiggle {\n    width: 90px;\n    top: 0;\n    left: 0;\n  }\n  .hero__sticker {\n    right: 0;\n    top: 6px;\n    width: 128px;\n  }\n  .hero__sticker-paper {\n    padding: 16px 12px 20px;\n    font-size: 22px;\n  }\n  .hero__sticker-alt,\n  .hero__arrow {\n    display: none;\n  }\n  .cta-dark {\n    min-height: 48px;\n  }\n}\n\n@media (max-width: 540px) {\n  .hero__eyebrow {\n    font-size: 10px;\n    letter-spacing: 0.1em;\n    line-height: 1.6;\n  }\n  .hero__title {\n    font-size: clamp(34px, 9.4vw, 48px);\n  }\n  .hero__lead {\n    font-size: 16px;\n    line-height: 1.65;\n  }\n  .hero__actions {\n    gap: 14px;\n  }\n  .hero__note {\n    width: 100%;\n    text-align: center;\n    transform: none;\n    font-size: 22px;\n  }\n  .hero__note br {\n    display: none;\n  }\n  .hero__badges {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    gap: 10px;\n    font-size: 13px;\n  }\n  .hero__visual {\n    padding: 16px 14px 8px;\n  }\n  .hero__sticker {\n    width: 106px;\n  }\n  .hero__sticker-paper {\n    font-size: 19px;\n    padding: 14px 10px 18px;\n  }\n  .hero__frame {\n    padding: 10px 10px 46px;\n  }\n  .hero__caption {\n    font-size: 23px;\n    left: 12px;\n  }\n  .cta-dark {\n    width: 100%;\n    justify-content: center;\n    padding: 16px 18px;\n    font-size: 15px;\n    min-height: 54px;\n    text-align: center;\n  }\n  .cta-dark > span {\n    flex-shrink: 0;\n  }\n}\n",
+      "example": {
+        "eyebrow": "Индивидуальные онлайн-занятия",
+        "title": "Английский, *который вписывается* в твою жизнь",
+        "lead": "Разговорная практика под твои задачи: для работы, учёбы, поездок и общения.",
+        "button": {
+          "label": "Записаться на пробный урок",
+          "href": "/zapis"
+        },
+        "note": "первое занятие —\nзнакомимся и выбираем цель ↗",
+        "badges": [
+          {
+            "text": "Практика живого общения"
+          },
+          {
+            "text": "Занятия онлайн"
+          }
+        ],
+        "photo_caption": "Hi, I'm Lera ♡",
+        "sticker_top": "Small steps,\nbig opportunities ♡",
+        "sticker_bottom": "Let's\nspeak\nEnglish :)"
+      }
+    },
+    {
+      "key": "le-goals",
+      "title": "Vallex: выбери свою цель",
+      "description": "Четыре карточки-цели с фото: по нажатию переворачиваются и показывают, что будет на занятиях",
+      "category": "about",
+      "sketch": "features",
+      "fields": [
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок блока",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "repeater",
+          "name": "cards",
+          "label": "Карточки",
+          "hint": "Карточек всегда четыре — под них сделана раскладка.",
+          "required": false,
+          "min": 4,
+          "max": 4,
+          "fields": [
+            {
+              "type": "text",
+              "name": "title",
+              "label": "Название",
+              "required": true,
+              "maxLength": 20
+            },
+            {
+              "type": "textarea",
+              "name": "text",
+              "label": "Текст на лицевой стороне",
+              "required": true,
+              "maxLength": 110
+            },
+            {
+              "type": "image",
+              "name": "photo",
+              "label": "Фото на лицевой стороне",
+              "required": false
+            },
+            {
+              "type": "text",
+              "name": "back_title",
+              "label": "Заголовок на обороте",
+              "required": true,
+              "maxLength": 30
+            },
+            {
+              "type": "repeater",
+              "name": "back_items",
+              "label": "Пункты на обороте",
+              "required": false,
+              "min": 1,
+              "max": 3,
+              "fields": [
+                {
+                  "type": "text",
+                  "name": "text",
+                  "label": "Пункт",
+                  "required": true,
+                  "maxLength": 60
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "template": "<div class=\"goals\">\n  <div class=\"goals__head\">\n    <div class=\"goals__heading\">\n      <h2 class=\"section-title\">{{ title | accent }}</h2>\n      <svg width=\"220\" height=\"16\" viewBox=\"0 0 220 16\" class=\"section-underline\" aria-hidden=\"true\"><path d=\"M4 10 C 60 4, 140 4, 216 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path></svg>\n    </div>\n    <div class=\"hand-aside\">Нажми на карточку,<br>чтобы узнать больше ↓</div>\n  </div>\n\n  <div class=\"goals__board\">\n    {% for card in cards %}\n    {% assign look = forloop.index0 | modulo: 4 | plus: 1 %}\n    <div class=\"goal-card goal-card--{{ look }}\">\n      <input class=\"goal-card__toggle\" type=\"checkbox\" id=\"{{ block.id }}-flip-{{ forloop.index }}\" aria-label=\"{{ card.title }} — перевернуть карточку\">\n      <div class=\"goal-card__inner\">\n        <div class=\"goal-card__front\">\n          <div class=\"goal-card__tape\"></div>\n          <div class=\"goal-card__number\">{% if forloop.index < 10 %}0{% endif %}{{ forloop.index }}</div>\n          <h3 class=\"goal-card__title\">{{ card.title }}</h3>\n          <p class=\"goal-card__text\">{{ card.text | newline_to_br }}</p>\n          <div class=\"goal-card__photo\">{% if card.photo %}{{ card.photo | image: '(min-width: 820px) 240px, (min-width: 541px) 45vw, 90vw', 'goal-card__img' }}{% endif %}</div>\n          <div class=\"goal-card__caption\" aria-hidden=\"true\">переверни ↻</div>\n        </div>\n        <div class=\"goal-card__back\">\n          <div class=\"goal-card__back-eyebrow\">как проходят занятия</div>\n          <h3 class=\"goal-card__back-title\">{{ card.back_title }}</h3>\n          <ul class=\"goal-card__list\" role=\"list\">\n            {% for item in card.back_items %}<li class=\"goal-card__item\"><span class=\"goal-card__check\" aria-hidden=\"true\">✓</span>{{ item.text }}</li>{% endfor %}\n          </ul>\n          <div class=\"goal-card__back-hint\" aria-hidden=\"true\">↻ назад</div>\n        </div>\n      </div>\n      <label class=\"goal-card__hit\" for=\"{{ block.id }}-flip-{{ forloop.index }}\"></label>\n    </div>\n    {% endfor %}\n  </div>\n</div>\n",
+      "css": "/* Цели: четыре бумажные карточки, которые переворачиваются по нажатию — без JavaScript: на каждой\n   карточке скрытый флажок, а переворот делает :checked. Перетаскивания карточек, как в исходном\n   сайте, здесь нет: оно держалось на скрипте, а блоки Averra работают без него. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --rust: #b85418;\n  --orange: #e9782f;\n  --peach: #f4a56e;\n  --pink-pale: #f6e1dd;\n  --beige: #efe7d8;\n  --paper-bright: #fffdf8;\n  --tape: rgba(226, 212, 182, 0.85);\n  --shadow-ink: rgba(30, 43, 37, 0.12);\n  --stripe-cream-a: #ece3d4;\n  --stripe-cream-b: #e4d9c6;\n  --stripe-pink-a: #efd6ce;\n  --stripe-pink-b: #e8ccc3;\n  --stripe-beige-a: #e6dcca;\n  --stripe-beige-b: #ddd1bc;\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  padding: 64px 24px 96px;\n  overflow-x: clip;\n}\n\n.goals__head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  justify-content: space-between;\n  gap: 16px 40px;\n  margin-bottom: 48px;\n}\n\n.goals__heading {\n  position: relative;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.section-underline {\n  display: block;\n  margin-top: 4px;\n  max-width: 100%;\n  color: var(--orange);\n}\n\n.hand-aside {\n  font-family: var(--font-accent);\n  font-size: 25px;\n  line-height: 1.05;\n  color: var(--color-accent);\n  transform: rotate(-3deg);\n}\n\n/* Четыре колонки на широкой доске, две на средней, одна на узкой: clamp() выбирает наименьшую\n   ширину колонки по ширине самой доски, без медиазапросов. */\n.goals__board {\n  position: relative;\n  display: grid;\n  grid-template-columns: repeat(\n      auto-fit,\n      minmax(\n        clamp(\n          calc(20% + 1px),\n          calc((1080px - 100%) * 1000),\n          clamp(calc(33.4% + 1px), calc((540px - 100%) * 1000), 100%)\n        ),\n        1fr\n      )\n    );\n  gap: 40px 24px;\n  padding: 16px 0 24px;\n}\n\n.goal-card {\n  position: relative;\n  justify-self: center;\n  width: min(100%, 280px);\n  height: 360px;\n  margin-top: var(--card-offset);\n  transform: rotate(var(--rotation));\n  perspective: 1400px;\n}\n\n.goal-card--1 {\n  --card-offset: 26px;\n  --rotation: -4deg;\n  --card-paper: var(--color-surface);\n  --tape-tilt: -4deg;\n  --frame-a: var(--stripe-cream-a);\n  --frame-b: var(--stripe-cream-b);\n}\n\n.goal-card--2 {\n  --card-offset: 0px;\n  --rotation: 2.5deg;\n  --card-paper: var(--pink-pale);\n  --tape-tilt: 3deg;\n  --frame-a: var(--stripe-pink-a);\n  --frame-b: var(--stripe-pink-b);\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n\n.goal-card--3 {\n  --card-offset: 40px;\n  --rotation: -2deg;\n  --card-paper: var(--color-surface);\n  --tape-tilt: -2deg;\n  --frame-a: var(--stripe-cream-a);\n  --frame-b: var(--stripe-cream-b);\n}\n\n.goal-card--4 {\n  --card-offset: 10px;\n  --rotation: 3.5deg;\n  --card-paper: var(--beige);\n  --tape-tilt: 4deg;\n  --frame-a: var(--stripe-beige-a);\n  --frame-b: var(--stripe-beige-b);\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n\n/* Флажок невидим, но остаётся в порядке Tab: пробел переворачивает карточку с клавиатуры */\n.goal-card__toggle {\n  position: absolute;\n  top: 0;\n  left: 0;\n  width: 1px;\n  height: 1px;\n  margin: 0;\n  opacity: 0;\n}\n\n/* Метка поверх карточки — нажатие в любом месте переворачивает её */\n.goal-card__hit {\n  position: absolute;\n  inset: 0;\n  z-index: 2;\n  cursor: pointer;\n}\n\n.goal-card__toggle:focus-visible ~ .goal-card__hit {\n  outline: 3px solid var(--rust);\n  outline-offset: 6px;\n  border-radius: 6px;\n}\n\n.goal-card__inner {\n  position: absolute;\n  inset: 0;\n  transform-style: preserve-3d;\n  transition: transform 0.65s cubic-bezier(0.3, 0.7, 0.2, 1);\n}\n\n.goal-card__toggle:checked ~ .goal-card__inner {\n  transform: rotateY(180deg);\n}\n\n.goal-card__front {\n  position: absolute;\n  inset: 0;\n  backface-visibility: hidden;\n  -webkit-backface-visibility: hidden;\n  background: var(--card-paper);\n  border-radius: 6px;\n  box-shadow: 0 6px 18px var(--shadow-ink);\n  padding: 28px 22px 18px;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.goal-card__tape {\n  position: absolute;\n  left: 50%;\n  top: -13px;\n  width: 90px;\n  height: 26px;\n  margin-left: -45px;\n  transform: rotate(var(--tape-tilt));\n  background: var(--tape);\n  clip-path: var(--shape-tape);\n}\n\n.goal-card__number {\n  font-family: ui-monospace, \"JetBrains Mono\", Menlo, Consolas, monospace;\n  font-size: 12px;\n  color: var(--color-muted);\n}\n\n.goal-card__title {\n  margin: 0;\n  font-size: 30px;\n}\n\n.goal-card__text {\n  margin: 0;\n  font-size: 15px;\n  line-height: 1.5;\n  color: var(--color-text);\n}\n\n/* Фото в белой рамке; пока фото нет — полосатая заглушка */\n.goal-card__photo {\n  flex: 1;\n  min-height: 80px;\n  border-radius: 3px;\n  background: repeating-linear-gradient(135deg, var(--frame-a) 0 9px, var(--frame-b) 9px 18px);\n  position: relative;\n  overflow: hidden;\n  box-shadow: inset 0 0 0 5px var(--paper-bright);\n}\n\n.goal-card__img {\n  position: absolute;\n  inset: 5px;\n  display: block;\n}\n\n.goal-card__img img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: sepia(0.18) saturate(0.85) contrast(0.95);\n  pointer-events: none;\n}\n\n.goal-card__caption,\n.goal-card__back-hint {\n  font-family: var(--font-accent);\n  font-size: 22px;\n  color: var(--color-accent);\n}\n\n.goal-card__back {\n  position: absolute;\n  inset: 0;\n  backface-visibility: hidden;\n  -webkit-backface-visibility: hidden;\n  transform: rotateY(180deg);\n  background: var(--color-accent);\n  color: var(--color-background);\n  border-radius: 6px;\n  box-shadow: 0 6px 18px var(--shadow-ink);\n  padding: 28px 22px 18px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.goal-card__back-eyebrow {\n  font-family: var(--font-accent);\n  font-size: 24px;\n  color: var(--peach);\n}\n\n.goal-card__back-title {\n  margin: 0;\n  font-size: 26px;\n}\n\n.goal-card__list {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n  font-size: 15px;\n  line-height: 1.45;\n}\n\n.goal-card__item {\n  display: flex;\n  gap: 10px;\n}\n\n.goal-card__check {\n  color: var(--peach);\n  font-weight: 700;\n}\n\n.goal-card__back-hint {\n  margin-top: auto;\n  color: var(--color-background);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .goal-card__inner {\n    transition: none;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 44px;\n    padding-bottom: 52px;\n  }\n  .goals__head {\n    gap: 20px;\n    margin-bottom: 28px;\n  }\n  .goals__board {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: 28px 20px;\n    padding: 16px 0;\n  }\n  /* Обе стороны определяют высоту, поэтому крупный текст не обрезается */\n  .goal-card {\n    width: 100%;\n    height: auto;\n    margin: 0;\n    transform: none;\n  }\n  .goal-card__inner {\n    position: relative;\n    display: grid;\n  }\n  .goal-card__inner > div {\n    position: relative;\n    inset: auto;\n    grid-area: 1 / 1;\n    min-width: 0;\n    padding: 26px 20px 20px;\n  }\n  .goal-card__photo {\n    min-height: 116px;\n  }\n  .goal-card__title {\n    font-size: clamp(25px, 4vw, 30px);\n    overflow-wrap: anywhere;\n  }\n  .goal-card__list {\n    line-height: 1.55;\n  }\n}\n\n@media (max-width: 540px) {\n  .goals__board {\n    grid-template-columns: minmax(0, 1fr);\n    gap: 28px;\n  }\n  .goal-card__inner > div {\n    padding: 26px 22px 20px;\n  }\n  .goal-card__photo {\n    min-height: 136px;\n  }\n  .goal-card__title {\n    font-size: 29px;\n  }\n}\n",
+      "example": {
+        "title": "Выбери свою *цель*",
+        "cards": [
+          {
+            "title": "Учёба",
+            "text": "Разбираться в учебных текстах, писать работы и задавать вопросы на занятиях.",
+            "back_title": "Для учёбы",
+            "back_items": [
+              {
+                "text": "Разбираем твои лекции и учебные тексты"
+              }
+            ]
+          },
+          {
+            "title": "Работа",
+            "text": "Общаться с коллегами, готовиться к интервью и объяснять свои идеи.",
+            "back_title": "Для работы",
+            "back_items": [
+              {
+                "text": "Собираем лексику твоей сферы"
+              }
+            ]
+          },
+          {
+            "title": "Путешествия",
+            "text": "Общаться в поездках: заселиться в отель и спросить дорогу.",
+            "back_title": "Для путешествий",
+            "back_items": [
+              {
+                "text": "Проигрываем ситуации: аэропорт, отель, кафе"
+              }
+            ]
+          },
+          {
+            "title": "Общение",
+            "text": "Поддерживать разговор, знакомиться и выражать свои мысли.",
+            "back_title": "Для общения",
+            "back_items": [
+              {
+                "text": "Много разговорной практики на живые темы"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "le-about",
+      "title": "Vallex: обо мне",
+      "description": "Фото на полароиде со стикером, рассказ о себе и пункты с галочками",
+      "category": "about",
+      "sketch": "text-image",
+      "fields": [
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "text",
+          "label": "Рассказ о себе",
+          "hint": "Чтобы начать новый абзац, оставь пустую строку.",
+          "required": true,
+          "maxLength": 1500
+        },
+        {
+          "type": "repeater",
+          "name": "points",
+          "label": "Пункты с галочками",
+          "hint": "Коротко, по одной мысли: образование, сертификаты, опыт, подход.",
+          "required": false,
+          "min": 0,
+          "max": 8,
+          "fields": [
+            {
+              "type": "text",
+              "name": "text",
+              "label": "Пункт",
+              "required": true,
+              "maxLength": 90
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "name": "photo",
+          "label": "Фото",
+          "hint": "Портрет рядом с рассказом.",
+          "required": false
+        },
+        {
+          "type": "textarea",
+          "name": "sticker",
+          "label": "Розовый стикер на фото",
+          "required": false,
+          "maxLength": 40
+        }
+      ],
+      "template": "<div class=\"about\">\n  <div class=\"about__media\">\n    <div class=\"about__polaroid\">\n      <div class=\"about__frame\">\n        <div class=\"about__tape-left\"></div>\n        <div class=\"about__tape-right\"></div>\n        {% if photo %}{{ photo | image: '(min-width: 820px) 380px, 80vw', 'about__photo' }}{% endif %}\n      </div>\n    </div>\n    {% if sticker %}\n    <div class=\"about__sticker\"><div class=\"about__sticker-paper\">{{ sticker | newline_to_br }}</div></div>\n    {% endif %}\n  </div>\n  <div class=\"about__text\">\n    <h2 class=\"section-title\">{{ title | accent }}</h2>\n    {{ text | paragraphs }}\n    {% if points.size > 0 %}\n    <ul class=\"about__points\" role=\"list\">\n      {% for point in points %}<li class=\"about__point\"><span class=\"about__check\" aria-hidden=\"true\">✓</span>{{ point.text }}</li>{% endfor %}\n    </ul>\n    {% endif %}\n  </div>\n</div>\n",
+      "css": "/* Обо мне: фото на полароиде с клейкой лентой и стикером, рассказ и пункты с галочками. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --rust: #b85418;\n  --pink: #f1cfc5;\n  --tape: rgba(226, 212, 182, 0.85);\n  --shadow-ink: rgba(30, 43, 37, 0.16);\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  --shape-torn: polygon(\n    0 0,\n    100% 2%,\n    100% 94%,\n    92% 98%,\n    84% 94%,\n    75% 99%,\n    66% 95%,\n    57% 99%,\n    48% 94%,\n    39% 98%,\n    30% 94%,\n    21% 99%,\n    12% 95%,\n    0 98%\n  );\n  padding: 64px 24px 96px;\n}\n\n.about {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 56px 72px;\n}\n\n.about__media {\n  flex: 1 1 320px;\n  max-width: 420px;\n  position: relative;\n  margin: 0 auto;\n}\n\n.about__polaroid {\n  transform: rotate(-2.5deg);\n  filter: drop-shadow(0 16px 26px var(--shadow-ink));\n}\n\n.about__frame {\n  background: var(--color-surface);\n  padding: 14px 14px 18px;\n  position: relative;\n}\n\n.about__tape-left,\n.about__tape-right {\n  position: absolute;\n  top: 14px;\n  width: 90px;\n  height: 26px;\n  background: var(--tape);\n  clip-path: var(--shape-tape);\n  z-index: 1;\n}\n\n.about__tape-left {\n  left: -18px;\n  transform: rotate(-38deg);\n}\n\n.about__tape-right {\n  right: -18px;\n  transform: rotate(38deg);\n}\n\n.about__photo,\n.about__photo img {\n  display: block;\n  width: 100%;\n  height: auto;\n}\n\n.about__sticker {\n  position: absolute;\n  right: -6%;\n  bottom: -28px;\n  width: 130px;\n  transform: rotate(6deg);\n  filter: drop-shadow(0 8px 14px var(--shadow-ink));\n}\n\n.about__sticker-paper {\n  background: var(--pink);\n  padding: 16px 14px 22px;\n  font-family: var(--font-accent);\n  font-size: 26px;\n  line-height: 1;\n  color: var(--color-accent);\n  clip-path: var(--shape-torn);\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n}\n\n.about__text {\n  flex: 1 1 380px;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 22px;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.about__text p {\n  margin: 0;\n  font-size: 18px;\n  line-height: 1.6;\n  color: var(--color-text);\n  text-wrap: pretty;\n}\n\n.about__points {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  margin: 0;\n  padding: 4px 0 0;\n  list-style: none;\n  font-size: 16px;\n}\n\n.about__point {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n}\n\n.about__check {\n  font-family: var(--font-accent);\n  font-size: 26px;\n  line-height: 1;\n  color: var(--rust);\n}\n\n@keyframes wiggle {\n  0%,\n  100% {\n    rotate: 0deg;\n  }\n  30% {\n    rotate: -3deg;\n  }\n  65% {\n    rotate: 2deg;\n  }\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .about__sticker:hover .about__sticker-paper {\n    animation: wiggle 0.6s ease-in-out;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 44px;\n    padding-bottom: 52px;\n  }\n  .about {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    gap: 36px;\n  }\n  .about__media {\n    width: min(82%, 340px);\n    min-width: 0;\n    margin: 8px auto 20px;\n  }\n  .about__sticker {\n    right: -4%;\n    width: 112px;\n  }\n  .about__sticker-paper {\n    font-size: 23px;\n  }\n  .about__text {\n    gap: 18px;\n  }\n  .about__text p {\n    font-size: 17px;\n  }\n}\n\n@media (max-width: 540px) {\n  .about__media {\n    width: 84%;\n  }\n  .about__text p {\n    font-size: 16px;\n    line-height: 1.65;\n  }\n}\n",
+      "example": {
+        "title": "Привет, я *Лера*",
+        "text": "Я Лера, преподаватель английского. Помогаю использовать язык в жизни.\n\nКаждое занятие я веду сама и подстраиваю под тебя.",
+        "points": [
+          {
+            "text": "Индивидуальные занятия под твою цель"
+          },
+          {
+            "text": "Спокойная работа с ошибками"
+          }
+        ],
+        "sticker": "Nice to\nmeet you ♡"
+      }
+    },
+    {
+      "key": "le-steps",
+      "title": "Vallex: как проходят занятия",
+      "description": "Пронумерованные бумажные карточки шагов от пробного урока до результата",
+      "category": "sales",
+      "sketch": "steps",
+      "fields": [
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок блока",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "aside",
+          "label": "Рукописная надпись справа от заголовка",
+          "hint": "Enter — перенос на новую строку.",
+          "required": false,
+          "maxLength": 60
+        },
+        {
+          "type": "repeater",
+          "name": "items",
+          "label": "Шаги",
+          "required": false,
+          "min": 1,
+          "max": 6,
+          "fields": [
+            {
+              "type": "text",
+              "name": "title",
+              "label": "Название",
+              "required": true,
+              "maxLength": 40
+            },
+            {
+              "type": "textarea",
+              "name": "text",
+              "label": "Текст",
+              "required": true,
+              "maxLength": 200
+            }
+          ]
+        }
+      ],
+      "template": "<div class=\"steps\">\n  <div class=\"section-head\">\n    <div>\n      <h2 class=\"section-title\">{{ title | accent }}</h2>\n      <svg width=\"260\" height=\"16\" viewBox=\"0 0 260 16\" class=\"section-underline\" aria-hidden=\"true\"><path d=\"M4 9 C 70 3, 170 4, 256 9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path></svg>\n    </div>\n    {% if aside %}<div class=\"hand-aside\">{{ aside | newline_to_br }}</div>{% endif %}\n  </div>\n  <ol class=\"steps__grid\" role=\"list\">\n    {% for item in items %}\n    {% assign look = forloop.index0 | modulo: 4 | plus: 1 %}\n    <li class=\"step-card step-card--{{ look }}\">\n      <div class=\"step-card__tape\"></div>\n      <div class=\"step-card__number\" aria-hidden=\"true\">{% if forloop.index < 10 %}0{% endif %}{{ forloop.index }}</div>\n      <h3 class=\"step-card__title\">{{ item.title }}</h3>\n      <p class=\"step-card__text\">{{ item.text | newline_to_br }}</p>\n    </li>\n    {% endfor %}\n  </ol>\n</div>\n",
+      "css": "/* Как проходят занятия: пронумерованные бумажные карточки на клейкой ленте. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --rust: #b85418;\n  --orange: #e9782f;\n  --pink-pale: #f6e1dd;\n  --beige: #efe7d8;\n  --tape: rgba(226, 212, 182, 0.85);\n  --shadow-ink: rgba(30, 43, 37, 0.1);\n  --shadow-lift: rgba(30, 43, 37, 0.14);\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  padding: 64px 24px 110px;\n}\n\n.section-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  justify-content: space-between;\n  gap: 16px 40px;\n  margin-bottom: 56px;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.section-underline {\n  display: block;\n  margin-top: 4px;\n  max-width: 100%;\n  color: var(--orange);\n}\n\n.hand-aside {\n  font-family: var(--font-accent);\n  font-size: 25px;\n  line-height: 1.05;\n  color: var(--color-accent);\n  transform: rotate(-3deg);\n}\n\n.steps__grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));\n  gap: 36px 28px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n/* Вид карточки — по её месту (step-card--1…4), чтобы ритм не зависел от текстов */\n.step-card {\n  position: relative;\n  background: var(--card-paper);\n  padding: 34px 26px 30px;\n  transform: rotate(var(--card-tilt));\n  box-shadow: 0 6px 18px var(--shadow-ink);\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.step-card--1 {\n  --card-paper: var(--color-surface);\n  --card-tilt: -1.2deg;\n  --tape-tilt: -5deg;\n}\n.step-card--2 {\n  --card-paper: var(--pink-pale);\n  --card-tilt: 1deg;\n  --tape-tilt: 4deg;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n.step-card--3 {\n  --card-paper: var(--color-surface);\n  --card-tilt: -0.6deg;\n  --tape-tilt: -3deg;\n}\n.step-card--4 {\n  --card-paper: var(--beige);\n  --card-tilt: 1.4deg;\n  --tape-tilt: 5deg;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n\n.step-card__tape {\n  position: absolute;\n  left: 24px;\n  top: -12px;\n  width: 76px;\n  height: 24px;\n  transform: rotate(var(--tape-tilt));\n  background: var(--tape);\n  clip-path: var(--shape-tape);\n}\n\n.step-card__number {\n  font-family: var(--font-accent);\n  font-size: 46px;\n  line-height: 0.9;\n  color: var(--rust);\n}\n\n.step-card__title {\n  margin: 0;\n  font-size: 24px;\n}\n\n.step-card__text {\n  margin: 0;\n  font-size: 15px;\n  line-height: 1.55;\n  color: var(--color-text);\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .step-card {\n    transition:\n      translate 0.3s ease,\n      box-shadow 0.3s ease;\n  }\n  .step-card:hover {\n    translate: 0 -5px;\n    box-shadow: 0 14px 28px var(--shadow-lift);\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 44px;\n    padding-bottom: 52px;\n  }\n  .section-head {\n    gap: 20px;\n    margin-bottom: 28px;\n  }\n  .hand-aside {\n    font-size: 23px;\n  }\n  .steps__grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: 28px 20px;\n  }\n  .step-card {\n    transform: none;\n    padding: 28px 22px 24px;\n    min-width: 0;\n  }\n}\n\n@media (max-width: 540px) {\n  .section-title {\n    font-size: clamp(30px, 8vw, 40px);\n    line-height: 1.15;\n  }\n  .hand-aside {\n    font-size: 22px;\n  }\n  .steps__grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n  .step-card {\n    gap: 10px;\n  }\n}\n",
+      "example": {
+        "title": "Как проходят занятия",
+        "aside": "всё онлайн,\nв удобное тебе время",
+        "items": [
+          {
+            "title": "Знакомимся",
+            "text": "Обсуждаем твою цель и опыт изучения языка."
+          },
+          {
+            "title": "Составляем план",
+            "text": "Выбираем темы и материалы под твою задачу."
+          },
+          {
+            "title": "Практикуемся",
+            "text": "Разговариваем, тренируем понимание речи."
+          },
+          {
+            "title": "Следим за прогрессом",
+            "text": "Возвращаемся к твоим целям и корректируем план."
+          }
+        ]
+      }
+    },
+    {
+      "key": "le-reviews",
+      "title": "Vallex: отзывы",
+      "description": "Сообщения учеников в виде переписки на тёмной полосе с рваными краями и кнопкой записи",
+      "category": "trust",
+      "sketch": "reviews",
+      "fields": [
+        {
+          "type": "textarea",
+          "name": "title",
+          "label": "Заголовок блока",
+          "hint": "Enter — перенос на новую строку.",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "lead",
+          "label": "Текст под заголовком",
+          "required": false,
+          "maxLength": 160
+        },
+        {
+          "type": "textarea",
+          "name": "note",
+          "label": "Примечание мелким шрифтом",
+          "hint": "Например, «Публикую с разрешения учеников». Если пусто — не показывается.",
+          "required": false,
+          "maxLength": 200
+        },
+        {
+          "type": "link",
+          "name": "cta",
+          "label": "Кнопка рядом с отзывами",
+          "hint": "Обычно ведёт на страницу записи. Нет ссылки — кнопки нет.",
+          "required": false
+        },
+        {
+          "type": "textarea",
+          "name": "sticker",
+          "label": "Белый стикер (только на компьютере)",
+          "required": false,
+          "maxLength": 40
+        },
+        {
+          "type": "repeater",
+          "name": "items",
+          "label": "Отзывы",
+          "required": false,
+          "min": 1,
+          "max": 12,
+          "fields": [
+            {
+              "type": "text",
+              "name": "name",
+              "label": "Имя",
+              "required": true,
+              "maxLength": 40
+            },
+            {
+              "type": "text",
+              "name": "topic",
+              "label": "Чем занимается",
+              "hint": "Пишется рядом с именем: «Аня · английский для работы».",
+              "required": false,
+              "maxLength": 60
+            },
+            {
+              "type": "textarea",
+              "name": "text",
+              "label": "Текст отзыва",
+              "required": true,
+              "maxLength": 600
+            },
+            {
+              "type": "image",
+              "name": "photo",
+              "label": "Фото",
+              "hint": "Необязательно — без фото будет кружок с первой буквой имени.",
+              "required": false
+            },
+            {
+              "type": "text",
+              "name": "caption",
+              "label": "Подпись под отзывом",
+              "hint": "Необязательно, мелким шрифтом.",
+              "required": false,
+              "maxLength": 40
+            }
+          ]
+        }
+      ],
+      "template": "<div class=\"reviews\">\n  <div class=\"reviews__aside\">\n    <div class=\"reviews__intro\">\n      <div class=\"reviews__intro-body\">\n        <h2 class=\"section-title\">{{ title | accent }}</h2>\n        <svg width=\"200\" height=\"16\" viewBox=\"0 0 200 16\" class=\"reviews__underline\" aria-hidden=\"true\"><path d=\"M4 10 C 60 3, 130 4, 196 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path></svg>\n        {% if lead %}<p class=\"reviews__lead\">{{ lead | newline_to_br }}</p>{% endif %}\n        {% if note %}<p class=\"reviews__note\">{{ note | newline_to_br }}</p>{% endif %}\n        {% if cta %}<a class=\"reviews__cta reviews__cta--desktop\" href=\"{{ cta | link }}\">{{ cta.label }} <span aria-hidden=\"true\">→</span></a>{% endif %}\n      </div>\n    </div>\n    {% if sticker %}\n    <div class=\"reviews__sticker\"><div class=\"reviews__sticker-paper\">{{ sticker | newline_to_br }}</div></div>\n    {% endif %}\n  </div>\n  <ul class=\"reviews__chat\" role=\"list\">\n    {% for item in items %}\n    {% assign odd = forloop.index0 | modulo: 2 %}\n    <li class=\"review{% if odd == 1 %} review--right{% endif %}\">\n      {% if odd == 0 %}\n        {% if item.photo %}<img class=\"review__avatar\" src=\"{{ item.photo | image_url }}\" alt=\"\" width=\"64\" height=\"64\" loading=\"lazy\" decoding=\"async\">{% else %}<span class=\"review__avatar review__avatar--initial\" aria-hidden=\"true\">{{ item.name | slice: 0, 1 | upcase }}</span>{% endif %}\n      {% endif %}\n      <div class=\"review__bubble\">\n        <div class=\"review__author\">{{ item.name }}{% if item.topic %} · {{ item.topic }}{% endif %}</div>\n        <div class=\"review__text\">{{ item.text | newline_to_br }}</div>\n        {% if item.caption %}<div class=\"review__caption\">{{ item.caption }}</div>{% endif %}\n      </div>\n      {% if odd == 1 %}\n        {% if item.photo %}<img class=\"review__avatar\" src=\"{{ item.photo | image_url }}\" alt=\"\" width=\"64\" height=\"64\" loading=\"lazy\" decoding=\"async\">{% else %}<span class=\"review__avatar review__avatar--initial\" aria-hidden=\"true\">{{ item.name | slice: 0, 1 | upcase }}</span>{% endif %}\n      {% endif %}\n    </li>\n    {% endfor %}\n  </ul>\n  {% if cta %}<a class=\"reviews__cta reviews__cta--mobile\" href=\"{{ cta | link }}\">{{ cta.label }} <span aria-hidden=\"true\">→</span></a>{% endif %}\n</div>\n",
+      "css": "/* Отзывы: тёмная полоса с рваными краями на всю ширину страницы, слева — вступление, справа —\n   переписка. Фон полосы — акцент темы, текст — фон темы. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --rust: #b85418;\n  --accent-deep: #8a3a2c;\n  --peach: #f4a56e;\n  --pink: #f1cfc5;\n  --on-accent-muted: #d9d4c8;\n  --caption: #6b736d;\n  --caption-warm: #6b5650;\n  --shadow-dark: rgba(0, 0, 0, 0.25);\n  --shadow-cta: rgba(0, 0, 0, 0.2);\n  --shape-torn-fine: polygon(\n    0 2%,\n    100% 0,\n    100% 94%,\n    93% 98%,\n    86% 94%,\n    78% 99%,\n    70% 95%,\n    62% 99%,\n    54% 94%,\n    46% 98%,\n    38% 94%,\n    30% 99%,\n    22% 95%,\n    14% 99%,\n    7% 94%,\n    0 97%\n  );\n  background: var(--color-accent);\n  color: var(--color-background);\n  padding: 130px 24px 140px;\n  clip-path: polygon(\n    0 14px,\n    4% 4px,\n    9% 16px,\n    15% 2px,\n    22% 12px,\n    28% 0,\n    35% 14px,\n    42% 5px,\n    49% 15px,\n    56% 3px,\n    63% 13px,\n    70% 1px,\n    77% 14px,\n    84% 4px,\n    91% 15px,\n    96% 3px,\n    100% 12px,\n    100% calc(100% - 12px),\n    95% calc(100% - 2px),\n    89% calc(100% - 14px),\n    82% calc(100% - 3px),\n    75% calc(100% - 15px),\n    68% calc(100% - 4px),\n    61% calc(100% - 13px),\n    54% 100%,\n    47% calc(100% - 14px),\n    40% calc(100% - 2px),\n    33% calc(100% - 12px),\n    26% calc(100% - 1px),\n    19% calc(100% - 14px),\n    12% calc(100% - 3px),\n    6% calc(100% - 13px),\n    0 calc(100% - 4px)\n  );\n}\n\n.reviews {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 48px 72px;\n  align-items: flex-start;\n}\n\n/* Левая колонка той же высоты, что и переписка: вступление липнет, пока длинный список прокручивают */\n.reviews__aside {\n  flex: 1 1 300px;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 20px;\n  position: relative;\n  align-self: stretch;\n}\n\n.reviews__intro {\n  flex: 1 1 auto;\n}\n\n.reviews__intro-body {\n  position: sticky;\n  top: 40px;\n  display: flex;\n  flex-direction: column;\n  gap: 20px;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--peach);\n}\n\n.reviews__underline {\n  display: block;\n  margin-top: -8px;\n  color: var(--peach);\n}\n\n.reviews__lead {\n  margin: 0;\n  font-size: 17px;\n  line-height: 1.6;\n  color: var(--on-accent-muted);\n  max-width: 360px;\n}\n\n.reviews__note {\n  margin: 0;\n  max-width: 340px;\n  font-size: 12px;\n  line-height: 1.5;\n  color: var(--on-accent-muted);\n}\n\n.reviews__cta {\n  align-self: flex-start;\n  display: inline-flex;\n  align-items: center;\n  gap: 10px;\n  margin-top: 8px;\n  padding: 15px 24px;\n  border-radius: 999px;\n  background: var(--color-surface);\n  color: var(--color-accent);\n  font-weight: 600;\n  font-size: 16px;\n  text-decoration: none;\n  box-shadow: 0 10px 24px var(--shadow-cta);\n}\n\n.reviews__cta:hover {\n  filter: brightness(1.06);\n  color: var(--color-accent);\n}\n\n.reviews__cta--mobile {\n  display: none;\n}\n\n.reviews__sticker {\n  width: 150px;\n  margin-top: 28px;\n  transform: rotate(-6deg);\n  filter: drop-shadow(0 10px 16px var(--shadow-dark));\n}\n\n.reviews__sticker-paper {\n  background: var(--color-surface);\n  padding: 20px 16px 26px;\n  font-family: var(--font-accent);\n  font-size: 30px;\n  line-height: 1;\n  color: var(--color-text);\n  clip-path: var(--shape-torn-fine);\n}\n\n/* Переписка: отзывы чередуются, чётные слева, нечётные справа */\n.reviews__chat {\n  flex: 1.4 1 420px;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 18px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.review {\n  display: flex;\n  align-items: flex-end;\n  gap: 12px;\n  max-width: 480px;\n}\n\n.review--right {\n  justify-content: flex-end;\n  align-self: flex-end;\n}\n\n.review__avatar {\n  display: block;\n  flex: none;\n  width: 64px;\n  height: 64px;\n  object-fit: cover;\n  border-radius: 50%;\n  border: 2px solid var(--on-accent-muted);\n}\n\n.review__bubble {\n  background: var(--color-surface);\n  color: var(--color-text);\n  padding: 14px 18px 10px;\n  border-radius: 18px 18px 18px 4px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.review--right .review__bubble {\n  background: var(--pink);\n  border-radius: 18px 18px 4px 18px;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n\n.review__author {\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--rust);\n}\n\n.review--right .review__author {\n  color: var(--accent-deep);\n}\n\n.review__text {\n  font-size: 16px;\n  line-height: 1.5;\n}\n\n.review__caption {\n  font-family: ui-monospace, \"JetBrains Mono\", Menlo, Consolas, monospace;\n  font-size: 11px;\n  color: var(--caption);\n  align-self: flex-end;\n}\n\n.review--right .review__caption {\n  color: var(--caption-warm);\n}\n\n/* Без фото в кружке — первая буква имени */\n.review__avatar--initial {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: var(--peach);\n  color: var(--color-accent);\n  font-family: var(--font-heading);\n  font-size: 26px;\n  line-height: 1;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .reviews__cta {\n    transition:\n      translate 0.25s ease,\n      filter 0.2s ease;\n  }\n  .reviews__cta:hover {\n    translate: 0 -2px;\n  }\n  .reviews__cta > span {\n    transition: translate 0.25s ease;\n  }\n  .reviews__cta:hover > span {\n    translate: 4px 0;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding: 64px 24px 72px;\n  }\n  .reviews {\n    gap: 28px;\n  }\n  .reviews__aside,\n  .reviews__chat {\n    flex-basis: 100%;\n  }\n  .reviews__sticker {\n    display: none;\n  }\n  .reviews__cta--desktop {\n    display: none;\n  }\n  .reviews__cta--mobile {\n    display: inline-flex;\n    width: 100%;\n    justify-content: center;\n    margin-top: 0;\n  }\n  .review {\n    max-width: 100%;\n    gap: 8px;\n  }\n  .review__bubble {\n    min-width: 0;\n    overflow-wrap: anywhere;\n  }\n}\n\n@media (max-width: 540px) {\n  :scope {\n    padding: 56px 24px 64px;\n  }\n  .review__avatar {\n    width: 48px;\n    height: 48px;\n  }\n  .review__avatar--initial {\n    font-size: 21px;\n  }\n  .review__bubble {\n    padding: 13px 14px 10px;\n  }\n  .review__text {\n    font-size: 15px;\n  }\n}\n",
+      "example": {
+        "title": "Что пишут\nученики",
+        "lead": "Маленькие победы за пределами урока.",
+        "note": "[Публикую с разрешения учеников]",
+        "cta": {
+          "label": "Хочу так же — на пробный урок",
+          "href": "/zapis"
+        },
+        "sticker": "You\ngot this ♡",
+        "items": [
+          {
+            "name": "[Имя]",
+            "topic": "[чем занимается]",
+            "text": "[Настоящий отзыв ученика]",
+            "caption": "[откуда отзыв]"
+          },
+          {
+            "name": "[Имя]",
+            "text": "[Настоящий отзыв ученика]"
+          }
+        ]
+      }
+    },
+    {
+      "key": "le-prices",
+      "title": "Vallex: цены",
+      "description": "Бумажные карточки тарифов на клейкой ленте с необязательной наклейкой на углу",
+      "category": "sales",
+      "sketch": "pricing",
+      "fields": [
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок блока",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "aside",
+          "label": "Рукописная надпись справа от заголовка",
+          "hint": "Enter — перенос на новую строку.",
+          "required": false,
+          "maxLength": 60
+        },
+        {
+          "type": "repeater",
+          "name": "items",
+          "label": "Тарифы",
+          "required": false,
+          "min": 1,
+          "max": 6,
+          "fields": [
+            {
+              "type": "text",
+              "name": "price",
+              "label": "Цена",
+              "hint": "Как напишешь, так и будет: «1 500 ₽», «бесплатно», «от 1 200 ₽».",
+              "required": true,
+              "maxLength": 24
+            },
+            {
+              "type": "text",
+              "name": "title",
+              "label": "Название",
+              "required": true,
+              "maxLength": 40
+            },
+            {
+              "type": "textarea",
+              "name": "note",
+              "label": "Подробности",
+              "required": false,
+              "maxLength": 160
+            },
+            {
+              "type": "text",
+              "name": "badge",
+              "label": "Наклейка на углу",
+              "hint": "Необязательно — розовая наклейка, чтобы выделить тариф.",
+              "required": false,
+              "maxLength": 20
+            }
+          ]
+        },
+        {
+          "type": "textarea",
+          "name": "note",
+          "label": "Примечание под ценами",
+          "required": false,
+          "maxLength": 300
+        }
+      ],
+      "template": "<div class=\"prices\">\n  <div class=\"section-head\">\n    <div>\n      <h2 class=\"section-title\">{{ title | accent }}</h2>\n      <svg width=\"220\" height=\"16\" viewBox=\"0 0 220 16\" class=\"section-underline\" aria-hidden=\"true\"><path d=\"M4 10 C 60 4, 140 4, 216 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path></svg>\n    </div>\n    {% if aside %}<div class=\"hand-aside\">{{ aside | newline_to_br }}</div>{% endif %}\n  </div>\n  <ul class=\"prices__grid\" role=\"list\">\n    {% for item in items %}\n    {% assign look = forloop.index0 | modulo: 3 | plus: 1 %}\n    <li class=\"price-card price-card--{{ look }}\">\n      <div class=\"price-card__tape\"></div>\n      {% if item.badge %}<div class=\"price-card__badge\">{{ item.badge }}</div>{% endif %}\n      <div class=\"price-card__value\">{{ item.price }}</div>\n      <h3 class=\"price-card__name\">{{ item.title }}</h3>\n      {% if item.note %}<p class=\"price-card__note\">{{ item.note | newline_to_br }}</p>{% endif %}\n    </li>\n    {% endfor %}\n  </ul>\n  {% if note %}<p class=\"prices__note\">{{ note | newline_to_br }}</p>{% endif %}\n</div>\n",
+      "css": "/* Цены: бумажные карточки тарифов с необязательной розовой наклейкой на углу. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --rust: #b85418;\n  --orange: #e9782f;\n  --pink: #f1cfc5;\n  --pink-pale: #f6e1dd;\n  --beige: #efe7d8;\n  --tape: rgba(226, 212, 182, 0.85);\n  --shadow-ink: rgba(30, 43, 37, 0.1);\n  --shadow-badge: rgba(30, 43, 37, 0.12);\n  --shadow-lift: rgba(30, 43, 37, 0.14);\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  padding: 110px 24px 24px;\n}\n\n.section-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  justify-content: space-between;\n  gap: 16px 40px;\n  margin-bottom: 56px;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.section-underline {\n  display: block;\n  margin-top: 4px;\n  max-width: 100%;\n  color: var(--orange);\n}\n\n.hand-aside {\n  font-family: var(--font-accent);\n  font-size: 25px;\n  line-height: 1.05;\n  color: var(--color-accent);\n  transform: rotate(-3deg);\n}\n\n.prices__grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));\n  gap: 40px 28px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n/* Вид карточки — по её месту (price-card--1…3) */\n.price-card {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  padding: 34px 26px 28px;\n  background: var(--card-paper);\n  box-shadow: 0 6px 18px var(--shadow-ink);\n  transform: rotate(var(--card-tilt));\n}\n\n.price-card--1 {\n  --card-paper: var(--color-surface);\n  --card-tilt: -1deg;\n  --tape-tilt: -4deg;\n}\n.price-card--2 {\n  --card-paper: var(--pink-pale);\n  --card-tilt: 1deg;\n  --tape-tilt: 3deg;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n.price-card--3 {\n  --card-paper: var(--beige);\n  --card-tilt: -0.5deg;\n  --tape-tilt: -4deg;\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n  color: var(--color-text);\n}\n\n.price-card__tape {\n  position: absolute;\n  left: 24px;\n  top: -12px;\n  width: 76px;\n  height: 24px;\n  transform: rotate(var(--tape-tilt));\n  background: var(--tape);\n  clip-path: var(--shape-tape);\n}\n\n.price-card__value {\n  font-family: var(--font-accent);\n  font-size: 46px;\n  line-height: 0.95;\n  color: var(--rust);\n}\n\n.price-card__name {\n  margin: 0;\n  font-size: 24px;\n}\n\n.price-card__note {\n  margin: 0;\n  font-size: 15px;\n  line-height: 1.55;\n  color: var(--color-text);\n}\n\n.price-card__badge {\n  position: absolute;\n  right: -10px;\n  top: -16px;\n  padding: 8px 12px 10px;\n  background: var(--pink);\n  font-family: var(--font-accent);\n  font-size: 22px;\n  line-height: 1;\n  color: var(--color-accent);\n  transform: rotate(5deg);\n  box-shadow: 0 6px 12px var(--shadow-badge);\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n}\n\n.prices__note {\n  margin: 40px 0 0;\n  max-width: 640px;\n  font-size: 15px;\n  line-height: 1.6;\n  color: var(--color-text);\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .price-card {\n    transition:\n      translate 0.3s ease,\n      box-shadow 0.3s ease;\n  }\n  .price-card:hover {\n    translate: 0 -5px;\n    box-shadow: 0 14px 28px var(--shadow-lift);\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 56px;\n    padding-bottom: 8px;\n  }\n  .section-head {\n    gap: 20px;\n    margin-bottom: 28px;\n  }\n  .hand-aside {\n    font-size: 23px;\n  }\n  .prices__grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: 32px 20px;\n  }\n  .price-card {\n    transform: none;\n    padding: 30px 22px 24px;\n    min-width: 0;\n  }\n}\n\n@media (max-width: 540px) {\n  .section-title {\n    font-size: clamp(30px, 8vw, 40px);\n    line-height: 1.15;\n  }\n  .hand-aside {\n    font-size: 22px;\n  }\n  .prices__grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n  .price-card__badge {\n    right: -4px;\n  }\n}\n",
+      "example": {
+        "title": "Стоимость занятий",
+        "aside": "подберём формат\nпод твою цель",
+        "items": [
+          {
+            "price": "[цена] ₽",
+            "title": "Пробное занятие",
+            "note": "[Длительность, формат]",
+            "badge": "Начнём здесь"
+          },
+          {
+            "price": "[цена] ₽",
+            "title": "Разовое занятие",
+            "note": "[Длительность, формат]"
+          },
+          {
+            "price": "[цена] ₽",
+            "title": "Пакет занятий",
+            "note": "[Сколько занятий]",
+            "badge": "Выгоднее вместе"
+          }
+        ],
+        "note": "[Условия оплаты и переноса занятий]"
+      }
+    },
+    {
+      "key": "le-faq",
+      "title": "Vallex: вопросы и ответы",
+      "description": "Раскрывающиеся вопросы с рукописной ссылкой «напиши мне» у заголовка",
+      "category": "trust",
+      "sketch": "faq",
+      "fields": [
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок блока",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "link",
+          "name": "aside",
+          "label": "Рукописная ссылка у заголовка",
+          "hint": "Подпись — до 40 знаков, Enter — перенос строки. Обычно ведёт в Telegram.",
+          "required": false
+        },
+        {
+          "type": "repeater",
+          "name": "items",
+          "label": "Вопросы",
+          "required": false,
+          "min": 1,
+          "max": 15,
+          "fields": [
+            {
+              "type": "text",
+              "name": "question",
+              "label": "Вопрос",
+              "required": true,
+              "maxLength": 140
+            },
+            {
+              "type": "textarea",
+              "name": "answer",
+              "label": "Ответ",
+              "hint": "Чтобы начать новый абзац, оставь пустую строку.",
+              "required": true,
+              "maxLength": 1000
+            }
+          ]
+        }
+      ],
+      "template": "<div class=\"faq\">\n  <div class=\"faq__head\">\n    <div>\n      <h2 class=\"section-title\">{{ title | accent }}</h2>\n      <svg width=\"260\" height=\"16\" viewBox=\"0 0 260 16\" class=\"section-underline\" aria-hidden=\"true\"><path d=\"M4 9 C 70 3, 170 4, 256 9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"></path></svg>\n    </div>\n    {% if aside %}<a class=\"hand-aside faq__aside\" href=\"{{ aside | link }}\">{{ aside.label | newline_to_br }}</a>{% endif %}\n  </div>\n  <div class=\"faq__list\">\n    {% for item in items %}\n    <details class=\"faq__item\">\n      <summary class=\"faq__question\">{{ item.question }}<span class=\"faq__icon\" aria-hidden=\"true\"></span></summary>\n      <div class=\"faq__answer\">{{ item.answer | paragraphs }}</div>\n    </details>\n    {% endfor %}\n  </div>\n</div>\n",
+      "css": "/* Вопросы и ответы: <details> без скриптов. На широком экране заголовок слева остаётся на месте,\n   пока справа прокручивают вопросы. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --rust: #b85418;\n  --orange: #e9782f;\n  --faq-hover: #f6efe3;\n  --shadow-ink: rgba(30, 43, 37, 0.08);\n  padding: 96px 24px 16px;\n}\n\n.faq__head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  justify-content: space-between;\n  gap: 16px 40px;\n  margin-bottom: 40px;\n}\n\n.section-title {\n  margin: 0;\n  font-size: clamp(34px, 4.4vw, 54px);\n  line-height: 1.1;\n}\n\n.section-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.section-underline {\n  display: block;\n  margin-top: 4px;\n  max-width: 100%;\n  color: var(--orange);\n}\n\n.hand-aside {\n  font-family: var(--font-accent);\n  font-size: 25px;\n  line-height: 1.05;\n  color: var(--color-accent);\n  transform: rotate(-3deg);\n}\n\n.faq__aside {\n  display: inline-block;\n  text-decoration: none;\n}\n\n.faq__aside:hover {\n  text-decoration: underline;\n}\n\n.faq__list {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.faq__item {\n  background: var(--color-surface);\n  border-radius: 6px;\n  box-shadow: 0 4px 14px var(--shadow-ink);\n}\n\n.faq__question {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 20px;\n  padding: 20px 24px;\n  cursor: pointer;\n  list-style: none;\n  font-family: var(--font-heading);\n  font-weight: var(--font-heading-weight);\n  font-size: clamp(19px, 2vw, 22px);\n  line-height: 1.3;\n  border-radius: 6px;\n}\n\n.faq__question::-webkit-details-marker {\n  display: none;\n}\n\n/* Плюс, который превращается в минус */\n.faq__icon {\n  position: relative;\n  flex: none;\n  width: 18px;\n  height: 18px;\n}\n\n.faq__icon::before,\n.faq__icon::after {\n  content: \"\";\n  position: absolute;\n  left: 0;\n  top: 8px;\n  width: 18px;\n  height: 2px;\n  border-radius: 2px;\n  background: var(--rust);\n  transition: transform 0.25s ease;\n}\n\n.faq__icon::after {\n  transform: rotate(90deg);\n}\n\n.faq__item[open] .faq__icon::after {\n  transform: rotate(0deg);\n}\n\n.faq__answer {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  padding: 8px 24px 24px;\n}\n\n.faq__answer p {\n  margin: 0;\n  max-width: 720px;\n  font-size: 16px;\n  line-height: 1.6;\n  color: var(--color-text);\n}\n\n@media (hover: hover) and (pointer: fine) {\n  .faq__item:not([open]) .faq__question:hover {\n    background-color: var(--faq-hover);\n    --color-text: var(--paper-ink);\n    --color-accent: var(--paper-green);\n    --color-muted: var(--paper-muted);\n    color: var(--color-text);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .faq__icon::before,\n  .faq__icon::after {\n    transition: none;\n  }\n}\n\n@media (min-width: 1024px) {\n  .faq {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);\n    gap: 64px;\n    align-items: start;\n  }\n  .faq__head {\n    position: sticky;\n    top: 40px;\n    flex-direction: column;\n    align-items: flex-start;\n    justify-content: flex-start;\n    gap: 28px;\n    margin-bottom: 0;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding-top: 56px;\n    padding-bottom: 8px;\n  }\n  .faq__head {\n    margin-bottom: 28px;\n  }\n  .faq__question {\n    padding: 18px 20px;\n  }\n  .faq__answer {\n    padding: 6px 20px 22px;\n  }\n}\n\n@media (max-width: 540px) {\n  .section-title {\n    font-size: clamp(30px, 8vw, 40px);\n    line-height: 1.15;\n  }\n  .hand-aside {\n    font-size: 22px;\n  }\n}\n",
+      "example": {
+        "title": "Частые вопросы",
+        "aside": {
+          "label": "остались вопросы?\nнапиши мне — отвечу ↗",
+          "href": "https://t.me/example"
+        },
+        "items": [
+          {
+            "question": "[Вопрос клиента]",
+            "answer": "[Ответ на вопрос]"
+          },
+          {
+            "question": "[Ещё один вопрос]",
+            "answer": "[Ответ на вопрос]"
+          }
+        ]
+      }
+    },
+    {
+      "key": "le-signup",
+      "title": "Vallex: запись внизу",
+      "description": "Розовый лист на клейкой ленте с призывом записаться, кнопкой и ссылкой в Telegram",
+      "category": "contact",
+      "sketch": "cta",
+      "fields": [
+        {
+          "type": "text",
+          "name": "eyebrow",
+          "label": "Рукописная надпись над заголовком",
+          "required": false,
+          "maxLength": 30
+        },
+        {
+          "type": "text",
+          "name": "title",
+          "label": "Заголовок",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "text",
+          "label": "Текст",
+          "required": false,
+          "maxLength": 300
+        },
+        {
+          "type": "link",
+          "name": "button",
+          "label": "Главная кнопка",
+          "hint": "Обычно ведёт на страницу записи: /zapis",
+          "required": true
+        },
+        {
+          "type": "textarea",
+          "name": "note",
+          "label": "Подпись под кнопкой",
+          "required": false,
+          "maxLength": 200
+        },
+        {
+          "type": "link",
+          "name": "telegram",
+          "label": "Ссылка «или напиши мне в Telegram»",
+          "hint": "Нет ссылки — её не показываем.",
+          "required": false
+        }
+      ],
+      "template": "<div class=\"signup\">\n  <div class=\"signup__card\">\n    <div class=\"signup__tape-left\"></div>\n    <div class=\"signup__tape-right\"></div>\n    <div class=\"signup__paper\">\n      {% if eyebrow %}<div class=\"hand-eyebrow\">{{ eyebrow }}</div>{% endif %}\n      <h2 class=\"cta-title\">{{ title | accent }}</h2>\n      {% if text %}<p class=\"cta-text\">{{ text | newline_to_br }}</p>{% endif %}\n      <a class=\"cta-accent\" href=\"{{ button | link }}\"{% if note %} aria-describedby=\"{{ block.id }}-note\"{% endif %}>{{ button.label }} <span aria-hidden=\"true\">→</span></a>\n      {% if note %}<p class=\"signup__note\" id=\"{{ block.id }}-note\">{{ note | newline_to_br }}</p>{% endif %}\n      {% if telegram %}<a class=\"signup__alt\" href=\"{{ telegram | link }}\">{{ telegram.label }}</a>{% endif %}\n    </div>\n  </div>\n</div>\n",
+      "css": "/* Запись внизу: розовый лист на клейкой ленте, кнопка и ссылка в Telegram. */\n:scope {\n  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */\n  --paper-ink: #1e2b25;\n  --paper-green: #213d32;\n  --paper-muted: #5b645e;\n  --terracotta: #c0503d;\n  --terracotta-dark: #a9432f;\n  --pink: #f1cfc5;\n  --warm-text: #3e3531;\n  --tape: rgba(226, 212, 182, 0.9);\n  --shadow-card: rgba(30, 43, 37, 0.14);\n  --shadow-cta: rgba(192, 80, 61, 0.3);\n  --shadow-cta-lift: rgba(192, 80, 61, 0.36);\n  --on-terracotta: #ffffff;\n  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);\n  padding: 110px 24px 80px;\n}\n\n.signup__card {\n  position: relative;\n  transform: rotate(-1deg);\n  filter: drop-shadow(0 18px 30px var(--shadow-card));\n}\n\n.signup__tape-left,\n.signup__tape-right {\n  position: absolute;\n  top: 10px;\n  width: 100px;\n  height: 28px;\n  background: var(--tape);\n  z-index: 2;\n  clip-path: var(--shape-tape);\n}\n\n.signup__tape-left {\n  left: -14px;\n  transform: rotate(-35deg);\n}\n\n.signup__tape-right {\n  right: -14px;\n  transform: rotate(35deg);\n}\n\n.signup__paper {\n  background: var(--pink);\n  color: var(--warm-text);\n  padding: clamp(48px, 7vw, 80px) clamp(24px, 6vw, 72px);\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  text-align: center;\n  gap: 22px;\n  clip-path: polygon(\n    0 1%,\n    6% 0,\n    14% 1.5%,\n    23% 0,\n    31% 1%,\n    40% 0,\n    48% 1.5%,\n    57% 0,\n    66% 1%,\n    74% 0,\n    83% 1.5%,\n    91% 0,\n    100% 1%,\n    100% 98%,\n    94% 100%,\n    86% 98.5%,\n    77% 100%,\n    69% 98%,\n    60% 100%,\n    52% 98.5%,\n    43% 100%,\n    35% 98%,\n    26% 100%,\n    18% 98.5%,\n    9% 100%,\n    0 98%\n  );\n  --color-text: var(--paper-ink);\n  --color-accent: var(--paper-green);\n  --color-muted: var(--paper-muted);\n}\n\n.hand-eyebrow {\n  font-family: var(--font-accent);\n  font-size: 38px;\n  line-height: 1;\n  color: var(--color-accent);\n  transform: rotate(-4deg);\n}\n\n.cta-title {\n  margin: 0;\n  font-size: clamp(34px, 4.8vw, 58px);\n  line-height: 1.08;\n  text-wrap: balance;\n  color: var(--color-text);\n}\n\n.cta-title em {\n  font-style: italic;\n  color: var(--terracotta);\n}\n\n.cta-text {\n  margin: 0;\n  font-size: 18px;\n  line-height: 1.55;\n  color: var(--warm-text);\n  max-width: 520px;\n  text-wrap: pretty;\n}\n\n.cta-accent {\n  display: inline-flex;\n  align-items: center;\n  gap: 12px;\n  background: var(--terracotta);\n  color: var(--on-terracotta);\n  padding: 20px 34px;\n  border-radius: 999px;\n  font-weight: 600;\n  font-size: 17px;\n  text-decoration: none;\n  box-shadow: 0 10px 24px var(--shadow-cta);\n  margin-top: 6px;\n}\n\n.cta-accent:hover {\n  background: var(--terracotta-dark);\n  color: var(--on-terracotta);\n}\n\n.signup__note {\n  font-size: 14px;\n  margin: 0;\n  color: var(--warm-text);\n}\n\n.signup__alt {\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--color-accent);\n  text-underline-offset: 3px;\n}\n\n@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {\n  .cta-accent {\n    transition:\n      translate 0.25s ease,\n      box-shadow 0.25s ease,\n      background-color 0.2s ease;\n  }\n  .cta-accent:hover {\n    translate: 0 -2px;\n    box-shadow: 0 14px 28px var(--shadow-cta-lift);\n  }\n  .cta-accent > span {\n    transition: translate 0.25s ease;\n  }\n  .cta-accent:hover > span {\n    translate: 4px 0;\n  }\n}\n\n@media (max-width: 819px) {\n  :scope {\n    padding: 56px 24px 40px;\n  }\n  .signup__card {\n    transform: none;\n  }\n  .signup__paper {\n    padding: 44px 24px;\n    gap: 20px;\n  }\n  .cta-accent {\n    justify-content: center;\n    max-width: 100%;\n    padding: 17px 22px;\n    text-align: center;\n  }\n}\n\n@media (max-width: 540px) {\n  .signup__paper {\n    padding: 38px 18px;\n  }\n  .signup__tape-left,\n  .signup__tape-right {\n    width: 64px;\n    height: 22px;\n  }\n  .signup__tape-left {\n    left: -8px;\n  }\n  .signup__tape-right {\n    right: -8px;\n  }\n  .cta-title {\n    font-size: clamp(30px, 8vw, 40px);\n    line-height: 1.15;\n  }\n  .cta-text {\n    font-size: 16px;\n    line-height: 1.65;\n  }\n  .cta-accent {\n    width: 100%;\n    padding: 16px 12px;\n    font-size: 15px;\n    gap: 8px;\n  }\n  .cta-accent > span {\n    flex-shrink: 0;\n  }\n}\n",
+      "example": {
+        "eyebrow": "Попробуем?",
+        "title": "Начни с *пробного урока*",
+        "text": "Познакомимся, обсудим твою задачу и определим уровень.",
+        "button": {
+          "label": "Записаться на пробный урок",
+          "href": "/zapis"
+        },
+        "note": "Оставь заявку — я свяжусь с тобой в течение дня.",
+        "telegram": {
+          "label": "или напиши мне в Telegram ↗",
+          "href": "https://t.me/example"
+        }
+      }
+    }
+  ]
+}

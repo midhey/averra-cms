@@ -1,0 +1,372 @@
+/* Цели: четыре бумажные карточки, которые переворачиваются по нажатию — без JavaScript: на каждой
+   карточке скрытый флажок, а переворот делает :checked. Перетаскивания карточек, как в исходном
+   сайте, здесь нет: оно держалось на скрипте, а блоки Averra работают без него. */
+:scope {
+  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
+  --paper-ink: #1e2b25;
+  --paper-green: #213d32;
+  --paper-muted: #5b645e;
+  --terracotta: #c0503d;
+  --rust: #b85418;
+  --orange: #e9782f;
+  --peach: #f4a56e;
+  --pink-pale: #f6e1dd;
+  --beige: #efe7d8;
+  --paper-bright: #fffdf8;
+  --tape: rgba(226, 212, 182, 0.85);
+  --shadow-ink: rgba(30, 43, 37, 0.12);
+  --stripe-cream-a: #ece3d4;
+  --stripe-cream-b: #e4d9c6;
+  --stripe-pink-a: #efd6ce;
+  --stripe-pink-b: #e8ccc3;
+  --stripe-beige-a: #e6dcca;
+  --stripe-beige-b: #ddd1bc;
+  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
+  padding: 64px 24px 96px;
+  overflow-x: clip;
+}
+
+.goals__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 40px;
+  margin-bottom: 48px;
+}
+
+.goals__heading {
+  position: relative;
+}
+
+.section-title {
+  margin: 0;
+  font-size: clamp(34px, 4.4vw, 54px);
+  line-height: 1.1;
+}
+
+.section-title em {
+  font-style: italic;
+  color: var(--terracotta);
+}
+
+.section-underline {
+  display: block;
+  margin-top: 4px;
+  max-width: 100%;
+  color: var(--orange);
+}
+
+.hand-aside {
+  font-family: var(--font-accent);
+  font-size: 25px;
+  line-height: 1.05;
+  color: var(--color-accent);
+  transform: rotate(-3deg);
+}
+
+/* Четыре колонки на широкой доске, две на средней, одна на узкой: clamp() выбирает наименьшую
+   ширину колонки по ширине самой доски, без медиазапросов. */
+.goals__board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(
+      auto-fit,
+      minmax(
+        clamp(
+          calc(20% + 1px),
+          calc((1080px - 100%) * 1000),
+          clamp(calc(33.4% + 1px), calc((540px - 100%) * 1000), 100%)
+        ),
+        1fr
+      )
+    );
+  gap: 40px 24px;
+  padding: 16px 0 24px;
+}
+
+.goal-card {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 280px);
+  height: 360px;
+  margin-top: var(--card-offset);
+  transform: rotate(var(--rotation));
+  perspective: 1400px;
+}
+
+.goal-card--1 {
+  --card-offset: 26px;
+  --rotation: -4deg;
+  --card-paper: var(--color-surface);
+  --tape-tilt: -4deg;
+  --frame-a: var(--stripe-cream-a);
+  --frame-b: var(--stripe-cream-b);
+}
+
+.goal-card--2 {
+  --card-offset: 0px;
+  --rotation: 2.5deg;
+  --card-paper: var(--pink-pale);
+  --tape-tilt: 3deg;
+  --frame-a: var(--stripe-pink-a);
+  --frame-b: var(--stripe-pink-b);
+  --color-text: var(--paper-ink);
+  --color-accent: var(--paper-green);
+  --color-muted: var(--paper-muted);
+  color: var(--color-text);
+}
+
+.goal-card--3 {
+  --card-offset: 40px;
+  --rotation: -2deg;
+  --card-paper: var(--color-surface);
+  --tape-tilt: -2deg;
+  --frame-a: var(--stripe-cream-a);
+  --frame-b: var(--stripe-cream-b);
+}
+
+.goal-card--4 {
+  --card-offset: 10px;
+  --rotation: 3.5deg;
+  --card-paper: var(--beige);
+  --tape-tilt: 4deg;
+  --frame-a: var(--stripe-beige-a);
+  --frame-b: var(--stripe-beige-b);
+  --color-text: var(--paper-ink);
+  --color-accent: var(--paper-green);
+  --color-muted: var(--paper-muted);
+  color: var(--color-text);
+}
+
+/* Флажок невидим, но остаётся в порядке Tab: пробел переворачивает карточку с клавиатуры */
+.goal-card__toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+/* Метка поверх карточки — нажатие в любом месте переворачивает её */
+.goal-card__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.goal-card__toggle:focus-visible ~ .goal-card__hit {
+  outline: 3px solid var(--rust);
+  outline-offset: 6px;
+  border-radius: 6px;
+}
+
+.goal-card__inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.goal-card__toggle:checked ~ .goal-card__inner {
+  transform: rotateY(180deg);
+}
+
+.goal-card__front {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: var(--card-paper);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px var(--shadow-ink);
+  padding: 28px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.goal-card__tape {
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  width: 90px;
+  height: 26px;
+  margin-left: -45px;
+  transform: rotate(var(--tape-tilt));
+  background: var(--tape);
+  clip-path: var(--shape-tape);
+}
+
+.goal-card__number {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.goal-card__title {
+  margin: 0;
+  font-size: 30px;
+}
+
+.goal-card__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+/* Фото в белой рамке; пока фото нет — полосатая заглушка */
+.goal-card__photo {
+  flex: 1;
+  min-height: 80px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, var(--frame-a) 0 9px, var(--frame-b) 9px 18px);
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 5px var(--paper-bright);
+}
+
+.goal-card__img {
+  position: absolute;
+  inset: 5px;
+  display: block;
+}
+
+.goal-card__img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.18) saturate(0.85) contrast(0.95);
+  pointer-events: none;
+}
+
+.goal-card__caption,
+.goal-card__back-hint {
+  font-family: var(--font-accent);
+  font-size: 22px;
+  color: var(--color-accent);
+}
+
+.goal-card__back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: rotateY(180deg);
+  background: var(--color-accent);
+  color: var(--color-background);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px var(--shadow-ink);
+  padding: 28px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.goal-card__back-eyebrow {
+  font-family: var(--font-accent);
+  font-size: 24px;
+  color: var(--peach);
+}
+
+.goal-card__back-title {
+  margin: 0;
+  font-size: 26px;
+}
+
+.goal-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.goal-card__item {
+  display: flex;
+  gap: 10px;
+}
+
+.goal-card__check {
+  color: var(--peach);
+  font-weight: 700;
+}
+
+.goal-card__back-hint {
+  margin-top: auto;
+  color: var(--color-background);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-card__inner {
+    transition: none;
+  }
+}
+
+@media (max-width: 819px) {
+  :scope {
+    padding-top: 44px;
+    padding-bottom: 52px;
+  }
+  .goals__head {
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  .goals__board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 20px;
+    padding: 16px 0;
+  }
+  /* Обе стороны определяют высоту, поэтому крупный текст не обрезается */
+  .goal-card {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    transform: none;
+  }
+  .goal-card__inner {
+    position: relative;
+    display: grid;
+  }
+  .goal-card__inner > div {
+    position: relative;
+    inset: auto;
+    grid-area: 1 / 1;
+    min-width: 0;
+    padding: 26px 20px 20px;
+  }
+  .goal-card__photo {
+    min-height: 116px;
+  }
+  .goal-card__title {
+    font-size: clamp(25px, 4vw, 30px);
+    overflow-wrap: anywhere;
+  }
+  .goal-card__list {
+    line-height: 1.55;
+  }
+}
+
+@media (max-width: 540px) {
+  .goals__board {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .goal-card__inner > div {
+    padding: 26px 22px 20px;
+  }
+  .goal-card__photo {
+    min-height: 136px;
+  }
+  .goal-card__title {
+    font-size: 29px;
+  }
+}

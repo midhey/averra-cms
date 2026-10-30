@@ -1,0 +1,214 @@
+/* Обо мне: фото на полароиде с клейкой лентой и стикером, рассказ и пункты с галочками. */
+:scope {
+  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
+  --paper-ink: #1e2b25;
+  --paper-green: #213d32;
+  --paper-muted: #5b645e;
+  --terracotta: #c0503d;
+  --rust: #b85418;
+  --pink: #f1cfc5;
+  --tape: rgba(226, 212, 182, 0.85);
+  --shadow-ink: rgba(30, 43, 37, 0.16);
+  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
+  --shape-torn: polygon(
+    0 0,
+    100% 2%,
+    100% 94%,
+    92% 98%,
+    84% 94%,
+    75% 99%,
+    66% 95%,
+    57% 99%,
+    48% 94%,
+    39% 98%,
+    30% 94%,
+    21% 99%,
+    12% 95%,
+    0 98%
+  );
+  padding: 64px 24px 96px;
+}
+
+.about {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 56px 72px;
+}
+
+.about__media {
+  flex: 1 1 320px;
+  max-width: 420px;
+  position: relative;
+  margin: 0 auto;
+}
+
+.about__polaroid {
+  transform: rotate(-2.5deg);
+  filter: drop-shadow(0 16px 26px var(--shadow-ink));
+}
+
+.about__frame {
+  background: var(--color-surface);
+  padding: 14px 14px 18px;
+  position: relative;
+}
+
+.about__tape-left,
+.about__tape-right {
+  position: absolute;
+  top: 14px;
+  width: 90px;
+  height: 26px;
+  background: var(--tape);
+  clip-path: var(--shape-tape);
+  z-index: 1;
+}
+
+.about__tape-left {
+  left: -18px;
+  transform: rotate(-38deg);
+}
+
+.about__tape-right {
+  right: -18px;
+  transform: rotate(38deg);
+}
+
+.about__photo,
+.about__photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.about__sticker {
+  position: absolute;
+  right: -6%;
+  bottom: -28px;
+  width: 130px;
+  transform: rotate(6deg);
+  filter: drop-shadow(0 8px 14px var(--shadow-ink));
+}
+
+.about__sticker-paper {
+  background: var(--pink);
+  padding: 16px 14px 22px;
+  font-family: var(--font-accent);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-accent);
+  clip-path: var(--shape-torn);
+  --color-text: var(--paper-ink);
+  --color-accent: var(--paper-green);
+  --color-muted: var(--paper-muted);
+}
+
+.about__text {
+  flex: 1 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: clamp(34px, 4.4vw, 54px);
+  line-height: 1.1;
+}
+
+.section-title em {
+  font-style: italic;
+  color: var(--terracotta);
+}
+
+.about__text p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--color-text);
+  text-wrap: pretty;
+}
+
+.about__points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+  font-size: 16px;
+}
+
+.about__point {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about__check {
+  font-family: var(--font-accent);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--rust);
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  30% {
+    rotate: -3deg;
+  }
+  65% {
+    rotate: 2deg;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .about__sticker:hover .about__sticker-paper {
+    animation: wiggle 0.6s ease-in-out;
+  }
+}
+
+@media (max-width: 819px) {
+  :scope {
+    padding-top: 44px;
+    padding-bottom: 52px;
+  }
+  .about {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+  .about__media {
+    width: min(82%, 340px);
+    min-width: 0;
+    margin: 8px auto 20px;
+  }
+  .about__sticker {
+    right: -4%;
+    width: 112px;
+  }
+  .about__sticker-paper {
+    font-size: 23px;
+  }
+  .about__text {
+    gap: 18px;
+  }
+  .about__text p {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 540px) {
+  .about__media {
+    width: 84%;
+  }
+  .about__text p {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "key": "le-hero",
+  "title": "Vallex: первый экран",
+  "description": "Заголовок с маркером, кнопка записи, преимущества и фото на полароиде со стикерами",
+  "category": "start",
+  "sketch": "hero",
+  "fields": [
+    {
+      "type": "text",
+      "name": "eyebrow",
+      "label": "Строчка над заголовком",
+      "hint": "Мелкими заглавными буквами.",
+      "maxLength": 50
+    },
+    {
+      "type": "textarea",
+      "name": "title",
+      "label": "Главный заголовок",
+      "hint": "Слова в *звёздочках* подсвечиваются маркером. Enter — перенос строки.",
+      "required": true,
+      "maxLength": 80
+    },
+    { "type": "textarea", "name": "lead", "label": "Текст под заголовком", "maxLength": 300 },
+    {
+      "type": "link",
+      "name": "button",
+      "label": "Главная кнопка",
+      "hint": "Обычно ведёт на страницу записи: /zapis",
+      "required": true
+    },
+    {
+      "type": "textarea",
+      "name": "note",
+      "label": "Рукописная фраза у кнопки",
+      "hint": "Enter — перенос на новую строку.",
+      "maxLength": 60
+    },
+    {
+      "type": "repeater",
+      "name": "badges",
+      "label": "Короткие преимущества",
+      "hint": "Строчки с оранжевыми точками под кнопкой.",
+      "min": 0,
+      "max": 6,
+      "fields": [
+        { "type": "text", "name": "text", "label": "Пункт", "required": true, "maxLength": 30 }
+      ]
+    },
+    {
+      "type": "image",
+      "name": "photo",
+      "label": "Фото",
+      "hint": "Обрезается до пропорции 4:5 по центру — лицо лучше держать посередине. Без фото — полосатая заглушка."
+    },
+    { "type": "text", "name": "photo_caption", "label": "Подпись на полароиде", "maxLength": 30 },
+    {
+      "type": "textarea",
+      "name": "sticker_top",
+      "label": "Розовый стикер у фото",
+      "maxLength": 50
+    },
+    {
+      "type": "textarea",
+      "name": "sticker_bottom",
+      "label": "Белый стикер под фото (только на компьютере)",
+      "maxLength": 30
+    }
+  ],
+  "example": {
+    "eyebrow": "Индивидуальные онлайн-занятия",
+    "title": "Английский, *который вписывается* в твою жизнь",
+    "lead": "Разговорная практика под твои задачи: для работы, учёбы, поездок и общения.",
+    "button": { "label": "Записаться на пробный урок", "href": "/zapis" },
+    "note": "первое занятие —\nзнакомимся и выбираем цель ↗",
+    "badges": [{ "text": "Практика живого общения" }, { "text": "Занятия онлайн" }],
+    "photo_caption": "Hi, I'm Lera ♡",
+    "sticker_top": "Small steps,\nbig opportunities ♡",
+    "sticker_bottom": "Let's\nspeak\nEnglish :)"
+  }
+}

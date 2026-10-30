@@ -1,0 +1,75 @@
+{
+  "key": "le-prices",
+  "title": "Vallex: цены",
+  "description": "Бумажные карточки тарифов на клейкой ленте с необязательной наклейкой на углу",
+  "category": "sales",
+  "sketch": "pricing",
+  "fields": [
+    {
+      "type": "text",
+      "name": "title",
+      "label": "Заголовок блока",
+      "required": true,
+      "maxLength": 60
+    },
+    {
+      "type": "textarea",
+      "name": "aside",
+      "label": "Рукописная надпись справа от заголовка",
+      "hint": "Enter — перенос на новую строку.",
+      "maxLength": 60
+    },
+    {
+      "type": "repeater",
+      "name": "items",
+      "label": "Тарифы",
+      "min": 1,
+      "max": 6,
+      "fields": [
+        {
+          "type": "text",
+          "name": "price",
+          "label": "Цена",
+          "hint": "Как напишешь, так и будет: «1 500 ₽», «бесплатно», «от 1 200 ₽».",
+          "required": true,
+          "maxLength": 24
+        },
+        { "type": "text", "name": "title", "label": "Название", "required": true, "maxLength": 40 },
+        { "type": "textarea", "name": "note", "label": "Подробности", "maxLength": 160 },
+        {
+          "type": "text",
+          "name": "badge",
+          "label": "Наклейка на углу",
+          "hint": "Необязательно — розовая наклейка, чтобы выделить тариф.",
+          "maxLength": 20
+        }
+      ]
+    },
+    {
+      "type": "textarea",
+      "name": "note",
+      "label": "Примечание под ценами",
+      "maxLength": 300
+    }
+  ],
+  "example": {
+    "title": "Стоимость занятий",
+    "aside": "подберём формат\nпод твою цель",
+    "items": [
+      {
+        "price": "[цена] ₽",
+        "title": "Пробное занятие",
+        "note": "[Длительность, формат]",
+        "badge": "Начнём здесь"
+      },
+      { "price": "[цена] ₽", "title": "Разовое занятие", "note": "[Длительность, формат]" },
+      {
+        "price": "[цена] ₽",
+        "title": "Пакет занятий",
+        "note": "[Сколько занятий]",
+        "badge": "Выгоднее вместе"
+      }
+    ],
+    "note": "[Условия оплаты и переноса занятий]"
+  }
+}

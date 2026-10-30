@@ -1,0 +1,81 @@
+{
+  "key": "le-goals",
+  "title": "Vallex: выбери свою цель",
+  "description": "Четыре карточки-цели с фото: по нажатию переворачиваются и показывают, что будет на занятиях",
+  "category": "about",
+  "sketch": "features",
+  "fields": [
+    {
+      "type": "text",
+      "name": "title",
+      "label": "Заголовок блока",
+      "required": true,
+      "maxLength": 60
+    },
+    {
+      "type": "repeater",
+      "name": "cards",
+      "label": "Карточки",
+      "hint": "Карточек всегда четыре — под них сделана раскладка.",
+      "min": 4,
+      "max": 4,
+      "fields": [
+        { "type": "text", "name": "title", "label": "Название", "required": true, "maxLength": 20 },
+        {
+          "type": "textarea",
+          "name": "text",
+          "label": "Текст на лицевой стороне",
+          "required": true,
+          "maxLength": 110
+        },
+        { "type": "image", "name": "photo", "label": "Фото на лицевой стороне" },
+        {
+          "type": "text",
+          "name": "back_title",
+          "label": "Заголовок на обороте",
+          "required": true,
+          "maxLength": 30
+        },
+        {
+          "type": "repeater",
+          "name": "back_items",
+          "label": "Пункты на обороте",
+          "min": 1,
+          "max": 3,
+          "fields": [
+            { "type": "text", "name": "text", "label": "Пункт", "required": true, "maxLength": 60 }
+          ]
+        }
+      ]
+    }
+  ],
+  "example": {
+    "title": "Выбери свою *цель*",
+    "cards": [
+      {
+        "title": "Учёба",
+        "text": "Разбираться в учебных текстах, писать работы и задавать вопросы на занятиях.",
+        "back_title": "Для учёбы",
+        "back_items": [{ "text": "Разбираем твои лекции и учебные тексты" }]
+      },
+      {
+        "title": "Работа",
+        "text": "Общаться с коллегами, готовиться к интервью и объяснять свои идеи.",
+        "back_title": "Для работы",
+        "back_items": [{ "text": "Собираем лексику твоей сферы" }]
+      },
+      {
+        "title": "Путешествия",
+        "text": "Общаться в поездках: заселиться в отель и спросить дорогу.",
+        "back_title": "Для путешествий",
+        "back_items": [{ "text": "Проигрываем ситуации: аэропорт, отель, кафе" }]
+      },
+      {
+        "title": "Общение",
+        "text": "Поддерживать разговор, знакомиться и выражать свои мысли.",
+        "back_title": "Для общения",
+        "back_items": [{ "text": "Много разговорной практики на живые темы" }]
+      }
+    ]
+  }
+}

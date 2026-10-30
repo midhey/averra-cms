@@ -1,0 +1,35 @@
+<div class="reviews">
+  <div class="reviews__aside">
+    <div class="reviews__intro">
+      <div class="reviews__intro-body">
+        <h2 class="section-title">{{ title | accent }}</h2>
+        <svg width="200" height="16" viewBox="0 0 200 16" class="reviews__underline" aria-hidden="true"><path d="M4 10 C 60 3, 130 4, 196 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+        {% if lead %}<p class="reviews__lead">{{ lead | newline_to_br }}</p>{% endif %}
+        {% if note %}<p class="reviews__note">{{ note | newline_to_br }}</p>{% endif %}
+        {% if cta %}<a class="reviews__cta reviews__cta--desktop" href="{{ cta | link }}">{{ cta.label }} <span aria-hidden="true">→</span></a>{% endif %}
+      </div>
+    </div>
+    {% if sticker %}
+    <div class="reviews__sticker"><div class="reviews__sticker-paper">{{ sticker | newline_to_br }}</div></div>
+    {% endif %}
+  </div>
+  <ul class="reviews__chat" role="list">
+    {% for item in items %}
+    {% assign odd = forloop.index0 | modulo: 2 %}
+    <li class="review{% if odd == 1 %} review--right{% endif %}">
+      {% if odd == 0 %}
+        {% if item.photo %}<img class="review__avatar" src="{{ item.photo | image_url }}" alt="" width="64" height="64" loading="lazy" decoding="async">{% else %}<span class="review__avatar review__avatar--initial" aria-hidden="true">{{ item.name | slice: 0, 1 | upcase }}</span>{% endif %}
+      {% endif %}
+      <div class="review__bubble">
+        <div class="review__author">{{ item.name }}{% if item.topic %} · {{ item.topic }}{% endif %}</div>
+        <div class="review__text">{{ item.text | newline_to_br }}</div>
+        {% if item.caption %}<div class="review__caption">{{ item.caption }}</div>{% endif %}
+      </div>
+      {% if odd == 1 %}
+        {% if item.photo %}<img class="review__avatar" src="{{ item.photo | image_url }}" alt="" width="64" height="64" loading="lazy" decoding="async">{% else %}<span class="review__avatar review__avatar--initial" aria-hidden="true">{{ item.name | slice: 0, 1 | upcase }}</span>{% endif %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if cta %}<a class="reviews__cta reviews__cta--mobile" href="{{ cta | link }}">{{ cta.label }} <span aria-hidden="true">→</span></a>{% endif %}
+</div>

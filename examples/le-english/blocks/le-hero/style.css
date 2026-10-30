@@ -1,0 +1,513 @@
+/* Первый экран Vallex English. Цвета страницы, текста, акцента и шрифты — роли темы; бумага
+   стикеров, скотч и маркер — свои цвета блока (в теме для них роли нет), поэтому они объявлены
+   один раз здесь, а ниже используются переменными. */
+:scope {
+  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
+  --paper-ink: #1e2b25;
+  --paper-green: #213d32;
+  --paper-muted: #5b645e;
+  --pink: #f1cfc5;
+  --orange: #e9782f;
+  --tape: rgba(226, 212, 182, 0.85);
+  --tape-light: rgba(226, 212, 182, 0.8);
+  --stripe-a: #e6dccb;
+  --stripe-b: #ded2be;
+  --shadow-ink: rgba(30, 43, 37, 0.18);
+  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
+  --shape-torn: polygon(
+    0 0,
+    100% 2%,
+    100% 94%,
+    92% 98%,
+    84% 94%,
+    75% 99%,
+    66% 95%,
+    57% 99%,
+    48% 94%,
+    39% 98%,
+    30% 94%,
+    21% 99%,
+    12% 95%,
+    0 98%
+  );
+  --shape-torn-fine: polygon(
+    0 2%,
+    100% 0,
+    100% 94%,
+    93% 98%,
+    86% 94%,
+    78% 99%,
+    70% 95%,
+    62% 99%,
+    54% 94%,
+    46% 98%,
+    38% 94%,
+    30% 99%,
+    22% 95%,
+    14% 99%,
+    7% 94%,
+    0 97%
+  );
+  padding: 24px 24px 72px;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 48px;
+}
+
+.hero__text {
+  flex: 1 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.hero__eyebrow {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.hero__title {
+  margin: 0;
+  font-size: clamp(40px, 6.2vw, 78px);
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Слова в *звёздочках* — курсив с маркером под ними */
+.hero__title em {
+  font-style: italic;
+  color: var(--color-accent);
+  background:
+    linear-gradient(100deg, transparent 1%, var(--pink) 2.5%, var(--pink) 97%, transparent 99%) 0
+    82% / 100% 42% no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0 0.12em;
+}
+
+.hero__lead {
+  margin: 0;
+  font-size: clamp(17px, 1.6vw, 20px);
+  line-height: 1.55;
+  color: var(--color-text);
+  max-width: 520px;
+  text-wrap: pretty;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
+}
+
+.cta-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  padding: 19px 32px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 17px;
+  text-decoration: none;
+  box-shadow: 0 10px 24px var(--shadow-ink);
+}
+
+.cta-dark:hover {
+  filter: brightness(1.18);
+  color: var(--color-on-accent);
+}
+
+.hero__note {
+  font-family: var(--font-accent);
+  font-size: 24px;
+  line-height: 1.05;
+  color: var(--color-accent);
+  transform: rotate(-4deg);
+}
+
+.hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.hero__badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  flex-shrink: 0;
+}
+
+.hero__visual {
+  flex: 1 1 420px;
+  min-width: 0;
+  position: relative;
+  height: clamp(440px, 52vw, 600px);
+}
+
+.hero__squiggle {
+  position: absolute;
+  left: 2%;
+  top: 0;
+  z-index: 3;
+  color: var(--orange);
+}
+
+.hero__polaroid {
+  position: absolute;
+  left: clamp(0px, 14%, 90px);
+  top: 6%;
+  width: min(380px, 76%);
+  transform: rotate(2deg);
+  filter: drop-shadow(0 16px 26px var(--shadow-ink));
+  z-index: 2;
+}
+
+.hero__frame {
+  background: var(--color-surface);
+  padding: 14px 14px 56px;
+  position: relative;
+}
+
+.hero__tape {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  width: 110px;
+  height: 30px;
+  margin-left: -55px;
+  transform: rotate(-3deg);
+  background: var(--tape-light);
+  clip-path: var(--shape-tape);
+  z-index: 1;
+}
+
+/* Фото обрезается до 4:5 по центру; без фото — полосатая заглушка */
+.hero__photo {
+  aspect-ratio: 4 / 5;
+  background: repeating-linear-gradient(135deg, var(--stripe-a) 0 10px, var(--stripe-b) 10px 20px);
+  overflow: hidden;
+}
+
+.hero__img,
+.hero__img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hero__img img {
+  object-fit: cover;
+}
+
+.hero__caption {
+  position: absolute;
+  left: 18px;
+  bottom: 12px;
+  font-family: var(--font-accent);
+  font-size: 26px;
+  color: var(--color-accent);
+}
+
+/* Розовый стикер справа вверху */
+.hero__sticker {
+  position: absolute;
+  right: 0;
+  top: 2%;
+  width: clamp(130px, 30%, 180px);
+  transform: rotate(5deg);
+  z-index: 3;
+  filter: drop-shadow(0 8px 14px var(--shadow-ink));
+}
+
+.hero__sticker-paper {
+  background: var(--pink);
+  padding: 20px 16px 26px;
+  font-family: var(--font-accent);
+  font-size: clamp(22px, 2.2vw, 27px);
+  line-height: 1.05;
+  color: var(--color-accent);
+  clip-path: var(--shape-torn);
+  --color-text: var(--paper-ink);
+  --color-accent: var(--paper-green);
+  --color-muted: var(--paper-muted);
+}
+
+/* Белый стикер на скотче внизу слева (только на широком экране) */
+.hero__sticker-alt {
+  position: absolute;
+  left: -2%;
+  bottom: 10%;
+  width: 150px;
+  transform: rotate(-7deg);
+  z-index: 3;
+  filter: drop-shadow(0 8px 14px var(--shadow-ink));
+}
+
+.hero__sticker-alt-tape {
+  position: absolute;
+  left: 40px;
+  top: -12px;
+  width: 70px;
+  height: 24px;
+  transform: rotate(4deg);
+  background: var(--tape);
+  z-index: 1;
+  clip-path: var(--shape-tape);
+}
+
+.hero__sticker-alt-paper {
+  background: var(--color-surface);
+  padding: 22px 18px 28px;
+  font-family: var(--font-accent);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--color-text);
+  clip-path: var(--shape-torn-fine);
+}
+
+.hero__arrow {
+  position: absolute;
+  right: 6%;
+  bottom: 6%;
+  z-index: 3;
+  color: var(--orange);
+}
+
+/* Появление: линии рисуются, стикеры садятся на место. Конечное состояние — всегда видимое,
+   поэтому без анимации (и при «уменьшить движение») страница просто стоит. */
+@keyframes wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes marker {
+  from {
+    background-size: 0% 42%;
+  }
+}
+
+@keyframes stick {
+  from {
+    opacity: 0;
+    scale: 1.18;
+    translate: 0 -16px;
+  }
+}
+
+@keyframes settle {
+  from {
+    rotate: -3deg;
+    translate: 0 12px;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  30% {
+    rotate: -3deg;
+  }
+  65% {
+    rotate: 2deg;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero__squiggle {
+    animation: wipe 1s 0.35s cubic-bezier(0.6, 0, 0.3, 1) both;
+  }
+  .hero__arrow {
+    animation: wipe 0.8s 1.15s cubic-bezier(0.6, 0, 0.3, 1) both;
+  }
+  .hero__title em {
+    animation: marker 0.9s 0.5s cubic-bezier(0.6, 0, 0.2, 1) both;
+  }
+  .hero__polaroid {
+    animation: settle 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .hero__sticker {
+    animation: stick 0.6s 0.75s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  }
+  .hero__sticker-alt {
+    animation: stick 0.6s 0.95s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  }
+  .hero__note {
+    animation: fade-up 0.6s 1.2s ease-out both;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .cta-dark {
+    transition:
+      translate 0.25s ease,
+      filter 0.2s ease;
+  }
+  .cta-dark:hover {
+    translate: 0 -2px;
+  }
+  .cta-dark > span {
+    transition: translate 0.25s ease;
+  }
+  .cta-dark:hover > span {
+    translate: 4px 0;
+  }
+  .hero__sticker:hover .hero__sticker-paper,
+  .hero__sticker-alt:hover .hero__sticker-alt-paper {
+    animation: wiggle 0.6s ease-in-out;
+  }
+}
+
+@media (max-width: 819px) {
+  :scope {
+    padding-top: 20px;
+    padding-bottom: 48px;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+  .hero__text {
+    gap: 22px;
+  }
+  .hero__title {
+    font-size: clamp(38px, 7.5vw, 60px);
+    line-height: 1.08;
+  }
+  .hero__lead {
+    max-width: 620px;
+  }
+  .hero__visual {
+    width: min(100%, 430px);
+    justify-self: center;
+    height: auto;
+    padding: 20px 22px 10px;
+  }
+  .hero__polaroid {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 88%;
+    margin: 0 auto;
+  }
+  .hero__squiggle {
+    width: 90px;
+    top: 0;
+    left: 0;
+  }
+  .hero__sticker {
+    right: 0;
+    top: 6px;
+    width: 128px;
+  }
+  .hero__sticker-paper {
+    padding: 16px 12px 20px;
+    font-size: 22px;
+  }
+  .hero__sticker-alt,
+  .hero__arrow {
+    display: none;
+  }
+  .cta-dark {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 540px) {
+  .hero__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    line-height: 1.6;
+  }
+  .hero__title {
+    font-size: clamp(34px, 9.4vw, 48px);
+  }
+  .hero__lead {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .hero__actions {
+    gap: 14px;
+  }
+  .hero__note {
+    width: 100%;
+    text-align: center;
+    transform: none;
+    font-size: 22px;
+  }
+  .hero__note br {
+    display: none;
+  }
+  .hero__badges {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    font-size: 13px;
+  }
+  .hero__visual {
+    padding: 16px 14px 8px;
+  }
+  .hero__sticker {
+    width: 106px;
+  }
+  .hero__sticker-paper {
+    font-size: 19px;
+    padding: 14px 10px 18px;
+  }
+  .hero__frame {
+    padding: 10px 10px 46px;
+  }
+  .hero__caption {
+    font-size: 23px;
+    left: 12px;
+  }
+  .cta-dark {
+    width: 100%;
+    justify-content: center;
+    padding: 16px 18px;
+    font-size: 15px;
+    min-height: 54px;
+    text-align: center;
+  }
+  .cta-dark > span {
+    flex-shrink: 0;
+  }
+}

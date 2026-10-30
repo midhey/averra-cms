@@ -3,6 +3,7 @@ packages:
   - packages/*
   - e2e
   - deploy
+  - examples/*
 
 # Одна версия общих зависимостей на весь репозиторий.
 # В package.json пакетов вместо версии пишем "catalog:"

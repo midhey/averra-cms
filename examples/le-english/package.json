@@ -1,0 +1,29 @@
+{
+  "name": "@averra/example-le-english",
+  "private": true,
+  "type": "module",
+  "description": "Пример переноса самописного сайта на Averra: набор своих блоков le-english и скрипт импорта",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.21.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "build": "tsx build-blocks.ts",
+    "import": "node import.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@averra/api": "workspace:*",
+    "@averra/blocks": "workspace:*",
+    "@averra/schema": "workspace:*",
+    "@types/node": "catalog:",
+    "sharp": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

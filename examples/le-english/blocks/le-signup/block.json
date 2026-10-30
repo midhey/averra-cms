@@ -1,0 +1,39 @@
+{
+  "key": "le-signup",
+  "title": "Vallex: запись внизу",
+  "description": "Розовый лист на клейкой ленте с призывом записаться, кнопкой и ссылкой в Telegram",
+  "category": "contact",
+  "sketch": "cta",
+  "fields": [
+    {
+      "type": "text",
+      "name": "eyebrow",
+      "label": "Рукописная надпись над заголовком",
+      "maxLength": 30
+    },
+    { "type": "text", "name": "title", "label": "Заголовок", "required": true, "maxLength": 60 },
+    { "type": "textarea", "name": "text", "label": "Текст", "maxLength": 300 },
+    {
+      "type": "link",
+      "name": "button",
+      "label": "Главная кнопка",
+      "hint": "Обычно ведёт на страницу записи: /zapis",
+      "required": true
+    },
+    { "type": "textarea", "name": "note", "label": "Подпись под кнопкой", "maxLength": 200 },
+    {
+      "type": "link",
+      "name": "telegram",
+      "label": "Ссылка «или напиши мне в Telegram»",
+      "hint": "Нет ссылки — её не показываем."
+    }
+  ],
+  "example": {
+    "eyebrow": "Попробуем?",
+    "title": "Начни с *пробного урока*",
+    "text": "Познакомимся, обсудим твою задачу и определим уровень.",
+    "button": { "label": "Записаться на пробный урок", "href": "/zapis" },
+    "note": "Оставь заявку — я свяжусь с тобой в течение дня.",
+    "telegram": { "label": "или напиши мне в Telegram ↗", "href": "https://t.me/example" }
+  }
+}

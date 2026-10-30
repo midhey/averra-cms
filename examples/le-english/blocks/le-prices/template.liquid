@@ -1,0 +1,22 @@
+<div class="prices">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">{{ title | accent }}</h2>
+      <svg width="220" height="16" viewBox="0 0 220 16" class="section-underline" aria-hidden="true"><path d="M4 10 C 60 4, 140 4, 216 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+    </div>
+    {% if aside %}<div class="hand-aside">{{ aside | newline_to_br }}</div>{% endif %}
+  </div>
+  <ul class="prices__grid" role="list">
+    {% for item in items %}
+    {% assign look = forloop.index0 | modulo: 3 | plus: 1 %}
+    <li class="price-card price-card--{{ look }}">
+      <div class="price-card__tape"></div>
+      {% if item.badge %}<div class="price-card__badge">{{ item.badge }}</div>{% endif %}
+      <div class="price-card__value">{{ item.price }}</div>
+      <h3 class="price-card__name">{{ item.title }}</h3>
+      {% if item.note %}<p class="price-card__note">{{ item.note | newline_to_br }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if note %}<p class="prices__note">{{ note | newline_to_br }}</p>{% endif %}
+</div>

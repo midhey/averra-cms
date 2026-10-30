@@ -1,0 +1,17 @@
+<div class="faq">
+  <div class="faq__head">
+    <div>
+      <h2 class="section-title">{{ title | accent }}</h2>
+      <svg width="260" height="16" viewBox="0 0 260 16" class="section-underline" aria-hidden="true"><path d="M4 9 C 70 3, 170 4, 256 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+    </div>
+    {% if aside %}<a class="hand-aside faq__aside" href="{{ aside | link }}">{{ aside.label | newline_to_br }}</a>{% endif %}
+  </div>
+  <div class="faq__list">
+    {% for item in items %}
+    <details class="faq__item">
+      <summary class="faq__question">{{ item.question }}<span class="faq__icon" aria-hidden="true"></span></summary>
+      <div class="faq__answer">{{ item.answer | paragraphs }}</div>
+    </details>
+    {% endfor %}
+  </div>
+</div>

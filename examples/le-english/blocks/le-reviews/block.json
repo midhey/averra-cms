@@ -1,0 +1,90 @@
+{
+  "key": "le-reviews",
+  "title": "Vallex: отзывы",
+  "description": "Сообщения учеников в виде переписки на тёмной полосе с рваными краями и кнопкой записи",
+  "category": "trust",
+  "sketch": "reviews",
+  "fields": [
+    {
+      "type": "textarea",
+      "name": "title",
+      "label": "Заголовок блока",
+      "hint": "Enter — перенос на новую строку.",
+      "required": true,
+      "maxLength": 60
+    },
+    { "type": "textarea", "name": "lead", "label": "Текст под заголовком", "maxLength": 160 },
+    {
+      "type": "textarea",
+      "name": "note",
+      "label": "Примечание мелким шрифтом",
+      "hint": "Например, «Публикую с разрешения учеников». Если пусто — не показывается.",
+      "maxLength": 200
+    },
+    {
+      "type": "link",
+      "name": "cta",
+      "label": "Кнопка рядом с отзывами",
+      "hint": "Обычно ведёт на страницу записи. Нет ссылки — кнопки нет."
+    },
+    {
+      "type": "textarea",
+      "name": "sticker",
+      "label": "Белый стикер (только на компьютере)",
+      "maxLength": 40
+    },
+    {
+      "type": "repeater",
+      "name": "items",
+      "label": "Отзывы",
+      "min": 1,
+      "max": 12,
+      "fields": [
+        { "type": "text", "name": "name", "label": "Имя", "required": true, "maxLength": 40 },
+        {
+          "type": "text",
+          "name": "topic",
+          "label": "Чем занимается",
+          "hint": "Пишется рядом с именем: «Аня · английский для работы».",
+          "maxLength": 60
+        },
+        {
+          "type": "textarea",
+          "name": "text",
+          "label": "Текст отзыва",
+          "required": true,
+          "maxLength": 600
+        },
+        {
+          "type": "image",
+          "name": "photo",
+          "label": "Фото",
+          "hint": "Необязательно — без фото будет кружок с первой буквой имени."
+        },
+        {
+          "type": "text",
+          "name": "caption",
+          "label": "Подпись под отзывом",
+          "hint": "Необязательно, мелким шрифтом.",
+          "maxLength": 40
+        }
+      ]
+    }
+  ],
+  "example": {
+    "title": "Что пишут\nученики",
+    "lead": "Маленькие победы за пределами урока.",
+    "note": "[Публикую с разрешения учеников]",
+    "cta": { "label": "Хочу так же — на пробный урок", "href": "/zapis" },
+    "sticker": "You\ngot this ♡",
+    "items": [
+      {
+        "name": "[Имя]",
+        "topic": "[чем занимается]",
+        "text": "[Настоящий отзыв ученика]",
+        "caption": "[откуда отзыв]"
+      },
+      { "name": "[Имя]", "text": "[Настоящий отзыв ученика]" }
+    ]
+  }
+}

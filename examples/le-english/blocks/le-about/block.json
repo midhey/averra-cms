@@ -1,0 +1,45 @@
+{
+  "key": "le-about",
+  "title": "Vallex: обо мне",
+  "description": "Фото на полароиде со стикером, рассказ о себе и пункты с галочками",
+  "category": "about",
+  "sketch": "text-image",
+  "fields": [
+    { "type": "text", "name": "title", "label": "Заголовок", "required": true, "maxLength": 60 },
+    {
+      "type": "textarea",
+      "name": "text",
+      "label": "Рассказ о себе",
+      "hint": "Чтобы начать новый абзац, оставь пустую строку.",
+      "required": true,
+      "maxLength": 1500
+    },
+    {
+      "type": "repeater",
+      "name": "points",
+      "label": "Пункты с галочками",
+      "hint": "Коротко, по одной мысли: образование, сертификаты, опыт, подход.",
+      "min": 0,
+      "max": 8,
+      "fields": [
+        { "type": "text", "name": "text", "label": "Пункт", "required": true, "maxLength": 90 }
+      ]
+    },
+    {
+      "type": "image",
+      "name": "photo",
+      "label": "Фото",
+      "hint": "Портрет рядом с рассказом."
+    },
+    { "type": "textarea", "name": "sticker", "label": "Розовый стикер на фото", "maxLength": 40 }
+  ],
+  "example": {
+    "title": "Привет, я *Лера*",
+    "text": "Я Лера, преподаватель английского. Помогаю использовать язык в жизни.\n\nКаждое занятие я веду сама и подстраиваю под тебя.",
+    "points": [
+      { "text": "Индивидуальные занятия под твою цель" },
+      { "text": "Спокойная работа с ошибками" }
+    ],
+    "sticker": "Nice to\nmeet you ♡"
+  }
+}

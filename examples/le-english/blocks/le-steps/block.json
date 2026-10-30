@@ -1,0 +1,44 @@
+{
+  "key": "le-steps",
+  "title": "Vallex: как проходят занятия",
+  "description": "Пронумерованные бумажные карточки шагов от пробного урока до результата",
+  "category": "sales",
+  "sketch": "steps",
+  "fields": [
+    {
+      "type": "text",
+      "name": "title",
+      "label": "Заголовок блока",
+      "required": true,
+      "maxLength": 60
+    },
+    {
+      "type": "textarea",
+      "name": "aside",
+      "label": "Рукописная надпись справа от заголовка",
+      "hint": "Enter — перенос на новую строку.",
+      "maxLength": 60
+    },
+    {
+      "type": "repeater",
+      "name": "items",
+      "label": "Шаги",
+      "min": 1,
+      "max": 6,
+      "fields": [
+        { "type": "text", "name": "title", "label": "Название", "required": true, "maxLength": 40 },
+        { "type": "textarea", "name": "text", "label": "Текст", "required": true, "maxLength": 200 }
+      ]
+    }
+  ],
+  "example": {
+    "title": "Как проходят занятия",
+    "aside": "всё онлайн,\nв удобное тебе время",
+    "items": [
+      { "title": "Знакомимся", "text": "Обсуждаем твою цель и опыт изучения языка." },
+      { "title": "Составляем план", "text": "Выбираем темы и материалы под твою задачу." },
+      { "title": "Практикуемся", "text": "Разговариваем, тренируем понимание речи." },
+      { "title": "Следим за прогрессом", "text": "Возвращаемся к твоим целям и корректируем план." }
+    ]
+  }
+}

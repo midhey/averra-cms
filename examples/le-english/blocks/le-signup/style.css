@@ -1,0 +1,222 @@
+/* Запись внизу: розовый лист на клейкой ленте, кнопка и ссылка в Telegram. */
+:scope {
+  /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
+  --paper-ink: #1e2b25;
+  --paper-green: #213d32;
+  --paper-muted: #5b645e;
+  --terracotta: #c0503d;
+  --terracotta-dark: #a9432f;
+  --pink: #f1cfc5;
+  --warm-text: #3e3531;
+  --tape: rgba(226, 212, 182, 0.9);
+  --shadow-card: rgba(30, 43, 37, 0.14);
+  --shadow-cta: rgba(192, 80, 61, 0.3);
+  --shadow-cta-lift: rgba(192, 80, 61, 0.36);
+  --on-terracotta: #ffffff;
+  --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
+  padding: 110px 24px 80px;
+}
+
+.signup__card {
+  position: relative;
+  transform: rotate(-1deg);
+  filter: drop-shadow(0 18px 30px var(--shadow-card));
+}
+
+.signup__tape-left,
+.signup__tape-right {
+  position: absolute;
+  top: 10px;
+  width: 100px;
+  height: 28px;
+  background: var(--tape);
+  z-index: 2;
+  clip-path: var(--shape-tape);
+}
+
+.signup__tape-left {
+  left: -14px;
+  transform: rotate(-35deg);
+}
+
+.signup__tape-right {
+  right: -14px;
+  transform: rotate(35deg);
+}
+
+.signup__paper {
+  background: var(--pink);
+  color: var(--warm-text);
+  padding: clamp(48px, 7vw, 80px) clamp(24px, 6vw, 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 22px;
+  clip-path: polygon(
+    0 1%,
+    6% 0,
+    14% 1.5%,
+    23% 0,
+    31% 1%,
+    40% 0,
+    48% 1.5%,
+    57% 0,
+    66% 1%,
+    74% 0,
+    83% 1.5%,
+    91% 0,
+    100% 1%,
+    100% 98%,
+    94% 100%,
+    86% 98.5%,
+    77% 100%,
+    69% 98%,
+    60% 100%,
+    52% 98.5%,
+    43% 100%,
+    35% 98%,
+    26% 100%,
+    18% 98.5%,
+    9% 100%,
+    0 98%
+  );
+  --color-text: var(--paper-ink);
+  --color-accent: var(--paper-green);
+  --color-muted: var(--paper-muted);
+}
+
+.hand-eyebrow {
+  font-family: var(--font-accent);
+  font-size: 38px;
+  line-height: 1;
+  color: var(--color-accent);
+  transform: rotate(-4deg);
+}
+
+.cta-title {
+  margin: 0;
+  font-size: clamp(34px, 4.8vw, 58px);
+  line-height: 1.08;
+  text-wrap: balance;
+  color: var(--color-text);
+}
+
+.cta-title em {
+  font-style: italic;
+  color: var(--terracotta);
+}
+
+.cta-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--warm-text);
+  max-width: 520px;
+  text-wrap: pretty;
+}
+
+.cta-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--terracotta);
+  color: var(--on-terracotta);
+  padding: 20px 34px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 17px;
+  text-decoration: none;
+  box-shadow: 0 10px 24px var(--shadow-cta);
+  margin-top: 6px;
+}
+
+.cta-accent:hover {
+  background: var(--terracotta-dark);
+  color: var(--on-terracotta);
+}
+
+.signup__note {
+  font-size: 14px;
+  margin: 0;
+  color: var(--warm-text);
+}
+
+.signup__alt {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-underline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .cta-accent {
+    transition:
+      translate 0.25s ease,
+      box-shadow 0.25s ease,
+      background-color 0.2s ease;
+  }
+  .cta-accent:hover {
+    translate: 0 -2px;
+    box-shadow: 0 14px 28px var(--shadow-cta-lift);
+  }
+  .cta-accent > span {
+    transition: translate 0.25s ease;
+  }
+  .cta-accent:hover > span {
+    translate: 4px 0;
+  }
+}
+
+@media (max-width: 819px) {
+  :scope {
+    padding: 56px 24px 40px;
+  }
+  .signup__card {
+    transform: none;
+  }
+  .signup__paper {
+    padding: 44px 24px;
+    gap: 20px;
+  }
+  .cta-accent {
+    justify-content: center;
+    max-width: 100%;
+    padding: 17px 22px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 540px) {
+  .signup__paper {
+    padding: 38px 18px;
+  }
+  .signup__tape-left,
+  .signup__tape-right {
+    width: 64px;
+    height: 22px;
+  }
+  .signup__tape-left {
+    left: -8px;
+  }
+  .signup__tape-right {
+    right: -8px;
+  }
+  .cta-title {
+    font-size: clamp(30px, 8vw, 40px);
+    line-height: 1.15;
+  }
+  .cta-text {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .cta-accent {
+    width: 100%;
+    padding: 16px 12px;
+    font-size: 15px;
+    gap: 8px;
+  }
+  .cta-accent > span {
+    flex-shrink: 0;
+  }
+}

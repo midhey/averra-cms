@@ -1,0 +1,57 @@
+{
+  "key": "le-faq",
+  "title": "Vallex: вопросы и ответы",
+  "description": "Раскрывающиеся вопросы с рукописной ссылкой «напиши мне» у заголовка",
+  "category": "trust",
+  "sketch": "faq",
+  "fields": [
+    {
+      "type": "text",
+      "name": "title",
+      "label": "Заголовок блока",
+      "required": true,
+      "maxLength": 60
+    },
+    {
+      "type": "link",
+      "name": "aside",
+      "label": "Рукописная ссылка у заголовка",
+      "hint": "Подпись — до 40 знаков, Enter — перенос строки. Обычно ведёт в Telegram."
+    },
+    {
+      "type": "repeater",
+      "name": "items",
+      "label": "Вопросы",
+      "min": 1,
+      "max": 15,
+      "fields": [
+        {
+          "type": "text",
+          "name": "question",
+          "label": "Вопрос",
+          "required": true,
+          "maxLength": 140
+        },
+        {
+          "type": "textarea",
+          "name": "answer",
+          "label": "Ответ",
+          "hint": "Чтобы начать новый абзац, оставь пустую строку.",
+          "required": true,
+          "maxLength": 1000
+        }
+      ]
+    }
+  ],
+  "example": {
+    "title": "Частые вопросы",
+    "aside": {
+      "label": "остались вопросы?\nнапиши мне — отвечу ↗",
+      "href": "https://t.me/example"
+    },
+    "items": [
+      { "question": "[Вопрос клиента]", "answer": "[Ответ на вопрос]" },
+      { "question": "[Ещё один вопрос]", "answer": "[Ответ на вопрос]" }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+<div class="hero">
+  <div class="hero__text">
+    {% if eyebrow %}<div class="hero__eyebrow">{{ eyebrow }}</div>{% endif %}
+    <h1 class="hero__title">{{ title | accent }}</h1>
+    {% if lead %}<p class="hero__lead">{{ lead | newline_to_br }}</p>{% endif %}
+    <div class="hero__actions">
+      <a class="cta-dark" href="{{ button | link }}">{{ button.label }} <span aria-hidden="true">→</span></a>
+      {% if note %}<div class="hero__note" aria-hidden="true">{{ note | newline_to_br }}</div>{% endif %}
+    </div>
+    {% if badges.size > 0 %}
+    <ul class="hero__badges" role="list">
+      {% for badge in badges %}<li class="hero__badge"><span class="hero__dot" aria-hidden="true"></span>{{ badge.text }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  <div class="hero__visual">
+    <svg width="130" height="54" viewBox="0 0 130 54" class="hero__squiggle" aria-hidden="true"><path d="M6 40 C 24 8, 40 6, 46 30 S 72 50, 84 22 S 108 4, 124 16" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"></path></svg>
+    <div class="hero__polaroid">
+      <div class="hero__frame">
+        <div class="hero__tape"></div>
+        {% if photo %}
+        <div class="hero__photo">{{ photo | image: '(min-width: 820px) 380px, 80vw', 'hero__img' }}</div>
+        {% else %}
+        <div class="hero__photo hero__photo--empty"></div>
+        {% endif %}
+        {% if photo_caption %}<div class="hero__caption">{{ photo_caption }}</div>{% endif %}
+      </div>
+    </div>
+    {% if sticker_top %}
+    <div class="hero__sticker"><div class="hero__sticker-paper">{{ sticker_top | newline_to_br }}</div></div>
+    {% endif %}
+    {% if sticker_bottom %}
+    <div class="hero__sticker-alt">
+      <div class="hero__sticker-alt-tape"></div>
+      <div class="hero__sticker-alt-paper">{{ sticker_bottom | newline_to_br }}</div>
+    </div>
+    {% endif %}
+    <svg width="110" height="60" viewBox="0 0 110 60" class="hero__arrow" aria-hidden="true"><path d="M6 50 C 30 44, 62 34, 96 12" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path><path d="M78 10 L 98 10 L 92 30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </div>
+</div>

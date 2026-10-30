@@ -227,7 +227,7 @@ importers:
         version: 2.5.15
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       pnpm:
         specifier: 12.9.1
         version: 12.9.1
@@ -312,7 +312,7 @@ importers:
         version: 21.0.3
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       sass:
         specifier: 'catalog:'
         version: 1.105.2
@@ -400,7 +400,7 @@ importers:
         version: 0.28.2
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       selfsigned:
         specifier: ^5.5.0
         version: 5.5.0
@@ -434,7 +434,7 @@ importers:
         version: 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.9)(typescript@6.0.3)
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       starlight-links-validator:
         specifier: ^0.27.0
         version: 0.27.0(@astrojs/starlight@0.42.6(astro@7.3.5(@types/node@24.19.1)(sass@1.105.2)(tsx@4.23.15)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.3.5(@types/node@24.19.1)(sass@1.105.2)(tsx@4.23.15)(yaml@2.9.1))(supports-color@10.2.2)
@@ -468,7 +468,7 @@ importers:
         version: 24.19.1
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -517,7 +517,7 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -539,7 +539,7 @@ importers:
         version: 24.19.1
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       tsx:
         specifier: 'catalog:'
         version: 4.23.15
@@ -569,13 +569,43 @@ importers:
         version: 4.13.13
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       sharp:
         specifier: 'catalog:'
         version: 0.35.5(@types/node@24.19.1)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  examples/le-english:
+    devDependencies:
+      '@averra/api':
+        specifier: workspace:*
+        version: link:../../apps/api
+      '@averra/blocks':
+        specifier: workspace:*
+        version: link:../../packages/blocks
+      '@averra/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.1
+      node:
+        specifier: runtime:^24.21.0
+        version: runtime:24.22.2
+      sharp:
+        specifier: 'catalog:'
+        version: 0.35.5(@types/node@24.19.1)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.1)(happy-dom@21.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(sass@1.105.2)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/blocks:
     dependencies:
@@ -609,7 +639,7 @@ importers:
         version: 21.0.3
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       react:
         specifier: 'catalog:'
         version: 19.3.0
@@ -631,7 +661,7 @@ importers:
     devDependencies:
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -644,6 +674,9 @@ importers:
       '@averra/schema':
         specifier: workspace:*
         version: link:../schema
+      '@fontsource/caveat':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/golos-text':
         specifier: 'catalog:'
         version: 5.3.0
@@ -659,6 +692,9 @@ importers:
       '@fontsource/montserrat':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/playfair-display':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/pt-serif':
         specifier: ^5.3.0
         version: 5.3.0
@@ -671,7 +707,7 @@ importers:
         version: 24.19.1
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -686,7 +722,7 @@ importers:
         version: 24.19.1
       node:
         specifier: runtime:^24.21.0
-        version: runtime:24.22.0
+        version: runtime:24.22.2
       postcss:
         specifier: 'catalog:'
         version: 8.5.30
@@ -1689,6 +1725,9 @@ packages:
   '@expressive-code/plugin-text-markers@0.44.2':
     resolution: {integrity: sha512-SNI7EgUSiADqbqUzzMbj1ZeC/r2pa5eg3KyFOGAd3a7EsIA4qzjXQLp+ODWQtHVDKFCdGs4J3ovSJUqvKIK96g==}
 
+  '@fontsource/caveat@5.3.0':
+    resolution: {integrity: sha512-eHTfzQxFSW9ABERRLNruHoNJmKed2J7pqTUc5lp4a4POMgXGKpxmWj3d9Hz10kmAg6iuTTLe6UagbA4bnsmfQw==}
+
   '@fontsource/golos-text@5.3.0':
     resolution: {integrity: sha512-R+gM4qOZSrge4TtEGps0zTpU8X4e7e32L+3yy0J/2LnVB/IERlidEpXPWSZVGzTaL5QnPRVmoebRXSuVtjUIVg==}
 
@@ -1706,6 +1745,9 @@ packages:
 
   '@fontsource/montserrat@5.3.0':
     resolution: {integrity: sha512-iQPDtZOnmM5ih4JBGaMSXisRap0ixb9bAUw2hDtY7EjVfaqiiNlKtVuJl9XclxUwtwMMHNcWXfQR6zI9x05+Tg==}
+
+  '@fontsource/playfair-display@5.3.0':
+    resolution: {integrity: sha512-uJSABalvdWc10fEPppQjQocamT21LEyRfzzWfRfqbkPz+sRv+kKpYDKyluBUskvJREkJTos9epj1WjQROGu99Q==}
 
   '@fontsource/pt-serif@5.3.0':
     resolution: {integrity: sha512-ST+j/byBGZw6H+TQMX78o6Qlngfj2Va/Q9fAJxq54Is1ZQk1/FhBIuqyJcLmnpi0trG8V/hWO9Bx6ZY09A0DBQ==}
@@ -3670,7 +3712,7 @@ packages:
   node-mock-http@1.0.5:
     resolution: {integrity: sha512-KQyt/wLjG3TAc7DOUhpqWzgd4ERxR80JOlTK5VE5R1S12IaPVN5qkj4klBce9HPG1Njuup4Sb5bljaT34lIyjw==}
 
-  node@runtime:24.22.0:
+  node@runtime:24.22.2:
     resolution:
       type: variations
       variants:
@@ -3678,9 +3720,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-y7HWJfv6YbI/1KlJ6kHJsIu3kF+8dUA7sR1LzKc6VWY=
+            integrity: sha256-s9D3zDDSjkR0j4TdskyXqHNZJ0QPrv/JbjRFSRQWenk=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-aix-ppc64.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-aix-ppc64.tar.gz
           targets:
             - cpu: ppc64
               os: aix
@@ -3688,9 +3730,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-apck2bUKXyK0gWze1EG1qNndrlRhkaXlt++lpeLuJtU=
+            integrity: sha256-qpVJNJ5H3/qkLc+V1uBq3oxL2vyYCXmIO4h2dnDfOFo=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-darwin-arm64.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-darwin-arm64.tar.gz
           targets:
             - cpu: arm64
               os: darwin
@@ -3698,9 +3740,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-SV4/JzxkXzxGd9Q4MEzfxwFynqXexXKPXI52ot7OS5E=
+            integrity: sha256-1eM21YjEW+DDfb1SzCmJVZMAnKSZeneh/QKBUTHtDlI=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-darwin-x64.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-darwin-x64.tar.gz
           targets:
             - cpu: x64
               os: darwin
@@ -3708,9 +3750,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-t+eZHVQHgVrfp0oqnNTbaDVSyM4y/0opXCLpcoScP10=
+            integrity: sha256-lcJkFQrOt/NDein9aYSST1+NFRHqPL1sUIuD9sVV2uI=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-arm64.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-arm64.tar.gz
           targets:
             - cpu: arm64
               os: linux
@@ -3718,9 +3760,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-jLp7v2iam1imXlgRFG6o0B5J0H5x97hGLk9v/NfS5/0=
+            integrity: sha256-9WQOG2VrZ/YA44z5xfJ460KMlJiZT1ykHWQG+6BgqfM=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-ppc64le.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-ppc64le.tar.gz
           targets:
             - cpu: ppc64le
               os: linux
@@ -3728,9 +3770,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-WQFxj1Uf+qduJQny1hLVvhb6ic3fvi1gEyXBDify0rY=
+            integrity: sha256-Nyhvy37wtDG3X/nc7VF/1zstSg6cRgJC1Ml5i4ubQkc=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-s390x.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-s390x.tar.gz
           targets:
             - cpu: s390x
               os: linux
@@ -3738,9 +3780,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-qVoPryjW98STA28FWdbTK3uMeaoG5BWxJ4L5aUaERIQ=
+            integrity: sha256-EevRbI14GcBnUhEiVQUnPXrqMFqN2FqcCusfvsI0MyA=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-x64-musl.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-x64-musl.tar.gz
           targets:
             - cpu: x64
               os: linux
@@ -3749,9 +3791,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-KOoKQ43poTvXiR/XWO7mx4Ge6K9UQt/Y1FvWXlbUIow=
+            integrity: sha256-NhcYxETkmvLKWhEMg7pqiQEUPyOrKF677wNB85H0gqk=
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-x64.tar.gz
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-x64.tar.gz
           targets:
             - cpu: x64
               os: linux
@@ -3759,10 +3801,10 @@ packages:
             archive: zip
             bin:
               node: node.exe
-            integrity: sha256-OlwgmlvFnmWzvA+hPtXhZqJr09VTMoR/SYt2sDdAjWE=
-            prefix: node-v24.22.0-win-arm64
+            integrity: sha256-9HlowhMQUHf2TGUQ8AdjLAyiV0gCoLUGfDJ8SavhxGg=
+            prefix: node-v24.22.2-win-arm64
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-win-arm64.zip
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-win-arm64.zip
           targets:
             - cpu: arm64
               os: win32
@@ -3770,10 +3812,10 @@ packages:
             archive: zip
             bin:
               node: node.exe
-            integrity: sha256-+Wg6GYd+EqmxZzBcjbcQQNgSh2NZ3iHw0ul8PzIfgMM=
-            prefix: node-v24.22.0-win-x64
+            integrity: sha256-yhv/XY6tE8ny6kBKF220a9QwcE1bURNzQEn6Nl53meI=
+            prefix: node-v24.22.2-win-x64
             type: binary
-            url: https://nodejs.org/download/release/v24.22.0/node-v24.22.0-win-x64.zip
+            url: https://nodejs.org/download/release/v24.22.2/node-v24.22.2-win-x64.zip
           targets:
             - cpu: x64
               os: win32
@@ -3781,9 +3823,9 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-aBKlPls3+8MkdtbDURA40rw7vRs7s0jWwE3Sxwocj0o=
+            integrity: sha256-cK/SUKkn+8MvPZWlhZfv3xSqitGU6JQmj5uDCaLauE4=
             type: binary
-            url: https://unofficial-builds.nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-arm64-musl.tar.gz
+            url: https://unofficial-builds.nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-arm64-musl.tar.gz
           targets:
             - cpu: arm64
               os: linux
@@ -3792,14 +3834,14 @@ packages:
             archive: tarball
             bin:
               node: bin/node
-            integrity: sha256-cs0lP74MJTnVIgjtCY1Ht4/ywyunYpXY5rWwzgZ9y6U=
+            integrity: sha256-hn4yLWcpTpxAXxDK5dcO0uSUC7Nn+kfby1FRyYmdfAQ=
             type: binary
-            url: https://unofficial-builds.nodejs.org/download/release/v24.22.0/node-v24.22.0-linux-x64-musl.tar.gz
+            url: https://unofficial-builds.nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-x64-musl.tar.gz
           targets:
             - cpu: x64
               os: linux
               libc: musl
-    version: 24.22.0
+    version: 24.22.2
     hasBin: true
 
   nodemailer@10.1.0:
@@ -5554,6 +5596,8 @@ snapshots:
     dependencies:
       '@expressive-code/core': 0.44.2
 
+  '@fontsource/caveat@5.3.0': {}
+
   '@fontsource/golos-text@5.3.0': {}
 
   '@fontsource/inter@5.3.0': {}
@@ -5565,6 +5609,8 @@ snapshots:
   '@fontsource/manrope@5.3.0': {}
 
   '@fontsource/montserrat@5.3.0': {}
+
+  '@fontsource/playfair-display@5.3.0': {}
 
   '@fontsource/pt-serif@5.3.0': {}
 
@@ -7492,7 +7538,7 @@ snapshots:
 
   node-mock-http@1.0.5: {}
 
-  node@runtime:24.22.0: {}
+  node@runtime:24.22.2: {}
 
   nodemailer@10.1.0: {}
 

@@ -1,0 +1,23 @@
+<div class="about">
+  <div class="about__media">
+    <div class="about__polaroid">
+      <div class="about__frame">
+        <div class="about__tape-left"></div>
+        <div class="about__tape-right"></div>
+        {% if photo %}{{ photo | image: '(min-width: 820px) 380px, 80vw', 'about__photo' }}{% endif %}
+      </div>
+    </div>
+    {% if sticker %}
+    <div class="about__sticker"><div class="about__sticker-paper">{{ sticker | newline_to_br }}</div></div>
+    {% endif %}
+  </div>
+  <div class="about__text">
+    <h2 class="section-title">{{ title | accent }}</h2>
+    {{ text | paragraphs }}
+    {% if points.size > 0 %}
+    <ul class="about__points" role="list">
+      {% for point in points %}<li class="about__point"><span class="about__check" aria-hidden="true">✓</span>{{ point.text }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>

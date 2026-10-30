@@ -1,0 +1,14 @@
+<div class="signup">
+  <div class="signup__card">
+    <div class="signup__tape-left"></div>
+    <div class="signup__tape-right"></div>
+    <div class="signup__paper">
+      {% if eyebrow %}<div class="hand-eyebrow">{{ eyebrow }}</div>{% endif %}
+      <h2 class="cta-title">{{ title | accent }}</h2>
+      {% if text %}<p class="cta-text">{{ text | newline_to_br }}</p>{% endif %}
+      <a class="cta-accent" href="{{ button | link }}"{% if note %} aria-describedby="{{ block.id }}-note"{% endif %}>{{ button.label }} <span aria-hidden="true">→</span></a>
+      {% if note %}<p class="signup__note" id="{{ block.id }}-note">{{ note | newline_to_br }}</p>{% endif %}
+      {% if telegram %}<a class="signup__alt" href="{{ telegram | link }}">{{ telegram.label }}</a>{% endif %}
+    </div>
+  </div>
+</div>
