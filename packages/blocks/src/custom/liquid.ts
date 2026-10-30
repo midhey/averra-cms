@@ -9,6 +9,7 @@ import {
   type TopLevelToken,
 } from 'liquidjs'
 import { fallbackFormat, largestVariant, srcSetOf, vectorVariant } from '../ui/media-file'
+import { liquidCode } from './html'
 import { CustomBlockRenderError } from './problems'
 
 /** Пределы рендера шаблона: время одного рендера и «память» LiquidJS (созданные строки и массивы) */
@@ -84,14 +85,14 @@ function pictureHtml(value: unknown, sizes: unknown, className: unknown) {
   return `<picture${classAttr}>${sources}<img src="${escapeHtml(largest.url)}" srcset="${escapeHtml(srcSetOf(file, fallback))}" sizes="${size}" ${dimensions} alt="${alt}" loading="${loading}"${fetchPriority} decoding="async"></picture>`
 }
 
-/** Абзацы по пустой строке, переносы внутри абзаца — <br> */
+/** Абзацы по пустой строке, переносы внутри абзаца — <br> и перевод строки: без него слова склеились бы там, где CSS прячет br */
 const paragraphsHtml = (value: unknown) =>
   text(value)
     .replace(/\r\n?/g, '\n')
     .split(/\n\s*\n/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => `<p>${escapeHtml(part).replaceAll('\n', '<br>')}</p>`)
+    .map((part) => `<p>${escapeHtml(part).replaceAll('\n', '<br>\n')}</p>`)
     .join('')
 
 /**
@@ -101,7 +102,7 @@ const paragraphsHtml = (value: unknown) =>
 const accentHtml = (value: unknown) =>
   escapeHtml(text(value).replace(/\r\n?/g, '\n'))
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-    .replaceAll('\n', '<br>')
+    .replaceAll('\n', '<br>\n')
 
 /** Теги, которые в своём блоке недоступны, и почему */
 const DISABLED_TAGS: Record<string, string> = {
@@ -181,7 +182,7 @@ function createEngine() {
   engine.registerFilter('newline_to_br', {
     raw: true,
     handler: (value: unknown) =>
-      escapeHtml(text(value).replace(/\r\n?/g, '\n')).replaceAll('\n', '<br>'),
+      escapeHtml(text(value).replace(/\r\n?/g, '\n')).replaceAll('\n', '<br>\n'),
   })
   engine.registerFilter('paragraphs', { raw: true, handler: paragraphsHtml })
   engine.registerFilter('accent', { raw: true, handler: accentHtml })
@@ -259,8 +260,6 @@ const TAG_BODY = /\{\{-?([\s\S]*?)-?\}\}|\{%-?([\s\S]*?)-?%\}/g
 const DANGLING_PIPE = /\|\s*(?:\||$)/
 /** Фильтр с «:» без аргумента: {{ title | date: }} */
 const DANGLING_COLON = /\|\s*[\w-]+\s*:\s*(?:\||$)/
-/** comment и raw — не код: «|» и сравнения в них ничего не значат */
-const NOT_CODE = /\{%-?\s*(comment|raw)\s*-?%\}[\s\S]*?\{%-?\s*end\1\s*-?%\}/g
 const DANGLING_OPERATOR = /(?:==|!=|<>|<=|>=|<|>|\bcontains|\band|\bor)\s*$/
 
 /**
@@ -269,8 +268,9 @@ const DANGLING_OPERATOR = /(?:==|!=|<>|<=|>=|<|>|\bcontains|\band|\bor)\s*$/
  */
 export function liquidLint(template: string): { message: string; line: number }[] {
   const problems: { message: string; line: number }[] = []
-  // Пробелы той же длины с переводами строк на месте: номера строк не сдвигаются
-  const source = template.replace(NOT_CODE, (part) => part.replace(/[^\n]/g, ' '))
+  // comment и raw — не код: «|» и сравнения в них ничего не значат. Границы те же, что у LiquidJS;
+  // пробелы той же длины с переводами строк на месте: номера строк не сдвигаются
+  const source = liquidCode(template)
   for (const match of source.matchAll(TAG_BODY)) {
     const body = match[1] ?? match[2] ?? ''
     const start = source.slice(0, match.index).split('\n').length

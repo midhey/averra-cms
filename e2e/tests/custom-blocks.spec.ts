@@ -234,3 +234,72 @@ test('публикуется черновик, который человек в�
   await page.getByRole('button', { name: 'Опубликовать' }).click()
   await expect(page.getByText(/^Опубликовано: блок есть в каталоге редактора/)).toBeVisible()
 })
+
+test('закрытое окно popover не открывается CSS блока: display: block не выводит его поверх страницы', async ({
+  browser,
+  demoSite,
+}) => {
+  const siteId = demoSite.id
+  const blocks = sites[':siteId']['custom-blocks']
+  const key = 'popover-ad'
+  const param = { siteId, key }
+  expect((await blocks.$post({ param: { siteId }, json: { key, title: 'Окно' } })).status).toBe(201)
+  // Обход, который пробовал проверяющий: `display: block` у [popover] показывает закрытое окно
+  // с position: fixed из стиля браузера — защитный слой base.css не даёт этого сделать
+  const saved = await blocks[':key'].$put({
+    param,
+    json: {
+      key,
+      title: 'Окно',
+      description: 'Проверка защитного слоя popover',
+      category: 'about',
+      fields: [{ type: 'text', name: 'title', label: 'Заголовок', required: true }],
+      template:
+        '<h2>{{ title }}</h2>\n<button type="button" popovertarget="t-ad">Открыть</button>\n<div id="t-ad" popover class="ad"><p>Окно</p></div>',
+      css: '.ad { display: block !important; inset: 0; width: auto; height: auto; margin: 0; z-index: 9 }',
+      example: { title: 'Заголовок' },
+    },
+  })
+  expect(saved.status, 'сохранение: ошибок в проверке нет').toBe(200)
+  const view = await blocks[':key'].$get({ param })
+  if (view.status !== 200) throw new Error(`Блок не прочитан: ${view.status}`)
+  const { draft } = await view.json()
+  if (!draft) throw new Error('У блока нет черновика')
+  expect((await blocks[':key'].publish.$post({ param, json: { draft } })).status).toBe(200)
+
+  const slug = `okno-${randomUUID().slice(0, 8)}`
+  expect(
+    (await sites[':siteId'].pages.$post({ param: { siteId }, json: { slug, title: 'Окно' } }))
+      .status,
+  ).toBe(201)
+  const pageParam = { siteId, slug }
+  expect(
+    (
+      await sites[':siteId'].pages[':slug'].$put({
+        param: pageParam,
+        json: {
+          title: 'Окно',
+          content: {
+            blocks: [{ id: 'ad-1', type: `custom:${key}`, props: { title: 'Страница с окном' } }],
+          },
+        },
+      })
+    ).status,
+  ).toBe(200)
+  expect((await sites[':siteId'].pages[':slug'].publish.$post({ param: pageParam })).status).toBe(
+    200,
+  )
+
+  const context = await browser.newContext({ locale: 'ru-RU' })
+  const site = await context.newPage()
+  await expect
+    .poll(async () => (await site.goto(`${urls.renderer}/${slug}`))?.status(), { timeout: 120_000 })
+    .toBe(200)
+  const ad = site.locator('[data-custom-block] .ad')
+  const display = () =>
+    ad.evaluate((el) => el.ownerDocument.defaultView?.getComputedStyle(el).display)
+  expect(await display(), 'закрытое окно скрыто').toBe('none')
+  await site.getByRole('button', { name: 'Открыть' }).click()
+  expect(await display(), 'открытое окно показывается').toBe('block')
+  await context.close()
+})

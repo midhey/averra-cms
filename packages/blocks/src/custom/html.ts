@@ -1,3 +1,4 @@
+import { defaultOptions, type TagToken, Tokenizer, TokenKind } from 'liquidjs'
 import { type DefaultTreeAdapterTypes, parseFragment, serialize } from 'parse5'
 import { isReservedDataAttribute, isReservedId } from './marker'
 import type { CustomBlockProblem } from './problems'
@@ -338,18 +339,99 @@ function clean(
   })
 }
 
-const LIQUID =
+// Запасной разбор, если токенизатор LiquidJS отказал (незакрытый тег): шаблон всё равно не
+// сохранится из-за ошибки Liquid, а маска нужна проверке HTML для понятных строк
+const LIQUID_FALLBACK =
   /\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\}|\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g
+
+const NOT_CODE_FALLBACK =
+  /\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\}|\{%-?\s*raw\s*-?%\}[\s\S]*?\{%-?\s*endraw\s*-?%\}/g
 
 /** Замена той же длины, переводы строк на месте: номера строк и позиции не сдвигаются */
 const blank = (text: string, fill: string) => text.replace(/[^\n]/g, fill)
 
+type LiquidScan = {
+  masked: string
+  /** Шаблон, где comment и raw (с тегами) вычеркнуты: в них нет кода Liquid */
+  code: string
+  raws: Array<[number, number]>
+}
+
+/**
+ * Разбор шаблона тем же токенизатором, что и рендер: границы raw, вывода и тегов совпадают с
+ * LiquidJS дословно (аргументы raw, «%» в endraw, «{% # … %}», кавычки в выводе). Свой regexp
+ * расходился бы с ним, и разметка пряталась бы от проверки
+ */
+function scanLiquid(template: string): LiquidScan {
+  const raws: Array<[number, number]> = []
+  let masked = ''
+  let code = ''
+  try {
+    const tokenizer = new Tokenizer(template)
+    let inRaw = false
+    // Комментарии в LiquidJS не вложены: «comment» внутри ничего не открывает, первый endcomment
+    // закрывает
+    let inComment = false
+    while (tokenizer.p < tokenizer.N) {
+      const token = tokenizer.readTopLevelToken(defaultOptions)
+      const text = template.slice(token.begin, token.end)
+      if (token.kind === TokenKind.HTML) {
+        if (inRaw) {
+          // Внутри raw Liquid выводит текст как есть: разметка в нём — настоящая разметка страницы
+          raws.push([token.begin, token.end])
+          masked += text
+          code += blank(text, ' ')
+        } else {
+          masked += inComment ? blank(text, ' ') : text
+          code += inComment ? blank(text, ' ') : text
+        }
+        continue
+      }
+      const name = token.kind === TokenKind.Tag ? (token as TagToken).name : ''
+      if (inRaw) {
+        // Единственный токен-тег в режиме raw — endraw
+        inRaw = false
+        masked += blank(text, ' ')
+        code += blank(text, ' ')
+      } else if (name === 'raw' && !inComment) {
+        inRaw = true
+        masked += blank(text, ' ')
+        code += blank(text, ' ')
+      } else {
+        if (name === 'comment') inComment = true
+        const fill = token.kind === TokenKind.Output && !inComment ? 'x' : ' '
+        masked += blank(text, fill)
+        // raw внутри комментария токенизатор всё равно читает как raw: его текст — часть комментария
+        code += inComment || name === 'endcomment' ? blank(text, ' ') : text
+        if (name === 'endcomment') inComment = false
+      }
+    }
+    return { masked, code, raws }
+  } catch {
+    return {
+      masked: template.replace(LIQUID_FALLBACK, (part) =>
+        blank(part, part.startsWith('{{') ? 'x' : ' '),
+      ),
+      code: template.replace(NOT_CODE_FALLBACK, (part) => blank(part, ' ')),
+      raws: [],
+    }
+  }
+}
+
+/**
+ * Код Liquid шаблона для линтера: comment и raw (вместе с тегами) пробелами той же длины,
+ * границы — как у LiquidJS и у проверки HTML
+ */
+export function liquidCode(template: string) {
+  return scanLiquid(template).code
+}
+
 /**
  * Шаблон без Liquid: вывод {{ }} — буквами x (значение атрибута остаётся непустым), теги {% %}
- * и комментарии — пробелами. HTML вокруг остаётся на своих строках и колонках
+ * и комментарии — пробелами. HTML вокруг (и внутри raw) остаётся на своих строках и колонках
  */
 export function maskLiquid(template: string) {
-  return template.replace(LIQUID, (part) => blank(part, part.startsWith('{{') ? 'x' : ' '))
+  return scanLiquid(template).masked
 }
 
 /**
@@ -358,7 +440,7 @@ export function maskLiquid(template: string) {
  * h1 и картинка без alt — предупреждения
  */
 export function checkTemplateHtml(template: string): CustomBlockProblem[] {
-  const masked = maskLiquid(template)
+  const { masked, raws } = scanLiquid(template)
   const problems: CustomBlockProblem[] = []
   const add = (level: CustomBlockProblem['level'], line: number | undefined, message: string) =>
     problems.push({ part: 'template', level, line, message })
@@ -398,9 +480,19 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
         const source = attrLocation
           ? template.slice(attrLocation.startOffset, attrLocation.endOffset)
           : ''
-        const hasOutput = source.includes('{{') || source.includes('{%')
+        const sourceStart = attrLocation?.startOffset ?? 0
+        // Скобки Liquid внутри raw — обычные символы значения, не вывод
+        const liquidAt = (from: number, to: number) =>
+          [...source.slice(from, to).matchAll(/{{|{%/g)].some(
+            (hit) =>
+              !raws.some(
+                ([start, end]) =>
+                  sourceStart + from + hit.index >= start && sourceStart + from + hit.index < end,
+              ),
+          )
+        const hasOutput = liquidAt(0, source.length)
         const nameSource = source.split('=')[0] ?? ''
-        if (nameSource.includes('{{') || nameSource.includes('{%')) {
+        if (liquidAt(0, nameSource.length)) {
           // Значение поля стало бы атрибутами (style, form, onclick…), а чистка видит только итог
           add('error', attrLine, 'Имя атрибута не собирают из Liquid: Liquid — только в значении')
           continue

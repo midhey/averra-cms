@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { Page } from '../Page'
 import { compileCustomCss } from './css'
 import { checkTemplateHtml, maskLiquid, sanitizeHtml } from './html'
+import { liquidLint } from './liquid'
 import { CUSTOM_BLOCK_ATTRIBUTE, isReservedDataAttribute } from './marker'
 import { customBlockProblems, customBlocksCss, renderCustomBlockHtml } from './render'
 
@@ -160,13 +161,15 @@ describe('шаблон: рендер', () => {
       '{% for plan in plans %}<b>{{ plan.name }}</b>{% endfor %}{{ text | paragraphs }}{{ text | newline_to_br }}',
       { title: 'x', text: 'a<b>\nb\n\nc', plans: [{ name: 'A' }, { name: 'B' }] },
     )
-    expect(html).toBe('<b>A</b><b>B</b><p>a&lt;b&gt;<br>b</p><p>c</p>a&lt;b&gt;<br>b<br><br>c')
+    expect(html).toBe(
+      '<b>A</b><b>B</b><p>a&lt;b&gt;<br>\nb</p><p>c</p>a&lt;b&gt;<br>\nb<br>\n<br>\nc',
+    )
   })
 
   it('accent: слова в звёздочках — <em>, остальное экранировано, переносы — <br>', () => {
     expect(
       render('{{ title | accent }}', { title: 'Английский, *который вписывается*\nв <жизнь>' }),
-    ).toBe('Английский, <em>который вписывается</em><br>в &lt;жизнь&gt;')
+    ).toBe('Английский, <em>который вписывается</em><br>\nв &lt;жизнь&gt;')
     // Звёздочка без пары и пустая пара остаются текстом; разметка внутри пары — текст
     expect(render('{{ title | accent }}', { title: 'a *b* c * d' })).toBe('a <em>b</em> c * d')
     expect(render('{{ title | accent }}', { title: '*<b>x</b>*' })).toBe(
@@ -375,6 +378,81 @@ describe('шаблон: проверка при сохранении', () => {
 describe('HTML шаблона и разметка сайта', () => {
   const templateErrors = (template: string) =>
     checkTemplateHtml(template).filter((problem) => problem.level === 'error')
+
+  it('разметка внутри raw видна проверке: script и onerror дают ошибку со строкой', () => {
+    const script = templateErrors('<p>a</p>\n{% raw %}{{ <script>alert(1)</script> }}{% endraw %}')
+    expect(script[0]).toMatchObject({ line: 2, message: expect.stringMatching(/script/) })
+    const handler = templateErrors('{% raw %}{% <img src=x onerror=alert(1)> %}{% endraw %}')
+    expect(handler[0]?.message).toMatch(/onerror/)
+    // Обычный текст со скобками Liquid в raw — не ошибка
+    expect(templateErrors('<p>{% raw %}{{ title }}{% endraw %}</p>')).toEqual([])
+  })
+
+  it('границы raw — как у LiquidJS: аргументы тегов, «{%- endraw» не конец, скобки в href', () => {
+    const bad = [
+      '{% raw x %}{{ <script>alert(1)</script> x }}{% endraw %}',
+      '{% raw %}{{ <script>alert(1)</script> x }}{% endraw y %}',
+      '{% raw %}a{%- endraw %}{{ <script>alert(1)</script> x }}{% endraw %}',
+      '{% raw %}<a href="javascript:alert(1)//{{">x</a>{% endraw %}',
+      // «%» в аргументах, дефис и не-ASCII в имени тега: LiquidJS читает их как часть слова
+      '{% raw 5% %}{{ <script>alert(1)</script> }}{% endraw %}',
+      '{% raw %}{% endraw-x %}{{ <script>alert(1)</script> }}{% endraw %}',
+      '{% raw %}{% endrawё %}{{ <script>alert(1)</script> }}{% endraw %}',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+  })
+
+  it('comment не вложен, как в LiquidJS: первый endcomment закрывает, разметка дальше видна', () => {
+    const bad = [
+      '{% comment %} a {% comment %} {% endcomment %}\n<script>alert(1)</script>',
+      '{% comment %}{% comment %}{% endcomment %}<img src="x" alt="" onerror="alert(1)">',
+      '{% comment %}{% comment %}{% endcomment %}<a href="javascript:alert(1)">x</a>',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+    expect(
+      templateErrors('{% comment %}\n{% comment %}\n{% endcomment %}\n<script>x</script>')[0],
+    ).toMatchObject({ line: 4 })
+    // Обычный комментарий скрывает свою разметку, как и раньше
+    expect(templateErrors('{% comment %}<script>x</script>{% endcomment %}<p>a</p>')).toEqual([])
+  })
+
+  it('lint Liquid берёт границы raw и comment у LiquidJS', () => {
+    const fine = [
+      '{% raw x %}{{ a | }}{% endraw %}',
+      '{% raw %}a{%- endraw %}{{ b | }}{% endraw %}',
+    ]
+    for (const template of fine) {
+      expect(liquidLint(template), template).toEqual([])
+    }
+    expect(liquidLint('{% raw %}{{ a | }}{% endraw %}{{ b | }}')).toHaveLength(1)
+  })
+
+  it('«raw», собранный из вывода или комментария, не прячет запреты атрибутов', () => {
+    const bad = [
+      '{{ "{% raw %}" }}<a href={{title}}>t</a>{{ "{% endraw %}" }}',
+      '{{ "{% raw %}" }}<div {{title}}>t</div>{{ "{% endraw %}" }}',
+      '{% # {% raw %}<a href={{title}}>t</a>{% # {% endraw %}',
+      '{% raw %}a{% endraw x%y %}<a href={{title}}>t</a>{% raw %}{% endraw %}',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+  })
+
+  it('popover с display: block не выходит из-под защитного слоя base.css', () => {
+    const file = '../base.css'
+    const css = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+    expect(css).toMatch(
+      /@layer averra-guard\s*\{[^}]*\[data-custom-block\] \[popover\]:not\(:popover-open\)/,
+    )
+    expect(css).toMatch(/display:\s*none\s*!important/)
+    // Сам блок слои завести не может: иначе перебил бы порядок
+    expect(errors({ css: '@layer x { .ad { display: block } }' }).length).toBeGreaterThan(0)
+  })
 
   it.each([
     '<div data-cookie-consent data-mode="consent" data-metrika="99999999" hidden></div>',

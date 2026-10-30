@@ -97,3 +97,14 @@ html[data-sticky-header="double"] {
   max-width: 100%;
   height: auto;
 }
+
+/* Закрытое окно [popover] у браузера — position: fixed; inset: 0, а CSS блока может показать его
+   правилом display: block и закрыть страницу. Важное объявление из слоя сильнее важного без слоя,
+   а @layer в CSS блока запрещён, поэтому блок это правило не перебьёт. Открытое окно
+   (:popover-open) остаётся законным. В браузерах без popover правило ни на что не влияет */
+@layer averra-guard {
+  [data-custom-block] [popover]:not(:popover-open) {
+    /* biome-ignore lint/complexity/noImportantStyles: важное из слоя — единственный способ перебить CSS блока */
+    display: none !important;
+  }
+}
