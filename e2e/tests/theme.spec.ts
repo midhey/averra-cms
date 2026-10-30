@@ -98,6 +98,47 @@ test('пресет, непроходящий акцент — ошибка, пр
   expect(fonts.every((file) => file.startsWith('manrope-') && file.endsWith('.woff2'))).toBe(true)
 })
 
+test('акцентный шрифт: выбрать и опубликовать — --font-accent и файлы шрифта, «Как у заголовков» — убрать', async ({
+  page,
+  demoSite,
+}) => {
+  // Две сборки сайта подряд
+  test.setTimeout(180_000)
+  await page.goto('/theme')
+  const accentFont = page.getByLabel('Акцентный', { exact: true })
+  await expect(accentFont).toHaveValue('')
+  await accentFont.selectOption('caveat')
+  await expect(page.getByText('Не сохранено')).toBeVisible()
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(
+    page.getByText('Тема сохранена. На сайте она появится после публикации'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Опубликовать' }).click()
+  await expect(page.getByText(/Тема опубликована/)).toBeVisible()
+  await expect
+    .poll(() => servedHtml(demoSite.id), { timeout: 90_000 })
+    .toMatch(/--font-accent:"Caveat"/)
+  const withAccent = await readdir(join(release(demoSite.id), '_fonts'))
+  expect(withAccent.some((file) => file.startsWith('caveat-'))).toBe(true)
+  expect(withAccent.every((file) => file.endsWith('.woff2'))).toBe(true)
+
+  // «Как у заголовков»: шрифт убран из темы, переменная указывает на шрифт заголовков, файлов нет
+  await accentFont.selectOption({ label: 'Как у заголовков' })
+  await expect(page.getByText('Не сохранено')).toBeVisible()
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(
+    page.getByText('Тема сохранена. На сайте она появится после публикации'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Опубликовать' }).click()
+  await expect(page.getByText(/Тема опубликована/)).toBeVisible()
+  await expect
+    .poll(() => servedHtml(demoSite.id), { timeout: 90_000 })
+    .toContain('--font-accent:var(--font-heading)')
+  // Релиз подменяется целиком: html уже новый, значит и папки со шрифтами в нём нет (или без Caveat)
+  const rest = await readdir(join(release(demoSite.id), '_fonts')).catch(() => [])
+  expect(rest.some((file) => file.startsWith('caveat-'))).toBe(false)
+})
+
 test('телефон 375 px: подписи скруглений целиком, без горизонтальной прокрутки', async ({
   page,
 }) => {
