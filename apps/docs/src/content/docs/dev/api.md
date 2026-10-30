@@ -115,6 +115,26 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 справочнике `media`. Как пользоваться — [Шапка и меню](/averra-cms/admin/header/), почему так —
 [решение](/averra-cms/decisions/site-header/).
 
+## Свои блоки
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/sites/:siteId/custom-blocks` | `{ blocks }`: владельцу — все с черновиком (`draft`), опубликованным (`published`), `unpublished` и временем; редактору, клиенту и токену — только опубликованные (`draft: null`) |
+| `POST /api/sites/:siteId/custom-blocks` | создать: `{ key, title }` → заготовка (заголовок и текст), 201. Ключ занят — 409. Только владельцу (`blocks.define`), токену — 403 |
+| `GET /api/sites/:siteId/custom-blocks/:key` | блок с замечаниями (`problems`: часть, уровень, строка, текст) и страницами, где он стоит (`usage`). Только владельцу |
+| `PUT /api/sites/:siteId/custom-blocks/:key` | сохранить черновик (`CustomBlockDraft`, ключ тот же). Структура полей — 400 с путём (`fields.1.name`), ошибки шаблона, CSS и примера — в `problems`, сохранению не мешают |
+| `POST /api/sites/:siteId/custom-blocks/:key/publish` | опубликовать: с ошибками — 400 (`path` — `template`, `css`, `example.…`, в тексте — строка); иначе версия в историю, сборка в очередь и `affected` — опубликованные страницы, чьи данные не подходят под новое определение |
+| `GET /api/sites/:siteId/custom-blocks/:key/revisions` | версии, новые сверху |
+| `POST /api/sites/:siteId/custom-blocks/:key/revisions/:revisionId/restore` | версия — в черновик |
+| `DELETE /api/sites/:siteId/custom-blocks/:key` | удалить, 204. Блок на страницах (черновик или сайт) — 409 со списком |
+| `GET /api/sites/:siteId/custom-blocks/export` | файл `averra.custom-blocks` версии 1 с черновиками всех блоков (`content-disposition: attachment`) |
+| `POST /api/sites/:siteId/custom-blocks/import` | `{ blocks, resolutions }`: блоки из файла — черновиками. Занятый ключ без решения — 409 (`resolutions.<ключ>`), ничего не записано; решение — `replace`, `skip` или `{ rename }` |
+
+Сохранение черновика страницы проверяет поля своих блоков по опубликованным определениям (400 с
+путём `content.blocks.N.props.…`), публикация страницы — ещё раз (409, если определение с тех пор
+поменялось). Снимок для сборки отдаёт `customBlocks` — опубликованные определения по ключу.
+Подробно — [Свои блоки](/averra-cms/dev/custom-blocks/).
+
 ## Подвал сайта
 
 | Запрос | Что делает |

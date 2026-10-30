@@ -28,6 +28,7 @@ sidebar:
 - [Тема сайта и контраст](/averra-cms/decisions/theme-contrast/)
 - [Шапка сайта и меню](/averra-cms/decisions/site-header/)
 - [Подвал сайта](/averra-cms/decisions/site-footer/)
+- [Свои блоки: Liquid в базе, без JavaScript](/averra-cms/decisions/custom-blocks/)
 
 ## Стек
 
