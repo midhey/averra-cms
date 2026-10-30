@@ -6,7 +6,7 @@ import { StatusPill } from '../ui/StatusPill'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import styles from './BlockList.module.scss'
 import { blockHint, blockName } from './block-hint'
-import { catalogEntry } from './catalog'
+import { entryTitle } from './catalog'
 import type { EditorBlock } from './draft'
 
 type BlockListProps = {
@@ -26,6 +26,8 @@ type BlockListProps = {
   actionsOnEvery?: boolean
   /** Под списком: на узком экране — кнопка «SEO страницы» (в полосе для неё нет места) */
   footer?: ReactNode
+  /** Название блока по типу: из каталога со своими блоками сайта */
+  titleOf?: (type: string) => string
 }
 
 /**
@@ -43,6 +45,7 @@ export function BlockList(props: BlockListProps) {
     onAdd,
     actionsOnEvery,
     footer,
+    titleOf = entryTitle,
   } = props
   const headingId = useId()
   const limitId = useId()
@@ -76,6 +79,7 @@ export function BlockList(props: BlockListProps) {
               selected={block.id === selectedId}
               withActions={actionsOnEvery === true || block.id === selectedId}
               invalid={invalidIds.has(block.id)}
+              title={titleOf(block.type)}
               onSelect={onSelect}
               onMove={onMove}
               onRemove={onRemove}
@@ -114,13 +118,15 @@ type BlockItemProps = {
   /** Показать стрелки и удаление */
   withActions: boolean
   invalid: boolean
+  /** Название типа блока */
+  title: string
   onSelect: (id: string) => void
   onMove: (from: number, to: number) => void
   onRemove: (id: string) => void
 }
 
 function BlockItem(props: BlockItemProps) {
-  const { block, index, count, selected, withActions, invalid, ...actions } = props
+  const { block, index, count, selected, withActions, invalid, title, ...actions } = props
   const sortable = useSortableItem(block.id)
   const arrows = useMoveButtons(index, count, actions.onMove)
   const name = blockName(block)
@@ -145,7 +151,7 @@ function BlockItem(props: BlockItemProps) {
         onClick={() => actions.onSelect(block.id)}
       >
         <span className={styles.type}>
-          {catalogEntry(block.type).title}
+          {title}
           {invalid && <StatusPill tone="danger">Ошибка</StatusPill>}
         </span>
         <span className={styles.hint}>{blockHint(block)}</span>

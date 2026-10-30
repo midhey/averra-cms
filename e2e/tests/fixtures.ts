@@ -98,7 +98,22 @@ async function resetDemoSite() {
     const deleted = await page.$delete({ param: { siteId: site.id, slug } })
     expect(deleted.status, `удаление страницы ${slug} демо-сайта`).toBe(204)
   }
+  await resetCustomBlocks(site.id)
   return site
+}
+
+/**
+ * Своих блоков на демо-сайте нет (tests/custom-blocks.spec.ts их создаёт): каталог редактора у
+ * остальных тестов — 16 встроенных. Страницы с ними уже удалены выше, поэтому блоки удаляются
+ */
+async function resetCustomBlocks(siteId: string) {
+  const custom = sites[':siteId']['custom-blocks']
+  const res = await custom.$get({ param: { siteId } })
+  if (res.status !== 200) throw new Error(`Свои блоки демо-сайта: ${res.status}`)
+  for (const { key } of (await res.json()).blocks) {
+    const deleted = await custom[':key'].$delete({ param: { siteId, key } })
+    expect(deleted.status, `удаление своего блока ${key}`).toBe(204)
+  }
 }
 
 /**

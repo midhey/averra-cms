@@ -1,4 +1,3 @@
-import type { BlockType } from '@averra/schema'
 import { useEffect, useRef, useState } from 'react'
 import { countRu } from '../format/plural'
 import { Button } from '../ui/Button'
@@ -13,8 +12,8 @@ import {
   type CatalogEntry,
   type CatalogSection,
   catalog,
-  catalogSections,
   filterCatalog,
+  sectionsFor,
   sectionTitle,
 } from './catalog'
 
@@ -24,10 +23,11 @@ const FINE_POINTER = '(pointer: fine)'
 type AddBlockDialogProps = {
   open: boolean
   onClose: () => void
-  onPick: (type: BlockType) => void
+  /** Тип блока: встроенного (hero) или своего (custom:tariffs) */
+  onPick: (type: string) => void
   /** Куда встанет блок: после выбранного (его имя) или в конец страницы */
   after: string | null
-  /** Блоки каталога — для витрины; редактор берёт весь каталог */
+  /** Блоки каталога: редактор — встроенные и свои блоки сайта, витрина — свои примеры */
   entries?: readonly CatalogEntry[]
 }
 
@@ -90,7 +90,7 @@ export function AddBlockDialog({
           legend="Раздел каталога"
           hideLegend
           appearance="chips"
-          options={catalogSections.map((value) => ({
+          options={sectionsFor(entries).map((value) => ({
             value,
             label: value === 'all' ? `Все · ${entries.length}` : sectionTitle(value),
           }))}
@@ -107,11 +107,12 @@ export function AddBlockDialog({
           {found.map((entry) => (
             <li key={entry.type}>
               <button type="button" className={styles.option} onClick={() => onPick(entry.type)}>
-                <BlockSketch type={entry.type} className={styles.sketch} />
+                <BlockSketch sketch={entry.sketch} className={styles.sketch} />
                 <span className={styles.text}>
                   <span className={styles.heading}>
                     <span className={styles.title}>{entry.title}</span>
                     {entry.isNew && <StatusPill tone="info">новый</StatusPill>}
+                    {entry.custom && <StatusPill tone="neutral">свой</StatusPill>}
                   </span>
                   <span className={styles.description}>{entry.description}</span>
                 </span>

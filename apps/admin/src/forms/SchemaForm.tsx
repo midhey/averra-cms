@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode, useId, useMemo } from 'react'
+import { type ComponentType, type ReactNode, useId, useMemo, useState } from 'react'
 import { Button, IconButton } from '../ui/Button'
 import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
@@ -95,6 +95,8 @@ function SchemaField(props: FieldProps) {
       return <EnumField {...props} />
     case 'checkbox':
       return <CheckboxField {...props} />
+    case 'number':
+      return <NumberField {...props} />
     case 'object':
       return <ObjectField {...props} />
     case 'list':
@@ -152,6 +154,39 @@ function TextField(props: FieldProps & { multiline?: boolean }) {
       type={input ?? 'text'}
       inputMode={input}
       onChange={(event) => update(event.target.value)}
+    />
+  )
+}
+
+/**
+ * Число (поля своих блоков): обычное поле с цифровой клавиатурой. Текст поля — свой: пока человек
+ * пишет «1,» или «-», значение не теряется. Не число — уходит строкой, и схема скажет, что не так
+ */
+function NumberField({ schema, value, path, label, required, errors, onChange }: FieldProps) {
+  const [text, setText] = useState(() => (typeof value === 'number' ? String(value) : ''))
+  // Значение сменили не здесь (вернули версию, другой блок) — поле показывает его
+  const shown =
+    typeof value === 'number' && Number(text.replace(',', '.')) !== value ? String(value) : text
+  const integer = schema.type === 'integer'
+  const range =
+    schema.minimum !== undefined || schema.maximum !== undefined
+      ? `от ${schema.minimum ?? '−∞'} до ${schema.maximum ?? '∞'}`
+      : undefined
+  return (
+    <TextInput
+      label={<FieldLabel label={label} required={required} />}
+      hint={[schema.description, range].filter(Boolean).join('. ') || undefined}
+      error={errors[pathKey(path)]}
+      value={shown}
+      inputMode={integer ? 'numeric' : 'decimal'}
+      placeholder={typeof schema.default === 'number' ? String(schema.default) : undefined}
+      onChange={(event) => {
+        const next = event.target.value
+        setText(next)
+        const trimmed = next.trim()
+        const number = Number(trimmed.replace(',', '.'))
+        onChange(path, trimmed === '' ? undefined : Number.isFinite(number) ? number : trimmed)
+      }}
     />
   )
 }

@@ -1,4 +1,4 @@
-import { ExistingPageSlug, LeadStatus, MAIN_PAGE_SLUG, Uuid } from '@averra/schema'
+import { CustomBlockKey, ExistingPageSlug, LeadStatus, MAIN_PAGE_SLUG, Uuid } from '@averra/schema'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
@@ -9,10 +9,13 @@ import {
   Outlet,
   redirect,
 } from '@tanstack/react-router'
+import { publishedDefinitions } from './custom-blocks/custom-block-format'
 import { legacySiteTarget } from './legacy-paths'
 import { canInvite, canManageChannels, canSeeLeads, safeRedirect } from './permissions'
 import {
   buildQuery,
+  customBlockQuery,
+  customBlocksQuery,
   footerQuery,
   headerQuery,
   invitationsQuery,
@@ -38,6 +41,8 @@ import {
   themeQuery,
 } from './queries'
 import { CookiesScreen } from './screens/CookiesScreen'
+import { CustomBlockScreen } from './screens/CustomBlockScreen'
+import { CustomBlocksScreen } from './screens/CustomBlocksScreen'
 import { EditorScreen } from './screens/EditorScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
 import { HeaderScreen } from './screens/HeaderScreen'
@@ -248,6 +253,36 @@ const headerRoute = createRoute({
   component: HeaderScreen,
 })
 
+// Свои блоки — владельцу: участнику API отдаст только опубликованные определения, а экран
+// скажет, что создаёт их владелец. Медиатека — для картинок примера и предпросмотра
+const customBlocksRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/blocks',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await queryClient.ensureQueryData(customBlocksQuery(siteId))
+  },
+  component: CustomBlocksScreen,
+})
+
+// Свой блок — свежий из API, как страница в редакторе: экран берёт черновик в своё состояние
+const customBlockRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/blocks/$key',
+  beforeLoad: ({ params }) => {
+    if (!CustomBlockKey.safeParse(params.key).success) throw notFound({ data: 'Блок не найден' })
+  },
+  loader: async ({ context: { queryClient }, params: { key } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await Promise.all([
+      queryClient.fetchQuery(customBlockQuery(siteId, key)),
+      Promise.allSettled([queryClient.ensureQueryData(mediaQuery(siteId))]),
+    ])
+  },
+  gcTime: 0,
+  component: CustomBlockScreen,
+})
+
 const mediaRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/media',
@@ -406,11 +441,13 @@ const editorRoute = createRoute({
   // и устаревший черновик (например, после правки через MCP) при сохранении затёр бы новый
   loader: async ({ context: { queryClient }, params: { slug } }) => {
     const siteId = await siteIdOf(queryClient)
-    const [site, page] = await Promise.all([
+    // Свои блоки — свежие, как страница: определение могли опубликовать заново
+    const [site, page, custom] = await Promise.all([
       queryClient.ensureQueryData(siteQuery(siteId)),
       queryClient.fetchQuery(pageQuery(siteId, slug)),
+      queryClient.fetchQuery(customBlocksQuery(siteId)),
     ])
-    return { site, page }
+    return { site, page, customBlocks: publishedDefinitions(custom.blocks) }
   },
   // Без этого роутер при повторном заходе сначала показал бы прошлые данные, а свежие
   // загрузил бы фоном — а редактор их уже не подхватит
@@ -439,6 +476,8 @@ const routeTree = rootRoute.addChildren([
     pagesRoute,
     themeRoute,
     headerRoute,
+    customBlocksRoute,
+    customBlockRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),
     notificationsRoute,

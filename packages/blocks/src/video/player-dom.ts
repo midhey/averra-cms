@@ -51,7 +51,8 @@ export function startVideoPlayers(doc: Document = document) {
     if (!target || typeof (target as Element).closest !== 'function') return
     const link = (target as Element).closest<HTMLAnchorElement>('a[data-video-embed]')
     const src = link?.getAttribute('data-video-embed') ?? ''
-    if (!link || !isEmbedUrl(src)) return
+    // Обложка внутри своего блока — подделка: iframe в своём блоке запрещён
+    if (!link || link.closest('[data-custom-block]') || !isEmbedUrl(src)) return
     event.preventDefault()
     const frame = playerFrame(doc, src, link.getAttribute('data-video-title') ?? '')
     // Ссылка на ролик под плеером: если площадка в iframe не откроется, посетитель не останется

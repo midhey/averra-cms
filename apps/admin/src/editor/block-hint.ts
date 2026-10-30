@@ -29,7 +29,10 @@ export function blockHint(block: EditorBlock) {
   if (title) return title
   const { items, fields, plans, members } = block.props
   if (Array.isArray(items) && items.length > 0) {
-    return countRu(items.length, itemNouns[block.type] ?? ['пункт', 'пункта', 'пунктов'])
+    return countRu(
+      items.length,
+      itemNouns[block.type as BlockType] ?? ['пункт', 'пункта', 'пунктов'],
+    )
   }
   if (Array.isArray(plans) && plans.length > 0) {
     return countRu(plans.length, ['тариф', 'тарифа', 'тарифов'])

@@ -148,6 +148,13 @@
       "when": 1793011250825,
       "tag": "0020_site_footer",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793192866266,
+      "tag": "0021_custom_blocks",
+      "breakpoints": true
     }
   ]
 }

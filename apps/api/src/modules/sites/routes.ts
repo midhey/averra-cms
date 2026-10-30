@@ -19,6 +19,7 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { checkPageCustomBlocks, customBlocksConflict } from '../custom-blocks/service'
 import { headerRepo } from '../header/repo'
 import { leadsRepo } from '../leads/repo'
 import { missingMediaIssues } from '../media/refs'
@@ -168,7 +169,12 @@ export function sitesRoutes({
         validate('json', SaveDraft),
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
-          const { title, content } = c.req.valid('json')
+          const { title } = c.req.valid('json')
+          // Свои блоки — по опубликованным определениям сайта: их схем нет в коде, они в базе.
+          // Дальше идёт страница после их схем: умолчания полей подставлены, как у встроенных
+          const custom = await checkPageCustomBlocks(db, siteId, c.req.valid('json').content)
+          if (custom.issues.length > 0) return c.json(validationError(custom.issues), 400)
+          const content = custom.content
           // Картинка — ссылка в медиатеку этого сайта: на чужую или удалённую сослаться нельзя, SVG
           // в блоки не ставится
           const missing = await missingMediaIssues(media, siteId, content)
@@ -236,6 +242,15 @@ export function sitesRoutes({
         site('page.publish'),
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
+          // Черновик проверили при сохранении, но определение своего блока с тех пор могли
+          // опубликовать заново: данные, которые под него не подходят, на сайт не уходят
+          const found = await repo.findPage(siteId, slug)
+          if (!found) return c.json(notFound('Страница не найдена'), 404)
+          const draft = PageContent.safeParse(found.draft)
+          if (draft.success) {
+            const custom = await checkPageCustomBlocks(db, siteId, draft.data)
+            if (custom.issues.length > 0) return c.json(customBlocksConflict(custom.issues), 409)
+          }
           const page = await repo.publish(siteId, slug, c.var.actor)
           if (!page) return c.json(notFound('Страница не найдена'), 404)
           await rebuild(siteId)

@@ -15,6 +15,7 @@ catalog:
   astro: ^7.3.5
   happy-dom: ^21.0.3
   hono: ^4.13.13
+  postcss: ^8.5.30
   react: ^19.3.0
   react-dom: ^19.3.0
   sass: ^1.105.2

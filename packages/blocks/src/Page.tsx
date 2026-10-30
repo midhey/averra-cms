@@ -1,12 +1,15 @@
 import {
-  type BlockInstance,
+  isCustomBlock,
   type MediaMap,
   mainHeadingBlock,
+  type PageBlock,
   type PageContent,
 } from '@averra/schema'
 import { Clients } from './clients/Clients'
 import { Contacts } from './contacts/Contacts'
 import { Cta } from './cta/Cta'
+import { CustomBlock } from './custom/CustomBlock'
+import type { CustomBlockMap } from './custom/render'
 import { Faq } from './faq/Faq'
 import { Features } from './features/Features'
 import { Form } from './form/Form'
@@ -28,12 +31,29 @@ type PageProps = {
   media?: MediaMap
   /** Адрес приёма заявок формы по id блока. Без него (предпросмотр) формы не отправляются */
   formAction?: (blockId: string) => string
+  /** Опубликованные свои блоки по ключу. Без них свои блоки страницы не выводятся */
+  customBlocks?: CustomBlockMap
+  /**
+   * Свой блок не вывелся (данные не подходят под определение, шаблон упал): сборка пишет это в
+   * журнал. Без него — молча, как на сайте
+   */
+  onCustomBlockError?: (blockId: string, message: string) => void
+  /** Предпросмотр в админке: вместо невыведенного своего блока — причина на его месте */
+  preview?: boolean
 }
 
-export function Page({ content, media = {}, formAction }: PageProps) {
+export function Page({
+  content,
+  media = {},
+  formAction,
+  customBlocks = {},
+  onCustomBlockError,
+  preview = false,
+}: PageProps) {
   // h1 на странице один: его получает первый блок «Первый экран». Правило — в схеме: по нему же
   // проверки SEO в редакторе говорят, есть ли h1
   const mainHeroId = mainHeadingBlock(content.blocks)?.id
+  const pageIds = content.blocks.map((block) => block.id)
   return (
     // id — цель «К содержимому» в шапке сайта (SiteHeader)
     <main id={CONTENT_ID}>
@@ -44,6 +64,10 @@ export function Page({ content, media = {}, formAction }: PageProps) {
           headingLevel={block.id === mainHeroId ? 1 : 2}
           media={media}
           formAction={formAction}
+          customBlocks={customBlocks}
+          onCustomBlockError={onCustomBlockError}
+          preview={preview}
+          pageIds={pageIds}
           // Первый блок виден сразу при открытии: его картинку не откладываем
           priority={index === 0}
         />
@@ -53,14 +77,38 @@ export function Page({ content, media = {}, formAction }: PageProps) {
 }
 
 type BlockProps = {
-  block: BlockInstance
+  block: PageBlock
   headingLevel: 1 | 2
   media: MediaMap
   priority: boolean
   formAction?: ((blockId: string) => string) | undefined
+  customBlocks: CustomBlockMap
+  onCustomBlockError?: ((blockId: string, message: string) => void) | undefined
+  preview: boolean
+  pageIds: readonly string[]
 }
 
-function Block({ block, ...common }: BlockProps) {
+function Block({
+  block,
+  customBlocks,
+  onCustomBlockError,
+  preview,
+  pageIds,
+  ...common
+}: BlockProps) {
+  if (isCustomBlock(block)) {
+    return (
+      <CustomBlock
+        block={block}
+        definitions={customBlocks}
+        media={common.media}
+        priority={common.priority}
+        onError={onCustomBlockError}
+        preview={preview}
+        pageIds={pageIds}
+      />
+    )
+  }
   switch (block.type) {
     case 'hero':
       return <Hero id={block.id} data={block.props} {...common} />

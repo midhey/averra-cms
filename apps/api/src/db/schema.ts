@@ -734,3 +734,64 @@ export const notificationWatch = pgTable('notification_watch', {
   data: jsonb().$type<Record<string, unknown>>().notNull().default({}),
   raisedAt: timestamp({ withTimezone: true }).notNull(),
 })
+
+/**
+ * Свои блоки сайта (раздел «Свои блоки» админки): определение — поля, шаблон Liquid и CSS — по
+ * схеме CustomBlockDraft. Черновик правит владелец, на сайт и в редактор страниц попадает только
+ * опубликованное. Ключ не меняется: по нему (custom:<ключ>) блоки страниц находят определение.
+ * Обновление Averra эти строки не трогает — свои блоки живут в базе установки, а не в образе
+ */
+export const customBlocks = pgTable(
+  'custom_blocks',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    key: text().notNull(),
+    draft: jsonb().$type<Record<string, unknown>>().notNull(),
+    // NULL — блок ещё не публиковали: на страницу его не поставить
+    published: jsonb().$type<Record<string, unknown>>(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    publishedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('custom_blocks_site_key_unique').on(table.siteId, table.key),
+    check('custom_blocks_draft_object', sql`jsonb_typeof(${table.draft}) = 'object'`),
+    check(
+      'custom_blocks_published_object',
+      sql`${table.published} IS NULL OR jsonb_typeof(${table.published}) = 'object'`,
+    ),
+    check(
+      'custom_blocks_published_at',
+      sql`(${table.published} IS NULL) = (${table.publishedAt} IS NULL)`,
+    ),
+  ],
+)
+
+/**
+ * История публикаций своего блока: что ушло на сайт, кто и когда. Пишет её публикация в той же
+ * транзакции, возврат версии в черновик историю не меняет — как у страниц
+ */
+export const customBlockRevisions = pgTable(
+  'custom_block_revisions',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    blockId: uuid()
+      .notNull()
+      .references(() => customBlocks.id, { onDelete: 'cascade' }),
+    version: integer().notNull(),
+    definition: jsonb().$type<Record<string, unknown>>().notNull(),
+    publishedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('custom_block_revisions_block_version_unique').on(table.blockId, table.version),
+    index('custom_block_revisions_site_id_idx').on(table.siteId),
+    check('custom_block_revisions_version_positive', sql`${table.version} > 0`),
+  ],
+)

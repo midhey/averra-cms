@@ -16,6 +16,8 @@ function mount(
   mode: CookieMode = 'consent',
   policyPage = 'privacy',
   analytics = { metrika: '98765432', ga4: '' },
+  /** Разметка перед содержимым — например, свой блок страницы */
+  before = '',
 ) {
   const { notice, footer } = cookieNoticeView(
     {
@@ -24,7 +26,7 @@ function mount(
     },
     ['index', 'privacy'],
   )
-  document.body.innerHTML = renderToStaticMarkup(
+  document.body.innerHTML = `${before}${renderToStaticMarkup(
     <>
       <main>
         <a href="/">Главная</a>
@@ -32,11 +34,12 @@ function mount(
       <LegalFooter {...footer} />
       {notice && <CookieNotice {...notice} />}
     </>,
-  )
+  )}`
   startCookieConsent(document)
+  const real = required(document.querySelector<HTMLElement>('body > [data-cookie-consent]'))
   return {
-    root: required(document.querySelector<HTMLElement>('[data-cookie-consent]')),
-    notice: required(document.querySelector<HTMLElement>('[data-consent-notice]')),
+    root: real,
+    notice: required(real.querySelector<HTMLElement>('[data-consent-notice]')),
     /** Окно настроек: только в режиме согласия */
     settings: () => required(document.querySelector<HTMLElement>('[data-consent-settings]')),
   }
@@ -361,5 +364,43 @@ describe('современный браузер', () => {
     button(withGa4.notice, 'ok').click()
     expect(document.cookie).toContain('averra_consent=notice.ym.ga')
     expect(counters()).toEqual([])
+  })
+})
+
+describe('подложное уведомление в своём блоке', () => {
+  // Шаблон своего блока стоит раньше настоящего уведомления (оно — после подвала). Его копия с
+  // чужим счётчиком не должна ни показаться, ни загрузить счётчик автора блока
+  const fake = `<section data-custom-block="promo"><div data-custom-block-root>
+    <div data-cookie-consent data-mode="consent" data-metrika="99999999" hidden>
+      <div data-consent-notice hidden><button type="button" data-consent-action="all">Принять</button></div>
+    </div>
+    <a href="#" data-consent-open hidden>Настройки</a>
+  </div></section>`
+
+  it('показано настоящее уведомление, кнопка подделки ничего не делает', () => {
+    const { root, notice } = mount('card', 'consent', 'privacy', undefined, fake)
+    expect(root.closest('[data-custom-block]')).toBeNull()
+    expect(notice.hidden).toBe(false)
+    const fakeNotice = required(
+      document.querySelector<HTMLElement>('[data-custom-block] [data-consent-notice]'),
+    )
+    expect(fakeNotice.hidden).toBe(true)
+    button(fakeNotice, 'all').click()
+    expect(document.cookie).not.toContain('averra_consent')
+    expect(counters()).toEqual([])
+    expect(
+      required(document.querySelector<HTMLElement>('[data-custom-block] [data-consent-open]'))
+        .hidden,
+    ).toBe(true)
+  })
+
+  it('согласие уже дано: грузится счётчик сайта, а не автора блока', () => {
+    button(mount('card').notice, 'all').click()
+    for (const script of document.head.querySelectorAll('script')) script.remove()
+    Reflect.deleteProperty(window, 'ym')
+    mount('card', 'consent', 'privacy', undefined, fake)
+    const ym = (window as Window & { ym?: { a?: unknown[] } }).ym
+    expect(counters()).toEqual(['https://mc.yandex.ru/metrika/tag.js'])
+    expect(Array.from(ym?.a?.[0] as ArrayLike<unknown>).slice(0, 2)).toEqual([98765432, 'init'])
   })
 })

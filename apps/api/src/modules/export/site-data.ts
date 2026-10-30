@@ -3,6 +3,7 @@ import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
 import { type MediaStorage, mediaKey } from '../../media/storage'
 import { notificationSettingsRepo } from '../../notifications/settings'
+import { customBlocksRepo } from '../custom-blocks/repo'
 import { draftFooter, publishedFooter } from '../footer/read'
 import { draftHeader, publishedHeader } from '../header/read'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
@@ -40,6 +41,11 @@ site.json — все данные сайта (формат averra-site-export, �
               и SEO (settings:
               шаблон заголовка, описание, язык, адрес, индексация, иконка, коды проверки,
               счётчики аналитики, организация, редиректы);
+  customBlocks — свои блоки сайта: ключ (key; на странице блок с типом custom:<ключ>),
+              черновик (draft) и опубликованное определение (published; null — не
+              публиковали): название, описание, поля (fields), шаблон Liquid (template), CSS (css)
+              и пример данных (example). Файл для загрузки на другую установку — «Свои блоки →
+              Выгрузить» в админке;
   pages     — страницы: адрес (slug), черновик (draft) и опубликованная версия (published)
               с заголовками; блоки страницы — JSON по схемам блоков Averra;
               revisions — история публикаций страницы;
@@ -161,6 +167,13 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       },
       settings: readStoredSettings(site.settings),
     },
+    // Свои блоки: определения — тоже данные сайта (без них страницы со своими блоками не собрать)
+    customBlocks: (await customBlocksRepo(db).list(siteId)).map((row) => ({
+      key: row.key,
+      draft: row.draft,
+      published: row.published,
+      publishedAt: iso(row.publishedAt),
+    })),
   }
   const tail = { media: mediaView, missingFiles }
   yield {

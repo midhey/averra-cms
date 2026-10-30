@@ -64,3 +64,10 @@ export const canEditHeader = (access: SiteAccess) => access !== 'client'
 
 /** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки: владелец и клиент */
 export const canExportData = (access: SiteAccess) => access !== 'editor'
+
+/**
+ * Свои блоки (раздел «Свои блоки»): поля, шаблон и CSS — код на страницах сайта, его пишет
+ * разработчик студии, владелец установки (apps/api/src/auth/access.ts, blocks.define). Редактор и
+ * клиент только заполняют опубликованные свои блоки на страницах
+ */
+export const canDefineBlocks = (access: SiteAccess) => access === 'owner'

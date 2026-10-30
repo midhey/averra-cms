@@ -35,6 +35,7 @@
     "status": "tsx src/cli/status.ts"
   },
   "dependencies": {
+    "@averra/blocks": "workspace:*",
     "@averra/schema": "workspace:*",
     "@averra/tokens": "workspace:*",
     "@electric-sql/pglite": "^0.5.8",

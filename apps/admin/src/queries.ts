@@ -28,6 +28,10 @@ export const queryKeys = {
   theme: (siteId: string) => ['sites', siteId, 'theme'] as const,
   header: (siteId: string) => ['sites', siteId, 'header'] as const,
   footer: (siteId: string) => ['sites', siteId, 'footer'] as const,
+  customBlocks: (siteId: string) => ['sites', siteId, 'custom-blocks'] as const,
+  customBlock: (siteId: string, key: string) => ['sites', siteId, 'custom-blocks', key] as const,
+  customBlockRevisions: (siteId: string, key: string) =>
+    ['sites', siteId, 'custom-blocks', key, 'revisions'] as const,
   passwordReset: ['password-reset'] as const,
   invitation: (token: string) => ['invitation', token] as const,
   notifications: ['notifications'] as const,
@@ -68,6 +72,46 @@ export const siteQuery = (siteId: string) =>
     queryKey: queryKeys.site(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId'].$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Свои блоки сайта. Владельцу — все с черновиками (раздел «Свои блоки»), остальным — только
+ * опубликованные определения: ими редактор заполняет страницы и рисует предпросмотр
+ */
+export const customBlocksQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.customBlocks(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId']['custom-blocks'].$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Свой блок для экрана определения: черновик, опубликованное, замечания и где стоит */
+export const customBlockQuery = (siteId: string, key: string) =>
+  queryOptions({
+    queryKey: queryKeys.customBlock(siteId, key),
+    queryFn: async () => {
+      const res = await api.sites[':siteId']['custom-blocks'][':key'].$get({
+        param: { siteId, key },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** История публикаций своего блока */
+export const customBlockRevisionsQuery = (siteId: string, key: string) =>
+  queryOptions({
+    queryKey: queryKeys.customBlockRevisions(siteId, key),
+    queryFn: async () => {
+      const res = await api.sites[':siteId']['custom-blocks'][':key'].revisions.$get({
+        param: { siteId, key },
+      })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

@@ -1,0 +1,164 @@
+@use "@averra/ui" as ui;
+
+// Две колонки, как у темы: определение слева, предпросмотр справа. Не хватает места — предпросмотр
+// уходит под определение
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.settings {
+  display: flex;
+  flex: 1 1 ui.rem(480);
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: ui.rem(720);
+
+  @include ui.breakpoint-down(small) {
+    max-width: none;
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-top: var(--space-4);
+}
+
+.note,
+.usage {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.ok {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-success-text);
+}
+
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.problem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--font-size-small);
+}
+
+// Строка замечания — кнопка-ссылка: переводит курсор в поле кода
+.jump {
+  padding: 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-action);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: 0;
+
+  &:focus-visible {
+    @include ui.focus-ring;
+  }
+}
+
+.cheatsheet {
+  font-size: var(--font-size-small);
+
+  summary {
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+  }
+
+  summary:focus-visible {
+    @include ui.focus-ring;
+  }
+}
+
+.code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+  list-style: none;
+}
+
+.revisions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.revision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: ui.rem(1) solid var(--color-border);
+}
+
+// Кнопки и итог прилипают к низу колонки, как на экране темы
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--color-background);
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.preview {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex: 999 1 ui.rem(420);
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+
+  @include ui.breakpoint-down(small) {
+    position: static;
+  }
+}
+
+.previewBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.frame {
+  height: min(ui.rem(640), calc(100vh - ui.rem(64)));
+  min-height: ui.rem(360);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}

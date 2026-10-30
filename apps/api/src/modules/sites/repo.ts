@@ -14,6 +14,8 @@ import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
+import { customBlocksRepo } from '../custom-blocks/repo'
+import { cssMediaIds } from '../custom-blocks/service'
 import { publishedHeader } from '../header/read'
 import { readStoredSettings } from '../settings/read'
 
@@ -260,8 +262,8 @@ export function sitesRepo(db: Db) {
 
     /**
      * Картинки опубликованного сайта — id из полей-картинок блоков опубликованных страниц
-     * (collectMediaRefs), картинки настроек (OG, логотип, иконка) и логотип шапки, как в снимке
-     * для рендерера.
+     * (collectMediaRefs), картинки настроек (OG, логотип, иконка), логотип шапки и картинки из CSS
+     * своих блоков, как в снимке для рендерера.
      * По ним сборка решает, какие файлы картинок класть в релиз
      */
     async publishedMediaIds(siteId: string) {
@@ -279,6 +281,10 @@ export function sitesRepo(db: Db) {
         ),
         ...(site ? settingsMediaIds(readStoredSettings(site.settings)) : []),
         ...(site ? headerMediaIds(publishedHeader(site)) : []),
+        // Картинки из CSS опубликованных своих блоков (url(media:…))
+        ...(await customBlocksRepo(db).published(siteId)).flatMap((block) =>
+          cssMediaIds(block.css),
+        ),
       ])
     },
   }

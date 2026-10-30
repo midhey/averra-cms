@@ -1,5 +1,5 @@
 import {
-  type BlockType,
+  type CustomBlockDraft,
   type PageContent,
   type PageSeo,
   PageTitle,
@@ -38,6 +38,7 @@ import { usePageTitle } from '../ui/use-page-title'
 import { AddBlockDialog } from './AddBlockDialog'
 import { BlockList } from './BlockList'
 import { blockName } from './block-hint'
+import { catalog, customCatalog, entryTitle } from './catalog'
 import { createBlock, type EditorBlock, insertBlock, removeBlock, updateBlockProps } from './draft'
 import { draftState, type ServerPage } from './draft-state'
 import styles from './Editor.module.scss'
@@ -93,7 +94,16 @@ const serverPageOf = (page: EditorPage | ServerPage): ServerPage => ({
   publishedAt: page.publishedAt,
 })
 
-export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
+type EditorProps = {
+  site: EditorSite
+  page: EditorPage
+  /** Опубликованные свои блоки сайта: каталог, проверка полей и предпросмотр */
+  customBlocks?: readonly CustomBlockDraft[]
+}
+
+const NO_CUSTOM_BLOCKS: readonly CustomBlockDraft[] = []
+
+export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorProps) {
   const [title, setTitle] = useState(page.title)
   const [blocks, setBlocks] = useState<readonly EditorBlock[]>(page.draft.blocks)
   // SEO страницы (панель «SEO»): заголовок, описание, картинка, canonical, noindex — в черновике
@@ -153,7 +163,15 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     [site.id],
   )
 
-  const validation = useMemo(() => validateBlocks(blocks), [blocks])
+  // Каталог — встроенные блоки и свои блоки сайта; определения своих — для Page в предпросмотре
+  const entries = useMemo(() => [...catalog, ...customCatalog(customBlocks)], [customBlocks])
+  const definitions = useMemo(
+    () => Object.fromEntries(customBlocks.map((definition) => [definition.key, definition])),
+    [customBlocks],
+  )
+  const titleOf = useCallback((type: string) => entryTitle(type, entries), [entries])
+
+  const validation = useMemo(() => validateBlocks(blocks, customBlocks), [blocks, customBlocks])
   const invalidIds = useMemo(() => new Set(Object.keys(validation.blockErrors)), [validation])
 
   // Пока в форме ошибка, предпросмотр показывает последнюю правильную версию страницы
@@ -383,8 +401,8 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
     setShownRevision(null)
   }
 
-  const addBlock = (type: BlockType) => {
-    const block = createBlock(type, blocks)
+  const addBlock = (type: string) => {
+    const block = createBlock(type, blocks, entries)
     editBlocks(insertBlock(blocks, block, selectedId ?? undefined))
     setAdding(false)
     selectBlock(block.id, true)
@@ -602,6 +620,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             onRemove={deleteBlock}
             onAdd={() => setAdding(true)}
             actionsOnEvery={narrow}
+            titleOf={titleOf}
             footer={
               narrow && (
                 <Button
@@ -629,6 +648,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
             selectedId={showingRevision ? null : selectedId}
             onSelectBlock={showingRevision ? undefined : previewSelect}
             toolbar={narrow ? deviceSwitch : undefined}
+            customBlocks={definitions}
           />
         </section>
 
@@ -669,6 +689,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
                 if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))
               }}
               widgets={widgets}
+              entries={entries}
             />
           )}
         </div>
@@ -679,6 +700,7 @@ export function Editor({ site, page }: { site: EditorSite; page: EditorPage }) {
         onClose={() => setAdding(false)}
         onPick={addBlock}
         after={selected ? blockName(selected) : null}
+        entries={entries}
       />
     </div>
   )

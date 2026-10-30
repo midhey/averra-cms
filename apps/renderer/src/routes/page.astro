@@ -1,6 +1,7 @@
 ---
 import {
   cookieNoticeView,
+  customBlocksCss,
   headerMenuRow,
   headerRowButton,
   headerScriptNeeded,
@@ -13,6 +14,7 @@ import {
 } from '@averra/blocks'
 import '@averra/blocks/base.css'
 import {
+  customBlockKeysOf,
   FOOTER_FORM_ID,
   findRedirect,
   footerContacts,
@@ -44,7 +46,7 @@ export async function getStaticPaths() {
 
 // Содержимое грузим здесь, а не в getStaticPaths: в dev-режиме этот код выполняется
 // на каждый запрос, и опубликованные правки видны после обновления страницы
-const { site, pages, media } = await loadSnapshot()
+const { site, pages, media, customBlocks } = await loadSnapshot()
 // /404 в dev — отдельный маршрут (astro.config.mjs): иначе Astro показал бы там свою заглушку
 const devNotFound = Astro.routePattern === '/404'
 if (devNotFound) Astro.response.status = 404
@@ -109,6 +111,12 @@ const footer = siteFooterView({
   formAction: pages.includes(page) ? formActionFor(site.id, page.slug)(FOOTER_FORM_ID) : null,
   year: new Date().getFullYear(),
 })
+// CSS своих блоков страницы — один раз на тип, после темы: роли темы в нём уже определены
+const customCss = customBlocksCss(customBlockKeysOf(page.content), customBlocks, media)
+// Свой блок, чьи данные не подходят под опубликованное определение, на сайт не попадает: сборка
+// идёт дальше, а причина — в журнале сборки
+const customBlockError = (blockId: string, message: string) =>
+  console.warn(`Страница ${page.slug}, свой блок #${blockId} не выведен: ${message}`)
 // Скрипт плеера — только на страницах с блоком «Видео»
 const hasVideo = page.content.blocks.some((block) => block.type === 'video')
 ---
@@ -124,11 +132,18 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <Fragment set:html={head.join('\n')} />
     <style is:inline set:html={themeCss}></style>
+    {customCss && <style is:inline set:html={customCss} />}
     <Fragment set:html={scripts.join('\n')} />
   </head>
   <body>
     {header && <SiteHeader view={header} media={media} />}
-    <Page content={page.content} media={media} formAction={formActionFor(site.id, page.slug)} />
+    <Page
+      content={page.content}
+      media={media}
+      formAction={formActionFor(site.id, page.slug)}
+      customBlocks={customBlocks}
+      onCustomBlockError={customBlockError}
+    />
     {footer ? <SiteFooter view={footer} /> : <LegalFooter {...cookies.footer} />}
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}

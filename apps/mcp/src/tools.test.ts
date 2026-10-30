@@ -60,6 +60,32 @@ describe('каталог блоков', () => {
     }
   })
 
+  it('свои блоки сайта — после встроенных, только опубликованные, со схемой полей', async () => {
+    const owner = await api.loginAs('owner')
+    const headers = { ...owner.headers, 'content-type': 'application/json' }
+    const base = `/api/sites/${api.demoSiteId}/custom-blocks`
+    for (const key of ['tariffs', 'draft-only']) {
+      const res = await api.app.request(base, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key, title: 'Тарифы' }),
+      })
+      expect(res.status).toBe(201)
+    }
+    expect(
+      (await api.app.request(`${base}/tariffs/publish`, { method: 'POST', headers })).status,
+    ).toBe(200)
+    const catalog = await tools.listBlocks()
+    const own = catalog.blocks.filter((block) => block.custom)
+    expect(own.map((block) => block.type)).toEqual(['custom:tariffs'])
+    expect(own[0]?.props).toMatchObject({ properties: { title: { title: 'Заголовок' } } })
+    // Свой блок проходит save_draft так же, как встроенный
+    const content = {
+      blocks: [{ id: 'tariffs-1', type: 'custom:tariffs', props: own[0]?.example }],
+    }
+    await tools.saveDraft({ slug: 'svoi', title: 'Свои', content: PageContent.parse(content) })
+  })
+
   it('схема save_draft переводится в JSON Schema — в таком виде её видит нейронка', () => {
     expect(() => z.toJSONSchema(SaveDraftInput, { io: 'input' })).not.toThrow()
   })

@@ -1,6 +1,6 @@
-import { Page } from '@averra/blocks'
+import { type CustomBlockMap, customBlocksCss, Page } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
-import type { MediaMap, PageContent, Theme } from '@averra/schema'
+import { customBlockKeysOf, type MediaMap, type PageContent, type Theme } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import {
   Component,
@@ -85,6 +85,8 @@ type PreviewProps = {
    * а не на каждую перерисовку — иначе человека, прокрутившего предпросмотр вверх, вернёт вниз
    */
   scrollToEnd?: string | undefined
+  /** Опубликованные свои блоки сайта (в редакторе своего блока — его черновик) */
+  customBlocks?: CustomBlockMap | undefined
 }
 
 /** Роли темы админки для подсветки: их значения читаем из её документа */
@@ -110,6 +112,17 @@ export function Preview(props: PreviewProps) {
   const [scale, setScale] = useState(1)
   const width = devices[device]
   const selectionStyle = useMemo(() => frameDocument?.createElement('style'), [frameDocument])
+  // CSS своих блоков страницы — отдельным тегом после темы, как в <head> сайта: меняется вместе с
+  // содержимым, а не с темой
+  const customStyle = useMemo(() => frameDocument?.createElement('style'), [frameDocument])
+  const customBlocks = props.customBlocks
+  const customCss = useMemo(
+    () => (customBlocks ? customBlocksCss(customBlockKeysOf(content), customBlocks, media) : ''),
+    [content, customBlocks, media],
+  )
+  useEffect(() => {
+    if (customStyle) customStyle.textContent = customCss
+  }, [customStyle, customCss])
   const blockIds = useMemo(() => new Set(content.blocks.map((block) => block.id)), [content])
 
   // Широкий «десктоп» ужимаем под ширину колонки, чтобы видеть страницу целиком
@@ -139,15 +152,16 @@ export function Preview(props: PreviewProps) {
   // шрифты и тема сайта и подсветка выбранного блока. Vite подменяет стили при правках, поэтому
   // следим за <head> админки и копируем заново
   useEffect(() => {
-    if (!frameDocument || !selectionStyle) return
+    if (!frameDocument || !selectionStyle || !customStyle) return
     // Шрифты темы — перед её переменными, как в <head> сайта
     const themeCss = previewFontCss(theme) + themeToCss(theme)
     const sync = () => {
       const copied = previewStyleNodes(document).map((node) => node.cloneNode(true))
-      frameDocument.head.replaceChildren(
+      frameHead(frameDocument).replaceChildren(
         ...copied,
         styleElement(frameDocument, baseCss),
         styleElement(frameDocument, themeCss),
+        customStyle,
         selectionStyle,
       )
     }
@@ -155,7 +169,7 @@ export function Preview(props: PreviewProps) {
     const observer = new MutationObserver(sync)
     observer.observe(document.head, { childList: true, subtree: true, characterData: true })
     return () => observer.disconnect()
-  }, [frameDocument, theme, selectionStyle])
+  }, [frameDocument, theme, selectionStyle, customStyle])
 
   const interactive = onSelectBlock !== undefined
   useEffect(() => {
@@ -172,7 +186,7 @@ export function Preview(props: PreviewProps) {
   useEffect(() => {
     const view = frameDocument?.defaultView
     if (!view || selectedId === null || !interactive) return
-    const block = frameDocument.getElementById(selectedId)
+    const block = Document.prototype.getElementById.call(frameDocument, selectedId)
     if (!block) return
     const { top, bottom } = block.getBoundingClientRect()
     if (bottom > 0 && top < view.innerHeight) return
@@ -235,10 +249,10 @@ export function Preview(props: PreviewProps) {
         createPortal(
           <PreviewBoundary content={content}>
             {before}
-            <Page content={content} media={media} />
+            <Page content={content} media={media} customBlocks={customBlocks} preview />
             {extra}
           </PreviewBoundary>,
-          frameDocument.body,
+          frameBody(frameDocument),
         )}
     </div>
   )
@@ -274,4 +288,18 @@ class PreviewBoundary extends Component<BoundaryProps, BoundaryState> {
       <p style={{ padding: 24, font: '16px system-ui' }}>Предпросмотр не получилось нарисовать</p>
     )
   }
+}
+
+// head и body документа предпросмотра — через прототип Document: <img name="head"> в разметке
+// страницы браузер отдал бы вместо document.head. Шаблоны своих блоков name у img не пропускают,
+// но предпросмотр не должен ломаться и от старых или чужих данных
+const documentGetter = (name: 'head' | 'body') =>
+  Object.getOwnPropertyDescriptor(Document.prototype, name)?.get
+
+function frameHead(owner: Document): HTMLHeadElement {
+  return documentGetter('head')?.call(owner) ?? owner.head
+}
+
+function frameBody(owner: Document): HTMLElement {
+  return documentGetter('body')?.call(owner) ?? owner.body
 }

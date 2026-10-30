@@ -197,9 +197,20 @@ function forgetStorage(win: Window) {
   }
 }
 
+/**
+ * Разметка внутри своего блока — не наша: шаблон блока стоит раньше настоящего уведомления и мог бы
+ * подложить копию со своим счётчиком. Своя копия проверки, а не импорт: скрипт остаётся одним
+ * маленьким модулем, который сборка встраивает в страницу
+ */
+const insideCustomBlock = (element: Element) => element.closest('[data-custom-block]') !== null
+
 /** Запустить уведомление на странице. Нет разметки — ничего не делает */
 export function startCookieConsent(doc: Document = document) {
-  const root = doc.querySelector<HTMLElement>(CONSENT_ROOT_SELECTOR)
+  // Не первый в документе, а вне своих блоков: шаблон блока стоит раньше настоящего уведомления
+  const root =
+    Array.from(doc.querySelectorAll<HTMLElement>(CONSENT_ROOT_SELECTOR)).find(
+      (element) => !insideCustomBlock(element),
+    ) ?? null
   const win = doc.defaultView
   if (!root || !win) return undefined
   const mode: ConsentMode = root.dataset.mode === 'notice' ? 'notice' : 'consent'
@@ -281,6 +292,7 @@ export function startCookieConsent(doc: Document = document) {
   // них ничего (политика не опубликована), без JS скрыт целиком — показываем и его
   if (mode === 'consent' && settingsModal) {
     for (const link of doc.querySelectorAll<HTMLElement>('[data-consent-open]')) {
+      if (insideCustomBlock(link)) continue
       link.hidden = false
       const footer = link.closest<HTMLElement>('[data-legal-footer]')
       if (footer) footer.hidden = false

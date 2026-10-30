@@ -5,6 +5,7 @@ import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { validate } from '../../validate'
+import { checkPageCustomBlocks } from '../custom-blocks/service'
 import { missingMediaIssues } from '../media/refs'
 import { mediaRepo } from '../media/repo'
 import { sitesRepo } from '../sites/repo'
@@ -81,7 +82,14 @@ export function revisionsRoutes({ db }: { db: Db }) {
           return c.json(conflict(message, lostMedia), 409)
         }
 
-        const page = await sites.updateDraft(siteId, slug, title.data, content.data)
+        // Свой блок из версии могли удалить или опубликовать с другими полями
+        const custom = await checkPageCustomBlocks(db, siteId, content.data)
+        if (custom.issues.length > 0) {
+          const message = `Свои блоки версии ${revision.version} не подходят под опубликованные определения, вернуть её в черновик нельзя`
+          return c.json(conflict(message, custom.issues), 409)
+        }
+
+        const page = await sites.updateDraft(siteId, slug, title.data, custom.content)
         if (!page) return c.json(notFound('Страница не найдена'), 404)
         return c.json(page, 200)
       },

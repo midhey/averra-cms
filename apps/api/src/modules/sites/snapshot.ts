@@ -6,6 +6,8 @@ import {
   settingsMediaIds,
 } from '@averra/schema'
 import type { Db } from '../../db/client'
+import { customBlocksRepo } from '../custom-blocks/repo'
+import { cssMediaIds } from '../custom-blocks/service'
 import { publishedFooter } from '../footer/read'
 import { publishedHeader } from '../header/read'
 import { mediaRepo } from '../media/repo'
@@ -22,7 +24,8 @@ import { sitesRepo } from './repo'
  * главной, поэтому до публикации главной в снимке её нет. Шапка — опубликованная (null — её не
  * публиковали, на сайте шапки нет); телефон и адрес в неё рендерер берёт из той же организации.
  * Подвал — опубликованный (null — на сайте прежняя полоса с документами); реквизиты, контакты и
- * соцсети в него — тоже из организации.
+ * соцсети в него — тоже из организации. Свои блоки — опубликованные определения (шаблон и CSS и так
+ * на сайте в собранном виде).
  * siteUrl — адрес установки (SITE_URL),
  * если своего в настройках нет. undefined — сайта нет
  */
@@ -37,7 +40,11 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
   // Справочник картинок — только тех, что стоят на опубликованных страницах и в настройках:
   // рендереру нужны их варианты, а остальная медиатека снаружи не видна
   const header = publishedHeader(found)
+  // Свои блоки — опубликованные определения: их шаблон и CSS рендерер собирает в страницы. Картинки
+  // из их CSS (url(media:…)) — в справочник, как картинки блоков
+  const customBlocks = await customBlocksRepo(db).published(siteId)
   const mediaIds = [
+    ...customBlocks.flatMap((block) => cssMediaIds(block.css)),
     ...pages.flatMap((page) => collectMediaRefs(page.content).map((ref) => ref.mediaId)),
     ...settingsMediaIds(settings),
     ...headerMediaIds(header),
@@ -53,6 +60,12 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
       settings,
     },
     pages,
+    customBlocks: Object.fromEntries(
+      customBlocks.map(({ key, title, fields, template, css }) => [
+        key,
+        { key, title, fields, template, css },
+      ]),
+    ),
     media: await mediaRepo(db).files(siteId, mediaIds),
   }
 }

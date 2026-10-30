@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { BlockInstance, hero } from './blocks'
+import { hero } from './blocks'
+import { PageBlock } from './custom-blocks'
 import { MediaId } from './media'
 import { HTTPS_URL, isInternalPath } from './url'
 
@@ -63,7 +64,9 @@ export type PageSeo = z.infer<typeof PageSeo>
 
 export const PageContent = z
   .strictObject({
-    blocks: z.array(BlockInstance).max(PAGE_MAX_BLOCKS),
+    // Встроенные и свои блоки. Поля своих проверяет applyCustomBlocks по опубликованным
+    // определениям: их нет в коде, они в базе установки
+    blocks: z.array(PageBlock).max(PAGE_MAX_BLOCKS),
     seo: PageSeo.optional(),
     // Скрыть шапку сайта на этой странице (промо-лендинг): часть черновика, на сайт — с публикацией
     hideHeader: z.boolean().optional().meta({

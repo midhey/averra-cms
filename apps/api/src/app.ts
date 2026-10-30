@@ -12,6 +12,7 @@ import type { ImageProcessor } from './media/processor'
 import type { MediaStorage } from './media/storage'
 import { authRoutes } from './modules/auth/routes'
 import { buildsRoutes } from './modules/builds/routes'
+import { customBlocksRoutes } from './modules/custom-blocks/routes'
 import { exportRoutes, type PublishedSite } from './modules/export/routes'
 import { footerRoutes } from './modules/footer/routes'
 import { headerRoutes } from './modules/header/routes'
@@ -175,6 +176,10 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/header', headerRoutes({ db, publisher: deps.publisher, log }))
     // Подвал сайта: черновик и публикация (modules/footer)
     .route('/sites/:siteId/footer', footerRoutes({ db, publisher: deps.publisher, log }))
+    .route(
+      '/sites/:siteId/custom-blocks',
+      customBlocksRoutes({ db, publisher: deps.publisher, log }),
+    )
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке
     .route('/sites/:siteId', ogRoutes({ db, siteUrl: deps.siteUrl, cards: deps.ogCards }))

@@ -1,10 +1,12 @@
 import { CMS_API_URL, CMS_LINKS, CMS_SITE_ID } from 'astro:env/server'
 import type { AppType } from '@averra/api'
+import type { CustomBlockMap } from '@averra/blocks'
 import {
   defaultNotFoundContent,
   type MediaMap,
   NOT_FOUND_PAGE_SLUG,
   NOT_FOUND_PAGE_TITLE,
+  type PageContent,
 } from '@averra/schema'
 import { hc } from 'hono/client'
 import { ICON_FILES } from './icon-files'
@@ -35,7 +37,14 @@ async function fetchSnapshot() {
   }
   if (res.status !== 200) throw new Error(`API ответил ${res.status} на снимок сайта`)
   const snapshot = await res.json()
-  return { ...snapshot, media: withSiteUrls(snapshot.media) }
+  return {
+    ...snapshot,
+    // Страницы и свои блоки — ровно то, что API проверил своими схемами. Тип клиента Hono видит
+    // в них JSON и не узнаёт поля своих блоков (объект неизвестной формы)
+    pages: snapshot.pages.map((page) => ({ ...page, content: page.content as PageContent })),
+    customBlocks: snapshot.customBlocks as CustomBlockMap,
+    media: withSiteUrls(snapshot.media),
+  }
 }
 
 /** Путь файла картинки в API: /api/media/<id картинки>/<файл> */

@@ -64,9 +64,32 @@ const sketches = {
   },
 } as const satisfies Record<BlockType, Sketch>
 
-/** Набросок блока: рисунок, а не содержание — скрыт от диктора, смысл несут название и описание */
-export function BlockSketch({ type, className }: { type: BlockType; className?: string }) {
-  const sketch: Sketch = sketches[type]
+/**
+ * Общий набросок своего блока, у которого не выбран набросок встроенного: акцентные «скобки»
+ * вокруг содержимого — блок, сделанный под этот сайт
+ */
+const customSketch: Sketch = {
+  direction: 'row',
+  parts: [
+    bar('0.375rem', 40, 'accent'),
+    box('34%', 56),
+    bar('30%', 26, 'dark'),
+    bar('0.375rem', 40, 'accent'),
+  ],
+}
+
+/**
+ * Набросок блока: рисунок, а не содержание — скрыт от диктора, смысл несут название и описание.
+ * sketch — тип встроенного блока, чей рисунок взять; нет — общий набросок своего блока
+ */
+export function BlockSketch({
+  sketch: type,
+  className,
+}: {
+  sketch: BlockType | undefined
+  className?: string
+}) {
+  const sketch: Sketch = type ? sketches[type] : customSketch
   return (
     <span className={cx(styles.sketch, styles[sketch.direction], className)} aria-hidden="true">
       {sketch.parts.map((part, index) => (

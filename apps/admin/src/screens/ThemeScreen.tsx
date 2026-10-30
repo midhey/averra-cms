@@ -23,13 +23,22 @@ import {
 } from '@tanstack/react-query'
 import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
+import { publishedDefinitions } from '../custom-blocks/custom-block-format'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
 import { mediaMapOf } from '../media/media-format'
 import { canEditTheme } from '../permissions'
-import { mediaQuery, pageQuery, pagesQuery, queryKeys, siteQuery, themeQuery } from '../queries'
+import {
+  customBlocksQuery,
+  mediaQuery,
+  pageQuery,
+  pagesQuery,
+  queryKeys,
+  siteQuery,
+  themeQuery,
+} from '../queries'
 import { fieldError } from '../seo/seo-format'
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { ColorRow, ThemeSwatch } from '../theme/ThemeParts'
@@ -403,6 +412,15 @@ function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
   const page = useQuery({ ...pageQuery(siteId, slug), placeholderData: keepPreviousData })
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
+  // Свои блоки страницы — в новой теме тоже: их CSS построен на ролях темы
+  const custom = useQuery(customBlocksQuery(siteId))
+  const customBlocks = useMemo(
+    () =>
+      Object.fromEntries(
+        publishedDefinitions(custom.data?.blocks ?? []).map((item) => [item.key, item]),
+      ),
+    [custom.data],
+  )
   const draft = page.data?.draft
   const empty = draft !== undefined && draft.blocks.length === 0
   const content = useMemo(
@@ -447,6 +465,7 @@ function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
             media={media}
             device={device}
             selectedId={null}
+            customBlocks={customBlocks}
           />
         )}
       </div>

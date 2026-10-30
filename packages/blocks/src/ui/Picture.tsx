@@ -1,10 +1,5 @@
-import {
-  type Image,
-  type ImageFormat,
-  imageMimeTypes,
-  type MediaFile,
-  type MediaMap,
-} from '@averra/schema'
+import { type Image, type ImageFormat, imageMimeTypes, type MediaMap } from '@averra/schema'
+import { fallbackFormat, fullSizeUrl, largestVariant, srcSetOf, vectorVariant } from './media-file'
 import styles from './Picture.module.css'
 
 type PictureProps = {
@@ -36,7 +31,7 @@ export function Picture({ image, media, sizes, priority, eager, className }: Pic
 
   // SVG — один файл без вариантов (логотип шапки). В блоки API его не пускает, но если он там
   // окажется, выводим его как есть, а не пустое место
-  const vector = file.variants.find((variant) => variant.format === 'svg')
+  const vector = vectorVariant(file)
   if (vector) {
     return (
       <picture className={className}>
@@ -53,12 +48,7 @@ export function Picture({ image, media, sizes, priority, eager, className }: Pic
     )
   }
 
-  const srcSet = (format: ImageFormat) =>
-    file.variants
-      .filter((variant) => variant.format === format)
-      .toSorted((a, b) => a.width - b.width)
-      .map((variant) => `${variant.url} ${variant.width}w`)
-      .join(', ')
+  const srcSet = (format: ImageFormat) => srcSetOf(file, format)
 
   const fallback = fallbackFormat(file)
   const largest = largestVariant(file, fallback)
@@ -89,25 +79,4 @@ export function Picture({ image, media, sizes, priority, eager, className }: Pic
   )
 }
 
-/** Запасной формат — исходный JPEG или PNG. Если исходник был WebP или AVIF, запасной — WebP */
-const fallbackFormat = (file: MediaFile): ImageFormat =>
-  file.variants
-    .map((variant) => variant.format)
-    .find((format): format is 'jpeg' | 'png' => format === 'jpeg' || format === 'png') ?? 'webp'
-
-const largestVariant = (file: MediaFile, format: ImageFormat) =>
-  file.variants
-    .filter((variant) => variant.format === format)
-    .reduce<MediaFile['variants'][number] | undefined>(
-      (best, variant) => (!best || variant.width > best.width ? variant : best),
-      undefined,
-    )
-
-/**
- * Адрес картинки в полном размере: самый широкий вариант формата, который откроет любой браузер
- * (у SVG — сам файл). Им фото галереи ведёт на снимок целиком — без JavaScript и лайтбокса
- */
-export function fullSizeUrl(file: MediaFile) {
-  const vector = file.variants.find((variant) => variant.format === 'svg')
-  return vector?.url ?? largestVariant(file, fallbackFormat(file))?.url
-}
+export { fullSizeUrl }

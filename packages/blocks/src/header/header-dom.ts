@@ -4,6 +4,17 @@
 // Модуль без зависимостей и внешних загрузок: Astro собирает его в /_astro/… только на страницы,
 // где ему есть что делать (headerScriptNeeded)
 
+/**
+ * Первый элемент вне своих блоков: шаблон блока не подменит шапку и её метки копией. Своя копия
+ * проверки, а не импорт: Astro встраивает маленький модуль прямо в страницу
+ */
+function querySite<T extends Element>(doc: Document, selector: string): T | null {
+  for (const element of Array.from(doc.querySelectorAll<T>(selector))) {
+    if (!element.closest('[data-custom-block]')) return element
+  }
+  return null
+}
+
 /** Что скрипту нужно от окна: в тестах — свои наблюдатель и медиазапрос */
 export type HeaderEnvironment = {
   IntersectionObserver?: typeof IntersectionObserver | undefined
@@ -30,11 +41,11 @@ export function startSiteHeader(
   doc: Document = document,
   env: HeaderEnvironment = typeof window === 'undefined' ? {} : window,
 ) {
-  const header = doc.querySelector<HTMLElement>('[data-site-header]')
+  const header = querySite<HTMLElement>(doc, '[data-site-header]')
   if (!header) return
   const calm = env.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  const far = doc.querySelector('[data-header-sentinel="far"]')
-  const top = doc.querySelector('[data-header-sentinel="top"]')
+  const far = querySite<Element>(doc, '[data-header-sentinel="far"]')
+  const top = querySite<Element>(doc, '[data-header-sentinel="top"]')
   // Где IntersectionObserver нет (iOS до 12.2), шапка остаётся полной и липкой
   if (far && top && env.IntersectionObserver) {
     const condense = header.hasAttribute('data-condense')

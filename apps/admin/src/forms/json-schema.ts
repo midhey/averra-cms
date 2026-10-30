@@ -10,6 +10,8 @@ export type JsonSchema = {
   enum?: readonly (string | number)[]
   default?: unknown
   maxLength?: number
+  minimum?: number
+  maximum?: number
   pattern?: string
   properties?: Record<string, JsonSchema>
   required?: readonly string[]
@@ -25,6 +27,8 @@ export type JsonSchema = {
    * нужным type и клавиатурой на телефоне
    */
   'x-input'?: 'email' | 'tel'
+  /** Многострочный текст своего блока: поле textarea, даже если текст короткий */
+  'x-multiline'?: boolean
   /** Подписи вариантов выбора для людей: значение → подпись (тип поля формы: phone → «Телефон») */
   'x-enum-titles'?: Readonly<Record<string, string>>
   /**
@@ -38,6 +42,7 @@ export type FieldKind =
   | 'textarea'
   | 'select'
   | 'checkbox'
+  | 'number'
   | 'object'
   | 'list'
   | 'image'
@@ -52,10 +57,14 @@ export function fieldKind(schema: JsonSchema): FieldKind {
     case 'string':
       // Строка с шаблоном (ссылка и т.п.), почта и телефон всегда однострочные, даже если
       // допускают 254 или 2048 символов
+      if (schema['x-multiline']) return 'textarea'
       if (schema.pattern || schema['x-input']) return 'text'
       return (schema.maxLength ?? 0) > 150 ? 'textarea' : 'text'
     case 'boolean':
       return 'checkbox'
+    case 'number':
+    case 'integer':
+      return 'number'
     case 'object':
       return 'object'
     case 'array':

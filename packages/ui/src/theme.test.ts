@@ -99,6 +99,10 @@ describe('тема Averra', () => {
     ['--color-danger-text', '--color-danger-surface'],
     ['--color-danger-text', '--color-surface'],
     ['--color-info-text', '--color-info-surface'],
+    // Подсветка кода: поле кода лежит на --color-surface
+    ['--color-success-text', '--color-surface'],
+    ['--color-warning-text', '--color-surface'],
+    ['--color-info-text', '--color-surface'],
     ['--color-neutral-text', '--color-neutral-surface'],
   ])('контраст текста %s на %s не меньше 4,5:1', (text, background) => {
     expect(contrast(text, background)).toBeGreaterThanOrEqual(4.5)

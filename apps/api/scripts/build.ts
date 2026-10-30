@@ -58,6 +58,12 @@ await build({
   sourcemap: 'linked',
   // Имена функций и классов остаются: по ним читается стек ошибки и работают проверки по имени
   keepNames: true,
+  // Пакеты рабочей области тянут CommonJS-зависимости (postcss движка своих блоков), которые зовут
+  // require('path'). В ESM-сборке require нет, и esbuild бросил бы «Dynamic require of "path"»:
+  // даём модулю настоящий require
+  banner: {
+    js: "import { createRequire as __averraRequire } from 'node:module'; const require = __averraRequire(import.meta.url);",
+  },
   logLevel: 'warning',
 })
 

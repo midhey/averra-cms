@@ -1,22 +1,26 @@
 import {
+  type CustomFieldInput,
   contrastMessage,
   defaultTheme,
   HeaderLayout,
   type HeaderTargetPage,
   headerLayoutTitles,
   type MenuItem,
+  starterCustomBlock,
   type ThemeRadius,
   themeContrast,
   themePresets,
   themeRadiusTitles,
 } from '@averra/schema'
 import { type ReactNode, useId, useState } from 'react'
+import { FieldsBuilder } from '../custom-blocks/FieldsBuilder'
 import { AddBlockDialog } from '../editor/AddBlockDialog'
 import {
   type CatalogSection,
   catalog,
   catalogEntry,
   catalogSections,
+  customCatalog,
   sectionTitle,
 } from '../editor/catalog'
 import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
@@ -40,6 +44,7 @@ import {
 } from '../ui/AppShell'
 import { Button, buttonClassName, IconButton, iconButtonClassName } from '../ui/Button'
 import { Card, cardClassName } from '../ui/Card'
+import { CodeEditor } from '../ui/CodeEditor'
 import { CountBadge } from '../ui/CountBadge'
 import { DataTable } from '../ui/DataTable'
 import { Dialog } from '../ui/Dialog'
@@ -55,6 +60,38 @@ import { Steps } from '../ui/Steps'
 import { TabList, Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import styles from './UiShowcase.module.scss'
+
+/** Каталог витрины: встроенные блоки и свой блок — раздел «Свои» и общий набросок */
+const SHOWCASE_CATALOG = [
+  ...catalog,
+  ...customCatalog([starterCustomBlock('tariffs', 'Тарифы с наклейкой')]),
+]
+
+const SHOWCASE_TEMPLATE = [
+  '<div class="plans">',
+  '  <script>alert(1)</script>',
+  '  {% for plan in plans %}<p class="plan">{{ plan.name }}</p>{% endfor %}',
+  '  <h1>{{ title }}</h1>',
+  '</div>',
+].join('\n')
+
+const SHOWCASE_CSS = [
+  '/* Карточки тарифов */',
+  '.plans { display: grid; gap: var(--space-4); }',
+  '@media (min-width: 40rem) {',
+  '  .plan { color: #c00; }',
+  '}',
+].join('\n')
+
+const SHOWCASE_FIELDS: CustomFieldInput[] = [
+  { type: 'text', name: 'title', label: 'Заголовок', required: true },
+  {
+    type: 'repeater',
+    name: 'plans',
+    label: 'Тарифы',
+    fields: [{ type: 'image', name: 'photo', label: 'Фото' }],
+  },
+]
 
 /**
  * Файл логотипа 120 × 40 для карточки SVG: содержимое картинки, как у загруженного файла, а не
@@ -72,6 +109,7 @@ const SAMPLE_SVG_LOGO = `data:image/svg+xml,${encodeURIComponent(
 const sections = [
   { id: 'buttons', label: 'Кнопки', icon: 'overview' },
   { id: 'fields', label: 'Поля', icon: 'pages' },
+  { id: 'code', label: 'Свои блоки', icon: 'blocks' },
   { id: 'choice', label: 'Выбор', icon: 'check' },
   { id: 'tabs', label: 'Вкладки', icon: 'leads' },
   { id: 'statuses', label: 'Состояния', icon: 'status' },
@@ -143,6 +181,9 @@ export function UiShowcase() {
   const [picked, setPicked] = useState('')
   const [imageSide, setImageSide] = useState<'left' | 'right'>('left')
   const [catalogSection, setCatalogSection] = useState<CatalogSection>('all')
+  const [template, setTemplate] = useState(SHOWCASE_TEMPLATE)
+  const [css, setCss] = useState(SHOWCASE_CSS)
+  const [fields, setFields] = useState<CustomFieldInput[]>(SHOWCASE_FIELDS)
   const [column, setColumn] = useState<'blocks' | 'preview' | 'fields'>('blocks')
   const columnsId = useId()
   const [deleted, setDeleted] = useState(false)
@@ -352,6 +393,33 @@ export function UiShowcase() {
             />
             <Checkbox label="Обязательное поле" error="Отметьте флажок" />
             <Checkbox label="Выключен" disabled defaultChecked />
+          </div>
+        </Section>
+
+        <Section id="code" title="Свои блоки">
+          <div className={styles.stack}>
+            {/* Строка 2 — ошибка (знак «!»), строка 4 — совет (знак «·»): не только цветом */}
+            <CodeEditor
+              label="Шаблон Liquid"
+              hint="Tab уходит к следующему полю, отступы — пробелами"
+              language="liquid"
+              value={template}
+              onChange={setTemplate}
+              rows={6}
+              marks={
+                new Map([
+                  [2, 'error'],
+                  [4, 'warning'],
+                ])
+              }
+            />
+            <CodeEditor label="CSS блока" language="css" value={css} onChange={setCss} rows={5} />
+            <FieldsBuilder
+              fields={fields}
+              onChange={setFields}
+              errors={{ 'fields.0.name': 'Ключ «title» уже есть на этом уровне' }}
+              path="fields"
+            />
           </div>
         </Section>
 
@@ -722,10 +790,11 @@ export function UiShowcase() {
             open={catalogOpen}
             onClose={() => setCatalogOpen(false)}
             onPick={(type) => {
-              setPicked(catalogEntry(type).title)
+              setPicked(catalogEntry(type, SHOWCASE_CATALOG).title)
               setCatalogOpen(false)
             }}
             after={null}
+            entries={SHOWCASE_CATALOG}
           />
           <Dialog
             open={largeOpen}

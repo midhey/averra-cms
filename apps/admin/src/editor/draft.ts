@@ -1,15 +1,27 @@
-import type { BlockType } from '@averra/schema'
-import { catalogEntry } from './catalog'
+import { customBlockKeyOf, isCustomBlockType } from '@averra/schema'
+import { type CatalogEntry, catalog, catalogEntry } from './catalog'
 
-/** Блок в редакторе: поля как есть, пока без гарантий. Проверяет их схема при каждом изменении */
-export type EditorBlock = { id: string; type: BlockType; props: Record<string, unknown> }
+/**
+ * Блок в редакторе: поля как есть, пока без гарантий. Проверяет их схема при каждом изменении.
+ * Тип — встроенного блока (hero) или своего (custom:tariffs)
+ */
+export type EditorBlock = { id: string; type: string; props: Record<string, unknown> }
 
-/** Новый блок с примером содержимого. Id читаемый и годится как якорь: hero-2, cta-3 */
-export function createBlock(type: BlockType, existing: readonly EditorBlock[]): EditorBlock {
+/**
+ * Новый блок с примером содержимого. Id читаемый и годится как якорь: hero-2, cta-3; у своего
+ * блока — по ключу: tariffs-1
+ */
+export function createBlock(
+  type: string,
+  existing: readonly EditorBlock[],
+  entries: readonly CatalogEntry[] = catalog,
+): EditorBlock {
   const taken = new Set(existing.map((block) => block.id))
+  const base = isCustomBlockType(type) ? customBlockKeyOf(type) : type
   let n = 1
-  while (taken.has(`${type}-${n}`)) n += 1
-  return { id: `${type}-${n}`, type, props: structuredClone(catalogEntry(type).example) }
+  while (taken.has(`${base}-${n}`)) n += 1
+  const example = catalogEntry(type, entries).example
+  return { id: `${base}-${n}`, type, props: structuredClone(example) as Record<string, unknown> }
 }
 
 /** Вставка после блока afterId. Без него или если блок не найден — в конец */

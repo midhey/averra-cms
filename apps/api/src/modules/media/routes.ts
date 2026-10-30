@@ -33,6 +33,7 @@ import {
   sanitizeSvg,
 } from '../../media/svg'
 import { validate } from '../../validate'
+import { customBlocksRepo } from '../custom-blocks/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
@@ -355,6 +356,18 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
               ),
               409,
             )
+          }
+
+          // Картинка в CSS или примере своего блока: на сайте пропал бы фон, в каталоге — пример
+          const blocks = await customBlocksRepo(db).usingMedia(siteId, mediaId)
+          if (blocks.length > 0) {
+            const list = blocks.map((block) => `«${block.title}»`).join(', ')
+            const message = `Картинка в своих блоках: ${list} (CSS или пример). Уберите её оттуда, тогда её можно будет удалить`
+            const issues = blocks.map((block) => ({
+              path: `customBlocks.${block.key}`,
+              message: block.title,
+            }))
+            return c.json(conflict(message, issues), 409)
           }
 
           if (!(await repo.delete(siteId, mediaId))) {

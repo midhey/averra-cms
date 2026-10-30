@@ -2,6 +2,9 @@ import type { AppType } from '@averra/api'
 import {
   BLOCK_CATEGORIES,
   blocks,
+  CustomBlockDraft,
+  customBlockProps,
+  customBlockType,
   describeApiError,
   headerLayoutTitles,
   PageContent,
@@ -122,21 +125,52 @@ const rules = [
   'get_page и save_draft возвращают seoChecks — советы по SEO черновика (warning — стоит поправить, problem — важно). Публиковать они не мешают, но поправь их, если можешь.',
   'Страница с адресом 404 — служебная: её показывают на адресах, где страницы нет. Делай её из блоков, как обычную, с кнопкой на главную.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
+  'Свои блоки установки (custom: true, тип custom:<ключ>) ставятся на страницу так же: { id, type: "custom:tariffs", props } по их схеме props. Их сделал разработчик студии под этот сайт — бери их, если они подходят по смыслу. Менять сами свои блоки через MCP нельзя.',
   'Шапка, меню и подвал — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. Подвал тоже меняют только в админке. Сохраняя черновик, передавай hideHeader и hideFooter, если они уже были: без них поле пропадёт.',
 ]
 
-/** Каталог блоков для нейронки: те же Zod-схемы, что в API, но в виде JSON Schema */
-export function blockCatalog() {
+/**
+ * Свои блоки из GET /api/sites/:siteId/custom-blocks — только опубликованные определения. Каждое
+ * читается схемой: установка новее MCP могла добавить вид поля, и такой блок просто не попадёт в
+ * каталог, а не сломает его
+ */
+const CustomBlocksView = z.object({
+  blocks: z.array(z.object({ published: z.unknown() })).catch([]),
+})
+
+const publishedCustomBlocks = (body: unknown) =>
+  CustomBlocksView.parse(body).blocks.flatMap((block) => {
+    const definition = CustomBlockDraft.safeParse(block.published)
+    return definition.success ? [definition.data] : []
+  })
+
+/**
+ * Каталог блоков для нейронки: те же Zod-схемы, что в API, но в виде JSON Schema. Свои блоки
+ * установки (custom) — после встроенных: схема полей строится из их определения так же, как в API
+ */
+export function blockCatalog(custom: readonly CustomBlockDraft[] = []) {
   return {
     rules,
-    blocks: blocks.map((block) => ({
-      type: block.type,
-      title: block.title,
-      description: block.description,
-      category: BLOCK_CATEGORIES[block.category],
-      props: z.toJSONSchema(block.props, { io: 'input' }),
-      example: block.example,
-    })),
+    blocks: [
+      ...blocks.map((block) => ({
+        type: block.type as string,
+        title: block.title,
+        description: block.description,
+        category: BLOCK_CATEGORIES[block.category],
+        custom: false,
+        props: z.toJSONSchema(block.props, { io: 'input' }),
+        example: block.example as unknown,
+      })),
+      ...custom.map((block) => ({
+        type: customBlockType(block.key),
+        title: block.title,
+        description: block.description,
+        category: BLOCK_CATEGORIES[block.category],
+        custom: true,
+        props: z.toJSONSchema(customBlockProps(block.fields), { io: 'input' }),
+        example: block.example,
+      })),
+    ],
   }
 }
 
@@ -171,6 +205,7 @@ export function cmsTools(client: Api | undefined) {
       throw new Error(missingTokenMessage)
     }
     return {
+      listBlocks: async () => blockCatalog(),
       listSites: fail,
       getPage: fail,
       saveDraft: fail,
@@ -224,6 +259,19 @@ export function cmsTools(client: Api | undefined) {
     return tokenSite
   }
   return {
+    /**
+     * Каталог со своими блоками сайта токена. Свои блоки — добавка: установка до них (404) или
+     * сбой чтения не мешают отдать встроенные
+     */
+    listBlocks: async () => {
+      try {
+        const param = { siteId: await siteOf(undefined) }
+        const body = await unwrap(() => sites[':siteId']['custom-blocks'].$get({ param }))
+        return blockCatalog(publishedCustomBlocks(body))
+      } catch {
+        return blockCatalog()
+      }
+    },
     listSites: () => unwrap(() => sites.$get()),
     getPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
@@ -290,10 +338,10 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Каталог блоков',
       description:
-        'Какие блоки можно ставить на страницу и какие у них поля. Вызови перед тем, как собирать страницу.',
+        'Какие блоки можно ставить на страницу и какие у них поля: встроенные и свои блоки этого сайта (custom). Вызови перед тем, как собирать страницу.',
       annotations: { readOnlyHint: true },
     },
-    async () => asText(blockCatalog()),
+    async () => asText(await tools.listBlocks()),
   )
 
   server.registerTool(

@@ -1,0 +1,159 @@
+@use "@averra/ui" as ui;
+
+// Поле кода: номера строк слева, справа подсветка и поверх неё прозрачный textarea с тем же
+// шрифтом, размером и отступами. Совпадать должно всё, что влияет на раскладку текста: иначе
+// курсор встанет не над той буквой
+$line-height: 1.6;
+$padding: ui.rem(10);
+
+.editor {
+  // Высота поля в строках; компонент задаёт своё значение в style, здесь — запасное
+  --code-rows: 12;
+
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  line-height: $line-height;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+
+  // Кольцо фокуса — у всего редактора, а не у textarea внутри: номера строк — часть поля
+  &:has(.input:focus-visible) {
+    border-color: var(--color-focus-ring);
+
+    @include ui.focus-ring;
+  }
+}
+
+.gutter {
+  flex-shrink: 0;
+  min-width: ui.rem(48);
+  padding: $padding ui.rem(8);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-align: right;
+  user-select: none;
+  background: var(--color-surface-muted);
+  border-right: ui.rem(1) solid var(--color-border);
+}
+
+.line {
+  display: block;
+  white-space: pre;
+}
+
+// Строка с ошибкой: знак «!» и цвет ошибки, с предупреждением — «·» и цвет предупреждения
+.error {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-danger-text);
+  background: var(--color-danger-surface);
+}
+
+.warning {
+  color: var(--color-warning-text);
+  background: var(--color-warning-surface);
+}
+
+.area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.highlight,
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: $padding;
+  font: inherit;
+  letter-spacing: normal;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  pointer-events: none;
+}
+
+.input {
+  position: relative;
+  display: block;
+  height: calc(var(--code-rows) * #{$line-height}em + #{$padding * 2});
+  min-height: ui.rem(120);
+  overflow: auto;
+  color: transparent;
+  caret-color: var(--color-text);
+  resize: vertical;
+  background: transparent;
+  border: 0;
+
+  &::selection {
+    color: transparent;
+    background: var(--color-surface-accent);
+  }
+
+  // Кольцо фокуса — у всего редактора. Где нет :has() (iOS до 15.4), кольцо остаётся у поля
+  &:focus-visible {
+    @include ui.focus-ring;
+
+    outline-offset: -0.1875rem;
+  }
+
+  @supports selector(:has(*)) {
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  // Контрастная тема Windows: прозрачный текст поверх подсветки браузер не покажет — показываем
+  // сам текст поля, подсветку прячем
+  @media (forced-colors: active) {
+    color: CanvasText;
+
+    &::selection {
+      color: HighlightText;
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  .highlight {
+    visibility: hidden;
+  }
+}
+
+.comment {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.liquid {
+  color: var(--color-warning-text);
+}
+
+.tag,
+.atrule {
+  color: var(--color-action);
+}
+
+.attribute,
+.property {
+  color: var(--color-info-text);
+}
+
+.string {
+  color: var(--color-success-text);
+}
+
+.value {
+  color: var(--color-danger-text);
+}
