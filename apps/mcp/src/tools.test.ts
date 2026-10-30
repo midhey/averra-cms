@@ -373,7 +373,11 @@ describe('свои блоки: черновики через MCP', () => {
     expect(saved).toMatchObject({ created: true, hasUnpublishedChanges: true })
     expect(saved.problems).toEqual([])
     // Повторное сохранение — тот же блок, не создание
-    expect(await drafts.saveCustomBlockDraft(definition)).toMatchObject({ created: false })
+    expect(await drafts.saveCustomBlockDraft(definition)).toMatchObject({
+      created: false,
+      note: expect.stringMatching(/заменён целиком.*не читал.*могли/),
+    })
+    expect(saved.note).toBeUndefined()
 
     const checked = await drafts.checkCustomBlock({ key: 'mcp-promo' })
     expect(checked.verdict).toMatch(/Ошибок нет/)

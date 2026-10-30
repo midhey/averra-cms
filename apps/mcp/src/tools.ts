@@ -214,6 +214,10 @@ const CheckResult = z.object({
   css: z.string(),
 })
 
+/** Ответ сохранения существующего блока: чем это грозит правкам человека */
+const DRAFT_REPLACED_NOTE =
+  'Прежний черновик заменён целиком, истории черновиков нет. Если ты не читал черновик перед сохранением (list_custom_blocks), в нём могли быть правки человека — предупреди его, что они могли пропасть. Если правил только ты, ничего говорить не нужно'
+
 const WHO_PUBLISHES =
   'Публикует определение человек: «Свои блоки» → блок → «Опубликовать». До этого блок нельзя ставить на страницу (type "custom:<ключ>"): save_draft страницы проверяет её по опубликованным определениям.'
 
@@ -478,6 +482,8 @@ export function cmsTools(client: Api | undefined) {
       const saved = CustomBlockDetail.parse(await unwrap(async () => res))
       return {
         created,
+        // Истории черновиков нет: прежний (мог быть и от человека) заменён целиком
+        note: created ? undefined : DRAFT_REPLACED_NOTE,
         problems: saved.problems,
         hasUnpublishedChanges: saved.unpublished,
         who: WHO_PUBLISHES,
@@ -637,7 +643,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Сохранить черновик своего блока',
       description:
-        'Сохраняет ЧЕРНОВИК определения своего блока целиком (создаёт блок, если ключа ещё нет): ключ, название, описание, поля, шаблон Liquid, CSS и пример данных. Опубликованное не меняется и на сайт не попадает: публикует блок только человек в админке. Ошибки шаблона и CSS сохранению не мешают, они вернутся в problems — исправь и сохрани снова, затем check_custom_block. Правила — list_custom_blocks.rules. Нужно право токена на черновики блоков.',
+        'Сохраняет ЧЕРНОВИК определения своего блока целиком (создаёт блок, если ключа ещё нет): ключ, название, описание, поля, шаблон Liquid, CSS и пример данных. Черновик заменяется ЦЕЛИКОМ, истории черновиков нет: если человек правил его в админке, его правки пропадут. Поэтому перед сохранением существующего блока прочитай актуальный черновик (list_custom_blocks) и вноси правку в него. Опубликованное не меняется и на сайт не попадает: публикует блок только человек в админке. Ошибки шаблона и CSS сохранению не мешают, они вернутся в problems — исправь и сохрани снова, затем check_custom_block. Правила — list_custom_blocks.rules. Нужно право токена на черновики блоков.',
       inputSchema: SaveCustomBlockInput,
       annotations: { idempotentHint: true },
     },
@@ -648,6 +654,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
       ).length
       return asText({
         result: saved.created ? 'Блок создан, черновик сохранён' : 'Черновик сохранён',
+        note: saved.note,
         errors,
         problems: saved.problems,
         next:

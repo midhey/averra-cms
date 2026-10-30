@@ -28,7 +28,7 @@ sidebar:
 | Команда | Что делает |
 |---|---|
 | `pnpm token:create --name <имя> [--by <почта владельца>] [--blocks-draft]` | выпускает токен на сайт установки и показывает его один раз; `--blocks-draft` сразу даёт право на черновики своих блоков |
-| `pnpm token:list` | токены: сайт, кто выпустил, когда пользовались, отозван ли — без самих токенов |
+| `pnpm token:list` | токены: сайт, кто выпустил, когда пользовались, отозван ли, есть ли право на черновики блоков — без самих токенов |
 | `pnpm token:grant --id <id> --blocks-draft on\|off` | включает или выключает право на черновики своих блоков |
 | `pnpm token:revoke --id <id>` | отзывает токен |
 
@@ -36,7 +36,7 @@ sidebar:
 разработки, где сайтов несколько. id токена — в выводе `token:create` и `token:list`.
 
 На сервере — те же команды в контейнере API: `docker compose exec api node
-dist/server/token-create.js …` (`token-list.js`, `token-revoke.js`). С PostgreSQL они работают при
+dist/server/token-create.js …` (`token-list.js`, `token-grant.js`, `token-revoke.js`). С PostgreSQL они работают при
 запущенном API. Локально со встроенной базой сначала остановите `pnpm dev`.
 
 Экрана токенов в админке пока нет — он в [дорожной карте](/averra-cms/roadmap/).
