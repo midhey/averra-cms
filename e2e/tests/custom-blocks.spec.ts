@@ -201,3 +201,36 @@ test('свой блок: поля с повторителем и картинк�
   }
   await context.close()
 })
+
+test('публикуется черновик, который человек видел: правка со стороны (MCP) — предупреждение, а не сайт', async ({
+  page,
+  demoSite,
+}) => {
+  const siteId = demoSite.id
+  const blocks = sites[':siteId']['custom-blocks']
+  const param = { siteId, key: 'race' }
+  const created = await blocks.$post({ param: { siteId }, json: { key: 'race', title: 'Гонка' } })
+  expect(created.status).toBe(201)
+  await page.goto('/blocks/race')
+  await expect(page.getByRole('heading', { level: 1, name: 'Гонка' })).toBeVisible()
+
+  // Пока экран открыт, черновик меняют со стороны — так его сохраняет нейронка через MCP
+  const view = await blocks[':key'].$get({ param })
+  if (view.status !== 200) throw new Error(`Блок не прочитан: ${view.status}`)
+  const { draft } = await view.json()
+  if (!draft) throw new Error('У блока нет черновика')
+  const changed = { ...draft, template: `${draft.template}\n<p>Правка нейронки</p>` }
+  expect((await blocks[':key'].$put({ param, json: changed })).status).toBe(200)
+
+  await page.getByRole('button', { name: 'Опубликовать' }).click()
+  await expect(page.getByText(/^Черновик изменили, пока он был открыт/)).toBeVisible()
+  const after = await blocks[':key'].$get({ param })
+  if (after.status !== 200) throw new Error(`Блок не прочитан: ${after.status}`)
+  expect((await after.json()).published, 'непрочитанная правка не ушла на сайт').toBeNull()
+
+  // Экран показывает свежий черновик: человек его читает и публикует осознанно
+  await page.getByRole('tab', { name: /^Шаблон/ }).click()
+  await expect(page.getByRole('textbox', { name: 'Шаблон Liquid' })).toHaveValue(/Правка нейронки/)
+  await page.getByRole('button', { name: 'Опубликовать' }).click()
+  await expect(page.getByText(/^Опубликовано: блок есть в каталоге редактора/)).toBeVisible()
+})

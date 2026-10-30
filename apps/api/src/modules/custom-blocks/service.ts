@@ -18,6 +18,21 @@ const MEDIA_IN_CSS = /media:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 export const cssMediaIds = (css: string) =>
   [...css.matchAll(MEDIA_IN_CSS)].map((match) => (match[1] ?? '').toLowerCase())
 
+/** JSON с ключами по алфавиту: jsonb хранит ключи в своём порядке, а смысл от порядка не зависит */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.keys(value)
+      .toSorted()
+      .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
+  )
+}
+
+/** Одно ли это определение — по смыслу, без оглядки на порядок ключей */
+export const sameDefinition = (a: CustomBlockDraft, b: CustomBlockDraft) =>
+  JSON.stringify(canonical(a)) === JSON.stringify(canonical(b))
+
 /**
  * Замечания к определению: шаблон, CSS, пример (движок своих блоков) и картинки — из медиатеки
  * этого сайта, в примере не SVG. Публикуется определение только без ошибок

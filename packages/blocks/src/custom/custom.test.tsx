@@ -163,6 +163,17 @@ describe('шаблон: рендер', () => {
     expect(html).toBe('<b>A</b><b>B</b><p>a&lt;b&gt;<br>b</p><p>c</p>a&lt;b&gt;<br>b<br><br>c')
   })
 
+  it('accent: слова в звёздочках — <em>, остальное экранировано, переносы — <br>', () => {
+    expect(
+      render('{{ title | accent }}', { title: 'Английский, *который вписывается*\nв <жизнь>' }),
+    ).toBe('Английский, <em>который вписывается</em><br>в &lt;жизнь&gt;')
+    // Звёздочка без пары и пустая пара остаются текстом; разметка внутри пары — текст
+    expect(render('{{ title | accent }}', { title: 'a *b* c * d' })).toBe('a <em>b</em> c * d')
+    expect(render('{{ title | accent }}', { title: '*<b>x</b>*' })).toBe(
+      '<em>&lt;b&gt;x&lt;/b&gt;</em>',
+    )
+  })
+
   it('картинка — адаптивный picture с размерами и alt из поля', () => {
     const html = render("{{ photo | image: '50vw', 'photo' }}", {
       title: 'x',
@@ -502,6 +513,14 @@ describe('HTML шаблона и разметка сайта', () => {
       expect(sanitizeHtml(template)).not.toMatch(/\b(?:name|id|autofocus|tabindex)=/i)
     },
   )
+
+  it('«==» внутри {% if %} в значении атрибута в кавычках — не «значение без кавычек»', () => {
+    const template = '<li class="item{% if odd == 1 %} item--right{% endif %}">a</li>'
+    expect(checkTemplateHtml(template).filter((problem) => problem.level === 'error')).toEqual([])
+    // Без кавычек — по-прежнему ошибка
+    const bare = checkTemplateHtml('<li class={% if a == 1 %}x{% endif %}>a</li>')
+    expect(bare.some((problem) => /в кавычках/.test(problem.message))).toBe(true)
+  })
 
   it('id с дефисом, tabindex 0 и -1, name у details — можно', () => {
     const template =

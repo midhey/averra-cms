@@ -144,9 +144,10 @@ function CustomBlockEditor({
       return res.json()
     },
   })
+  // Публикуется черновик, который человек видел: если его поменял токен MCP, API ответит 409
   const publish = useMutation({
-    mutationFn: async () => {
-      const res = await blockApi.publish.$post({ param })
+    mutationFn: async (seen: CustomBlockDraft) => {
+      const res = await blockApi.publish.$post({ param, json: { draft: seen } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
@@ -165,27 +166,41 @@ function CustomBlockEditor({
     setUnpublished(next.unpublished)
   }
 
+  /** Сохраняет форму и возвращает черновик, как его записал API; не вышло — null */
   async function saveDraft() {
     if (!draft) {
       setNotice({ tone: 'danger', text: 'Не сохранить: поправьте отмеченные настройки полей' })
       setPart(parsed.error?.issues[0]?.path[0] === 'fields' ? 'fields' : 'basics')
-      return false
+      return null
     }
     try {
-      accept(await save.mutateAsync(draft))
+      const result = await save.mutateAsync(draft)
+      accept(result)
       await refresh()
-      return true
+      return result.draft
     } catch (error) {
       setNotice({ tone: 'danger', text: `Не удалось сохранить: ${messageOf(error)}` })
-      return false
+      return null
     }
+  }
+
+  // Черновик поменяли со стороны (токен MCP): показываем свежий, публиковать его человек решит сам
+  async function reload() {
+    const res = await blockApi.$get({ param })
+    if (res.status === 200) accept(await res.json())
+    await refresh()
   }
 
   async function onPublish() {
     setNotice(undefined)
-    if (unsaved && !(await saveDraft())) return
+    const seen = unsaved ? await saveDraft() : CustomBlockDraft.safeParse(saved).data
+    if (!seen) {
+      if (!unsaved)
+        setNotice({ tone: 'danger', text: 'Черновик не подходит под схему: сохраните его заново' })
+      return
+    }
     try {
-      const result = await publish.mutateAsync()
+      const result = await publish.mutateAsync(seen)
       accept(result)
       await refresh()
       setNotice(
@@ -204,6 +219,11 @@ function CustomBlockEditor({
             },
       )
     } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        await reload()
+        setNotice({ tone: 'warning', text: messageOf(error) })
+        return
+      }
       const issues = error instanceof ApiRequestError ? error.issues : []
       const list = issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')
       setNotice({
@@ -599,8 +619,8 @@ function Cheatsheet({ fields }: { fields: readonly CustomFieldInput[] }) {
       </ul>
       <p className={styles.note}>
         Свои фильтры: {CUSTOM_FILTERS.join(', ')}. image — адаптивная картинка с alt из поля, link —
-        безопасная ссылка, paragraphs и newline_to_br — абзацы и переносы строк. Подробнее — в
-        документации, «Свои блоки».
+        безопасная ссылка, paragraphs и newline_to_br — абзацы и переносы строк, accent — слова в
+        *звёздочках* в {'<em>'}. Подробнее — в документации, «Свои блоки».
       </p>
     </details>
   )

@@ -94,6 +94,15 @@ const paragraphsHtml = (value: unknown) =>
     .map((part) => `<p>${escapeHtml(part).replaceAll('\n', '<br>')}</p>`)
     .join('')
 
+/**
+ * Слова в *звёздочках* — акцент заголовка, <em>слово</em>; остальное — экранированный текст,
+ * переносы строк — <br>. Звёздочка без пары остаётся звёздочкой
+ */
+const accentHtml = (value: unknown) =>
+  escapeHtml(text(value).replace(/\r\n?/g, '\n'))
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    .replaceAll('\n', '<br>')
+
 /** Теги, которые в своём блоке недоступны, и почему */
 const DISABLED_TAGS: Record<string, string> = {
   include: 'шаблон своего блока — один файл',
@@ -175,6 +184,7 @@ function createEngine() {
       escapeHtml(text(value).replace(/\r\n?/g, '\n')).replaceAll('\n', '<br>'),
   })
   engine.registerFilter('paragraphs', { raw: true, handler: paragraphsHtml })
+  engine.registerFilter('accent', { raw: true, handler: accentHtml })
   return engine
 }
 
@@ -189,6 +199,7 @@ export const CUSTOM_FILTERS = [
   'link',
   'newline_to_br',
   'paragraphs',
+  'accent',
 ] as const
 
 const parsed = new Map<string, Template[]>()

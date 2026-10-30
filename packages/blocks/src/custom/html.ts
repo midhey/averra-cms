@@ -405,7 +405,8 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
           add('error', attrLine, 'Имя атрибута не собирают из Liquid: Liquid — только в значении')
           continue
         }
-        if (hasOutput && /=\s*[^\s"']/.test(source)) {
+        // Значение без кавычек — после первого «=» не кавычка. «==» внутри {% if a == b %} — не в счёт
+        if (hasOutput && /^[^=]*=\s*[^\s"']/.test(source)) {
           add(
             'error',
             attrLine,

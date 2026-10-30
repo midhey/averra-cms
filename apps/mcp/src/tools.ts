@@ -3,6 +3,7 @@ import {
   BLOCK_CATEGORIES,
   blocks,
   CustomBlockDraft,
+  CustomBlockKey,
   customBlockProps,
   customBlockType,
   describeApiError,
@@ -25,6 +26,9 @@ import {
 import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
+import { customBlockRules } from './custom-block-rules'
+
+export { customBlockRules }
 
 export type Api = ReturnType<typeof hc<AppType>>
 
@@ -125,7 +129,7 @@ const rules = [
   'get_page и save_draft возвращают seoChecks — советы по SEO черновика (warning — стоит поправить, problem — важно). Публиковать они не мешают, но поправь их, если можешь.',
   'Страница с адресом 404 — служебная: её показывают на адресах, где страницы нет. Делай её из блоков, как обычную, с кнопкой на главную.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
-  'Свои блоки установки (custom: true, тип custom:<ключ>) ставятся на страницу так же: { id, type: "custom:tariffs", props } по их схеме props. Их сделал разработчик студии под этот сайт — бери их, если они подходят по смыслу. Менять сами свои блоки через MCP нельзя.',
+  'Свои блоки установки (custom: true, тип custom:<ключ>) ставятся на страницу так же: { id, type: "custom:tariffs", props } по их схеме props. Их сделал разработчик студии под этот сайт — бери их, если они подходят по смыслу. Новый блок можно предложить черновиком определения (list_custom_blocks, save_custom_block_draft, check_custom_block) — если владелец включил токену это право; публикует определение только человек в админке, и до этого блока на страницах нет.',
   'Шапка, меню и подвал — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. Подвал тоже меняют только в админке. Сохраняя черновик, передавай hideHeader и hideFooter, если они уже были: без них поле пропадёт.',
 ]
 
@@ -143,6 +147,75 @@ const publishedCustomBlocks = (body: unknown) =>
     const definition = CustomBlockDraft.safeParse(block.published)
     return definition.success ? [definition.data] : []
   })
+
+/** Определение своего блока, как его сохраняет нейронка: та же схема, что у API (ключ — внутри) */
+export const SaveCustomBlockInput = z.object({ definition: CustomBlockDraft })
+export type SaveCustomBlockInput = z.output<typeof SaveCustomBlockInput>
+
+export const CustomBlockRef = z.object({
+  key: CustomBlockKey.describe('Ключ своего блока: латиница, цифры, дефис (tariffs)'),
+})
+export type CustomBlockRef = z.output<typeof CustomBlockRef>
+
+/**
+ * Проверка блока: либо ключ (проверяется сохранённый черновик), либо определение целиком (ещё не
+ * сохранённое). data — свои данные блока вместо примера, чтобы увидеть длинные и пустые значения
+ */
+export const CheckCustomBlockInput = z
+  .object({
+    key: CustomBlockKey.optional().describe('Ключ: проверить сохранённый черновик'),
+    definition: CustomBlockDraft.optional().describe('Определение целиком: проверить не сохраняя'),
+    data: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('Данные блока вместо примера: те же поля, что у props на странице'),
+  })
+  .refine((input) => (input.key === undefined) !== (input.definition === undefined), {
+    message: 'Нужно одно из двух: key (черновик) или definition (определение целиком)',
+  })
+export type CheckCustomBlockInput = z.output<typeof CheckCustomBlockInput>
+
+/**
+ * Определения из ответа API читаются схемой по одному: установка новее MCP могла добавить вид
+ * поля, и такой блок отдаётся без определения, а не ломает весь список
+ */
+const CustomBlockViews = z.object({
+  blocks: z
+    .array(
+      z.object({
+        key: z.string(),
+        draft: z.unknown(),
+        published: z.unknown(),
+        unpublished: z.boolean().catch(false),
+      }),
+    )
+    .catch([]),
+})
+
+const CustomBlockDetail = z.object({
+  draft: z.unknown(),
+  published: z.unknown(),
+  unpublished: z.boolean().catch(false),
+  problems: z.array(z.unknown()).catch([]),
+  usage: z.array(z.unknown()).catch([]),
+})
+
+const CheckResult = z.object({
+  problems: z.array(
+    z.object({
+      part: z.enum(['template', 'css', 'example', 'fields']),
+      level: z.enum(['error', 'warning']),
+      message: z.string(),
+      line: z.number().optional(),
+      path: z.string().optional(),
+    }),
+  ),
+  html: z.string().nullable(),
+  css: z.string(),
+})
+
+const WHO_PUBLISHES =
+  'Публикует определение человек: «Свои блоки» → блок → «Опубликовать». До этого блок нельзя ставить на страницу (type "custom:<ключ>"): save_draft страницы проверяет её по опубликованным определениям.'
 
 /**
  * Каталог блоков для нейронки: те же Zod-схемы, что в API, но в виде JSON Schema. Свои блоки
@@ -212,9 +285,14 @@ export function cmsTools(client: Api | undefined) {
       publishPage: fail,
       getTheme: fail,
       getHeader: fail,
+      listCustomBlocks: fail,
+      getCustomBlock: fail,
+      saveCustomBlockDraft: fail,
+      checkCustomBlock: fail,
     }
   }
   const sites = client.api.sites
+  const customBlocksApi = sites[':siteId']['custom-blocks']
   const page = sites[':siteId'].pages[':slug']
   // SEO сайта (шаблон заголовка, описание и картинка по умолчанию, адрес) — для советов по
   // странице: GET /api/sites/:siteId отдаёт их и токену. Установка старше 3.13 seo не отдаёт —
@@ -290,10 +368,15 @@ export function cmsTools(client: Api | undefined) {
     getTheme: async ({ siteId }: SiteRef) => {
       const param = { siteId: await siteOf(siteId) }
       const view = SiteThemeView.parse(await unwrap(() => sites[':siteId'].theme.$get({ param })))
-      const { heading, body } = view.published.fonts
+      const { heading, body, accent } = view.published.fonts
       return {
         theme: view.published,
-        fonts: { heading: themeFontTitles[heading], body: themeFontTitles[body] },
+        fonts: {
+          heading: themeFontTitles[heading],
+          body: themeFontTitles[body],
+          // Не выбран — на сайте работает шрифт заголовков
+          ...(accent && { accent: themeFontTitles[accent] }),
+        },
         unpublishedDraft: view.unpublished,
       }
     },
@@ -319,6 +402,122 @@ export function cmsTools(client: Api | undefined) {
         unpublishedDraft: view.unpublished,
       }
     },
+    /**
+     * Свои блоки сайта с определениями: поля, шаблон, CSS, пример. Токен с правом на черновики видит
+     * и черновики, без права — только опубликованное. Вместе с инструкцией, как писать блок
+     */
+    listCustomBlocks: async () => {
+      const param = { siteId: await siteOf(undefined) }
+      const body = CustomBlockViews.parse(await unwrap(() => customBlocksApi.$get({ param })))
+      return {
+        rules: customBlockRules,
+        blocks: body.blocks.map((view) => {
+          const draft = CustomBlockDraft.safeParse(view.draft)
+          const published = CustomBlockDraft.safeParse(view.published)
+          const definition = draft.success ? draft.data : published.success ? published.data : null
+          return {
+            key: view.key,
+            state: !published.success
+              ? 'только черновик: на сайте блока нет'
+              : view.unpublished
+                ? 'опубликован, черновик новее: на сайте прежняя версия'
+                : 'опубликован',
+            published: published.success,
+            hasUnpublishedChanges: view.unpublished,
+            definition,
+            note:
+              definition === null
+                ? 'Определение не читается этой версией MCP: обновите MCP или откройте блок в админке'
+                : undefined,
+          }
+        }),
+        who: WHO_PUBLISHES,
+      }
+    },
+
+    /** Один блок: черновик, опубликованное, замечания к черновику и страницы, где блок стоит */
+    getCustomBlock: async ({ key }: CustomBlockRef) => {
+      const param = { siteId: await siteOf(undefined), key }
+      const detail = CustomBlockDetail.parse(
+        await unwrap(() => customBlocksApi[':key'].$get({ param })),
+      )
+      return {
+        key,
+        draft: detail.draft,
+        published: detail.published,
+        hasUnpublishedChanges: detail.unpublished,
+        problems: detail.problems,
+        usage: detail.usage,
+        who: WHO_PUBLISHES,
+      }
+    },
+
+    /**
+     * Черновик определения: нет такого ключа — блок создаётся. Опубликованное не меняется. Ответ —
+     * замечания к черновику: ошибки шаблона, CSS и примера сохранению не мешают (код пишут по частям)
+     */
+    saveCustomBlockDraft: async ({ definition }: SaveCustomBlockInput) => {
+      const siteId = await siteOf(undefined)
+      const param = { siteId, key: definition.key }
+      const put = () => customBlocksApi[':key'].$put({ param, json: definition })
+      let created = false
+      let res = await put().catch((cause: unknown) => {
+        throw new Error('API не отвечает. Запусти его: pnpm dev', { cause })
+      })
+      if (res.status === 404) {
+        // Нет такого ключа — создаём блок и сохраняем черновик поверх заготовки
+        await unwrap(() =>
+          customBlocksApi.$post({
+            param: { siteId },
+            json: { key: definition.key, title: definition.title },
+          }),
+        )
+        created = true
+        res = await put()
+      }
+      const saved = CustomBlockDetail.parse(await unwrap(async () => res))
+      return {
+        created,
+        problems: saved.problems,
+        hasUnpublishedChanges: saved.unpublished,
+        who: WHO_PUBLISHES,
+      }
+    },
+
+    /**
+     * Проверка без публикации: замечания по частям (шаблон, CSS, пример) и HTML, каким его увидит
+     * сайт, на примере или на своих данных. По ключу берётся сохранённый черновик
+     */
+    checkCustomBlock: async ({ key, definition, data }: CheckCustomBlockInput) => {
+      const siteId = await siteOf(undefined)
+      let checked = definition
+      if (key !== undefined) {
+        const detail = CustomBlockDetail.parse(
+          await unwrap(() => customBlocksApi[':key'].$get({ param: { siteId, key } })),
+        )
+        const draft = CustomBlockDraft.safeParse(detail.draft)
+        if (!draft.success) throw new Error(`У блока «${key}» нет читаемого черновика`)
+        checked = draft.data
+      }
+      if (!checked) throw new Error('Нужно одно из двух: key или definition')
+      const result = CheckResult.parse(
+        await unwrap(() =>
+          customBlocksApi.check.$post({
+            param: { siteId },
+            json: { definition: checked, ...(data !== undefined && { data }) },
+          }),
+        ),
+      )
+      const errors = result.problems.filter((problem) => problem.level === 'error').length
+      return {
+        verdict:
+          errors === 0
+            ? 'Ошибок нет: блок можно отдавать человеку на публикацию'
+            : `Ошибок: ${errors}. Исправь их и сохрани черновик снова`,
+        ...result,
+      }
+    },
+
     publishPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
       return unwrap(() => page.publish.$post({ param }))
@@ -408,6 +607,68 @@ export function registerTools(server: McpServer, api: Api | undefined) {
       annotations: { readOnlyHint: true },
     },
     async (args) => asText(await tools.getHeader(args)),
+  )
+
+  server.registerTool(
+    'list_custom_blocks',
+    {
+      title: 'Свои блоки: определения',
+      description:
+        'Свои блоки этого сайта с определениями (поля, шаблон Liquid, CSS, пример) и инструкция rules — как писать свой блок: без JavaScript, на переменных темы, доступно, на телефоне 375 px. Черновики видны, если владелец включил токену право на черновики блоков (pnpm token:grant); иначе — только опубликованное. Вызови перед save_custom_block_draft.',
+      annotations: { readOnlyHint: true },
+    },
+    async () => asText(await tools.listCustomBlocks()),
+  )
+
+  server.registerTool(
+    'get_custom_block',
+    {
+      title: 'Свой блок',
+      description:
+        'Черновик и опубликованная версия одного своего блока, замечания к черновику и страницы, где блок стоит. Нужно право токена на черновики блоков.',
+      inputSchema: CustomBlockRef,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.getCustomBlock(args)),
+  )
+
+  server.registerTool(
+    'save_custom_block_draft',
+    {
+      title: 'Сохранить черновик своего блока',
+      description:
+        'Сохраняет ЧЕРНОВИК определения своего блока целиком (создаёт блок, если ключа ещё нет): ключ, название, описание, поля, шаблон Liquid, CSS и пример данных. Опубликованное не меняется и на сайт не попадает: публикует блок только человек в админке. Ошибки шаблона и CSS сохранению не мешают, они вернутся в problems — исправь и сохрани снова, затем check_custom_block. Правила — list_custom_blocks.rules. Нужно право токена на черновики блоков.',
+      inputSchema: SaveCustomBlockInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => {
+      const saved = await tools.saveCustomBlockDraft(args)
+      const errors = saved.problems.filter(
+        (problem) => (problem as { level?: unknown }).level === 'error',
+      ).length
+      return asText({
+        result: saved.created ? 'Блок создан, черновик сохранён' : 'Черновик сохранён',
+        errors,
+        problems: saved.problems,
+        next:
+          errors > 0
+            ? 'Исправь ошибки и сохрани снова. Проверка с HTML — check_custom_block'
+            : 'Проверь вид — check_custom_block, затем попроси человека опубликовать блок в админке',
+        who: saved.who,
+      })
+    },
+  )
+
+  server.registerTool(
+    'check_custom_block',
+    {
+      title: 'Проверить свой блок',
+      description:
+        'Проверяет шаблон, CSS и пример своего блока и показывает HTML и CSS, как их увидит сайт: на примере блока или на своих данных (data). Либо key — сохранённый черновик, либо definition — определение целиком, без сохранения. Возвращает problems: часть (template, css, example, fields), уровень (error блокирует публикацию, warning — совет), строка и понятный текст — исправляй по ним сам. Ничего не сохраняет и не публикует. Нужно право токена на черновики блоков.',
+      inputSchema: CheckCustomBlockInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.checkCustomBlock(args)),
   )
 
   server.registerTool(

@@ -610,6 +610,13 @@ export const NewCustomBlock = z.strictObject({
   title: z.string().trim().min(1).max(60),
 })
 
+/**
+ * Публикация своего блока: черновик, который человек видел. Черновик пишет и токен MCP — если он
+ * поменялся с тех пор, публикация отказывает, чтобы на сайт не ушёл код, которого никто не читал
+ */
+export const CustomBlockPublish = z.strictObject({ draft: CustomBlockDraft })
+export type CustomBlockPublish = z.infer<typeof CustomBlockPublish>
+
 /** Заготовка нового блока: заголовок и текст, шаблон и CSS на переменных темы */
 export function starterCustomBlock(key: string, title: string): CustomBlockDraft {
   return CustomBlockDraft.parse({

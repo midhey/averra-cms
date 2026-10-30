@@ -4,7 +4,14 @@ import { demoPage, PageContent } from '@averra/schema'
 import { hc } from 'hono/client'
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { blockCatalog, cmsTools, missingTokenMessage, SaveDraftInput } from './tools'
+import {
+  blockCatalog,
+  CheckCustomBlockInput,
+  cmsTools,
+  missingTokenMessage,
+  SaveCustomBlockInput,
+  SaveDraftInput,
+} from './tools'
 
 // Настоящая цепочка без сети: инструменты → типизированный клиент с токеном → API → база в памяти
 const api = await createTestApi()
@@ -64,6 +71,7 @@ describe('каталог блоков', () => {
     const owner = await api.loginAs('owner')
     const headers = { ...owner.headers, 'content-type': 'application/json' }
     const base = `/api/sites/${api.demoSiteId}/custom-blocks`
+    const drafts: Record<string, unknown> = {}
     for (const key of ['tariffs', 'draft-only']) {
       const res = await api.app.request(base, {
         method: 'POST',
@@ -71,10 +79,15 @@ describe('каталог блоков', () => {
         body: JSON.stringify({ key, title: 'Тарифы' }),
       })
       expect(res.status).toBe(201)
+      drafts[key] = ((await res.json()) as { draft: unknown }).draft
     }
-    expect(
-      (await api.app.request(`${base}/tariffs/publish`, { method: 'POST', headers })).status,
-    ).toBe(200)
+    // Публикуется черновик, который видел человек
+    const published = await api.app.request(`${base}/tariffs/publish`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ draft: drafts.tariffs }),
+    })
+    expect(published.status).toBe(200)
     const catalog = await tools.listBlocks()
     const own = catalog.blocks.filter((block) => block.custom)
     expect(own.map((block) => block.type)).toEqual(['custom:tariffs'])
@@ -310,5 +323,149 @@ describe('шапка сайта', () => {
     const result = await tools.getHeader({})
     expect(result.header?.menu).toEqual([{ ...menu[0], href: '/#contact' }])
     expect(result.unpublishedDraft).toBe(false)
+  })
+})
+
+const granted = await api.createToken(api.demoSiteId, 'mcp с правом', { blocksDraft: true })
+const drafts = cmsTools(clientWith(granted.token))
+const owner = await api.loginAs('owner')
+const ownerHeaders = { ...owner.headers, 'content-type': 'application/json' }
+
+describe('свои блоки: черновики через MCP', () => {
+  const base = `/api/sites/${api.demoSiteId}/custom-blocks`
+
+  const definition = SaveCustomBlockInput.parse({
+    definition: {
+      key: 'mcp-promo',
+      title: 'Промо от нейронки',
+      description: 'Заголовок, текст и кнопка',
+      category: 'sales',
+      fields: [
+        { type: 'text', name: 'title', label: 'Заголовок', required: true },
+        { type: 'link', name: 'button', label: 'Кнопка' },
+      ],
+      template:
+        '<h2 class="title">{{ title }}</h2>{% if button %}<a class="button" href="{{ button | link }}">{{ button.label }}</a>{% endif %}',
+      css: '.title { font-family: var(--font-heading) }',
+      example: { title: 'Привет', button: { label: 'Записаться', href: '/zapis' } },
+    },
+  })
+
+  it('схемы входа новых инструментов переводятся в JSON Schema', () => {
+    expect(() => z.toJSONSchema(SaveCustomBlockInput, { io: 'input' })).not.toThrow()
+    expect(() => z.toJSONSchema(CheckCustomBlockInput, { io: 'input' })).not.toThrow()
+  })
+
+  it('без права на черновики инструменты отвечают, как его включить', async () => {
+    await expect(tools.saveCustomBlockDraft(definition)).rejects.toThrow(/pnpm token:grant/)
+    await expect(tools.getCustomBlock({ key: 'mcp-promo' })).rejects.toThrow(/pnpm token:grant/)
+    await expect(tools.checkCustomBlock({ definition: definition.definition })).rejects.toThrow(
+      /pnpm token:grant/,
+    )
+    // Список опубликованного доступен и без права, как list_blocks
+    const list = await tools.listCustomBlocks()
+    expect(list.blocks.every((block) => block.published)).toBe(true)
+    expect(list.rules.join('\n')).toContain('Без JavaScript')
+  })
+
+  it('сохраняет черновик (создаёт блок), проверяет, показывает HTML; публикует только человек', async () => {
+    const saved = await drafts.saveCustomBlockDraft(definition)
+    expect(saved).toMatchObject({ created: true, hasUnpublishedChanges: true })
+    expect(saved.problems).toEqual([])
+    // Повторное сохранение — тот же блок, не создание
+    expect(await drafts.saveCustomBlockDraft(definition)).toMatchObject({ created: false })
+
+    const checked = await drafts.checkCustomBlock({ key: 'mcp-promo' })
+    expect(checked.verdict).toMatch(/Ошибок нет/)
+    expect(checked.html).toContain('<a class="button" href="/zapis">Записаться</a>')
+
+    // Свои данные вместо примера: пустая кнопка — блок выглядит правильно без неё
+    const without = await drafts.checkCustomBlock({
+      key: 'mcp-promo',
+      data: { title: 'Только заголовок' },
+    })
+    expect(without.html).not.toContain('<a')
+
+    const list = await drafts.listCustomBlocks()
+    const own = list.blocks.find((block) => block.key === 'mcp-promo')
+    expect(own).toMatchObject({ published: false, definition: { key: 'mcp-promo' } })
+    expect(own?.state).toMatch(/только черновик/)
+
+    // Токен публиковать не может, даже с правом
+    const res = await clientWith(granted.token).api.sites[':siteId']['custom-blocks'][
+      ':key'
+    ].publish.$post({
+      param: { siteId: site.id, key: 'mcp-promo' },
+      json: { draft: definition.definition },
+    })
+    expect(res.status).toBe(403)
+
+    // На страницу такой блок не встаёт, пока человек не опубликует: страницу проверяют по опубликованному
+    const onPage = tools.saveDraft({
+      slug: 'promo',
+      title: 'Промо',
+      content: PageContent.parse({
+        blocks: [{ id: 'promo-1', type: 'custom:mcp-promo', props: { title: 'Привет' } }],
+      }),
+    })
+    await expect(onPage).rejects.toThrow(/mcp-promo/)
+
+    // Человек публикует — страница принимает блок
+    expect(
+      (
+        await api.app.request(`${base}/mcp-promo/publish`, {
+          method: 'POST',
+          headers: ownerHeaders,
+          body: JSON.stringify({ draft: definition.definition }),
+        })
+      ).status,
+    ).toBe(200)
+    await tools.saveDraft({
+      slug: 'promo',
+      title: 'Промо',
+      content: PageContent.parse({
+        blocks: [{ id: 'promo-1', type: 'custom:mcp-promo', props: { title: 'Привет' } }],
+      }),
+    })
+  })
+
+  it('ошибки шаблона возвращаются со строкой и частью — нейронка правит по ним', async () => {
+    const broken = SaveCustomBlockInput.parse({
+      definition: {
+        ...definition.definition,
+        key: 'mcp-broken',
+        template: '<h2>{{ title }}</h2>\n<script>alert(1)</script>\n<p>{{ nope }}</p>',
+      },
+    })
+    const saved = await drafts.saveCustomBlockDraft(broken)
+    expect(saved.problems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ part: 'template', level: 'error', line: 2 }),
+        expect.objectContaining({ part: 'template', level: 'error', line: 3 }),
+      ]),
+    )
+    const checked = await drafts.checkCustomBlock({ key: 'mcp-broken' })
+    expect(checked.verdict).toMatch(/Ошибок: \d/)
+    // Структура полей, которую API не примет, — ошибка с путём
+    await expect(
+      drafts.checkCustomBlock({
+        definition: {
+          ...definition.definition,
+          fields: [{ type: 'text', name: 'Bad Name', label: 'x', required: false, maxLength: 10 }],
+        },
+      }),
+    ).rejects.toThrow(/fields/)
+  })
+
+  it('у проверки нужен ровно один из key и definition', () => {
+    expect(CheckCustomBlockInput.safeParse({}).success).toBe(false)
+    expect(
+      CheckCustomBlockInput.safeParse({ key: 'a-b', definition: definition.definition }).success,
+    ).toBe(false)
+    expect(CheckCustomBlockInput.safeParse({ key: 'a-b' }).success).toBe(true)
+  })
+
+  it('без токена инструменты объясняют, как его получить', async () => {
+    await expect(cmsTools(undefined).listCustomBlocks()).rejects.toThrow(missingTokenMessage)
   })
 })

@@ -81,6 +81,7 @@ export {
   type CustomBlockFieldsSource,
   CustomBlockInstance,
   CustomBlockKey,
+  CustomBlockPublish,
   CustomBlocksFile,
   CustomBlocksImport,
   CustomBlockType,

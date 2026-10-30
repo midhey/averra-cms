@@ -1,9 +1,17 @@
 import {
+  type CustomBlockProblem,
+  CustomBlockRenderError,
+  customBlockCss,
+  renderCustomBlockHtml,
+} from '@averra/blocks/custom-engine'
+import {
   applyCustomBlocks,
   CUSTOM_BLOCKS_FILE_FORMAT,
   CustomBlockDraft,
   CustomBlockKey,
+  CustomBlockPublish,
   CustomBlocksImport,
+  collectMediaRefs,
   customBlockType,
   MAIN_PAGE_SLUG,
   NewCustomBlock,
@@ -20,12 +28,22 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { mediaRepo } from '../media/repo'
 import { customBlocksRepo, readDefinition, viewOf } from './repo'
-import { definitionProblems, problemIssues } from './service'
+import { cssMediaIds, definitionProblems, problemIssues, sameDefinition } from './service'
+
+const changedDraft =
+  'Черновик изменили, пока он был открыт (например, через MCP): проверьте его и опубликуйте снова'
 
 const SiteParams = z.object({ siteId: Uuid() })
 const BlockParams = SiteParams.extend({ key: CustomBlockKey })
 const RevisionParams = BlockParams.extend({ revisionId: Uuid() })
+
+/** Проверка без сохранения: определение и, если нужно, свои данные вместо примера */
+const CheckInput = z.strictObject({
+  definition: CustomBlockDraft,
+  data: z.record(z.string(), z.unknown()).optional(),
+})
 
 type Deps = {
   db: Db
@@ -42,7 +60,9 @@ const usageWhere = ({ draft, published }: { draft: boolean; published: boolean }
 /**
  * Свои блоки сайта: монтируется на /sites/:siteId/custom-blocks. Читать опубликованные может
  * любой участник и токен (ими заполняют страницы, их видит MCP), черновики и всё остальное —
- * владелец (blocks.define); токену API менять нельзя (tokenDenied)
+ * владелец (blocks.define). Токену API с правом «черновики блоков» (token:grant) доступно
+ * blocks.draft: читать черновики, создать блок, сохранить черновик, проверить шаблон. Публикация,
+ * удаление, история и загрузка файла токену закрыты (tokenDenied): их делает человек
  */
 export function customBlocksRoutes({ db, publisher, log }: Deps) {
   const repo = customBlocksRepo(db)
@@ -71,7 +91,11 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
       // Владельцу — все блоки с черновиками; остальным — только опубликованные определения
       .get('/', validate('param', SiteParams), site('site.read'), async (c) => {
         const { siteId } = c.req.valid('param')
-        const defines = c.var.actor.kind === 'user' && can(c.var.siteRole, 'blocks.define')
+        const { actor } = c.var
+        // Токен с правом на черновики читает их же: иначе он не увидел бы свою работу
+        const defines =
+          (actor.kind === 'user' && can(c.var.siteRole, 'blocks.define')) ||
+          (actor.kind === 'token' && actor.blocksDraft === true)
         const views = (await repo.list(siteId)).map(viewOf)
         const blocks = defines
           ? views
@@ -84,7 +108,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
       .post(
         '/',
         validate('param', SiteParams),
-        site('blocks.define'),
+        site('blocks.draft'),
         validate('json', NewCustomBlock),
         async (c) => {
           const { siteId } = c.req.valid('param')
@@ -139,7 +163,50 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
         },
       )
 
-      .get('/:key', validate('param', BlockParams), site('blocks.define'), async (c) => {
+      // Проверка определения без сохранения и рендер на данных: ответ — замечания по частям (шаблон,
+      // CSS, пример) с номерами строк и HTML, каким его увидит сайт. Для MCP: нейронка чинит блок
+      // по тексту замечаний. Ошибки определения — не 400: это и есть результат проверки
+      .post(
+        '/check',
+        validate('param', SiteParams),
+        site('blocks.draft'),
+        validate('json', CheckInput),
+        async (c) => {
+          const { siteId } = c.req.valid('param')
+          const { definition, data } = c.req.valid('json')
+          const problems: CustomBlockProblem[] = await definitionProblems(db, siteId, definition)
+          const props = data ?? definition.example
+          const ids = [
+            ...cssMediaIds(definition.css),
+            ...collectMediaRefs(props).map((ref) => ref.mediaId),
+          ]
+          const media = await mediaRepo(db).files(siteId, ids)
+          let html: string | null = null
+          try {
+            html = renderCustomBlockHtml(definition, props, {
+              id: 'preview',
+              media,
+              priority: false,
+            })
+          } catch (error) {
+            if (!(error instanceof CustomBlockRenderError)) throw error
+            // Пример проверен выше (поля и пробный рендер): повторять его ошибки незачем. Свои данные —
+            // ошибка именно этой проверки
+            if (data !== undefined) {
+              problems.push({
+                part: error.line === undefined ? 'fields' : 'template',
+                level: 'error',
+                message: error.message,
+                line: error.line,
+              })
+            }
+          }
+          const css = customBlockCss(definition, media)
+          return c.json({ problems, html, css }, 200)
+        },
+      )
+
+      .get('/:key', validate('param', BlockParams), site('blocks.draft'), async (c) => {
         const { siteId, key } = c.req.valid('param')
         const row = await repo.find(siteId, key)
         if (!row) return c.json(notFound('Своего блока нет'), 404)
@@ -151,7 +218,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
       .put(
         '/:key',
         validate('param', BlockParams),
-        site('blocks.define'),
+        site('blocks.draft'),
         validate('json', CustomBlockDraft),
         async (c) => {
           const { siteId, key } = c.req.valid('param')
@@ -168,49 +235,50 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
         },
       )
 
-      // Публикация — только без ошибок. Ответ называет опубликованные страницы, чьи данные не
-      // подходят под новое определение: на сайте этот блок у них не покажется, пока их не поправят
-      .post('/:key/publish', validate('param', BlockParams), site('blocks.define'), async (c) => {
-        const { siteId, key } = c.req.valid('param')
-        const found = await repo.find(siteId, key)
-        if (!found) return c.json(notFound('Своего блока нет'), 404)
-        const draft = readDefinition(found.draft)
-        if (!draft) {
-          const issues = [
-            { path: 'draft', message: 'Черновик не подходит под схему: сохраните его заново' },
-          ]
-          return c.json(validationError(issues), 400)
-        }
-        const problems = problemIssues(await definitionProblems(db, siteId, draft))
-        if (problems.length > 0) return c.json(validationError(problems), 400)
-        const result = await repo.publish(siteId, draft, c.var.actor)
-        if (!result) return c.json(notFound('Своего блока нет'), 404)
-        if (!result.row) {
-          return c.json(
-            conflict('Черновик поменялся во время публикации: опубликуйте ещё раз'),
-            409,
-          )
-        }
-        const definition = readDefinition(result.row.published)
-        const affected = definition
-          ? (await repo.publishedPagesWith(siteId, key)).flatMap((page) => {
-              const content = PageContent.safeParse(page.content)
-              if (!content.success) return []
-              // Проверяем только блоки этого ключа: соседние свои блоки страницы к публикуемому
-              // определению отношения не имеют, без своих определений они дали бы ложное «нет на сайте»
-              const { issues } = applyCustomBlocks(content.data, [definition])
-              const first = issues.find((issue) => {
-                const type = content.data.blocks[Number(issue.path[1])]?.type
-                return type !== undefined && customBlockType(key) === type
+      // Публикация — только без ошибок и только того черновика, который видел человек: черновик
+      // пишет и токен MCP, и без сверки владелец опубликовал бы непрочитанную версию. Ответ называет
+      // опубликованные страницы, чьи данные не подходят под новое определение: на сайте этот блок у
+      // них не покажется, пока их не поправят
+      .post(
+        '/:key/publish',
+        validate('param', BlockParams),
+        site('blocks.define'),
+        validate('json', CustomBlockPublish),
+        async (c) => {
+          const { siteId, key } = c.req.valid('param')
+          const { draft: seen } = c.req.valid('json')
+          const found = await repo.find(siteId, key)
+          if (!found) return c.json(notFound('Своего блока нет'), 404)
+          const draft = readDefinition(found.draft)
+          if (!draft || !sameDefinition(draft, seen)) {
+            return c.json(conflict(changedDraft), 409)
+          }
+          const problems = problemIssues(await definitionProblems(db, siteId, draft))
+          if (problems.length > 0) return c.json(validationError(problems), 400)
+          const result = await repo.publish(siteId, draft, c.var.actor)
+          if (!result) return c.json(notFound('Своего блока нет'), 404)
+          if (!result.row) return c.json(conflict(changedDraft), 409)
+          const definition = readDefinition(result.row.published)
+          const affected = definition
+            ? (await repo.publishedPagesWith(siteId, key)).flatMap((page) => {
+                const content = PageContent.safeParse(page.content)
+                if (!content.success) return []
+                // Проверяем только блоки этого ключа: соседние свои блоки страницы к публикуемому
+                // определению отношения не имеют, без своих определений они дали бы ложное «нет на сайте»
+                const { issues } = applyCustomBlocks(content.data, [definition])
+                const first = issues.find((issue) => {
+                  const type = content.data.blocks[Number(issue.path[1])]?.type
+                  return type !== undefined && customBlockType(key) === type
+                })
+                return first
+                  ? [{ slug: page.slug, title: page.title ?? page.slug, message: first.message }]
+                  : []
               })
-              return first
-                ? [{ slug: page.slug, title: page.title ?? page.slug, message: first.message }]
-                : []
-            })
-          : []
-        await rebuild(siteId)
-        return c.json({ ...(await detailed(siteId, result.row)), affected }, 200)
-      })
+            : []
+          await rebuild(siteId)
+          return c.json({ ...(await detailed(siteId, result.row)), affected }, 200)
+        },
+      )
 
       .get('/:key/revisions', validate('param', BlockParams), site('blocks.define'), async (c) => {
         const { siteId, key } = c.req.valid('param')
