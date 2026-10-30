@@ -5,7 +5,7 @@
     {% if lead %}<p class="hero__lead">{{ lead | newline_to_br }}</p>{% endif %}
     <div class="hero__actions">
       <a class="cta-dark" href="{{ button | link }}">{{ button.label }} <span aria-hidden="true">→</span></a>
-      {% if note %}<div class="hero__note" aria-hidden="true">{{ note | newline_to_br }}</div>{% endif %}
+      {% if note %}<div class="hero__note">{{ note | newline_to_br }}</div>{% endif %}
     </div>
     {% if badges.size > 0 %}
     <ul class="hero__badges" role="list">

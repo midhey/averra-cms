@@ -127,6 +127,13 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     ? await upload(shareImage)
     : undefined
 
+  // Иконка сайта, как у оригинала: apple-touch-icon.png (на нём знак «Ve»), иначе favicon.svg.
+  // Сервер сам собирает из неё favicon.ico и иконки для телефонов
+  const iconSource = ['assets/images/apple-touch-icon.png', 'assets/images/favicon.svg'].find(
+    (path) => existsSync(join(options.publicDir, path)),
+  )
+  const iconId = iconSource ? await upload(iconSource) : undefined
+
   // ── Свои блоки: загрузка и публикация ───────────────────────────────────────────────────────
   const file = JSON.parse(readFileSync(options.blocksFile, 'utf8')) as {
     blocks: { key: string }[]
@@ -176,6 +183,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     language: 'ru',
     description: seo.description,
     ...(shareImageId && { ogImage: shareImageId }),
+    ...(iconId && { icon: iconId }),
     ...(options.siteUrl && { url: options.siteUrl }),
     organization,
     redirects: [...keptRedirects, ...redirects],

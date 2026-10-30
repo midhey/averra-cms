@@ -29,7 +29,7 @@ const describe = (status: number, body: unknown) => {
 }
 
 export type ClientOptions = {
-  /** Адрес API, например http://localhost:4000 или https://api.example.ru */
+  /** Адрес API, например http://localhost:4000 или https://admin.example.ru (на установке API живёт на адресе админки) */
   baseUrl: string
   /** Адрес админки (ADMIN_URL установки): API принимает запросы с cookie только с неё */
   origin: string

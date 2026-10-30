@@ -21,7 +21,7 @@ const usage = `Перенос сайта le-english на Averra через API.
                      заданы --content и --public)
   --content <файл>   контент сайта; у живого сайта клиента — <папка>/data/content.json
   --public <папка>   public/ исходного сайта: фото из assets/images/ и uploads/
-  --api <адрес>      адрес API установки (по умолчанию http://localhost:4000)
+  --api <адрес>      адрес API установки; на сервере — адрес админки, там же /api (по умолчанию http://localhost:4000)
   --origin <адрес>   адрес админки установки, ADMIN_URL (по умолчанию http://localhost:5173)
   --email <почта>    владелец установки
   --site-url <адрес> адрес сайта https://домен (canonical и карта сайта)

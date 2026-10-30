@@ -154,6 +154,12 @@ describe('скрипт переноса на настоящем API', () => {
     for (const name of ['hero', 'goal-1', 'goal-2', 'goal-3', 'goal-4']) {
       writeFileSync(join(dir, 'public', 'assets', 'images', `${name}.webp`), png)
     }
+    const touchIcon = await sharp({
+      create: { width: 180, height: 180, channels: 3, background: '#213d32' },
+    })
+      .png()
+      .toBuffer()
+    writeFileSync(join(dir, 'public', 'assets', 'images', 'apple-touch-icon.png'), touchIcon)
     const contentFile = join(dir, 'content.json')
     // Живой сайт хранит контент внутри записи { version, savedAt, content }
     writeFileSync(contentFile, JSON.stringify({ version: '1', savedAt: 'x', content }))
@@ -239,6 +245,7 @@ describe('скрипт переноса на настоящем API', () => {
     }>(`${base}/settings`)
     expect(kept.settings.organization.phone).toBe('+7 900 000-00-00')
     expect(kept.settings.organization.address.street).toBe('ул. Пушкина, 1')
+    expect((kept.settings as { icon?: string | null }).icon).toBeTruthy()
     expect(kept.settings.cookies).toMatchObject({ mode: 'notice', text: 'Мы используем cookies' })
   })
 
