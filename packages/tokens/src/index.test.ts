@@ -88,13 +88,15 @@ describe('шрифты темы', () => {
   it('знак рубля ₽ — у каждого начертания, из latin-ext и только он', () => {
     for (const font of themeFontIds) {
       const files = themeFontFiles({ ...defaultTheme, fonts: { heading: font, body: font } })
-      for (const weight of new Set(files.map((file) => file.weight))) {
+      for (const face of new Set(files.map((file) => `${file.weight} ${file.style}`))) {
         const ruble = files.filter(
-          (file) => file.weight === weight && file.unicodeRange.split(',').includes('U+20BD'),
+          (file) =>
+            `${file.weight} ${file.style}` === face &&
+            file.unicodeRange.split(',').includes('U+20BD'),
         )
         expect(
           ruble.map((file) => file.subset),
-          `${font} ${weight}`,
+          `${font} ${face}`,
         ).toEqual(['latin-ext'])
       }
       // Остальная latin-ext сайту не нужна: файл качается, только когда на странице есть ₽
@@ -123,6 +125,40 @@ describe('шрифты темы', () => {
       fonts: { heading: 'system', body: 'pt-serif' },
     })
     expect(files.map((file) => file.weight)).toEqual([400, 400, 400, 700, 700, 700])
+  })
+
+  it('Playfair Display в заголовках — настоящий курсив того же веса; в тексте курсива нет', () => {
+    const files = themeFontFiles({
+      ...defaultTheme,
+      fonts: { heading: 'playfair-display', body: 'manrope' },
+    }).map((file) => file.file)
+    expect(files).toContain('playfair-display-cyrillic-500-normal.woff2')
+    expect(files).toContain('playfair-display-cyrillic-500-italic.woff2')
+    const asBody = themeFontFiles({
+      ...defaultTheme,
+      fonts: { heading: 'manrope', body: 'playfair-display' },
+    }).map((file) => file.file)
+    expect(asBody.some((file) => file.includes('italic'))).toBe(false)
+    const css = fontFaceCss(
+      themeFontFiles({ ...defaultTheme, fonts: { heading: 'playfair-display', body: 'manrope' } }),
+      (file) => `/_fonts/${file.file}`,
+    )
+    expect(css).toContain('font-family:"Playfair Display";font-style:italic;font-weight:500')
+  })
+
+  it('акцентный шрифт: --font-accent и файлы 400 и жирный; не выбран — как заголовки', () => {
+    const plain = themeToCss(defaultTheme)
+    expect(plain).toContain('--font-accent:var(--font-heading)')
+    const theme = {
+      ...defaultTheme,
+      fonts: { heading: 'system', body: 'system', accent: 'caveat' },
+    } as const
+    expect(themeToCss(theme)).toContain('--font-accent:"Caveat", cursive')
+    expect(
+      themeFontFiles(theme)
+        .filter((file) => file.subset === 'cyrillic')
+        .map((file) => file.file),
+    ).toEqual(['caveat-cyrillic-400-normal.woff2', 'caveat-cyrillic-600-normal.woff2'])
   })
 
   it('системные шрифты — ни одного файла', () => {

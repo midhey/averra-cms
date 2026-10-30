@@ -109,6 +109,7 @@ sidebar:
 | `colors.onAccent` | текст на кнопках | `--color-on-accent` |
 | `colors.border` | рамки карточек «Преимуществ» и окон cookie (декор, без проверки контраста) | `--color-border` |
 | `fonts.heading`, `fonts.body` | id из `themeFontIds` | `--font-heading`, `--font-body`, `--font-heading-weight` |
+| `fonts.accent` (необязательно) | id из `themeFontIds` | `--font-accent`; не задан — `var(--font-heading)`. Для рукописных подписей и пометок в своих блоках; грузятся начертания 400 и жирное |
 | `radius` | `none`, `small`, `medium`, `large` (0, 4, 8, 16 px) | `--radius` |
 | — (из `text` и `background`) | затемнение фото «Первого экрана» на фото: `coverScrim(colors)` | `--cover-scrim` |
 

@@ -21,6 +21,11 @@ type HostedFont = {
   headingWeight: number
   /** Жирный в тексте (кнопки, подписи полей): у PT Serif нет 600 — берём 700 */
   boldWeight: number
+  /**
+   * Курсив заголовков — настоящий, из файлов. Без него браузер наклоняет прямой шрифт сам, а у
+   * шрифтов с засечками (Playfair Display) настоящий курсив — другие буквы
+   */
+  headingItalic?: boolean
 }
 
 export const fontCatalog: Record<ThemeFont, SystemFont | HostedFont> = {
@@ -66,6 +71,25 @@ export const fontCatalog: Record<ThemeFont, SystemFont | HostedFont> = {
     package: '@fontsource/unbounded',
     prefix: 'unbounded',
     fallback: SANS,
+    headingWeight: 600,
+    boldWeight: 600,
+  },
+  'playfair-display': {
+    kind: 'hosted',
+    family: 'Playfair Display',
+    package: '@fontsource/playfair-display',
+    prefix: 'playfair-display',
+    fallback: SERIF,
+    headingWeight: 500,
+    boldWeight: 700,
+    headingItalic: true,
+  },
+  caveat: {
+    kind: 'hosted',
+    family: 'Caveat',
+    package: '@fontsource/caveat',
+    prefix: 'caveat',
+    fallback: 'cursive',
     headingWeight: 600,
     boldWeight: 600,
   },
@@ -122,6 +146,7 @@ type Subset = keyof typeof subsets
 export type FontFile = {
   family: string
   weight: number
+  style: 'normal' | 'italic'
   subset: Subset
   unicodeRange: string
   /** Пакет и имя файла в нём: <package>/files/<file> */
@@ -129,17 +154,22 @@ export type FontFile = {
   file: string
 }
 
-function filesOf(entry: HostedFont, weights: Iterable<number>): FontFile[] {
+function filesOf(
+  entry: HostedFont,
+  weights: Iterable<number>,
+  style: FontFile['style'] = 'normal',
+): FontFile[] {
   return [...new Set(weights)]
     .sort((a, b) => a - b)
     .flatMap((weight) =>
       (Object.keys(subsets) as Subset[]).map((subset) => ({
         family: entry.family,
         weight,
+        style,
         subset,
         unicodeRange: subsets[subset],
         package: entry.package,
-        file: `${entry.prefix}-${subset}-${weight}-normal.woff2`,
+        file: `${entry.prefix}-${subset}-${weight}-${style}.woff2`,
       })),
     )
 }
@@ -160,16 +190,32 @@ export function themeFontFiles(theme: Theme): FontFile[] {
   const body = fontCatalog[theme.fonts.body]
   need(theme.fonts.body, 400, body.kind === 'hosted' ? body.boldWeight : 600)
   need(theme.fonts.heading, fontCatalog[theme.fonts.heading].headingWeight)
-  return [...weights].flatMap(([font, set]) => {
+  // Акцентный шрифт (рукописные подписи): обычное и жирное начертание, как тексту
+  if (theme.fonts.accent) {
+    const accent = fontCatalog[theme.fonts.accent]
+    need(theme.fonts.accent, 400, accent.kind === 'hosted' ? accent.boldWeight : 600)
+  }
+  const upright = [...weights].flatMap(([font, set]) => {
     const entry = fontCatalog[font]
     return entry.kind === 'hosted' ? filesOf(entry, set) : []
   })
+  const heading = fontCatalog[theme.fonts.heading]
+  const italic =
+    heading.kind === 'hosted' && heading.headingItalic
+      ? filesOf(heading, [heading.headingWeight], 'italic')
+      : []
+  return [...upright, ...italic]
 }
 
 /** Все файлы каталога: их подключает предпросмотр админки (грузятся только используемые) */
 export function allFontFiles(): FontFile[] {
   return Object.values(fontCatalog).flatMap((entry) =>
-    entry.kind === 'hosted' ? filesOf(entry, [400, entry.boldWeight, entry.headingWeight]) : [],
+    entry.kind === 'hosted'
+      ? [
+          ...filesOf(entry, [400, entry.boldWeight, entry.headingWeight]),
+          ...(entry.headingItalic ? filesOf(entry, [entry.headingWeight], 'italic') : []),
+        ]
+      : [],
   )
 }
 
@@ -178,7 +224,7 @@ export function fontFaceCss<F extends FontFile>(files: readonly F[], url: (file:
   return files
     .map(
       (file) =>
-        `@font-face{font-family:"${file.family}";font-style:normal;font-weight:${file.weight};` +
+        `@font-face{font-family:"${file.family}";font-style:${file.style};font-weight:${file.weight};` +
         `font-display:swap;src:url("${url(file)}") format("woff2");unicode-range:${file.unicodeRange}}`,
     )
     .join('')

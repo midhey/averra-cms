@@ -46,6 +46,7 @@ import {
   checksOf,
   contrastText,
   fontGroups,
+  fontRoleTitles,
   fontTitle,
   formOf,
   normalizeHex,
@@ -315,20 +316,28 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
 
         <Section title="Шрифты" card>
           <div className={styles.fonts}>
-            {(['heading', 'body'] as const).map((role) => (
+            {(['heading', 'body', 'accent'] as const).map((role) => (
               <Select
                 key={role}
-                label={role === 'heading' ? 'Заголовки' : 'Текст'}
+                label={fontRoleTitles[role]}
+                hint={role === 'accent' ? 'Подписи и пометки в своих блоках' : undefined}
                 name={`fonts.${role}`}
-                value={form.fonts[role]}
+                value={form.fonts[role] ?? ''}
                 disabled={readOnly}
                 onChange={(event) => {
                   const font = fontGroups
                     .flatMap((group) => group.fonts)
                     .find((item) => item === event.target.value)
-                  if (font) change({ ...form, fonts: { ...form.fonts, [role]: font } })
+                  if (font) {
+                    change({ ...form, fonts: { ...form.fonts, [role]: font } })
+                  } else if (role === 'accent') {
+                    // «Как у заголовков»: акцентный шрифт не задан
+                    const { accent: _accent, ...fonts } = form.fonts
+                    change({ ...form, fonts })
+                  }
                 }}
               >
+                {role === 'accent' && <option value="">Как у заголовков</option>}
                 {fontGroups.map((group) => (
                   <optgroup key={group.label} label={group.label}>
                     {group.fonts.map((font) => (
@@ -343,7 +352,8 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
           </div>
           <p className={styles.note}>
             Шрифты лежат на сервере сайта, с кириллицей. Google Fonts сайт не трогает, а посетитель
-            скачивает только выбранные начертания.
+            скачивает только выбранные начертания. Акцентный шрифт не выбран — подписи в своих
+            блоках набираются шрифтом заголовков.
           </p>
         </Section>
 

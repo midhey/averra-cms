@@ -16,6 +16,8 @@ export const themeFontIds = [
   'inter',
   'montserrat',
   'unbounded',
+  'playfair-display',
+  'caveat',
   'lora',
   'pt-serif',
   'system',
@@ -31,6 +33,8 @@ export const themeFontTitles: Record<ThemeFont, string> = {
   inter: 'Inter',
   montserrat: 'Montserrat',
   unbounded: 'Unbounded',
+  'playfair-display': 'Playfair Display',
+  caveat: 'Caveat (рукописный)',
   lora: 'Lora',
   'pt-serif': 'PT Serif',
   system: 'Системный',
@@ -79,6 +83,12 @@ export const Theme = z.strictObject({
   fonts: z.strictObject({
     heading: ThemeFont.meta({ title: 'Шрифт заголовков', 'x-enum-titles': themeFontTitles }),
     body: ThemeFont.meta({ title: 'Шрифт текста', 'x-enum-titles': themeFontTitles }),
+    // Для рукописных подписей, цифр и пометок в своих блоках (--font-accent). Нет — как у заголовков
+    accent: ThemeFont.optional().meta({
+      title: 'Акцентный шрифт',
+      description: 'Рукописные подписи и пометки; не выбран — шрифт заголовков',
+      'x-enum-titles': themeFontTitles,
+    }),
   }),
   radius: ThemeRadius.default('medium').meta({
     title: 'Скругления',
@@ -275,6 +285,8 @@ export function readTheme(stored: unknown, onInvalid?: (field: string) => void):
   }
   const radius = ThemeRadius.safeParse(theme.radius ?? 'medium')
   if (!radius.success) onInvalid?.('radius')
+  const accent = ThemeFont.optional().safeParse(fonts.accent)
+  if (!accent.success) onInvalid?.('fonts.accent')
   return {
     colors: {
       background,
@@ -285,7 +297,12 @@ export function readTheme(stored: unknown, onInvalid?: (field: string) => void):
       onAccent: color('onAccent'),
       border: border.success ? border.data : derivedBorder({ text, background }),
     },
-    fonts: { heading: font('heading'), body: font('body') },
+    fonts: {
+      heading: font('heading'),
+      body: font('body'),
+      // Акцентный шрифт необязателен: нет или непонятен (шрифт новее этой версии) — не задан
+      ...(accent.success && accent.data !== undefined && { accent: accent.data }),
+    },
     radius: radius.success ? radius.data : defaultTheme.radius,
   }
 }
@@ -299,7 +316,7 @@ export type LegacyTheme = {
 
 const legacyFont = (font: ThemeFont): LegacyTheme['fonts']['body'] => {
   if (font === 'system' || font === 'humanist' || font === 'serif') return font
-  return font === 'lora' || font === 'pt-serif' ? 'serif' : 'system'
+  return font === 'lora' || font === 'pt-serif' || font === 'playfair-display' ? 'serif' : 'system'
 }
 
 /**
@@ -324,6 +341,7 @@ export function sameTheme(a: Theme, b: Theme) {
     ) &&
     a.fonts.heading === b.fonts.heading &&
     a.fonts.body === b.fonts.body &&
+    a.fonts.accent === b.fonts.accent &&
     a.radius === b.radius
   )
 }

@@ -34,7 +34,8 @@
 
 .fonts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(ui.rem(150), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(ui.rem(200), 1fr));
+  align-items: start;
   gap: var(--space-3);
 }
 

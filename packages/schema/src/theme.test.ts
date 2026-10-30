@@ -229,3 +229,33 @@ describe('coverScrim — затемнение «Первого экрана» н
     expect(coverScrim(defaultTheme.colors)).toBeLessThan(0.8)
   })
 })
+
+describe('акцентный шрифт (рукописные подписи)', () => {
+  const withAccent = { ...defaultTheme, fonts: { ...defaultTheme.fonts, accent: 'caveat' } }
+
+  it('необязателен: тема без него проходит, с ним — читается и сравнивается', () => {
+    expect(Theme.safeParse(defaultTheme).success).toBe(true)
+    expect(Theme.parse(withAccent).fonts.accent).toBe('caveat')
+    expect(readTheme(withAccent).fonts.accent).toBe('caveat')
+    expect(readTheme(defaultTheme).fonts).not.toHaveProperty('accent')
+    expect(sameTheme(defaultTheme as Theme, Theme.parse(withAccent))).toBe(false)
+    expect(sameTheme(Theme.parse(withAccent), Theme.parse(withAccent))).toBe(true)
+  })
+
+  it('шрифт, которого эта версия не знает, — не задан, о нём сообщает onInvalid', () => {
+    const seen: string[] = []
+    const theme = readTheme(
+      { ...withAccent, fonts: { ...withAccent.fonts, accent: 'comic-future' } },
+      (field) => seen.push(field),
+    )
+    expect(theme.fonts).not.toHaveProperty('accent')
+    expect(seen).toEqual(['fonts.accent'])
+  })
+
+  it('прежняя версия получает тему без акцентного шрифта', () => {
+    expect(legacyTheme(Theme.parse(withAccent)).fonts).toEqual({
+      heading: 'system',
+      body: 'system',
+    })
+  })
+})

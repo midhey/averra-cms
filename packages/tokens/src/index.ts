@@ -56,6 +56,8 @@ export function themeToCss(theme: Theme): string {
     '--cover-scrim': String(coverScrim(colors)),
     '--font-heading': fontStack(fonts.heading),
     '--font-body': fontStack(fonts.body),
+    // Акцентный шрифт (рукописные подписи, цифры): не выбран — как у заголовков
+    '--font-accent': fonts.accent ? fontStack(fonts.accent) : 'var(--font-heading)',
     '--font-heading-weight': String(fontCatalog[fonts.heading].headingWeight),
     '--radius': radii[radius],
   }

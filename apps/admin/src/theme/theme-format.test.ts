@@ -79,7 +79,7 @@ describe('отметка у строки цвета', () => {
 
 describe('шрифты и состояние', () => {
   it('свои шрифты первыми, системные — отдельной группой', () => {
-    expect(fontGroups.map((group) => group.fonts.length)).toEqual([7, 3])
+    expect(fontGroups.map((group) => group.fonts.length)).toEqual([9, 3])
     expect(fontGroups[1]?.fonts).toEqual(['system', 'humanist', 'serif'])
   })
 

@@ -101,6 +101,13 @@ export const fontGroups: ReadonlyArray<{ label: string; fonts: ThemeFont[] }> = 
 
 export const fontTitle = (font: ThemeFont) => themeFontTitles[font]
 
+/** Подписи выбора шрифта по роли */
+export const fontRoleTitles = {
+  heading: 'Заголовки',
+  body: 'Текст',
+  accent: 'Акцентный',
+} as const
+
 /** Состояние темы словами: что с правками и что на сайте */
 export function themeStatus({ unsaved, unpublished }: { unsaved: boolean; unpublished: boolean }): {
   tone: StatusTone
