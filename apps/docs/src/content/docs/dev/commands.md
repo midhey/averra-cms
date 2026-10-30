@@ -42,7 +42,8 @@ sidebar:
 | `pnpm user:password --email …` | `user-password.js` | новый пароль, все входы пользователя завершаются, ссылки сброса сгорают. Путь вернуть доступ без почты |
 | `pnpm member:add --email … --role editor\|client [--site <id>]` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль |
 | `pnpm member:invite --email … --role editor\|client [--by <почта владельца>] [--site <id>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
-| `pnpm token:create --name … [--by <почта>] [--site <id>]` | `token-create.js` | токен API для MCP, показывается один раз |
+| `pnpm token:create --name … [--by <почта>] [--site <id>] [--blocks-draft]` | `token-create.js` | токен API для MCP, показывается один раз; `--blocks-draft` — право на черновики своих блоков |
+| `pnpm token:grant --id <id> --blocks-draft on\|off` | `token-grant.js` | включить или выключить право токена на черновики своих блоков |
 | `pnpm token:list` | `token-list.js` | токены без самих токенов: сайт, кто выпустил, когда пользовались, отозван ли |
 | `pnpm token:revoke --id <id>` | `token-revoke.js` | отозвать токен |
 | `pnpm mail:test --to <адрес>` | `mail-test.js` | проверочное письмо напрямую, по шагам. Проверяет только SMTP из окружения |

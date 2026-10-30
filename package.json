@@ -31,6 +31,7 @@
     "token:create": "pnpm --filter @averra/api token:create",
     "token:list": "pnpm --filter @averra/api token:list",
     "token:revoke": "pnpm --filter @averra/api token:revoke",
+    "token:grant": "pnpm --filter @averra/api token:grant",
     "mail:test": "pnpm --filter @averra/api mail:test",
     "fleet": "pnpm --filter @averra/deploy fleet"
   },

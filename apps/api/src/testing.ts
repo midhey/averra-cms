@@ -284,7 +284,12 @@ export async function createTestApi({
     sessionHeaders,
     loginAs,
     /** Токен API с правами редактора на сайте. Возвращает и сам токен, и его id для отзыва */
-    createToken: (siteId: string = demoSiteId, name = 'тест') => tokens.create({ siteId, name }),
+    createToken: (
+      siteId: string = demoSiteId,
+      name = 'тест',
+      options: { blocksDraft?: boolean } = {},
+    ) => tokens.create({ siteId, name, ...options }),
+    setTokenBlocksDraft: (id: string, allowed: boolean) => tokens.setBlocksDraft(id, allowed),
     revokeToken: (id: string) => tokens.revoke(id),
     addMember: users.addMember,
     /**

@@ -1,27 +1,10 @@
-import { Uuid } from '@averra/schema'
-import { z } from 'zod'
 import { tokensRepo } from '../modules/tokens/repo'
-import { UserEmail, usersRepo } from '../modules/users/repo'
-import { args, CliError, check, openDb, resolveSite, run } from './common'
-
-const usage = `Выпустить токен API (права редактора на сайте установки), например для MCP:
-  pnpm token:create --name mcp [--by <почта владельца>] [--site <id сайта>]
-
-Токен показывается один раз. --by нужен, только если владельцев несколько. --site не нужен:
-в установке один сайт. Он только для старых баз, где сайтов несколько.`
-
-const Args = z.object({
-  site: Uuid('Нужен id сайта').optional(),
-  name: z.string().trim().min(1).max(80),
-  by: UserEmail.optional(),
-})
+import { usersRepo } from '../modules/users/repo'
+import { CliError, openDb, resolveSite, run } from './common'
+import { parseTokenCreate, tokenCreateUsage } from './token-args'
 
 await run(async () => {
-  const { site, name, by } = check(
-    Args,
-    args({ site: { type: 'string' }, name: { type: 'string' }, by: { type: 'string' } }, usage),
-    usage,
-  )
+  const { site, name, by, blocksDraft } = parseTokenCreate()
   const { db, auth, close } = await openDb()
   try {
     const found = await resolveSite(db, site)
@@ -34,9 +17,11 @@ await run(async () => {
       siteId: found.id,
       name,
       createdBy: author.id,
+      blocksDraft,
     })
     console.log(`Токен «${name}» для сайта «${found.name}», id токена ${id}.`)
     console.log('Он показывается один раз: в базе остаётся только его хеш.')
+    if (blocksDraft) console.log('Право на черновики своих блоков: включено.')
     console.log('Для MCP положи эту строку в apps/mcp/.env:\n')
     console.log(`CMS_API_TOKEN=${token}\n`)
     console.log(`Отозвать: pnpm token:revoke --id ${id}`)
@@ -49,6 +34,7 @@ await run(async () => {
 async function soleOwner(users: ReturnType<typeof usersRepo>) {
   const owners = await users.owners()
   if (owners.length === 0) throw new CliError('Сначала создай владельца: pnpm user:create')
-  if (owners.length > 1) throw new CliError(`Владельцев несколько: укажи --by <почта>\n\n${usage}`)
+  if (owners.length > 1)
+    throw new CliError(`Владельцев несколько: укажи --by <почта>\n\n${tokenCreateUsage}`)
   return owners[0]
 }

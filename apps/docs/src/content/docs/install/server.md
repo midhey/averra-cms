@@ -131,7 +131,7 @@ docker compose exec api node dist/server/user-password.js --email anna@example.r
 
 Команды терминала на сервере — `node dist/server/<команда>.js` в контейнере API: `user-create`,
 `user-password`, `member-add`, `member-invite`, `token-create`, `token-list`,
-`token-revoke`, `mail-test`, `status`. С PostgreSQL они работают при запущенном API. Что делает каждая —
+`token-grant`, `token-revoke`, `mail-test`, `status`. С PostgreSQL они работают при запущенном API. Что делает каждая —
 [Команды](/averra-cms/dev/commands/).
 
 Бэкапы, восстановление, обновление и состояние — `averra.sh`:

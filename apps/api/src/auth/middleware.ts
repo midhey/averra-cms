@@ -12,6 +12,7 @@ import {
   siteRoleOf,
   TOKEN_PERSONAL_DATA_MESSAGE,
   tokenDenied,
+  tokenGrants,
 } from './access'
 import type { Auth } from './auth'
 
@@ -82,7 +83,12 @@ export function authenticate({ db, auth, trustedOrigins }: AuthenticateOptions) 
       // С неверным токеном на cookie не откатываемся: программа должна узнать, что токен плох
       const token = await tokens.verify(authorization.replace(/^bearer\s+/i, '').trim())
       if (!token) return c.json(unauthorized('Токен API недействителен или отозван'), 401)
-      c.set('actor', { kind: 'token', tokenId: token.id, siteId: token.siteId })
+      c.set('actor', {
+        kind: 'token',
+        tokenId: token.id,
+        siteId: token.siteId,
+        blocksDraft: token.blocksDraft,
+      })
       return next()
     }
 
@@ -129,7 +135,14 @@ export function requireSite(db: Db, permission: Permission) {
     }
     const deniedToToken = tokenDenied[permission]
     if (c.var.actor.kind === 'token' && deniedToToken) return c.json(forbidden(deniedToToken), 403)
-    if (!can(role, permission)) return c.json(forbidden(forbiddenMessages[permission]), 403)
+    const { actor } = c.var
+    const grant = tokenGrants[permission]
+    if (actor.kind === 'token' && grant) {
+      // Право выдано токену отдельно от роли: есть — пускаем, нет — подсказка, как его включить
+      if (!actor[grant.grant]) return c.json(forbidden(grant.message), 403)
+    } else if (!can(role, permission)) {
+      return c.json(forbidden(forbiddenMessages[permission]), 403)
+    }
     c.set('siteRole', role)
     return next()
   })

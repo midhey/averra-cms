@@ -18,6 +18,7 @@ await run(async () => {
         сайт: token.siteName,
         выпустил: token.createdBy ?? '—',
         создан: date(token.createdAt),
+        'черновики блоков': token.blocksDraft ? 'да' : 'нет',
         'последний раз': date(token.lastUsedAt),
         отозван: date(token.revokedAt),
       })),

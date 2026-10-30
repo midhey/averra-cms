@@ -17,16 +17,19 @@ export function tokensRepo(db: Db) {
       siteId,
       name,
       createdBy,
+      blocksDraft = false,
     }: {
       siteId: string
       name: string
       createdBy?: string
+      /** Право на черновики своих блоков: выключено, пока владелец не включит */
+      blocksDraft?: boolean
     }) {
       const id = crypto.randomUUID()
       const token = `cms_${id}_${randomSecret()}`
       await db
         .insert(apiTokens)
-        .values({ id, siteId, name, createdBy, tokenHash: await sha256(token) })
+        .values({ id, siteId, name, createdBy, blocksDraft, tokenHash: await sha256(token) })
       return { id, token }
     },
 
@@ -39,13 +42,14 @@ export function tokensRepo(db: Db) {
           siteId: apiTokens.siteId,
           tokenHash: apiTokens.tokenHash,
           revokedAt: apiTokens.revokedAt,
+          blocksDraft: apiTokens.blocksDraft,
         })
         .from(apiTokens)
         .where(eq(apiTokens.id, id))
       if (!row || row.revokedAt) return undefined
       if (!constantTimeEqual(await sha256(token), row.tokenHash)) return undefined
       await db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, id))
-      return { id, siteId: row.siteId }
+      return { id, siteId: row.siteId, blocksDraft: row.blocksDraft }
     },
 
     /** false — такого токена нет. Повторный отзыв не сдвигает время первого */
@@ -61,6 +65,16 @@ export function tokensRepo(db: Db) {
       return true
     },
 
+    /** Включить или выключить право на черновики своих блоков. false — такого токена нет */
+    async setBlocksDraft(id: string, allowed: boolean) {
+      const rows = await db
+        .update(apiTokens)
+        .set({ blocksDraft: allowed })
+        .where(eq(apiTokens.id, id))
+        .returning({ id: apiTokens.id })
+      return rows.length > 0
+    },
+
     /** Все токены без хешей: для команды token:list */
     list() {
       return db
@@ -71,6 +85,7 @@ export function tokensRepo(db: Db) {
           siteName: sites.name,
           createdBy: users.email,
           createdAt: apiTokens.createdAt,
+          blocksDraft: apiTokens.blocksDraft,
           lastUsedAt: apiTokens.lastUsedAt,
           revokedAt: apiTokens.revokedAt,
         })

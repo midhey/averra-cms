@@ -41,10 +41,22 @@ describe('токены API', () => {
     expect(a.token).not.toBe(b.token)
   })
 
+  it('право на черновики блоков: выключено по умолчанию, включается и выключается, читается при проверке', async () => {
+    const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'mcp' })
+    expect((await rowOf(id)).blocksDraft).toBe(false)
+    expect(await tokens.setBlocksDraft(id, true)).toBe(true)
+    expect((await tokens.verify(token))?.blocksDraft).toBe(true)
+    expect(await tokens.setBlocksDraft(id, false)).toBe(true)
+    expect((await tokens.verify(token))?.blocksDraft).toBe(false)
+    expect(await tokens.setBlocksDraft(crypto.randomUUID(), true)).toBe(false)
+    const granted = await tokens.create({ siteId: api.demoSiteId, name: 'mcp2', blocksDraft: true })
+    expect((await tokens.verify(granted.token))?.blocksDraft).toBe(true)
+  })
+
   it('проверка отдаёт сайт и отмечает, когда токеном пользовались', async () => {
     const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'mcp' })
     expect((await rowOf(id)).lastUsedAt).toBeNull()
-    expect(await tokens.verify(token)).toEqual({ id, siteId: api.demoSiteId })
+    expect(await tokens.verify(token)).toEqual({ id, siteId: api.demoSiteId, blocksDraft: false })
     expect((await rowOf(id)).lastUsedAt).toBeInstanceOf(Date)
   })
 

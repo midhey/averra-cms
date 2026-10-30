@@ -35,6 +35,7 @@ const entryPoints = {
   'token-create': 'src/cli/token-create.ts',
   'token-list': 'src/cli/token-list.ts',
   'token-revoke': 'src/cli/token-revoke.ts',
+  'token-grant': 'src/cli/token-grant.ts',
   'mail-test': 'src/cli/mail-test.ts',
   status: 'src/cli/status.ts',
   // Разбор ответа источника релизов: его зовёт averra.sh check-update в контейнере без сети

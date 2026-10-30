@@ -22,10 +22,13 @@ export class CliError extends Error {
   override name = 'CliError'
 }
 
-/** Аргументы вида --email a@b.ru. Неизвестный аргумент — ошибка, а не молчаливый пропуск */
-export function args<T extends ParseArgsOptionsConfig>(options: T, usage: string) {
+/**
+ * Аргументы вида --email a@b.ru. Неизвестный аргумент — ошибка, а не молчаливый пропуск.
+ * argv — для тестов; без него — аргументы процесса
+ */
+export function args<T extends ParseArgsOptionsConfig>(options: T, usage: string, argv?: string[]) {
   try {
-    return parseArgs({ options, strict: true, allowPositionals: false }).values
+    return parseArgs({ options, strict: true, allowPositionals: false, args: argv }).values
   } catch (error) {
     throw new CliError(`${(error as Error).message}\n\n${usage}`)
   }

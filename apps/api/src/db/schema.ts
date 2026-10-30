@@ -272,6 +272,9 @@ export const apiTokens = pgTable(
       .references(() => sites.id, { onDelete: 'cascade' }),
     name: text().notNull(),
     tokenHash: text().notNull(),
+    // Право сохранять черновики своих блоков (MCP). Выключено по умолчанию, включает владелец
+    // командой token:grant; публикует определение только человек
+    blocksDraft: boolean().notNull().default(false),
     // Кто выпустил. Удалили пользователя — токен остаётся, просто без автора
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

@@ -31,6 +31,7 @@
     "token:create": "tsx src/cli/token-create.ts",
     "token:list": "tsx src/cli/token-list.ts",
     "token:revoke": "tsx src/cli/token-revoke.ts",
+    "token:grant": "tsx src/cli/token-grant.ts",
     "mail:test": "tsx src/cli/mail-test.ts",
     "status": "tsx src/cli/status.ts"
   },
