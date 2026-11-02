@@ -155,7 +155,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 |---|---|
 | `GET /api/sites/:siteId/settings` | `{ settings, installationUrl, url }`: настройки (`SiteSettings`), адрес установки (`SITE_URL`) и адрес сайта, который из них выходит |
 | `PATCH /api/sites/:siteId/settings` | сохранить присланные поля верхнего уровня (`SiteSettingsPatch`), остальные не меняются; группы (`verification`, `analytics`, `organization`, `redirects`, `cookies`) — целиком. Ставит сборку. Картинка не из медиатеки, SVG в `ogImage`, SVG в `icon`, из которого не собрался набор иконок (набор растеризуется до сохранения), редирект с адреса страницы и страница политики (`cookies.policyPage`), которой нет на сайте, — 409 с путём до поля |
-| `POST /api/sites/:siteId/settings/legal-pages` | `{ document: 'privacy' \| 'consent' }` — черновик страницы `/privacy` или `/consent` из шаблона (`legalPageContent`) с реквизитами организации и включёнными сервисами; 201 со страницей. Адрес занят — 409, страница не перезаписывается |
+| `POST /api/sites/:siteId/settings/legal-pages` | `{ document: 'privacy' \| 'consent', replaceDraft?: boolean }` — черновик страницы `/privacy` или `/consent` из шаблона (`legalPageContent`) с реквизитами организации и включёнными сервисами; 201 со страницей. Адрес занят — 409, страница не перезаписывается; с `replaceDraft: true` заменяется только черновик существующей страницы (200), опубликованная версия остаётся |
 
 Редактору, клиенту и токену API — 403. Подробно — [SEO](/averra-cms/admin/seo/),
 [Cookie и согласие](/averra-cms/admin/cookies/) и [решение](/averra-cms/decisions/seo-settings/).

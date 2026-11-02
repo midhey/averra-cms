@@ -31,7 +31,11 @@ import { effectiveSiteUrl, settingsRepo } from './repo'
 import { sameSitePathOf } from './same-site'
 
 const SiteParams = z.object({ siteId: Uuid() })
-const NewLegalPage = z.strictObject({ document: LegalDocument })
+const NewLegalPage = z.strictObject({
+  document: LegalDocument,
+  /** Страница уже есть: заменить её черновик свежим шаблоном (опубликованная версия остаётся) */
+  replaceDraft: z.boolean().optional(),
+})
 
 const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
 
@@ -234,7 +238,8 @@ export function settingsRoutes(deps: SettingsDeps) {
       // Политика конфиденциальности или согласие на обработку ПДн из шаблона: черновик страницы с
       // реквизитами организации и сервисами, которые на сайте включены. Черновик для владельца, а
       // не юридическая гарантия: в нём пометка «проверьте с юристом». Адрес занят — 409, ничего не
-      // перезаписываем: в странице могли быть правки юриста
+      // перезаписываем: в странице могли быть правки юриста. С `replaceDraft: true` заменяется только
+      // черновик существующей страницы, опубликованное остаётся до публикации человеком
       .post(
         '/legal-pages',
         validate('param', SiteParams),
@@ -242,7 +247,7 @@ export function settingsRoutes(deps: SettingsDeps) {
         validate('json', NewLegalPage),
         async (c) => {
           const { siteId } = c.req.valid('param')
-          const { document } = c.req.valid('json')
+          const { document, replaceDraft } = c.req.valid('json')
           const [found, settings] = await Promise.all([pages.find(siteId), repo.read(siteId)])
           if (!found || !settings) return c.json(notFound('Сайт не найден'), 404)
           const facts = await legalFacts(
@@ -254,12 +259,14 @@ export function settingsRoutes(deps: SettingsDeps) {
             deps.notify(),
           )
           const { slug, title } = legalPages[document]
-          const page = await pages.createPage(
-            siteId,
-            slug,
-            title,
-            legalPageContent(document, facts),
-          )
+          const content = legalPageContent(document, facts)
+          const exists = await pages.findPage(siteId, slug)
+          // Замена черновика — только по явной просьбе: без неё занятый адрес остаётся 409
+          if (exists && replaceDraft) {
+            const replaced = await pages.updateDraft(siteId, slug, title, content)
+            if (replaced) return c.json(replaced, 200)
+          }
+          const page = await pages.createPage(siteId, slug, title, content)
           if (!page) {
             const issues = [{ path: 'document', message: `Страница /${slug} уже есть` }]
             return c.json(

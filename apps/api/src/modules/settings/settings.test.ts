@@ -554,6 +554,47 @@ describe('cookie и согласие', () => {
     }
   })
 
+  it('replaceDraft заменяет только черновик существующей страницы, опубликованное остаётся', async () => {
+    const send = (body: unknown) =>
+      app.request(`${url}/legal-pages`, {
+        method: 'POST',
+        headers: json(owner.headers),
+        body: JSON.stringify(body),
+      })
+    try {
+      expect((await legal('privacy')).status).toBe(201)
+      const edit = await app.request(`/api/sites/${demoSiteId}/pages/privacy`, {
+        method: 'PUT',
+        headers: json(owner.headers),
+        body: JSON.stringify({
+          title: 'Политика',
+          content: {
+            blocks: [{ id: 'mine', type: 'text', props: { title: 'Моя', body: 'Правка' } }],
+          },
+        }),
+      })
+      expect(edit.status, await edit.clone().text()).toBe(200)
+      const publish = await app.request(`/api/sites/${demoSiteId}/pages/privacy/publish`, {
+        method: 'POST',
+        headers: json(owner.headers),
+      })
+      expect(publish.status, await publish.clone().text()).toBe(200)
+
+      // Без флага адрес занят: ничего не перезаписывается
+      expect((await send({ document: 'privacy' })).status).toBe(409)
+      const res = await send({ document: 'privacy', replaceDraft: true })
+      expect(res.status, await res.clone().text()).toBe(200)
+      const page = (await res.json()) as { draft: unknown; published: unknown }
+      expect(JSON.stringify(page.draft)).toContain('проверьте с юристом')
+      expect(JSON.stringify(page.published)).toContain('Правка')
+      // Страницы нет — флаг создаёт её, как обычно
+      await removePage('privacy')
+      expect((await send({ document: 'privacy', replaceDraft: true })).status).toBe(201)
+    } finally {
+      await removePage('privacy')
+    }
+  })
+
   it('шаблоны знают про форму в черновике и Telegram; выключенный канал — не упоминают', async () => {
     const formPage = {
       blocks: [
