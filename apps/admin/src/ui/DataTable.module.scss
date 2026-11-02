@@ -13,6 +13,20 @@
   position: relative;
   overflow-x: auto;
 
+  // Тень у края, за которым есть ещё колонки: видна, пока в ту сторону можно листать
+  // (background-attachment: local — без скриптов). Закрывающая заливка — цвет поверхности,
+  // тень — цвет рамки органа управления
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left center / ui.rem(32) 100%
+      no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right center / ui.rem(32) 100%
+      no-repeat local,
+    linear-gradient(to right, var(--color-control-border), transparent) left center / ui.rem(10)
+      100% no-repeat scroll,
+    linear-gradient(to left, var(--color-control-border), transparent) right center / ui.rem(10)
+      100% no-repeat scroll,
+    var(--color-surface);
+
   // Кольцо внутрь: снаружи его срезала бы соседняя раскладка
   &:focus-visible {
     outline-offset: ui.rem(-3);
@@ -21,12 +35,17 @@
 
 .table {
   width: 100%;
+
+  // Ширину задаёт DataTable через style; здесь — значение по умолчанию
+  --table-min-width: 40rem;
+
+  min-width: var(--table-min-width);
   font-size: var(--font-size-body);
   border-collapse: collapse;
 
   th,
   td {
-    padding: ui.rem(16) ui.rem(20);
+    padding: ui.rem(16) var(--cell-padding-inline, #{ui.rem(20)});
     text-align: start;
     vertical-align: middle;
     border-bottom: ui.rem(1) solid var(--color-border-subtle);
@@ -48,6 +67,11 @@
 
 .fixed {
   table-layout: fixed;
+}
+
+// Плотная таблица: поля у ячеек уже, чтобы 5–6 колонок помещались в рамку без прокрутки
+.compact {
+  --cell-padding-inline: #{ui.rem(12)};
 }
 
 .caption {
@@ -92,4 +116,121 @@
 
 .table .end {
   text-align: end;
+}
+
+// Действия строки не уезжают за край: прижаты к правой границе рамки поверх прокручиваемого
+.table .pinned {
+  position: sticky;
+  inset-inline-end: 0;
+  background: var(--color-surface);
+
+  // Тень у левого края прижатой колонки, пока под ней есть спрятанные колонки (DataTable ставит
+  // data-more). Рисуем псевдоэлементом: box-shadow у ячейки при border-collapse не виден
+  &::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 100%;
+    width: ui.rem(10);
+    pointer-events: none;
+    content: "";
+    background: linear-gradient(to left, var(--color-control-border), transparent);
+    opacity: 0;
+    transition: opacity var(--duration-fast) ease;
+  }
+}
+
+.scroller[data-more] .pinned::before {
+  opacity: 1;
+}
+
+// Телефон: строка — карточка. Заголовки колонок прячутся (остаются для диктора), значения идут
+// столбиком «подпись — значение»; действия — внизу карточки. Таблица не шире экрана, прокрутки нет
+@include ui.breakpoint-down(small) {
+  .scroller {
+    overflow-x: visible;
+    background: var(--color-surface);
+  }
+
+  .table {
+    min-width: 0;
+
+    &,
+    tbody,
+    tr {
+      display: block;
+    }
+
+    // Заголовки только для диктора (как .visually-hidden: скрыт визуально, не из дерева)
+    thead {
+      position: absolute;
+      width: ui.rem(1);
+      height: ui.rem(1);
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    tr {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-3);
+      align-items: center;
+      padding: ui.rem(14) ui.rem(16);
+      border-bottom: ui.rem(1) solid var(--color-border-subtle);
+    }
+
+    tbody tr:last-child {
+      border-bottom: 0;
+    }
+
+    th,
+    td {
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    // Название — на всю ширину карточки
+    .rowHeader {
+      flex: 1 1 100%;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    td {
+      display: flex;
+      gap: ui.rem(6);
+      align-items: baseline;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    td[data-label]::before {
+      flex-shrink: 0;
+      font-family: var(--font-sans);
+      font-size: var(--font-size-small);
+      color: var(--color-text-muted);
+      content: attr(data-label) ":";
+    }
+
+    // Колонка без подписи — действия: в конец, вправо
+    td:not([data-label]) {
+      margin-inline-start: auto;
+    }
+
+    // Карточка: все ячейки переносятся по любым символам, в том числе nowrap-колонки (почта):
+    // иначе длинный адрес раздвигал бы страницу вбок
+    .nowrap,
+    .rowHeader {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .pinned {
+      position: static;
+
+      &::before {
+        display: none;
+      }
+    }
+  }
 }

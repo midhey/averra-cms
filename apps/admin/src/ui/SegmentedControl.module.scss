@@ -49,9 +49,24 @@
   }
 }
 
+// Выключенный вариант («только просмотр»): подпись читаема, пунктир отличает от доступного
 .option:has(.input:disabled) {
+  color: var(--color-disabled-text);
   cursor: not-allowed;
-  opacity: 0.55;
+}
+
+// Пунктир — только у видов с собственной рамкой; у дорожки рамки нет (иначе сегмент получил бы
+// толстую рамку по умолчанию), там пунктиром обведена вся дорожка
+.cards .option:has(.input:disabled),
+.list .option:has(.input:disabled),
+.chips .option:has(.input:disabled) {
+  border-style: dashed;
+  border-color: var(--color-disabled-border);
+}
+
+.segments .options:has(.input:disabled) {
+  outline: ui.rem(1) dashed var(--color-disabled-border);
+  outline-offset: ui.rem(-1);
 }
 
 .label {
@@ -78,7 +93,7 @@
   color: var(--color-text-muted);
   border-radius: var(--radius-item);
 
-  &:hover {
+  &:hover:not(:has(.input:disabled)) {
     color: var(--color-text);
   }
 
@@ -120,11 +135,11 @@
   font-size: var(--font-size-caption);
   color: var(--color-text);
   background: var(--color-surface);
-  border: ui.rem(2) solid var(--color-border);
+  border: ui.rem(2) solid var(--color-control-border);
   border-radius: var(--radius-control);
 
-  &:hover {
-    border-color: var(--color-border-strong);
+  &:hover:not(:has(.input:disabled)) {
+    border-color: var(--color-control-border-hover);
   }
 
   &:has(.input:checked) {
@@ -273,7 +288,7 @@ $sketch-media-radius: ui.rem(3);
   border: ui.rem(1) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
 
-  &:hover {
+  &:hover:not(:has(.input:disabled)) {
     background: var(--color-surface-muted);
   }
 
@@ -310,11 +325,11 @@ $sketch-media-radius: ui.rem(3);
   color: var(--color-text);
   text-align: start;
   background: var(--color-surface);
-  border: ui.rem(2) solid var(--color-border);
+  border: ui.rem(2) solid var(--color-control-border);
   border-radius: var(--radius-control);
 
-  &:hover {
-    border-color: var(--color-border-strong);
+  &:hover:not(:has(.input:disabled)) {
+    border-color: var(--color-control-border-hover);
   }
 
   &:has(.input:checked) {

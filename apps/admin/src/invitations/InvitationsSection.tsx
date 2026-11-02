@@ -85,11 +85,17 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
   })
 
   const columns: Column<Invitation>[] = [
-    { key: 'email', header: 'Почта', wrap: 'nowrap', cell: (invitation) => invitation.email },
+    {
+      key: 'email',
+      header: 'Почта',
+      // Длинный адрес переносится, иначе состояние уезжало бы под прижатую колонку действий
+      wrap: 'anywhere',
+      minWidth: '14rem',
+      cell: (invitation) => invitation.email,
+    },
     {
       key: 'role',
       header: 'Роль',
-      wrap: 'nowrap',
       cell: (invitation) => roleLabels[invitation.role],
     },
     {
@@ -106,16 +112,16 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
       key: 'invitedBy',
       header: 'Пригласил',
       muted: true,
-      wrap: 'nowrap',
       cell: (invitation) => invitation.invitedBy ?? '—',
     },
     {
       key: 'expiresAt',
       header: 'Действует до',
       muted: true,
-      wrap: 'nowrap',
       cell: (invitation) => (
-        <time dateTime={invitation.expiresAt}>{formatDateTime(invitation.expiresAt)}</time>
+        <time dateTime={invitation.expiresAt}>
+          {wrapAtTime(formatDateTime(invitation.expiresAt))}
+        </time>
       ),
     },
     {
@@ -123,6 +129,7 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
       header: <span className="visually-hidden">Действия</span>,
       align: 'end',
       wrap: 'nowrap',
+      pinned: true,
       cell: (invitation) =>
         canRevoke(invitation.status) && (
           <Button
@@ -197,6 +204,7 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
           rows={invitations.data}
           rowKey={(invitation) => invitation.id}
           minWidth="48rem"
+          compact
           empty={
             <EmptyState title="Приглашений пока нет" icon="user" headingLevel={3}>
               Пригласите клиента или редактора формой выше.
@@ -319,4 +327,12 @@ function InviteForm({
       </form>
     </div>
   )
+}
+
+// Дата и время рвутся только между собой: внутри даты пробелы неразрывные, иначе «г.,» повисает
+// в начале второй строки
+function wrapAtTime(text: string) {
+  const comma = text.lastIndexOf(', ')
+  if (comma === -1) return text
+  return `${text.slice(0, comma).replaceAll(' ', ' ')}, ${text.slice(comma + 2)}`
 }

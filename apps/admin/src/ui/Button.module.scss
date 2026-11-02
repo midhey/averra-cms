@@ -29,20 +29,23 @@
 // Идёт действие: кнопка не бледнеет, как выключенная, а показывает спиннер
 .button[aria-busy="true"] {
   cursor: progress;
-  opacity: 1;
 }
 
+// Рамка есть у каждого вида, прозрачная у тех, что без неё: размер кнопки не прыгает при наведении
 .primary {
   color: var(--color-primary-text);
   background: var(--color-primary);
 }
 
+// Рамка вторичной кнопки — роль «граница органа управления», не меньше 3:1 к фону
 .secondary {
   color: var(--color-text);
   background: var(--color-surface);
-  border-color: var(--color-border);
+  border-color: var(--color-control-border);
 }
 
+// Ghost без рамки в покое: он читается как действие по тексту и значку. Рамка и заливка
+// появляются при наведении и фокусе — как у вторичной, и тоже не меньше 3:1
 .ghost {
   color: var(--color-text);
   background: transparent;
@@ -53,17 +56,65 @@
   background: transparent;
 }
 
-.primary:hover:not(:disabled, [aria-disabled="true"]) {
+// data-demo-state — только для витрины /dev/ui: показывает наведение и фокус без мыши.
+// Работает так же, как настоящие :hover и :focus-visible
+.primary:is(:hover, [data-demo-state="hover"]):not(:disabled, [aria-disabled="true"]) {
   background: var(--color-primary-hover);
 }
 
-.secondary:hover:not(:disabled, [aria-disabled="true"]),
-.ghost:hover:not(:disabled, [aria-disabled="true"]) {
-  background: var(--color-surface-muted);
+.secondary:is(:hover, [data-demo-state="hover"]):not(:disabled, [aria-disabled="true"]),
+.ghost:is(:hover, :focus-visible, [data-demo-state="hover"], [data-demo-state="focus"]):not(
+    :disabled,
+    [aria-disabled="true"]
+  ) {
+  background: var(--color-control-hover);
+  border-color: var(--color-control-border-hover);
 }
 
-.danger:hover:not(:disabled, [aria-disabled="true"]) {
+.secondary:active:not(:disabled, [aria-disabled="true"]),
+.ghost:active:not(:disabled, [aria-disabled="true"]) {
+  background: var(--color-control-active);
+}
+
+.danger:is(:hover, :focus-visible, [data-demo-state="hover"], [data-demo-state="focus"]):not(
+    :disabled,
+    [aria-disabled="true"]
+  ) {
   background: var(--color-danger-surface);
+  border-color: var(--color-danger-text);
+}
+
+.button[data-demo-state="focus"] {
+  @include ui.focus-ring;
+}
+
+// Выключена: серая плоская заливка, пунктирная рамка и курсор «нельзя» — отличается формой, а не
+// только цветом. Текст остаётся читаемым (роль disabled-text), прозрачности нет.
+// Идёт действие (aria-busy) — не выключена: у неё спиннер и обычный вид
+.button:is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
+  background: var(--color-disabled-surface);
+  border-color: var(--color-disabled-border);
+  border-style: dashed;
+}
+
+// У видов без рамки (ghost, danger) выключенная не получает коробку: иначе она выглядела бы
+// заметнее рабочих соседей, как нажатая. Фон и рамка прозрачны, признак — цвет disabled-text и
+// пунктирное подчёркивание подписи (у кнопки-иконки подписи нет, ей возвращается рамка, ниже)
+.ghost:is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]),
+.danger:is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline dashed;
+  text-decoration-thickness: ui.rem(1);
+  text-underline-offset: ui.rem(3);
+}
+
+// У кнопки-иконки подчёркивать нечего: чтобы выключенная отличалась не только цветом значка,
+// у неё остаётся пунктирное кольцо видимой рамки (disabled-border, 3:1 к поверхности)
+.iconOnly:is(.ghost, .danger):is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
+  border-color: var(--color-disabled-border);
 }
 
 .small {

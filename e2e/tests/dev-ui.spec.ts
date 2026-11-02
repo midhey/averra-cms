@@ -82,6 +82,176 @@ test.describe('витрина компонентов', () => {
     await expect(slug).toHaveValue(/-dalee$/u)
   })
 
+  test('кнопки: рамка вторичной не меньше 3:1, наведение и выключенность заметны', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    await expect(page.getByRole('heading', { name: 'Ряд состояний кнопок' })).toBeVisible()
+    // Замер в браузере строкой (типов DOM у e2e нет): контраст WCAG рамки с фоном вокруг кнопки
+    const read = async (index: number) =>
+      (await page.evaluate(`(() => {
+        const row = [...document.querySelectorAll('#button-states tbody tr')]
+          .find((tr) => tr.textContent.startsWith('Вторичная'))
+        const button = row.querySelectorAll('td button')[${index}]
+        const cs = getComputedStyle(button)
+        const parse = (s) => s.match(/[\\d.]+/g).slice(0, 3).map(Number)
+        const lum = (c) => c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 })
+          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0)
+        const ratio = (a, b) => { const [l, d] = [lum(a), lum(b)].sort((x, y) => y - x); return (l + 0.05) / (d + 0.05) }
+        const around = parse(getComputedStyle(row.closest('div')).backgroundColor)
+        return {
+          border: ratio(parse(cs.borderTopColor), around),
+          borderStyle: cs.borderTopStyle,
+          borderColor: cs.borderTopColor,
+          bg: cs.backgroundColor,
+          opacity: cs.opacity,
+        }
+      })()`)) as {
+        border: number
+        borderStyle: string
+        borderColor: string
+        bg: string
+        opacity: string
+      }
+    const rest = await read(0)
+    const hover = await read(1)
+    const disabled = await read(3)
+    expect(rest.border).toBeGreaterThanOrEqual(3)
+    // Наведение меняет и заливку, и рамку, рамка остаётся не слабее 3:1
+    expect(hover.bg).not.toBe(rest.bg)
+    expect(hover.borderColor).not.toBe(rest.borderColor)
+    expect(hover.border).toBeGreaterThanOrEqual(3)
+    // Выключенная отличается формой (пунктир), а не только цветом, и не прозрачна
+    expect(rest.borderStyle).toBe('solid')
+    expect(disabled.borderStyle).toBe('dashed')
+    expect(disabled.opacity).toBe('1')
+    // Фокус: кольцо видно
+    await expect(
+      page.locator('#button-states tbody tr').nth(1).locator('td button').nth(2),
+    ).toHaveCSS('outline-style', 'solid')
+  })
+
+  test('выключенная ghost и danger без коробки: фон и рамка прозрачны, подпись подчёркнута', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    await expect(page.getByRole('heading', { name: 'Ряд состояний кнопок' })).toBeVisible()
+    for (const name of ['Ghost', 'Опасная']) {
+      const style = (await page.evaluate(`(() => {
+        const row = [...document.querySelectorAll('#button-states tbody tr')]
+          .find((tr) => tr.textContent.startsWith(${JSON.stringify(name)}))
+        const cs = getComputedStyle(row.querySelectorAll('td button')[3])
+        return { bg: cs.backgroundColor, border: cs.borderTopColor, line: cs.textDecorationLine }
+      })()`)) as { bg: string; border: string; line: string }
+      expect(style.bg, name).toBe('rgba(0, 0, 0, 0)')
+      expect(style.border, name).toBe('rgba(0, 0, 0, 0)')
+      expect(style.line, name).toBe('underline')
+    }
+  })
+
+  test('флажок: рамка 3:1 к фону; нет состояния — кольцо; у прижатой колонки тень', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const probe = (await page.evaluate(`(() => {
+      const parse = (s) => s.match(/[0-9.]+/g).slice(0, 3).map(Number)
+      const lum = (c) => c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 })
+        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0)
+      const ratio = (a, b) => { const [l, d] = [lum(a), lum(b)].sort((x, y) => y - x); return (l + 0.05) / (d + 0.05) }
+      const box = document.querySelector('input[type=checkbox]:not(:checked):not(:disabled)')
+      const cs = getComputedStyle(box)
+      const neutral = [...document.querySelectorAll('[class*=neutral]')]
+        .map((el) => el.querySelector('[class*=indicator]')).find(Boolean)
+      return {
+        border: ratio(parse(cs.borderTopColor), parse(cs.backgroundColor)),
+        ring: neutral ? getComputedStyle(neutral).boxShadow : '',
+      }
+    })()`)) as { border: number; ring: string }
+    expect(probe.border).toBeGreaterThanOrEqual(3)
+    expect(probe.ring).not.toBe('none')
+    expect(probe.ring).not.toBe('')
+
+    // Прижатая колонка в узкой рамке: «Удалить» целиком в рамке, тень включена data-more
+    const frame = page.getByTestId('pinned-table').getByRole('group')
+    await expect(frame).toHaveAttribute('data-more')
+    await expect
+      .poll(() =>
+        page.evaluate(`(() => {
+          const button = document.querySelector('[data-testid=pinned-table] button')
+          return getComputedStyle(button.closest('td'), '::before').opacity
+        })()`),
+      )
+      .toBe('1')
+  })
+
+  test('выключенные список и дорожка читаемы: без прозрачности, без толстой рамки сегментов', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    const select = page.getByRole('combobox', { name: 'Список выключен' })
+    await expect(select).toBeDisabled()
+    // Chrome делает выключенный select прозрачным (0,7): подпись бледнеет ниже 4,5:1
+    await expect(select).toHaveCSS('opacity', '1')
+    const group = page.getByRole('group', { name: 'Ширина (только просмотр)' })
+    // Выбранный сегмент в покое уже «тёмный» и наведением не меняется: проверяем невыбранный
+    const segment = group.locator('label').filter({ hasText: 'Планшет' })
+    await expect(segment).toHaveCSS('border-top-width', '0px')
+    const track = page
+      .getByRole('group', { name: 'Ширина (только просмотр)' })
+      .locator('div')
+      .first()
+    await expect(track).toHaveCSS('outline-style', 'dashed')
+    // Наведение на выключенный вариант ничего не меняет: он не выглядит рабочим
+    const colorOf = () => segment.evaluate('(el) => getComputedStyle(el).color')
+    const before = await colorOf()
+    await segment.hover({ force: true })
+    // transition цвета короткий: ждём его конца, потом сверяем
+    await page.waitForTimeout(400)
+    expect(await colorOf()).toBe(before)
+  })
+
+  test('выключенная кнопка-иконка отличается формой: видимое пунктирное кольцо', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    await expect(page.getByRole('heading', { name: 'Ряд состояний кнопок' })).toBeVisible()
+    // Код выполняется в браузере строкой: типов DOM у e2e нет
+    const ring = (await page.evaluate(`(() => {
+      const row = [...document.querySelectorAll('#button-states tbody tr')]
+        .find((tr) => tr.textContent.startsWith('Иконка ghost'))
+      const button = row.querySelectorAll('td button')[3]
+      const cs = getComputedStyle(button)
+      const channels = (c) => c.match(/[\\d.]+/g).slice(0, 4).map(Number)
+      const lum = (c) => {
+        const [r, g, b] = channels(c).map((v) => {
+          const x = v / 255
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      let bg = button
+      while (bg && channels(getComputedStyle(bg).backgroundColor)[3] === 0) bg = bg.parentElement
+      const [hi, lo] = [lum(cs.borderTopColor), lum(getComputedStyle(bg).backgroundColor)].sort((x, y) => y - x)
+      return { style: cs.borderTopStyle, alpha: channels(cs.borderTopColor)[3] ?? 1, contrast: (hi + 0.05) / (lo + 0.05), label: button.getAttribute('aria-label') }
+    })()`)) as { style: string; alpha: number; contrast: number; label: string }
+    expect(ring.style).toBe('dashed')
+    // Рамка не прозрачна и заметна на фоне вокруг (WCAG 1.4.11)
+    expect(ring.alpha).toBeGreaterThan(0)
+    expect(ring.contrast).toBeGreaterThanOrEqual(3)
+    // Подпись для человека и диктора — по-русски
+    expect(ring.label).toBe('Иконка ghost: выключена')
+  })
+
+  test('точку «требует внимания» отличает форма: ромб', async ({ page }) => {
+    await page.goto('/dev/ui')
+    const clip = (await page.evaluate(`(() => {
+      const pill = [...document.querySelectorAll('[class*="warning"]')].find((el) => el.querySelector('[class*="indicator"]'))
+      return pill ? getComputedStyle(pill.querySelector('[class*="indicator"]')).clipPath : ''
+    })()`)) as string
+    expect(clip).toContain('polygon')
+  })
+
   test('поле с ошибкой остаётся красным и при наведении', async ({ page }) => {
     await page.goto('/dev/ui')
     const email = page.getByRole('textbox', { name: 'Почта для уведомлений' })

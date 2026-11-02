@@ -13,8 +13,8 @@
 
 .indicator {
   flex-shrink: 0;
-  width: ui.rem(7);
-  height: ui.rem(7);
+  width: ui.rem(8);
+  height: ui.rem(8);
   background: var(--status-indicator);
   border-radius: var(--radius-pill);
 }
@@ -26,8 +26,8 @@
   border-radius: var(--radius-pill);
 
   .indicator {
-    width: ui.rem(6);
-    height: ui.rem(6);
+    width: ui.rem(7);
+    height: ui.rem(7);
   }
 }
 
@@ -66,4 +66,18 @@
   --status-surface: var(--color-neutral-surface);
   --status-text: var(--color-neutral-text);
   --status-indicator: var(--color-neutral-indicator);
+}
+
+// «Нет состояния» — пустое кольцо, а не светлая точка: форма отличает его без цвета, а рамка — роль
+// границы органа управления (3:1), светлая точка сливалась с фоном
+.neutral .indicator {
+  background: transparent;
+  box-shadow: inset 0 0 0 ui.rem(1.5) var(--color-control-border);
+}
+
+// «Требует внимания» — ромб: янтарь с контрастом 3:1 к белому и к фону по светлоте почти не
+// отличается от зелёного, поэтому тон отличает форма, а не только цвет
+.warning .indicator {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }

@@ -67,6 +67,28 @@ const SHOWCASE_CATALOG = [
   ...customCatalog([starterCustomBlock('tariffs', 'Тарифы с наклейкой')]),
 ]
 
+const BUTTON_STATES = ['rest', 'hover', 'focus', 'disabled'] as const
+// Подписи состояний для людей: IconButton кладёт label в aria-label и title
+const STATE_LABELS = {
+  rest: 'обычная',
+  hover: 'наведение',
+  focus: 'фокус',
+  disabled: 'выключена',
+} as const satisfies Record<(typeof BUTTON_STATES)[number], string>
+const BUTTON_KINDS: ReadonlyArray<{
+  name: string
+  variant: 'primary' | 'secondary' | 'ghost' | 'danger'
+  label?: string
+  icon?: boolean
+}> = [
+  { name: 'Главная', variant: 'primary', label: 'Главная кнопка' },
+  { name: 'Вторичная', variant: 'secondary', label: 'Вторичная кнопка' },
+  { name: 'Ghost', variant: 'ghost', label: 'Ghost-кнопка' },
+  { name: 'Опасная', variant: 'danger', label: 'Опасная кнопка' },
+  { name: 'Иконка вторичная', variant: 'secondary', icon: true },
+  { name: 'Иконка ghost', variant: 'ghost', icon: true },
+]
+
 const SHOWCASE_TEMPLATE = [
   '<div class="plans">',
   '  <script>alert(1)</script>',
@@ -108,6 +130,7 @@ const SAMPLE_SVG_LOGO = `data:image/svg+xml,${encodeURIComponent(
 
 const sections = [
   { id: 'buttons', label: 'Кнопки', icon: 'overview' },
+  { id: 'button-states', label: 'Ряд состояний кнопок', icon: 'overview' },
   { id: 'fields', label: 'Поля', icon: 'pages' },
   { id: 'code', label: 'Свои блоки', icon: 'blocks' },
   { id: 'choice', label: 'Выбор', icon: 'check' },
@@ -341,6 +364,61 @@ export function UiShowcase() {
           </div>
         </Section>
 
+        <Section id="button-states" title="Ряд состояний кнопок">
+          <p className={styles.note}>
+            Каждый вид в четырёх состояниях: обычная, наведение, фокус, выключена. Наведение и фокус
+            показаны принудительно, настоящие работают так же.
+          </p>
+          <div className={styles.states}>
+            <table className={styles.statesTable}>
+              <caption className="visually-hidden">Состояния кнопок</caption>
+              <thead>
+                <tr>
+                  <td />
+                  {BUTTON_STATES.map((state) => (
+                    <th key={state} scope="col" className={styles.statesHead}>
+                      {STATE_LABELS[state].charAt(0).toUpperCase() + STATE_LABELS[state].slice(1)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUTTON_KINDS.map((kind) => (
+                  <tr key={kind.name}>
+                    <th scope="row" className={styles.statesHead}>
+                      {kind.name}
+                    </th>
+                    {BUTTON_STATES.map((state) => {
+                      const demo = state === 'hover' || state === 'focus' ? state : undefined
+                      return (
+                        <td key={state}>
+                          {kind.icon ? (
+                            <IconButton
+                              label={`${kind.name}: ${STATE_LABELS[state]}`}
+                              icon="trash"
+                              variant={kind.variant === 'ghost' ? 'ghost' : 'secondary'}
+                              disabled={state === 'disabled'}
+                              data-demo-state={demo}
+                            />
+                          ) : (
+                            <Button
+                              variant={kind.variant}
+                              disabled={state === 'disabled'}
+                              data-demo-state={demo}
+                            >
+                              {kind.label}
+                            </Button>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+
         <Section id="fields" title="Поля">
           <div className={styles.grid}>
             <TextArea
@@ -377,6 +455,10 @@ export function UiShowcase() {
               <option value="editor">Редактор</option>
             </Select>
             <TextInput label="Выключено" defaultValue="Нельзя изменить" disabled />
+            <Select label="Список выключен" defaultValue="client" disabled>
+              <option value="client">Клиент</option>
+              <option value="editor">Редактор</option>
+            </Select>
             <TextArea
               label="Описание длиннее предела"
               value="Слишком длинное описание страницы, которое не помещается в поиск"
@@ -393,6 +475,7 @@ export function UiShowcase() {
             />
             <Checkbox label="Обязательное поле" error="Отметьте флажок" />
             <Checkbox label="Выключен" disabled defaultChecked />
+            <Checkbox label="Выключен, без отметки" disabled />
           </div>
         </Section>
 
@@ -433,6 +516,17 @@ export function UiShowcase() {
             ]}
             value={device}
             onChange={setDevice}
+          />
+          {/* Выключенная дорожка («только просмотр»): пунктир вокруг дорожки, а не у каждого сегмента */}
+          <SegmentedControl
+            legend="Ширина (только просмотр)"
+            disabled
+            options={[
+              { value: 'phone', label: 'Телефон' },
+              { value: 'tablet', label: 'Планшет' },
+            ]}
+            value="phone"
+            onChange={() => {}}
           />
           {/* С переносом: в узкой колонке — сетка 2×2, подписи целиком (скругления темы) */}
           <div className={styles.narrow}>
@@ -739,6 +833,41 @@ export function UiShowcase() {
             rows={pages}
             rowKey={(page) => page.slug}
           />
+          {/* Узкая рамка: колонки не помещаются, «Удалить» прижата к краю, у края тень (data-more) */}
+          <div className={styles.narrowTable} data-testid="pinned-table">
+            <DataTable
+              caption="Страницы с прижатой колонкой действий"
+              columns={[
+                {
+                  key: 'title',
+                  header: 'Страница',
+                  wrap: 'nowrap',
+                  cell: (page: Page) => page.title,
+                },
+                { key: 'slug', header: 'Адрес', mono: true, cell: (page: Page) => page.slug },
+                {
+                  key: 'updated',
+                  header: 'Изменена',
+                  muted: true,
+                  cell: (page: Page) => page.updated,
+                },
+                {
+                  key: 'actions',
+                  header: <span className="visually-hidden">Действия</span>,
+                  align: 'end',
+                  wrap: 'nowrap',
+                  pinned: true,
+                  cell: (page: Page) => (
+                    <Button variant="danger" size="small" aria-label={`Удалить ${page.title}`}>
+                      Удалить
+                    </Button>
+                  ),
+                },
+              ]}
+              rows={pages}
+              rowKey={(page) => page.slug}
+            />
+          </div>
           <DataTable
             caption="Заявки"
             columns={[{ key: 'name', header: 'Имя', cell: (row: { name: string }) => row.name }]}

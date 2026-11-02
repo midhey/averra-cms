@@ -49,7 +49,11 @@
     @include ui.focus-ring;
   }
 
+  // «Только просмотр»: палитра не должна выглядеть рабочей
   &:disabled {
+    background: var(--color-disabled-surface);
+    border-color: var(--color-disabled-border);
+    border-style: dashed;
     cursor: not-allowed;
   }
 }

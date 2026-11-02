@@ -79,3 +79,29 @@ test('клиенту не видны «Новая страница», «Удал
   await expect(ed.saveButton).toBeVisible()
   await expect(ed.publishButton).toHaveCount(0)
 })
+
+test('клиенту «Только просмотр» на /theme и /header помечен, выключенные поля читаемы', async ({
+  page,
+  demoSite,
+}) => {
+  expect(demoSite.id).toBeTruthy()
+  await actAsClient(page)
+  for (const path of ['/theme', '/header']) {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    // Плашка с заголовком «Только просмотр» есть на экране
+    await expect(page.getByText('Только просмотр', { exact: true }).first()).toBeVisible()
+    if (path !== '/theme') continue
+    // Выключенное поле не бледнеет и отличается пунктиром, а не только цветом
+    const field = page.locator(
+      'input:disabled:not([type=color], [type=radio], [type=checkbox]), select:disabled',
+    )
+    await expect(field.first()).toBeVisible()
+    await expect(field.first()).toHaveCSS('opacity', '1')
+    await expect(field.first()).toHaveCSS('border-top-style', 'dashed')
+  }
+  // Палитра в режиме просмотра тоже не выглядит рабочей
+  await page.goto('/theme')
+  const picker = page.locator('input[type=color]:disabled').first()
+  await expect(picker).toHaveCSS('border-top-style', 'dashed')
+})

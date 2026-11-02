@@ -248,7 +248,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
         noValidate
       >
         {readOnly && (
-          <InlineAlert tone="info">
+          <InlineAlert tone="info" title="Только просмотр">
             Тему меняют владелец и редактор сайта: смена темы пересобирает весь сайт.
           </InlineAlert>
         )}

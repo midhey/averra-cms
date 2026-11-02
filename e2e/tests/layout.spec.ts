@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { demo, editor, expect, sidebar, test } from './fixtures'
+import { demo, editor, expect, sidebar, sites, test } from './fixtures'
 
 // Оболочка и экраны на ширине телефона: нет горизонтальной прокрутки страницы, меню открывается
 // кнопкой и закрывается Esc. И что панель прячет от роли (подмена роли в ответах API, как
@@ -121,7 +121,8 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   await expect(ed.inspector).toBeHidden()
   await expect(ed.previewFrame).toBeHidden()
 
-  // Полоса редактора — в две строки: полям с экранной клавиатурой остаётся высота
+  // Полоса редактора — две строки (название, действия), с длинным состоянием между ними ещё
+  // одна, но тонкая: полям с экранной клавиатурой остаётся высота
   const topbarHeight = () =>
     page
       .getByRole('banner')
@@ -129,9 +130,9 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
         (el: { getBoundingClientRect: () => { height: number } }) =>
           el.getBoundingClientRect().height,
       )
-  expect(Number(await topbarHeight())).toBeLessThanOrEqual(112)
+  expect(Number(await topbarHeight())).toBeLessThanOrEqual(124)
   await page.setViewportSize({ width: 320, height: 640 })
-  expect(Number(await topbarHeight())).toBeLessThanOrEqual(112)
+  expect(Number(await topbarHeight())).toBeLessThanOrEqual(124)
   expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
   await page.setViewportSize({ width: 375, height: 812 })
 
@@ -183,4 +184,98 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
     page.getByRole('complementary', { name: 'SEO страницы' }).getByLabel('Описание'),
   ).toBeVisible()
   expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
+})
+
+test('редактор на 375 px: название страницы не налезает на состояние', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  const ed = editor(page)
+  await ed.open()
+  // Длинное название и самое длинное состояние («Есть несохранённые правки…»)
+  await page
+    .getByRole('textbox', { name: 'Заголовок страницы' })
+    .fill('Очень длинное название страницы, которое не помещается')
+  const boxes = (await page.evaluate(`(() => {
+    const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+    return {
+      title: rect(document.querySelector('input[title^="Заголовок страницы"]')),
+      status: rect(document.querySelector('header [role=status]')),
+    }
+  })()`)) as Record<
+    'title' | 'status',
+    { left: number; right: number; top: number; bottom: number }
+  >
+  const { title, status } = boxes
+  // Состояние стоит отдельной строкой под названием, а название не сжато до обрубка (раньше при
+  // nowrap оно ужималось до ~96 px и читалось как «рое не по»: рамки не пересекались, но поле
+  // было бесполезным)
+  const where = `название ${JSON.stringify(title)}, состояние ${JSON.stringify(status)}`
+  expect(status.top, where).toBeGreaterThanOrEqual(title.bottom - 1)
+  expect(title.right - title.left, where).toBeGreaterThanOrEqual(200)
+  expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
+})
+
+test('вкладки на 375 px: выбранная вкладка не прячется за краем полосы', async ({
+  page,
+  demoSite,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  const key = `tabs-${Date.now()}`
+  const created = await sites[':siteId']['custom-blocks'].$post({
+    param: { siteId: demoSite.id },
+    json: { key, title: 'Вкладки' },
+  })
+  expect(created.status).toBe(201)
+  await page.goto(`/blocks/${key}`)
+  const tabs = page.getByRole('tablist').first()
+  await expect(tabs.getByRole('tab')).toHaveCount(6)
+  const last = tabs.getByRole('tab').last()
+  await last.click()
+  await expect(last).toBeInViewport({ ratio: 1 })
+  // Назад по клавише Home: первая вкладка снова целиком на виду
+  await page.keyboard.press('Home')
+  await expect(tabs.getByRole('tab').first()).toBeInViewport({ ratio: 1 })
+  // Тень у края: полоса листается, и у неё градиент-подсказка (приём background-attachment)
+  const strip = (await page.evaluate(`(() => {
+    const el = document.querySelector('[role=tablist]')
+    return {
+      scrolls: el.scrollWidth > el.clientWidth,
+      image: getComputedStyle(el).backgroundImage,
+    }
+  })()`)) as { scrolls: boolean; image: string }
+  expect(strip.scrolls).toBe(true)
+  expect(strip.image.match(/linear-gradient/gu)?.length).toBe(4)
+})
+
+test('редактор на 375 px: заливка края вкладок — цвет полосы, а не страницы', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await editor(page).open()
+  const colors = (await page.evaluate(`(() => {
+    const list = document.querySelector('[role=tablist]')
+    const strip = list.parentElement
+    const own = getComputedStyle(list)
+    const holder = [...document.querySelectorAll('*')].find((el) =>
+      getComputedStyle(el).getPropertyValue('--tabs-backdrop').trim())
+    const probe = document.createElement('i')
+    probe.style.color = own.getPropertyValue('--tabs-cover')
+    list.append(probe)
+    const cover = getComputedStyle(probe).color
+    probe.remove()
+    const backdrop = getComputedStyle(holder).backgroundColor
+    return { cover, backdrop, same: Boolean(holder && strip) }
+  })()`)) as { cover: string; backdrop: string; same: boolean }
+  expect(colors.cover).toBe(colors.backdrop)
+})
+
+test('активный пункт меню: полоска слева, жирный шрифт, не только заливка', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  const current = page.locator('nav a[aria-current=page]').first()
+  await expect(current).toBeVisible()
+  await expect(current).toHaveCSS('font-weight', '600')
+  const bar = (await page.evaluate(`(() => {
+    const cs = getComputedStyle(document.querySelector('nav a[aria-current=page]'), '::before')
+    return { color: cs.backgroundColor, width: cs.width }
+  })()`)) as { color: string; width: string }
+  expect(bar.color).not.toBe('rgba(0, 0, 0, 0)')
+  expect(bar.width).toBe('3px')
 })

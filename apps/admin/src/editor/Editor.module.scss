@@ -71,11 +71,6 @@
   gap: ui.rem(4) ui.rem(10);
   align-items: center;
   min-width: 0;
-
-  // Телефон: состояние в той же строке, заголовок сжимается с многоточием
-  @include ui.breakpoint-down(small) {
-    flex-wrap: nowrap;
-  }
 }
 
 // Поле заголовка и карандаш за ним — одним куском: плашка состояния переносится целиком
@@ -197,6 +192,8 @@
 }
 
 .tabs {
+  --tabs-backdrop: var(--color-surface-sidebar);
+
   padding-inline: var(--space-3);
   background: var(--color-surface-sidebar);
 }

@@ -327,7 +327,7 @@ function HeaderEditor(props: EditorProps) {
         noValidate
       >
         {readOnly && (
-          <InlineAlert tone="info">
+          <InlineAlert tone="info" title="Только просмотр">
             Шапку, меню и подвал меняют владелец и редактор сайта: их публикация пересобирает весь
             сайт.
           </InlineAlert>

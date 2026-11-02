@@ -1,4 +1,4 @@
-import type { Key, ReactNode } from 'react'
+import { type CSSProperties, type Key, type ReactNode, useEffect, useRef, useState } from 'react'
 import { cx } from './cx'
 import styles from './DataTable.module.scss'
 
@@ -19,7 +19,51 @@ export type Column<Row> = {
   wrap?: 'anywhere' | 'nowrap'
   /** Ширина колонки (%, rem) — для таблицы с fixed: остаток делят колонки без ширины */
   width?: string
+  /**
+   * Наименьшая ширина колонки (rem): с wrap anywhere длинная почта сжимается, а обычная не рвётся
+   * на буквы. Задаётся заголовку, ячейки следуют за ним
+   */
+  minWidth?: string
+  /**
+   * Колонка прижата к правому краю рамки и не уезжает при прокрутке вбок: действия строки
+   * («Отозвать», «Удалить») всегда на виду. Годится последней колонке
+   */
+  pinned?: boolean
+  /**
+   * Подпись значения в карточке на телефоне. По умолчанию — заголовок, если он строка; у
+   * колонки без подписи (действия) значение стоит без неё
+   */
+  label?: string
 }
+
+/**
+ * Есть ли справа ещё не показанные колонки. Нужно прижатой колонке действий: её тень (CSS не
+ * знает, прокручивается ли область) рисуется, только когда под ней что-то спрятано
+ */
+function useMoreAtEnd(shown: boolean) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    // Область появляется не сразу: пока строк нет, вместо неё показан empty
+    const el = ref.current
+    if (!shown || !el) return
+    const update = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    observer?.observe(el)
+    if (el.firstElementChild) observer?.observe(el.firstElementChild)
+    return () => {
+      el.removeEventListener('scroll', update)
+      observer?.disconnect()
+    }
+  }, [shown])
+  return [ref, more] as const
+}
+
+/** Подпись значения в карточке: свой label, иначе заголовок-строка */
+const labelOf = <Row,>(column: Column<Row>) =>
+  column.label ?? (typeof column.header === 'string' ? column.header : undefined)
 
 type DataTableProps<Row> = {
   /** Что в таблице: подпись таблицы и области прокрутки для диктора */
@@ -38,12 +82,15 @@ type DataTableProps<Row> = {
    * своей колонки и не раздвигает таблицу шире рамки (очередь писем)
    */
   layout?: 'auto' | 'fixed'
+  /** Плотная: меньше поля у ячеек — для таблиц с 5–6 колонками (приглашения) */
+  compact?: boolean
 }
 
 /**
  * Таблица: колонки описываются данными, первая ячейка строки — её заголовок (th scope="row").
- * На узком экране прокручивается внутри своей рамки, а не всей страницей; область прокрутки
- * (группа с подписью) в порядке Tab — её можно листать стрелками с клавиатуры
+ * Шире 40rem прокручивается внутри своей рамки (край с продолжением подсвечен, действия
+ * прижаты), а не всей страницей; область прокрутки (группа с подписью) в порядке Tab — её можно
+ * листать стрелками. На телефоне строка — карточка: название, затем «подпись: значение» и действия
  */
 export function DataTable<Row>({
   caption,
@@ -54,7 +101,9 @@ export function DataTable<Row>({
   empty,
   minWidth = '40rem',
   layout = 'auto',
+  compact = false,
 }: DataTableProps<Row>) {
+  const [scrollerRef, more] = useMoreAtEnd(!(rows.length === 0 && empty))
   if (rows.length === 0 && empty) return <div className={styles.frame}>{empty}</div>
   return (
     // Группа, а не region: таблица стоит в разделе экрана с тем же именем, и два ориентира
@@ -64,10 +113,15 @@ export function DataTable<Row>({
       role="group"
       className={cx(styles.frame, styles.scroller)}
       aria-label={caption}
+      ref={scrollerRef}
+      data-more={more || undefined}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: прокручиваемая область должна быть доступна с клавиатуры
       tabIndex={0}
     >
-      <table className={cx(styles.table, layout === 'fixed' && styles.fixed)} style={{ minWidth }}>
+      <table
+        className={cx(styles.table, layout === 'fixed' && styles.fixed, compact && styles.compact)}
+        style={{ '--table-min-width': minWidth } as CSSProperties}
+      >
         <caption className={showCaption ? styles.caption : 'visually-hidden'}>{caption}</caption>
         {columns.some((column) => column.width) && (
           <colgroup>
@@ -79,7 +133,12 @@ export function DataTable<Row>({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key} scope="col" className={cx(column.align === 'end' && styles.end)}>
+              <th
+                key={column.key}
+                scope="col"
+                className={cx(column.align === 'end' && styles.end, column.pinned && styles.pinned)}
+                style={column.minWidth ? { minWidth: column.minWidth } : undefined}
+              >
                 {column.header}
               </th>
             ))}
@@ -95,13 +154,14 @@ export function DataTable<Row>({
                   column.align === 'end' && styles.end,
                   column.wrap === 'anywhere' && styles.wrapAnywhere,
                   column.wrap === 'nowrap' && styles.nowrap,
+                  column.pinned && styles.pinned,
                 )
                 return index === 0 ? (
                   <th key={column.key} scope="row" className={cx(styles.rowHeader, className)}>
                     {column.cell(row)}
                   </th>
                 ) : (
-                  <td key={column.key} className={className}>
+                  <td key={column.key} className={className} data-label={labelOf(column)}>
                     {column.cell(row)}
                   </td>
                 )

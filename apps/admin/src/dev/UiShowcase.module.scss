@@ -135,3 +135,39 @@
 .themeSwatch {
   width: ui.rem(96);
 }
+
+.note {
+  max-width: ui.rem(640);
+  color: var(--color-text-muted);
+}
+
+// Ряды «вид кнопки × состояние»: на телефоне таблица листается внутри своей рамки
+.states {
+  max-width: 100%;
+  padding: var(--space-2);
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: ui.rem(1) solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.statesTable {
+  min-width: ui.rem(760);
+  border-collapse: separate;
+  border-spacing: var(--space-3);
+
+  th {
+    text-align: start;
+  }
+}
+
+.statesHead {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+// Узкая рамка для примера прижатой колонки действий: таблица шире неё и листается
+.narrowTable {
+  max-width: ui.rem(420);
+}

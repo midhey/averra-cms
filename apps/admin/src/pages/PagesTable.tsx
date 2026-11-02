@@ -93,6 +93,7 @@ export function PagesTable({ pages, actions, empty }: PagesTableProps) {
       header: <span className="visually-hidden">Действия</span>,
       align: 'end',
       wrap: 'nowrap',
+      pinned: true,
       cell: actions,
     })
   }

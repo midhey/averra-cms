@@ -59,6 +59,25 @@ describe('DataTable', () => {
     expect(document.activeElement).toBe(region)
   })
 
+  it('значения подписаны для карточки на телефоне, действия — без подписи', () => {
+    render(
+      <DataTable
+        caption="Приглашения"
+        columns={[
+          ...columns,
+          { key: 'note', header: <span>Заметка</span>, label: 'Заметка', cell: () => 'ок' },
+          { key: 'actions', header: <span>Действия</span>, pinned: true, cell: () => 'Удалить' },
+        ]}
+        rows={[{ title: 'Главная', slug: '/' }]}
+        rowKey={(page) => page.slug}
+      />,
+    )
+    const cells = within(screen.getByRole('table', { name: 'Приглашения' })).getAllByRole('cell')
+    expect(cells.map((cell) => cell.getAttribute('data-label'))).toEqual(['Адрес', 'Заметка', null])
+    // Действия прижаты к краю: на узком экране рамки они не уезжают за прокрутку
+    expect(cells[2]?.className).toContain('pinned')
+  })
+
   it('пустая — вместо таблицы пустое состояние', () => {
     render(
       <DataTable
