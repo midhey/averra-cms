@@ -8,7 +8,7 @@
       {% if text %}<p class="cta-text">{{ text | newline_to_br }}</p>{% endif %}
       <a class="cta-accent" href="{{ button | link }}"{% if note %} aria-describedby="{{ block.id }}-note"{% endif %}>{{ button.label }} <span aria-hidden="true">→</span></a>
       {% if note %}<p class="signup__note" id="{{ block.id }}-note">{{ note | newline_to_br }}</p>{% endif %}
-      {% if telegram %}<a class="signup__alt" href="{{ telegram | link }}">{{ telegram.label }}</a>{% endif %}
+      {% if telegram %}{% assign telegram_href = telegram | link %}<a class="signup__alt" href="{{ telegram_href }}"{% if telegram_href contains '://' %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ telegram.label }}</a>{% endif %}
     </div>
   </div>
 </div>

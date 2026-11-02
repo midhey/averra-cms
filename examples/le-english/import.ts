@@ -26,6 +26,8 @@ const usage = `Перенос сайта le-english на Averra через API.
   --email <почта>    владелец установки
   --site-url <адрес> адрес сайта https://домен (canonical и карта сайта)
   --logo <файл>      логотип для шапки (по умолчанию assets/logo.svg рядом со скриптом)
+  --rebuild-documents  заменить черновики /privacy и /consent свежим шаблоном, даже если их правили (опубликованное остаётся)
+                     (без флага — только черновик политики, не описывающий форму заявки)
   --publish          опубликовать страницы, тему, шапку и подвал (без флага — только черновики);
                      сработает, только когда /privacy и /consent уже опубликованы: форма записи
                      собирает персональные данные
@@ -73,6 +75,7 @@ async function main() {
       'site-url': { type: 'string' },
       logo: { type: 'string' },
       publish: { type: 'boolean', default: false },
+      'rebuild-documents': { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -106,6 +109,7 @@ async function main() {
     ...(existsSync(logo) && { logoFile: logo }),
     ...(values['site-url'] && { siteUrl: values['site-url'] }),
     publish: values.publish,
+    rebuildDocuments: values['rebuild-documents'],
     log: (line) => console.log(line),
   })
 

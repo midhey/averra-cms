@@ -84,6 +84,7 @@ export function createClient({ baseUrl, origin, fetch = globalThis.fetch }: Clie
   return {
     get: <T>(path: string) => call<T>('GET', path).then((r) => r.body),
     put: <T>(path: string, json: unknown) => call<T>('PUT', path, { json }).then((r) => r.body),
+    delete: (path: string) => call('DELETE', path).then((r) => r.body),
     patch: <T>(path: string, json: unknown) => call<T>('PATCH', path, { json }).then((r) => r.body),
     post: <T>(path: string, json?: unknown) =>
       call<T>('POST', path, json === undefined ? undefined : { json }).then((r) => r.body),

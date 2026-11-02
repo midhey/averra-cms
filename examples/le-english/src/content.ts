@@ -37,7 +37,8 @@ export function photosOf(content: Json): Photo[] {
 }
 
 /** Куда ведут кнопки «Записаться»: страница с формой заявки Averra */
-export const SIGNUP_HREF = '/zapis'
+// Со слэшем в конце: так страницу отдаёт сервер сайта, а без него был бы лишний редирект 308
+export const SIGNUP_HREF = '/zapis/'
 
 /** Секции главной по порядку страницы и их id: на них ссылается меню шапки */
 export const SECTIONS = [
@@ -212,11 +213,12 @@ export function signupFormProps(content: Json) {
         type: 'select',
         label: 'Где тебе удобнее общаться',
         required: true,
+        // Вид связи — как каналы исходного сайта: по нему сервер проверяет контакт
         options: [
-          { label: 'Telegram' },
-          { label: 'ВКонтакте' },
-          { label: 'Телефон' },
-          { label: 'Почта' },
+          { label: 'Telegram', contact: 'telegram' },
+          { label: 'ВКонтакте', contact: 'vk' },
+          { label: 'Телефон', contact: 'phone' },
+          { label: 'Почта', contact: 'email' },
         ],
       },
       {
@@ -224,6 +226,7 @@ export function signupFormProps(content: Json) {
         type: 'text',
         label: 'Как с тобой связаться',
         required: true,
+        contactBy: 'channel',
         hint: 'Ник в Telegram, ссылка на страницу ВКонтакте, номер телефона или почта — смотря что выбрано выше.',
       },
     ],
@@ -231,8 +234,8 @@ export function signupFormProps(content: Json) {
     successText:
       'Заявка у меня. Свяжусь с тобой в течение дня — договоримся о времени первого урока.',
     consentText: 'Даю согласие на обработку персональных данных',
-    policyUrl: '/privacy',
-    consentUrl: '/consent',
+    policyUrl: '/privacy/',
+    consentUrl: '/consent/',
   }
 }
 

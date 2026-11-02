@@ -13,6 +13,7 @@
   --stripe-a: #e6dccb;
   --stripe-b: #ded2be;
   --shadow-ink: rgba(30, 43, 37, 0.18);
+  --shadow-ink-lift: rgba(30, 43, 37, 0.3);
   --shape-tape: polygon(0 12%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
   --shape-torn: polygon(
     0 0,
@@ -125,7 +126,9 @@
 }
 
 .cta-dark:hover {
-  filter: brightness(1.18);
+  /* Как у оригинала: #213d32 → около #2c4a3e (×1.25), заметность дают подъём и тень выше */
+  filter: brightness(1.25);
+  box-shadow: 0 14px 28px var(--shadow-ink-lift);
   color: var(--color-on-accent);
 }
 
@@ -378,6 +381,7 @@
   .cta-dark {
     transition:
       translate 0.25s ease,
+      box-shadow 0.25s ease,
       filter 0.2s ease;
   }
   .cta-dark:hover {

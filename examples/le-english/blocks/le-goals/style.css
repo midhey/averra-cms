@@ -164,6 +164,21 @@
   border-radius: 6px;
 }
 
+/* Флажок переворачивает только пробел, Enter не работает: без скрипта это не обойти. Поэтому при
+   фокусе с клавиатуры подпись внутри карточки меняется на «пробел — перевернуть»; промежутки
+   между рядами остаются как в оригинале */
+.goal-card__by-key {
+  display: none;
+}
+
+.goal-card__toggle:focus-visible ~ .goal-card__inner .goal-card__by-key {
+  display: inline;
+}
+
+.goal-card__toggle:focus-visible ~ .goal-card__inner .goal-card__by-mouse {
+  display: none;
+}
+
 .goal-card__inner {
   position: absolute;
   inset: 0;
@@ -356,6 +371,10 @@
 }
 
 @media (max-width: 540px) {
+  .section-title {
+    font-size: clamp(30px, 8vw, 40px);
+    line-height: 1.15;
+  }
   .goals__board {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;

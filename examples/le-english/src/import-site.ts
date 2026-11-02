@@ -35,6 +35,12 @@ export type ImportOptions = {
    * опубликованы человеком: иначе ссылки формы вели бы на 404
    */
   publish: boolean
+  /**
+   * Заменить черновики /privacy и /consent свежим шаблоном, даже если их правили (правки в
+   * черновике пропадут). Опубликованная версия остаётся до публикации человеком. Без флага
+   * черновик пересобирается, только если политика не описывает форму заявки
+   */
+  rebuildDocuments?: boolean
   log?: (line: string) => void
 }
 
@@ -45,12 +51,29 @@ export type ImportResult = {
   warnings: string[]
   pages: string[]
   legalDrafts: string[]
+  /** Документы, чей черновик заменён свежим шаблоном */
+  rebuiltDocuments: string[]
+  /** Опубликованные документы, которые говорят «нет форм заявок»: правит и публикует человек */
+  staleDocuments: string[]
   published: boolean
   /** Документы, которые надо опубликовать в админке, прежде чем публиковать сайт с формой */
   missingDocuments: string[]
 }
 
 type Json = Record<string, unknown>
+
+type PageRecord = { draft: unknown; published: unknown }
+
+/**
+ * Документ явно врёт про форму: в нём есть фраза шаблона «на нём нет форм заявок» (политика
+ * создана до страницы /zapis). Признак — именно эта фраза, а не отсутствие слов про форму:
+ * юрист вправе переписать раздел как угодно, и его текст не считается ложью. Если про форму в
+ * тексте просто ничего не нашлось, скрипт только предупреждает
+ */
+const NO_FORMS_PHRASE = 'нет форм заявок'
+const claimsNoForms = (document: string, value: unknown) =>
+  document === 'privacy' && JSON.stringify(value ?? null).includes(NO_FORMS_PHRASE)
+const mentionsForm = (value: unknown) => /форм/i.test(JSON.stringify(value ?? null))
 
 const MIME: Record<string, string> = {
   webp: 'image/webp',
@@ -190,21 +213,6 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   })
   log('Настройки: название, описание, организация, редиректы со старых адресов документов')
 
-  // ── Политика и согласие: черновики из шаблона Averra ────────────────────────────────────────
-  const legalDrafts: string[] = []
-  for (const document of DOCUMENTS) {
-    const res = await client.postTolerant(`${base}/settings/legal-pages`, { document }, [409])
-    legalDrafts.push(document)
-    log(
-      res.status === 201
-        ? `Документ /${document}: черновик создан`
-        : `Документ /${document}: уже есть`,
-    )
-  }
-  await client.patch(`${base}/settings`, {
-    cookies: { ...current.settings.cookies, policyPage: 'privacy' },
-  })
-
   // ── Страницы ────────────────────────────────────────────────────────────────────────────────
   await client.put(`${base}/pages/index`, {
     title: 'Vallex English',
@@ -228,6 +236,61 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   })
   log('Страница zapis: черновик сохранён')
 
+  // ── Политика и согласие: черновики из шаблона Averra ────────────────────────────────────────
+  // Только после страниц: шаблон собирается по фактам сайта в момент создания (есть ли форма,
+  // какие сервисы), и политика, созданная до страницы /zapis, говорила бы «на сайте нет форм»
+  const legalDrafts: string[] = []
+  const rebuiltDocuments: string[] = []
+  const staleDocuments: string[] = []
+  const existing = await client.get<{ slug: string; publishedAt: string | null }[]>(`${base}/pages`)
+  for (const document of DOCUMENTS) {
+    const found = existing.find((page) => page.slug === document)
+    if (!found) {
+      await client.post(`${base}/settings/legal-pages`, { document })
+      legalDrafts.push(document)
+      log(`Документ /${document}: черновик создан`)
+      continue
+    }
+    legalDrafts.push(document)
+    const page = await client.get<PageRecord>(`${base}/pages/${document}`)
+    const published = found.publishedAt !== null
+    const draftStale = claimsNoForms(document, page.draft)
+    // Что видят посетители: у опубликованного документа — опубликованный текст
+    const liveStale = published && claimsNoForms(document, page.published)
+    // Черновик пересобираем, только если он прямо говорит «форм нет» (создан до страницы /zapis)
+    // или владелец попросил флагом. Любую другую правку, в том числе переписанный раздел про
+    // форму, не трогаем: черновики не попадают в историю версий, затёртое не вернуть
+    if (draftStale || options.rebuildDocuments) {
+      await client.post(`${base}/settings/legal-pages`, { document, replaceDraft: true })
+      rebuiltDocuments.push(document)
+      log(
+        published
+          ? `Документ /${document}: черновик заменён свежим шаблоном, опубликованная версия остаётся — проверьте и опубликуйте`
+          : `Документ /${document}: черновик пересобран из шаблона`,
+      )
+    } else {
+      log(
+        published
+          ? `Документ /${document}: опубликован, не трогаю`
+          : `Документ /${document}: правили вручную, не трогаю (пересобрать — флаг --rebuild-documents)`,
+      )
+    }
+    if (liveStale) staleDocuments.push(document)
+    else if (document === 'privacy' && !mentionsForm(published ? page.published : page.draft)) {
+      log(
+        `Предупреждение: в /${document} не нашлось слов про форму заявки. Проверьте, что текст описывает форму записи`,
+      )
+    }
+  }
+  for (const document of staleDocuments) {
+    log(
+      `ВНИМАНИЕ: опубликованный /${document} говорит, что на сайте нет форм заявок. Откройте его в «Страницах», исправьте раздел про заявки и опубликуйте (или запустите скрипт с --rebuild-documents: черновик заменится свежим шаблоном)`,
+    )
+  }
+  await client.patch(`${base}/settings`, {
+    cookies: { ...current.settings.cookies, policyPage: 'privacy' },
+  })
+
   // ── Шапка и подвал ──────────────────────────────────────────────────────────────────────────
   const logo =
     options.logoFile && existsSync(options.logoFile) ? await uploadFile(options.logoFile) : null
@@ -244,10 +307,14 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   const missingDocuments = DOCUMENTS.filter(
     (slug) => !listed.some((page) => page.slug === slug && page.publishedAt !== null),
   ).map((slug) => `/${slug}`)
-  const publish = options.publish && missingDocuments.length === 0
-  if (options.publish && !publish) {
+  const publish = options.publish && missingDocuments.length === 0 && staleDocuments.length === 0
+  if (options.publish && missingDocuments.length > 0) {
     log(
       `Сайт не опубликован: форма записи собирает персональные данные, а ${missingDocuments.join(' и ')} — черновики. Проверьте их в админке, опубликуйте и запустите скрипт с --publish ещё раз`,
+    )
+  } else if (options.publish && staleDocuments.length > 0) {
+    log(
+      'Сайт не опубликован: политика всё ещё говорит, что форм на сайте нет («нет форм заявок»). Поправьте её (см. предупреждение выше) и запустите скрипт с --publish ещё раз',
     )
   }
   if (publish) {
@@ -265,6 +332,8 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     warnings,
     pages: ['index', 'zapis'],
     legalDrafts,
+    rebuiltDocuments,
+    staleDocuments,
     published: publish,
     missingDocuments,
   }

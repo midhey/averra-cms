@@ -40,6 +40,6 @@ export const footer = { layout: 'simple', tone: 'surface', sections: false }
 
 /** Старые адреса документов исходного сайта → страницы документов Averra */
 export const redirects = [
-  { from: '/politika', to: '/privacy' },
-  { from: '/soglasie', to: '/consent' },
+  { from: '/politika', to: '/privacy/' },
+  { from: '/soglasie', to: '/consent/' },
 ]

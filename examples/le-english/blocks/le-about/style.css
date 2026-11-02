@@ -204,6 +204,10 @@
 }
 
 @media (max-width: 540px) {
+  .section-title {
+    font-size: clamp(30px, 8vw, 40px);
+    line-height: 1.15;
+  }
   .about__media {
     width: 84%;
   }

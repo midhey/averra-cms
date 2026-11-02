@@ -330,6 +330,10 @@ picture.review__avatar img {
 }
 
 @media (max-width: 540px) {
+  .section-title {
+    font-size: clamp(30px, 8vw, 40px);
+    line-height: 1.15;
+  }
   :scope {
     padding: 56px 24px 64px;
   }

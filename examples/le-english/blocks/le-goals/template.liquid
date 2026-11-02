@@ -19,7 +19,7 @@
           <h3 class="goal-card__title">{{ card.title }}</h3>
           <p class="goal-card__text">{{ card.text | newline_to_br }}</p>
           <div class="goal-card__photo">{% if card.photo %}{{ card.photo | image: '(min-width: 820px) 240px, (min-width: 541px) 45vw, 90vw', 'goal-card__img' }}{% endif %}</div>
-          <div class="goal-card__caption" aria-hidden="true">переверни ↻</div>
+          <div class="goal-card__caption" aria-hidden="true"><span class="goal-card__by-mouse">переверни ↻</span><span class="goal-card__by-key">пробел — перевернуть</span></div>
         </div>
         <div class="goal-card__back">
           <div class="goal-card__back-eyebrow">как проходят занятия</div>
@@ -27,7 +27,7 @@
           <ul class="goal-card__list" role="list">
             {% for item in card.back_items %}<li class="goal-card__item"><span class="goal-card__check" aria-hidden="true">✓</span>{{ item.text }}</li>{% endfor %}
           </ul>
-          <div class="goal-card__back-hint" aria-hidden="true">↻ назад</div>
+          <div class="goal-card__back-hint" aria-hidden="true"><span class="goal-card__by-mouse">↻ назад</span><span class="goal-card__by-key">пробел — назад</span></div>
         </div>
       </div>
       <label class="goal-card__hit" for="{{ block.id }}-flip-{{ forloop.index }}"></label>
