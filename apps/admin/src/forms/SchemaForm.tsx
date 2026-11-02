@@ -191,28 +191,34 @@ function NumberField({ schema, value, path, label, required, errors, onChange }:
   )
 }
 
-/** Выбор из вариантов: карточки с миниатюрами, сегменты или список — по схеме (enumAppearance) */
-function EnumField({ schema, value, path, label, errors, onChange }: FieldProps) {
+/**
+ * Выбор из вариантов: карточки с миниатюрами, сегменты или список — по схеме (enumAppearance).
+ * Необязательный выбор без значения по умолчанию — всегда список с пунктом «не задан»: у сегментов
+ * выбор не снять, а «первый вариант» на экране был бы неправдой, ведь в данных значения нет
+ */
+function EnumField({ schema, value, path, label, required, errors, onChange }: FieldProps) {
   const options = schema.enum ?? []
-  const current = value ?? schema.default ?? options[0]
+  const optional = !required && schema.default === undefined
+  const current = value ?? schema.default ?? (optional ? '' : options[0])
   const pick = (raw: string) =>
     onChange(
       path,
       options.find((option) => String(option) === raw),
     )
   const error = errors[pathKey(path)]
-  const appearance = enumAppearance(schema)
+  const appearance = optional ? 'select' : enumAppearance(schema)
   const errorId = useId()
 
   if (appearance === 'select') {
     return (
       <Select
-        label={label}
+        label={optional ? <FieldLabel label={label} required={false} /> : label}
         hint={schema.description}
         error={error}
         value={String(current)}
         onChange={(event) => pick(event.target.value)}
       >
+        {optional && <option value="">— не задан —</option>}
         {options.map((option) => (
           <option key={String(option)} value={String(option)}>
             {enumLabel(schema, option)}

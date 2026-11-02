@@ -209,3 +209,92 @@ test('«Скачать CSV» в разделе «Заявки» скачивае
   expect(row).toContain(`"'+7 900 111-22-33"`)
   await expect(page.getByRole('status')).toHaveText('Файл CSV со всеми заявками скачан')
 })
+
+test('контакт по способу связи: «Telegram» и «ab» браузер не пускает, телефон из букв — страница ошибки сервера', async ({
+  browser,
+  demoSite,
+}) => {
+  const slug = `zapis-${Date.now()}`
+  const param = { siteId: demoSite.id, slug }
+  const props = {
+    ...form.example,
+    title: 'Запись на урок',
+    fields: [
+      { name: 'name', type: 'name' as const, label: 'Как тебя зовут', required: true },
+      {
+        name: 'channel',
+        type: 'select' as const,
+        label: 'Где удобнее общаться',
+        required: true,
+        options: [
+          { label: 'Telegram', contact: 'telegram' as const },
+          { label: 'Телефон', contact: 'phone' as const },
+        ],
+      },
+      {
+        name: 'contact',
+        type: 'text' as const,
+        label: 'Как с тобой связаться',
+        required: true,
+        contactBy: 'channel',
+      },
+    ],
+  }
+  const pageApi = sites[':siteId'].pages[':slug']
+  const content = { blocks: [{ id: 'sign', type: 'form' as const, props }] }
+  expect((await pageApi.$put({ param, json: { title: 'Запись', content } })).status).toBe(200)
+  expect((await pageApi.publish.$post({ param })).status).toBe(200)
+
+  const marker = `Контакт ${Date.now()}`
+  const site = await visitor(browser, `/${slug}`)
+  const signup = site.page.getByRole('form', { name: 'Запись на урок' })
+  const fill = async (channel: string, contact: string) => {
+    await signup.getByLabel('Как тебя зовут').fill(marker)
+    await signup.getByLabel('Где удобнее общаться').selectOption(channel)
+    await signup.getByLabel('Как с тобой связаться').fill(contact)
+    await signup.getByLabel('Я согласен на обработку персональных данных').check()
+    await signup.getByRole('button', { name: 'Отправить заявку' }).click()
+  }
+  try {
+    // Слишком короткое останавливает браузер: поле не проходит pattern, заявка не уходит
+    const posts: string[] = []
+    site.page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push(request.url())
+    })
+    await fill('Telegram', 'ab')
+    const contact = signup.getByLabel('Как с тобой связаться')
+    expect(
+      await contact.evaluate(
+        (input) =>
+          (input as unknown as { validity: { patternMismatch: boolean } }).validity.patternMismatch,
+      ),
+    ).toBe(true)
+    await expect(contact).toHaveAttribute('title', /Не короче 5 знаков/)
+    // Дать браузеру время отправить, если бы он собирался: запроса быть не должно
+    await site.page.waitForTimeout(500)
+    expect(posts).toEqual([])
+    // Длинное, но не телефон: браузер пропустил, вид связи знает только сервер
+    await site.page.goto(`${urls.renderer}/${slug}`)
+    await fill('Телефон', 'abcdefgh')
+    await expect(site.page.getByText('Заявка не отправлена')).toBeVisible()
+    await expect(
+      site.page.getByText('Как с тобой связаться — Похоже, в номере не хватает цифр'),
+    ).toBeVisible()
+    // Верный ник — заявка принята
+    await site.page.goto(`${urls.renderer}/${slug}`)
+    await fill('Telegram', '@nickname')
+    await expect(site.page).toHaveURL(`${urls.renderer}/${slug}?sent=sign#sign-sent`)
+  } finally {
+    await site.context.close()
+  }
+
+  const leads = await ownerApi.sites[':siteId'].leads.$get({
+    param: { siteId: demoSite.id },
+    query: {},
+  })
+  if (leads.status !== 200) throw new Error(`Список заявок: ${leads.status}`)
+  const { items } = await leads.json()
+  // Из трёх попыток сохранилась одна — с верным контактом
+  expect(JSON.stringify(items).split(marker).length - 1).toBe(1)
+  expect(JSON.stringify(items)).toContain('@nickname')
+})

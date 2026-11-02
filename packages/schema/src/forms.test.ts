@@ -1,9 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { form } from './blocks'
+import { CONTACT_PATTERN, CONTACT_TITLE } from './contact-kind'
 import {
   CONSENT_FIELD,
   EMAIL_PATTERN,
-  type FormField,
+  FormField,
   fieldRules,
   formFieldInput,
   formFieldTypes,
@@ -344,5 +345,150 @@ describe('настройки заявок', () => {
     expect(LeadSettings.safeParse({ ...base, retentionDays: 6 }).success).toBe(false)
     expect(LeadSettings.safeParse({ ...base, retentionDays: 1826 }).success).toBe(false)
     expect(LeadSettings.safeParse({ ...base, retentionDays: 30 }).success).toBe(true)
+  })
+})
+
+describe('контакт по способу связи', () => {
+  const fields = [
+    field({
+      name: 'channel',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Telegram', contact: 'telegram' },
+        { label: 'ВКонтакте', contact: 'vk' },
+        { label: 'Телефон', contact: 'phone' },
+        { label: 'Почта', contact: 'email' },
+        { label: 'Голубь' },
+      ],
+    }),
+    field({ name: 'contact', type: 'text', required: true, contactBy: 'channel' }),
+  ]
+  const parse = (channel: string, contact: string) =>
+    leadValuesSchema(fields).safeParse({ channel, contact, consent: 'yes' })
+
+  it.each([
+    ['Telegram', '@nickname'],
+    ['Telegram', 'nick_name'],
+    ['Telegram', 'https://t.me/nickname'],
+    ['Telegram', 't.me/nickname/'],
+    ['Telegram', '+7 (900) 123-45-67'],
+    ['ВКонтакте', 'vk.com/nick.name'],
+    ['ВКонтакте', 'https://m.vk.ru/id123'],
+    ['ВКонтакте', '@nickn'],
+    ['Телефон', '8 900 123-45-67'],
+    ['Телефон', '+7(900)1234567'],
+    ['Почта', 'anna@example.ru'],
+    ['Голубь', 'на крыше, третий этаж'],
+  ])('%s: «%s» принимается', (channel, contact) => {
+    expect(parse(channel, contact).success).toBe(true)
+  })
+
+  it.each([
+    ['Telegram', 'ab', 'Напишите ник вроде @nickname или номер телефона'],
+    ['Telegram', '@abc', 'Напишите ник вроде @nickname или номер телефона'],
+    ['Telegram', 'ник в телеграме', 'Напишите ник вроде @nickname или номер телефона'],
+    ['ВКонтакте', 'ab', 'Вставьте ссылку на страницу, например vk.com/nickname'],
+    ['ВКонтакте', 'abcd', 'Вставьте ссылку на страницу, например vk.com/nickname'],
+    [
+      'ВКонтакте',
+      'https://example.com/nick',
+      'Вставьте ссылку на страницу, например vk.com/nickname',
+    ],
+    ['Телефон', '12345', 'Похоже, в номере не хватает цифр: нужно от 10 до 15'],
+    ['Телефон', 'abcdefghijk', 'Похоже, в номере не хватает цифр: нужно от 10 до 15'],
+    ['Почта', 'anna', 'Проверьте адрес: в нём должны быть @ и точка'],
+    ['Почта', 'anna@example', 'Проверьте адрес: в нём должны быть @ и точка'],
+  ])('%s: «%s» — ошибка у поля контакта', (channel, contact, message) => {
+    const result = parse(channel, contact)
+    expect(result.success).toBe(false)
+    expect(result.error?.issues).toEqual([expect.objectContaining({ path: ['contact'], message })])
+  })
+
+  it('ошибка другого поля не прячет ошибку контакта: форму правят за один раз', () => {
+    const withName = [field({ name: 'name', type: 'name', required: true }), ...fields]
+    const result = leadValuesSchema(withName).safeParse({
+      name: '',
+      channel: 'Telegram',
+      contact: 'ab',
+      consent: 'yes',
+    })
+    expect(result.error?.issues.map((issue) => issue.path[0]).sort()).toEqual(['contact', 'name'])
+  })
+
+  it('контакт, не прошедший свою проверку, даёт одну ошибку, а не две', () => {
+    const long = parse('Telegram', 'a'.repeat(300))
+    expect(long.error?.issues.filter((issue) => issue.path[0] === 'contact')).toHaveLength(1)
+    const multiline = parse('Telegram', '@nick\nname')
+    expect(multiline.error?.issues.filter((issue) => issue.path[0] === 'contact')).toHaveLength(1)
+  })
+
+  it('не объект — обычный отказ, а не исключение', () => {
+    for (const value of [null, undefined, 'строка', 5]) {
+      expect(leadValuesSchema(fields).safeParse(value).success).toBe(false)
+    }
+  })
+
+  it('канал не выбран или не из списка — ошибка самого выбора, контакт не проверяется', () => {
+    const none = leadValuesSchema(fields).safeParse({ contact: 'ab', consent: 'yes' })
+    expect(none.error?.issues.map((issue) => issue.path)).toEqual([['channel']])
+    const wrong = parse('Факс', 'ab')
+    expect(wrong.error?.issues.map((issue) => issue.path)).toEqual([['channel']])
+  })
+
+  it('в браузере — только общее правило: не короче 5 знаков, без пробелов по краям', () => {
+    const input = formFieldInput(fields[1] as FormField)
+    expect(input).toMatchObject({
+      element: 'input',
+      pattern: CONTACT_PATTERN,
+      title: CONTACT_TITLE,
+    })
+    if (input.element !== 'input' || !input.pattern) throw new Error('нет pattern')
+    const accepts = (value: string) => patternRegExp(input.pattern as string).test(value)
+    expect(accepts('ab')).toBe(false)
+    expect(accepts('@abc')).toBe(false)
+    expect(accepts(' abcde')).toBe(false)
+    expect(accepts('@nick')).toBe(true)
+    expect(accepts('+7 900 123-45-67')).toBe(true)
+    // То, что браузер пропустил, но сервер по выбранному способу не примет — страница ошибки
+    expect(accepts('abcdef') && !parse('Телефон', 'abcdef').success).toBe(true)
+  })
+
+  it('блок: contactBy должен указывать на выбор с видами связи', () => {
+    const base = { policyUrl: '/privacy', title: 'Запись' }
+    const ok = form.props.safeParse({ ...base, fields })
+    expect(ok.success).toBe(true)
+    const noSelect = form.props.safeParse({
+      ...base,
+      fields: [field({ name: 'contact', type: 'text', contactBy: 'channel' })],
+    })
+    expect(noSelect.error?.issues[0]).toMatchObject({
+      path: ['fields', 0, 'contactBy'],
+      message: 'Поля «channel» в форме нет',
+    })
+    const notSelect = form.props.safeParse({
+      ...base,
+      fields: [
+        field({ name: 'channel', type: 'text' }),
+        field({ name: 'contact', type: 'text', contactBy: 'channel' }),
+      ],
+    })
+    expect(notSelect.error?.issues[0]?.message).toBe('Поле «channel» — не выбор из списка')
+    const noKinds = form.props.safeParse({
+      ...base,
+      fields: [
+        field({ name: 'channel', type: 'select', options: [{ label: 'Один' }] }),
+        field({ name: 'contact', type: 'text', contactBy: 'channel' }),
+      ],
+    })
+    expect(noKinds.error?.issues[0]?.message).toBe('У вариантов поля «channel» не указан вид связи')
+  })
+
+  it('contactBy — только у строки текста, вид связи — только у вариантов выбора', () => {
+    expect(FormField.safeParse(field({ type: 'phone', contactBy: 'channel' })).success).toBe(false)
+    expect(
+      FormField.safeParse(field({ type: 'text', options: [{ label: 'a', contact: 'phone' }] }))
+        .success,
+    ).toBe(false)
   })
 })

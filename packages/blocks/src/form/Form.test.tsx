@@ -103,3 +103,36 @@ describe('блок «Форма»', () => {
     expect(render(withSelect)).not.toMatch(/<form[^>]*action=/)
   })
 })
+
+describe('контакт по способу связи', () => {
+  const html = render(
+    {
+      ...form.example,
+      fields: [
+        {
+          name: 'channel',
+          type: 'select',
+          label: 'Способ связи',
+          options: [
+            { label: 'Telegram', contact: 'telegram' },
+            { label: 'Телефон', contact: 'phone' },
+          ],
+        },
+        { name: 'contact', type: 'text', label: 'Контакт', required: true, contactBy: 'channel' },
+      ],
+    },
+    action,
+  )
+
+  it('в браузере — общий pattern и подсказка, точную проверку делает сервер', () => {
+    const contact = tag(html, 'lead-contact')
+    // Регистр важен: \S — «не пробел», \s — пробел. tag() его портит, поэтому pattern берём
+    // из сырой разметки
+    expect(html).toMatch(/id="lead-contact"[^>]*pattern="\\S\.\{3,\}\\S"/)
+    expect(contact).toContain('title="не короче 5 знаков, без пробелов по краям"')
+  })
+
+  it('у обычных полей подсказки-title нет', () => {
+    expect(tag(render(form.example, action), 'lead-name')).not.toContain('title=')
+  })
+})

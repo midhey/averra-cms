@@ -52,6 +52,15 @@ export {
   samePhone,
   telHref,
 } from './contact'
+export {
+  CONTACT_MIN_LENGTH,
+  CONTACT_PATTERN,
+  CONTACT_TITLE,
+  ContactKind,
+  contactKinds,
+  contactKindTitles,
+  contactRules,
+} from './contact-kind'
 export { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
 export {
   type AnalyticsIds,

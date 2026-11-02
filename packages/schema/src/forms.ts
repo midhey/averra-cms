@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import {
+  CONTACT_PATTERN,
+  CONTACT_TITLE,
+  ContactKind,
+  contactKindTitles,
+  contactRules,
+} from './contact-kind'
 import { hasHeaderBreak, MAIL_ADDRESS_PATTERN, MailAddress } from './mail'
 
 // Формы на сайте. Одна схема поля — два потребителя: компонент блока берёт из неё HTML-атрибуты
@@ -122,6 +129,11 @@ const FieldOption = z.strictObject({
     .min(1)
     .max(fieldRules.select.max)
     .meta({ title: 'Вариант' }),
+  contact: ContactKind.optional().meta({
+    title: 'Вид связи',
+    description: 'Нужен, если есть поле контакта, которое проверяется по выбранному способу связи',
+    'x-enum-titles': contactKindTitles,
+  }),
 })
 
 export const FormField = z
@@ -140,8 +152,27 @@ export const FormField = z
       .max(20)
       .optional()
       .meta({ title: 'Варианты', description: 'Только для выбора из списка' }),
+    contactBy: FormFieldName.optional().meta({
+      title: 'Проверять по способу связи',
+      description:
+        'Только для строки текста. Ключ поля «Выбор из списка», у вариантов которого указан вид связи: ник Telegram, номер телефона или почта проверяются по выбранному варианту',
+    }),
   })
   .superRefine((field, ctx) => {
+    if (field.contactBy !== undefined && field.type !== 'text') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contactBy'],
+        message: 'Проверка по способу связи бывает только у строки текста',
+      })
+    }
+    if (field.type !== 'select' && field.options?.some((option) => option.contact)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Вид связи бывает только у вариантов выбора из списка',
+      })
+    }
     if (field.type === 'select' && !field.options) {
       ctx.addIssue({
         code: 'custom',
@@ -172,6 +203,8 @@ export type FormFieldInput =
       type: InputType
       maxLength: number
       pattern?: string
+      /** Подсказка браузера, когда значение не подошло под pattern */
+      title?: string
       autoComplete?: string
       inputMode?: 'tel' | 'email'
     }
@@ -180,7 +213,7 @@ export type FormFieldInput =
   | { element: 'checkbox'; name: string; required: boolean; value: typeof CHECKED_VALUE }
 
 export function formFieldInput(
-  field: Pick<FormField, 'name' | 'type' | 'required' | 'options'>,
+  field: Pick<FormField, 'name' | 'type' | 'required' | 'options' | 'contactBy'>,
 ): FormFieldInput {
   const { name, required, type } = field
   const rule = fieldRules[type]
@@ -195,7 +228,11 @@ export function formFieldInput(
   }
   if (type === 'checkbox') return { element: 'checkbox', name, required, value: CHECKED_VALUE }
   const input = rule.input ?? { type: 'text' }
-  const pattern = rule.pattern?.source ?? (required ? NOT_BLANK_PATTERN : undefined)
+  // Контакт по способу связи: вид в браузере без скрипта не известен, точная проверка — на сервере
+  const contact = type === 'text' && field.contactBy !== undefined
+  const pattern = contact
+    ? CONTACT_PATTERN
+    : (rule.pattern?.source ?? (required ? NOT_BLANK_PATTERN : undefined))
   return {
     element: 'input',
     name,
@@ -203,6 +240,7 @@ export function formFieldInput(
     type: input.type,
     maxLength: rule.max,
     ...(pattern ? { pattern } : {}),
+    ...(contact ? { title: CONTACT_TITLE } : {}),
     ...(input.autoComplete ? { autoComplete: input.autoComplete } : {}),
     ...(input.inputMode ? { inputMode: input.inputMode } : {}),
   }
@@ -316,7 +354,46 @@ export function leadValuesSchema(fields: readonly FormField[]) {
   shape[CONSENT_FIELD] = z
     .literal(CHECKED_VALUE, { error: CONSENT_MESSAGE })
     .transform((): true => true)
-  return z.object(shape) as z.ZodType<Record<string, LeadValue>>
+  // Проверка контакта — отдельная на каждое такое поле и с when: по умолчанию Zod не запускает
+  // проверки объекта, если другое поле уже с ошибкой, и посетитель правил бы форму в два захода
+  // (сначала имя, потом контакт). Значение чужого поля с ошибкой в values просто отсутствует
+  let schema = z.object(shape)
+  for (const field of fields) {
+    if (field.contactBy === undefined) continue
+    const name = field.name
+    schema = schema.refine((values) => contactIssue(fields, values, name) === undefined, {
+      path: [name],
+      error: (issue) => contactIssue(fields, issue.input, name),
+      // when по умолчанию пропускает объект, если ошибка уже у какого-то поля. Нам нужно запускаться
+      // и тогда (имя с ошибкой не мешает проверить контакт), но не когда ошибка у самих полей
+      // контакта и выбора: там одна ошибка, а не две
+      when: (payload) => !payload.issues.some((one) => one.path?.[0] === name),
+    })
+  }
+  return schema as unknown as z.ZodType<Record<string, LeadValue>>
+}
+
+/**
+ * Контакт по способу связи: вид берётся у выбранного варианта списка, на который указывает
+ * contactBy. Если выбор или контакт не прошли свою проверку, это уже ошибки самих полей.
+ * Возвращает текст ошибки поля контакта или undefined
+ */
+function contactIssue(
+  fields: readonly FormField[],
+  values: unknown,
+  name: string,
+): string | undefined {
+  // Схему экспортирует пакет: safeParse(null) не должен бросать
+  if (typeof values !== 'object' || values === null) return undefined
+  const record = values as Record<string, unknown>
+  const field = fields.find((one) => one.name === name)
+  if (field?.contactBy === undefined) return undefined
+  const value = record[name]
+  const chosen = record[field.contactBy]
+  if (typeof value !== 'string' || typeof chosen !== 'string') return undefined
+  const select = fields.find((one) => one.name === field.contactBy)
+  const kind = select?.options?.find((option) => option.label === chosen)?.contact
+  return kind && !contactRules[kind].check(value) ? contactRules[kind].message : undefined
 }
 
 /** Срок хранения заявок сайта в днях: по умолчанию полгода */

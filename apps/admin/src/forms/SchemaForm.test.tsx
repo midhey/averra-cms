@@ -147,6 +147,39 @@ describe('SchemaForm', () => {
     expect((screen.getByLabelText('Обязательное') as HTMLInputElement).checked).toBe(true)
   })
 
+  it('необязательный выбор без значения: показан «не задан», выбранный вид связи снимается', async () => {
+    const user = userEvent.setup()
+    render(
+      <BlockForm
+        type="form"
+        initial={{
+          title: 'Заявка',
+          policyUrl: '/privacy',
+          fields: [
+            {
+              name: 'channel',
+              type: 'select',
+              label: 'Как связаться',
+              required: true,
+              options: [{ label: 'Голубь' }, { label: 'Телеграм', contact: 'telegram' }],
+            },
+          ],
+        }}
+      />,
+    )
+    const kinds = screen.getAllByLabelText(/^Вид связи/) as HTMLSelectElement[]
+    // Первый вариант без вида связи: на экране не «Telegram», как в данных
+    expect(kinds).toHaveLength(2)
+    expect(kinds[0]?.tagName).toBe('SELECT')
+    expect(kinds[0]?.selectedOptions[0]?.textContent).toBe('— не задан —')
+    expect(kinds[1]?.selectedOptions[0]?.textContent).toBe('Telegram')
+
+    await user.selectOptions(kinds[0] as HTMLSelectElement, 'phone')
+    expect(formValue().fields[0].options[0]).toEqual({ label: 'Голубь', contact: 'phone' })
+    await user.selectOptions(screen.getAllByLabelText(/^Вид связи/)[0] as HTMLSelectElement, '')
+    expect(formValue().fields[0].options[0]).toEqual({ label: 'Голубь' })
+  })
+
   it('пункты — карточки: добавить, поднять стрелкой, удалить', async () => {
     const user = userEvent.setup()
     render(

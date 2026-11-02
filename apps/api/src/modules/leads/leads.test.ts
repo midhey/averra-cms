@@ -313,6 +313,56 @@ describe('приём заявки', () => {
     expect(await leadsOf(api, siteId)).toEqual([])
   })
 
+  it('контакт проверяется по выбранному способу связи: «Telegram» и «ab» — 400, заявки нет', async () => {
+    const props = {
+      title: 'Запись на урок',
+      fields: [
+        { name: 'name', type: 'name', label: 'Как тебя зовут', required: true },
+        {
+          name: 'channel',
+          type: 'select',
+          label: 'Где удобнее общаться',
+          required: true,
+          options: [
+            { label: 'Telegram', contact: 'telegram' },
+            { label: 'Телефон', contact: 'phone' },
+          ],
+        },
+        {
+          name: 'contact',
+          type: 'text',
+          label: 'Как с тобой связаться',
+          required: true,
+          contactBy: 'channel',
+        },
+      ],
+      policyUrl: '/privacy',
+    }
+    siteCount += 1
+    const siteId = await api.createSite(`Урок ${siteCount}`)
+    await saveDraft(api, siteId, [formBlock(props)])
+    await publish(api, siteId)
+    const fields = (channel: string, contact: string) => ({
+      name: 'Аня',
+      channel,
+      contact,
+      consent: 'yes',
+    })
+
+    const bad = await submit(siteId, fields('Telegram', 'ab'))
+    expect(bad.status).toBe(400)
+    const page = await bad.text()
+    expect(page).toContain(
+      'Как с тобой связаться — Напишите ник вроде @nickname или номер телефона',
+    )
+    expect((await submit(siteId, fields('Телефон', '@nickname'))).status).toBe(400)
+    expect(await leadsOf(api, siteId)).toEqual([])
+
+    expect((await submit(siteId, fields('Telegram', '@nickname'))).status).toBe(303)
+    expect((await submit(siteId, fields('Телефон', '+7 900 123-45-67'))).status).toBe(303)
+    expect(await leadsOf(api, siteId)).toHaveLength(2)
+  })
+
   it('перевод строки в однострочном поле — 400, в многострочном — можно', async () => {
     const siteId = await siteWithForm()
     for (const field of ['name', 'phone', 'email', 'service']) {

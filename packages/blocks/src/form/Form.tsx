@@ -172,6 +172,7 @@ function Field({ field, id }: { field: FormField; id: string }) {
         required={input.required}
         maxLength={input.maxLength}
         pattern={input.pattern}
+        title={input.title}
         autoComplete={input.autoComplete}
         inputMode={input.inputMode}
         className={styles.input}

@@ -67,6 +67,16 @@ export const form = defineBlock({
           })
         }
         seen.add(field.name)
+        if (field.contactBy === undefined) return
+        const select = props.fields.find((one) => one.name === field.contactBy)
+        let message: string | undefined
+        if (select === undefined) message = `Поля «${field.contactBy}» в форме нет`
+        else if (select.type !== 'select')
+          message = `Поле «${field.contactBy}» — не выбор из списка`
+        else if (!select.options?.some((option) => option.contact)) {
+          message = `У вариантов поля «${field.contactBy}» не указан вид связи`
+        }
+        if (message) ctx.addIssue({ code: 'custom', path: ['fields', index, 'contactBy'], message })
       })
     }),
   example: {
