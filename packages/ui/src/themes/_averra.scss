@@ -13,7 +13,7 @@
   --palette-sand-250: #e9e7e1;
   --palette-sand-300: #e2e0da;
   --palette-sand-350: #f0eee9;
-  --palette-sand-600: #8c8a83;
+  --palette-sand-600: #827f78;
   --palette-sand-400: #c9c6bd;
   --palette-ink-600: #6b6c72;
   --palette-ink-700: #5f6066;
@@ -28,7 +28,7 @@
   --palette-green-400: #3a9a5b;
   --palette-green-800: #1f6b3a;
   --palette-amber-50: #fbf1e2;
-  --palette-amber-400: #e09a2b;
+  --palette-amber-400: #b27408;
   --palette-amber-900: #8a5208;
   --palette-red-50: #fbe9e7;
   --palette-red-400: #c8372d;
@@ -55,12 +55,23 @@
   --color-border-strong: var(--palette-sand-600);
   --color-border-subtle: var(--palette-sand-350);
 
+  /* Органы управления: рамка 3,45:1, наведение темнее и рамкой, и заливкой */
+  --color-control-border: var(--palette-sand-600);
+  --color-control-border-hover: var(--palette-ink-800);
+  --color-control-hover: var(--palette-sand-300);
+  --color-control-active: var(--palette-sand-400);
+
+  /* Выключенное: читаемый текст на сером, пунктирная рамка */
+  --color-disabled-text: var(--palette-ink-700);
+  --color-disabled-surface: var(--palette-sand-200);
+  --color-disabled-border: var(--palette-sand-600);
+
   /* Акцент и главное действие */
   --color-action: var(--palette-blue-600);
   --color-action-hover: var(--palette-blue-800);
   --color-action-text: var(--palette-sand-0);
   --color-primary: var(--palette-ink-950);
-  --color-primary-hover: var(--palette-ink-800);
+  --color-primary-hover: var(--palette-ink-600);
   --color-primary-text: var(--palette-sand-0);
   --color-focus-ring: var(--palette-blue-600);
   --color-overlay: color-mix(in srgb, var(--palette-ink-950) 48%, transparent);

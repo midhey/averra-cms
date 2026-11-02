@@ -111,14 +111,47 @@ describe('тема Averra', () => {
   it.each([
     ['--color-border-strong', '--color-surface'],
     ['--color-border-strong', '--color-background'],
+    // Рамка кнопок и флажков в покое и при наведении, на всех поверхностях админки
+    ['--color-control-border', '--color-surface'],
+    ['--color-control-border', '--color-background'],
+    ['--color-control-border', '--color-surface-muted'],
+    ['--color-control-border', '--color-surface-inset'],
+    ['--color-control-border', '--color-surface-sidebar'],
+    ['--color-control-border-hover', '--color-control-hover'],
+    ['--color-disabled-border', '--color-surface'],
     ['--color-focus-ring', '--color-surface'],
     ['--color-focus-ring', '--color-background'],
+    // Точка «требует внимания» в сайдбаре — единственный признак для зрячего (WCAG 1.4.11)
+    ['--color-warning-indicator', '--color-surface'],
+    ['--color-warning-indicator', '--color-surface-sidebar'],
+    ['--color-warning-indicator', '--color-background'],
   ])('граница полей и кольцо фокуса %s на %s не меньше 3:1', (border, background) => {
     expect(contrast(border, background)).toBeGreaterThanOrEqual(3)
   })
 
+  it.each([
+    ['--color-disabled-text', '--color-disabled-surface'],
+    ['--color-text', '--color-control-hover'],
+    ['--color-text', '--color-control-active'],
+    ['--color-danger-text', '--color-danger-surface'],
+  ])('текст %s на %s читается (4,5:1), в том числе выключенный', (text, background) => {
+    expect(contrast(text, background)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  // Наведение должно быть заметно: заливка и рамка меняются, а не «чуть-чуть»
+  it('наведение меняет заливку и рамку заметно', () => {
+    expect(contrast('--color-control-hover', '--color-surface')).toBeGreaterThanOrEqual(1.2)
+    expect(
+      contrast('--color-control-border-hover', '--color-control-border'),
+    ).toBeGreaterThanOrEqual(1.4)
+    expect(contrast('--color-primary-hover', '--color-primary')).toBeGreaterThanOrEqual(1.5)
+    expect(contrast('--color-control-active', '--color-control-hover')).toBeGreaterThan(1.05)
+  })
+
   it('точки статусов различаются по светлоте, а не только по оттенку', () => {
-    const tones = ['info', 'danger', 'success', 'warning', 'neutral'].map((tone) => ({
+    // Янтарь с контрастом 3:1 к поверхностям по светлоте сливается с зелёным (оба не светлее
+    // ~57 L*), поэтому его отличает форма (ромб): проверка ниже
+    const tones = ['info', 'danger', 'success', 'neutral'].map((tone) => ({
       tone,
       l: lightness(`--color-${tone}-indicator`),
     }))

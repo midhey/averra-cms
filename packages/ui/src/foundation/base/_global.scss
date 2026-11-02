@@ -29,10 +29,11 @@ body {
   @include tools.focus-ring;
 }
 
+// Выключенное не бледнеет: прозрачность роняла контраст текста до 2,5:1, и экран «только
+// просмотр» нельзя было читать. Вид выключенного задают компоненты ролями disabled-*
 :disabled,
 [aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: 0.55;
 }
 
 html.is-scroll-locked {
