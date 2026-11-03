@@ -37,14 +37,17 @@ async function uploadMedia(siteId: string, width: number, height: number) {
   return { name, id: created?.id ?? '' }
 }
 
-/** Карточка раздела «SEO» по заголовку и её «Сохранить» */
+/** Единая «Сохранить» экрана «SEO»: одна на все карточки, в липкой полосе внизу */
+const saveAll = (page: Page) => page.getByRole('button', { name: 'Сохранить', exact: true })
+
+/** Карточка раздела «SEO» по заголовку; сохраняет единая кнопка экрана */
 function card(page: Page, title: string) {
   const region = page.getByRole('region', { name: title })
   return {
     region,
     field: (label: string) => region.getByLabel(label, { exact: true }),
     save: async (done: RegExp) => {
-      await region.getByRole('button', { name: /^Сохранить/ }).click()
+      await saveAll(page).click()
       await expect(region.getByRole('status')).toHaveText(done)
     },
     /** Выбрать картинку из медиатеки в поле карточки */
@@ -86,7 +89,7 @@ test('владелец заполняет SEO, сайт пересобирает
   // Ошибка схемы — у поля, и фокус на нём
   const verification = card(page, 'Проверка в поисковиках')
   await verification.field('Яндекс Вебмастер').fill('"><script>')
-  await verification.region.getByRole('button', { name: 'Сохранить' }).click()
+  await saveAll(page).click()
   await expect(verification.field('Яндекс Вебмастер')).toBeFocused()
   await expect(verification.region).toContainText('латиница, цифры, _ и -')
   await verification
@@ -254,6 +257,37 @@ test('несохранённая правка в карточке — помет
   ])
 })
 
+test('одна «Сохранить» на экран: пометка у каждой изменённой карточки, ошибка не даёт сохранить остальные', async ({
+  page,
+}) => {
+  await page.goto('/seo')
+  await expect(page.getByRole('button', { name: /^Сохранить/ })).toHaveCount(1)
+  // Без правок кнопка выключена, как в редакторе страницы
+  await expect(saveAll(page)).toHaveAttribute('aria-disabled', 'true')
+
+  const general = card(page, 'Основное')
+  const verification = card(page, 'Проверка в поисковиках')
+  await general.field('Описание по умолчанию').fill('Одно описание на все страницы')
+  await verification.field('Яндекс Вебмастер').fill('"><script>')
+  await expect(saveAll(page)).not.toHaveAttribute('aria-disabled', 'true')
+  await expect(page.getByText('Не сохранено карточек: 2')).toBeVisible()
+
+  // Ошибка во второй карточке: ничего не сохранено, фокус — на её поле, у первой правка цела
+  await saveAll(page).click()
+  await expect(verification.field('Яндекс Вебмастер')).toBeFocused()
+  await expect(page.getByText('Ничего не сохранено: поправьте поля с ошибками')).toBeVisible()
+  await expect(page.getByText('Не сохранено карточек: 2')).toBeVisible()
+
+  // Поправили — одна кнопка сохраняет обе карточки, и кнопка снова выключена
+  await verification.field('Яндекс Вебмастер').fill('0a1b2c3d4e5f6a7b')
+  await saveAll(page).click()
+  await expect(general.region.getByRole('status')).toHaveText(/Основное сохранено/)
+  await expect(verification.region.getByRole('status')).toHaveText(/Коды сохранены/)
+  await expect(page.getByRole('status').filter({ hasText: 'Всё сохранено' })).toBeVisible()
+  await expect(saveAll(page)).toHaveAttribute('aria-disabled', 'true')
+  await expect(page.getByText(/Не сохранено/)).toHaveCount(0)
+})
+
 test('адрес сайта набирается по буквам: экран жив, ошибка схемы — у поля', async ({ page }) => {
   await page.goto('/seo')
   const general = card(page, 'Основное')
@@ -262,7 +296,7 @@ test('адрес сайта набирается по буквам: экран �
   await url.pressSequentially('example.ru')
   await expect(page.getByRole('heading', { level: 1, name: 'SEO' })).toBeVisible()
   await expect(url).toHaveValue('example.ru')
-  await general.region.getByRole('button', { name: /^Сохранить/ }).click()
+  await saveAll(page).click()
   await expect(url).toBeFocused()
   await expect(general.region).toContainText('https:// и домен')
 
@@ -337,7 +371,7 @@ test('редирект с адреса существующей страницы
   await redirects.region.getByRole('button', { name: 'Добавить редирект' }).click()
   await redirects.field('Откуда').fill('/ceny/')
   await redirects.field('Куда').fill('/')
-  await redirects.region.getByRole('button', { name: 'Сохранить редиректы' }).click()
+  await saveAll(page).click()
   await expect(redirects.region).toContainText('По этому адресу есть страница «Цены»')
   await expect(redirects.field('Откуда')).toBeFocused()
   const saved = await ownerApi.sites[':siteId'].settings.$get({ param: { siteId: demoSite.id } })

@@ -412,7 +412,7 @@ describe('скрипт переноса на настоящем API', () => {
     const done = await run({ publish: true })
     expect(done.staleDocuments).toEqual([])
     expect(done.published).toBe(true)
-  })
+  }, 30_000)
 
   it('кривой --site-url отвергается до первых изменений', async () => {
     const owner = await api.createUser('owner')

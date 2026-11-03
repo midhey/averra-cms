@@ -52,7 +52,9 @@ test('участник по прямому адресу /status — понятн
     route.fulfill({ status: 403, json: { error: { code: 'forbidden', message: ownerOnly } } }),
   )
   await page.goto('/status')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Не получилось открыть')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Нет доступа к разделу «Состояние»',
+  )
   await expect(page.getByRole('alert')).toHaveText(ownerOnly)
   await expect(page.getByRole('region', { name: 'Сведения' })).toHaveCount(0)
 })

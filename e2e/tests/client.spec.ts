@@ -105,3 +105,11 @@ test('клиенту «Только просмотр» на /theme и /header п
   const picker = page.locator('input[type=color]:disabled').first()
   await expect(picker).toHaveCSS('border-top-style', 'dashed')
 })
+
+test('клиенту в редакторе сказано, кто публикует его правки', async ({ page }) => {
+  await actAsClient(page)
+  await page.goto(`/pages/${MAIN_PAGE_SLUG}`)
+  await expect(
+    page.getByText('Публикует владелец или редактор: когда правки готовы, сообщите им.'),
+  ).toBeVisible()
+})

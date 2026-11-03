@@ -115,7 +115,7 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   const ed = editor(page)
   await ed.open()
   const tabs = page.getByRole('tablist', { name: 'Части редактора' })
-  await expect(tabs.getByRole('tab')).toHaveText(['Блоки', 'Предпросмотр', 'Поля'])
+  await expect(tabs.getByRole('tab')).toHaveText([/^Блоки/, /^Предпросмотр/, /^Поля/, /^SEO/])
   await expect(tabs.getByRole('tab', { name: 'Блоки' })).toHaveAttribute('aria-selected', 'true')
   await expect(ed.blockList).toBeVisible()
   await expect(ed.inspector).toBeHidden()
@@ -176,10 +176,11 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   await expect(page.getByRole('complementary', { name: 'История публикаций' })).toBeVisible()
   expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
 
-  // SEO страницы — кнопкой под списком блоков (в полосе места нет), тоже третья вкладка
+  // SEO страницы — своя вкладка, видна сразу, без прокрутки списка блоков
   await tabs.getByRole('tab', { name: 'Блоки' }).click()
-  await ed.blockList.getByRole('button', { name: /^SEO страницы/ }).click()
-  await expect(tabs.getByRole('tab', { name: 'SEO' })).toHaveAttribute('aria-selected', 'true')
+  await expect(tabs.getByRole('tab', { name: /^SEO/ })).toBeInViewport()
+  await tabs.getByRole('tab', { name: /^SEO/ }).click()
+  await expect(tabs.getByRole('tab', { name: /^SEO/ })).toHaveAttribute('aria-selected', 'true')
   await expect(
     page.getByRole('complementary', { name: 'SEO страницы' }).getByLabel('Описание'),
   ).toBeVisible()

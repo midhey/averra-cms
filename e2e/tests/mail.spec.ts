@@ -63,6 +63,9 @@ test('владелец открывает «Почту» из панели: со
   for (const { title, text, footer } of templates) {
     const article = section.getByRole('article', { name: title })
     await expect(article).toBeVisible()
+    // Шаблоны свёрнуты: письмо собирается, когда его раскрыли
+    await expect(article.locator('iframe')).toHaveCount(0)
+    await article.getByText(title, { exact: true }).click()
     // Письмо в iframe без скриптов: его содержимое — HTML шаблона на примерных данных
     const frame = article.frameLocator(`iframe[title="Предпросмотр письма «${title}»"]`)
     await expect(frame.locator('body')).toContainText(text)
@@ -232,7 +235,7 @@ test('участнику ссылки на почту нет, а по прямо
   await expect(page.getByRole('link', { name: /^Почта/ })).toHaveCount(0)
 
   await page.goto('/mail')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Не получилось открыть')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Нет доступа к разделу «Почта»')
   await expect(page.getByRole('alert')).toHaveText(OWNER_ONLY)
   await expect(page.getByRole('region', { name: 'Очередь писем' })).toHaveCount(0)
 })

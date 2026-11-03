@@ -150,8 +150,13 @@ test('редактор по прямому адресу /notifications — по�
     route.fulfill({ status: 403, json: { error: { code: 'forbidden', message } } }),
   )
   await page.goto('/notifications')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Не получилось открыть')
-  await expect(page.getByRole('alert')).toHaveText(message)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Нет доступа к разделу «Уведомления»',
+  )
+  // Текст — про раздел, а не про заявки из ответа API
+  await expect(page.getByRole('alert')).toHaveText(
+    'Уведомления настраивают владелец и клиент сайта',
+  )
   await expect(page.getByRole('region', { name: 'Новые заявки' })).toHaveCount(0)
 })
 
