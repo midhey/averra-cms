@@ -25,6 +25,13 @@ export const signOut = () => post('sign-out', {})
 export const requestPasswordReset = ({ email }: ForgotPassword) =>
   post('request-password-reset', { email })
 
+/**
+ * Смена своего пароля в профиле. Остальные входы пользователя завершаются, этот получает новую
+ * cookie (API, modules/auth). Неверный текущий пароль — ApiRequestError у поля currentPassword
+ */
+export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
+  post('change-password', body)
+
 /** Новый пароль по ссылке из письма. Все входы пользователя после этого завершаются */
 export const resetPassword = ({ token, newPassword }: ResetPassword) =>
   post('reset-password', { token, newPassword })

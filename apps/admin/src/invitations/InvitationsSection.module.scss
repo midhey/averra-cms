@@ -22,3 +22,43 @@
   flex-direction: column;
   gap: var(--space-2);
 }
+
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+// Имя и пометка «это вы» — в столбик: пометка не растягивает колонку
+.memberName {
+  display: flex;
+  flex-direction: column;
+}
+
+.actions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.roleForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+// Действия приглашения — столбиком: «Повторить» и «Отозвать» в ряд расширяли колонку,
+// и таблица на 1440 начинала листаться вбок
+.stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: stretch;
+}
+
+// Кто пригласил — под адресом приглашения: обычный перенос по словам, хотя адрес рвётся где угодно
+.inviter {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+  overflow-wrap: normal;
+}

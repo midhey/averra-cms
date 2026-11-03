@@ -48,7 +48,7 @@ const sections: { prefix: string; title: string; who?: string }[] = [
   {
     prefix: '/notifications',
     title: 'Уведомления',
-    who: 'Уведомления настраивают владелец и клиент сайта',
+    who: 'Уведомления настраивают владелец и администратор сайта',
   },
   { prefix: '/seo', title: 'SEO и аналитика' },
   { prefix: '/settings', title: 'Настройки' },

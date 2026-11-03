@@ -26,6 +26,7 @@ import {
   mailQuery,
   mailSmtpQuery,
   mediaQuery,
+  membersQuery,
   meQuery,
   notificationOutboxQuery,
   notificationsQuery,
@@ -33,6 +34,7 @@ import {
   pagesQuery,
   passwordResetQuery,
   recentLeadsQuery,
+  sessionsQuery,
   siteIdOf,
   siteNotificationsQuery,
   siteQuery,
@@ -57,6 +59,7 @@ import { MediaScreen } from './screens/MediaScreen'
 import { NotificationsScreen } from './screens/NotificationsScreen'
 import { OverviewScreen } from './screens/OverviewScreen'
 import { PagesScreen } from './screens/PagesScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { SeoScreen } from './screens/SeoScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
@@ -215,7 +218,7 @@ const pagesRoute = createRoute({
   component: PagesScreen,
 })
 
-// Тема сайта — владельцу и редактору (клиенту пункта в панели нет, а экран у него только для
+// Тема сайта — владельцу (остальным пункта в панели нет, а экран у них только для
 // чтения). Главное — тема и список страниц для предпросмотра; черновик главной и медиатека для
 // предпросмотра — второстепенное (allSettled): без них экран покажет пример лендинга
 const themeRoute = createRoute({
@@ -300,9 +303,9 @@ const mediaRoute = createRoute({
   component: MediaScreen,
 })
 
-// Заявки — владельцу и клиенту сайта. Редактору API ответит 403, и экран ошибки скажет почему.
-// Список — родитель, карточка заявки — ребёнок: при переходе между заявками и вкладками список
-// не пересоздаётся, и фокус остаётся там, где был
+// Заявки — владельцу и администратору сайта. Редактору API ответит 403, и экран ошибки скажет
+// почему. Список — родитель, карточка заявки — ребёнок: при переходе между заявками и вкладками
+// список не пересоздаётся, и фокус остаётся там, где был
 const leadsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/leads',
@@ -344,10 +347,10 @@ const leadRoute = createRoute({
   notFoundComponent: LeadNotFound,
 })
 
-// Уведомления: получатели заявок (владелец и клиент) — главное содержимое, их сбой — экран ошибки.
-// Грузятся у любой роли, как заявки: редактору, открывшему адрес напрямую, API ответит 403, и
-// экран ошибки скажет почему, а не покажет пустой экран с одним заголовком. Каналы и служебные
-// события — владельцу. Последние сообщения — второстепенное (allSettled)
+// Уведомления: получатели заявок (владелец и администратор сайта) — главное содержимое, их сбой —
+// экран ошибки. Грузятся у любой роли, как заявки: редактору, открывшему адрес напрямую, API
+// ответит 403, и экран ошибки скажет почему, а не покажет пустой экран с одним заголовком. Каналы и
+// служебные события — владельцу. Последние сообщения — второстепенное (allSettled)
 const notificationsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/notifications',
@@ -363,7 +366,7 @@ const notificationsRoute = createRoute({
   component: NotificationsScreen,
 })
 
-// Настройки сайта: заявки (владелец и клиент), участники (владелец), сайт на сервере, выгрузка.
+// Настройки сайта: заявки и участники (владелец и администратор сайта), сайт на сервере, выгрузка.
 // Настройки заявок — главное содержимое своего раздела: их сбой — экран ошибки. Остальное —
 // второстепенное (allSettled): сбой показывается внутри своего раздела
 const settingsRoute = createRoute({
@@ -376,8 +379,9 @@ const settingsRoute = createRoute({
       Promise.allSettled([queryClient.ensureQueryData(buildQuery(siteId))]),
       canInvite(site.access) &&
         Promise.allSettled([
+          queryClient.fetchQuery(membersQuery(siteId)),
           queryClient.ensureQueryData(invitationsQuery(siteId)),
-          queryClient.ensureQueryData(mailQuery()),
+          site.access === 'owner' && queryClient.ensureQueryData(mailQuery()),
         ]),
     ])
   },
@@ -448,6 +452,15 @@ const tokensRoute = createRoute({
   component: TokensScreen,
 })
 
+// Свой профиль — у каждого, кто вошёл. Число других входов — второстепенное (allSettled)
+const profileRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/profile',
+  loader: ({ context: { queryClient } }) =>
+    Promise.allSettled([queryClient.fetchQuery(sessionsQuery())]),
+  component: ProfileScreen,
+})
+
 // Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -503,6 +516,7 @@ const routeTree = rootRoute.addChildren([
     mailRoute,
     tokensRoute,
     statusRoute,
+    profileRoute,
   ]),
   editorRoute,
   ...devRoutes,

@@ -8,6 +8,7 @@ import {
 import { useRef, useState } from 'react'
 import type { FieldErrors } from '../forms/field-errors'
 import { Button, IconButton } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { Checkbox, Select, TextInput } from '../ui/Field'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
@@ -162,6 +163,7 @@ function FieldCard({
   onMove,
   onRemove,
 }: CardProps) {
+  const confirm = useConfirm()
   const arrows = useMoveButtons(index, count, onMove)
   const record = field as FieldRecord
   const error = (key: string) => errors[`${path}.${key}`]
@@ -201,8 +203,14 @@ function FieldCard({
               label={`Удалить поле «${name}»`}
               icon="trash"
               size="small"
-              onClick={() => {
-                if (window.confirm(`Удалить поле «${name}»?`)) onRemove()
+              onClick={async () => {
+                const yes = await confirm({
+                  title: `Удалить поле «${name}»?`,
+                  description: 'Его значения в блоках на страницах пропадут после публикации.',
+                  confirmLabel: 'Удалить поле',
+                  cancelLabel: 'Оставить',
+                })
+                if (yes) onRemove()
               }}
             />
           </span>

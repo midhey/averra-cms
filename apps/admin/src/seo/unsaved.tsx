@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react'
 import { Button } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { FormActions } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
 import styles from './unsaved.module.scss'
@@ -118,26 +119,35 @@ export function UnsavedChangesGuard({ children, saveAll = false }: GuardProps) {
       const element = bar.current
       const target = event.target
       if (!element || !(target instanceof HTMLElement) || element.contains(target)) return
+      // Закрыто — только если прямоугольники пересекаются: ссылки панели слева полосы не касаются,
+      // а в конце страницы полоса стоит на своём месте и кнопки под ней видны
       const box = target.getBoundingClientRect()
-      const barTop = element.getBoundingClientRect().top
-      if (box.bottom > barTop && box.top < window.innerHeight) {
-        window.scrollBy({ top: box.bottom - barTop + 8, behavior: 'instant' })
-      }
+      const cover = element.getBoundingClientRect()
+      const overlaps =
+        box.bottom > cover.top &&
+        box.top < cover.bottom &&
+        box.right > cover.left &&
+        box.left < cover.right
+      if (overlaps) window.scrollBy({ top: box.bottom - cover.top + 8, behavior: 'instant' })
     }
     document.addEventListener('focusin', onFocusIn)
     return () => document.removeEventListener('focusin', onFocusIn)
   }, [saveAll])
 
+  const confirm = useConfirm()
   useBlocker({
-    shouldBlockFn: () =>
-      !window.confirm(
+    shouldBlockFn: async () =>
+      !(await confirm({
+        title: 'Уйти без сохранения?',
         // Карточки — только там, где они есть на экране (SEO); у остальных «карточек» нет
-        !saveAll
-          ? 'На странице есть несохранённые правки. Уйти без сохранения?'
+        description: !saveAll
+          ? 'На странице есть несохранённые правки. Они пропадут.'
           : cards.size === 1
-            ? 'В одной карточке есть несохранённые правки. Уйти без сохранения?'
-            : `В карточках (${cards.size}) есть несохранённые правки. Уйти без сохранения?`,
-      ),
+            ? 'В одной карточке есть несохранённые правки. Они пропадут.'
+            : `В карточках (${cards.size}) есть несохранённые правки. Они пропадут.`,
+        confirmLabel: 'Уйти без сохранения',
+        cancelLabel: 'Остаться',
+      })),
     disabled: cards.size === 0,
     // Закрытие вкладки и перезагрузка спрашивают так же, как в редакторе страницы
     enableBeforeUnload: cards.size > 0,

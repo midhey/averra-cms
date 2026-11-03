@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import { ConfirmProvider } from '../ui/Confirm'
 
 /**
  * Компонент со ссылками роутера и запросами — в роутере в памяти: корень рисует компонент на
@@ -24,8 +25,10 @@ export async function renderWithRouter(ui: ReactNode, path = '/') {
   await router.load()
   const result = render(
     <QueryClientProvider client={queryClient}>
-      {/* biome-ignore lint/suspicious/noExplicitAny: роутер теста не совпадает с типами Register админки */}
-      <RouterProvider router={router as any} />
+      <ConfirmProvider>
+        {/* biome-ignore lint/suspicious/noExplicitAny: роутер теста — не тип Register админки */}
+        <RouterProvider router={router as any} />
+      </ConfirmProvider>
     </QueryClientProvider>,
   )
   return { ...result, router, queryClient }

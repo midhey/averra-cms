@@ -22,6 +22,7 @@ import {
 } from '../queries'
 import { Button, buttonClassName } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
+import { useConfirm } from '../ui/Confirm'
 import { EmptyState } from '../ui/EmptyState'
 import { TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
@@ -55,6 +56,7 @@ function Overview({ siteId }: { siteId: string }) {
     .sort()
     .at(-1)
 
+  const confirm = useConfirm()
   const publishAll = useMutation({
     mutationFn: (targets: readonly PageRow[]) =>
       publishPages(targets, (slug) =>
@@ -68,8 +70,14 @@ function Overview({ siteId }: { siteId: string }) {
   })
 
   // Несколько страниц уходят на публичный сайт одним нажатием: сначала спрашиваем, какие
-  function confirmPublish() {
-    if (window.confirm(publishQuestion(changed))) publishAll.mutate(changed)
+  async function confirmPublish() {
+    const yes = await confirm({
+      title: 'Опубликовать правки?',
+      description: publishQuestion(changed),
+      confirmLabel: 'Опубликовать',
+      tone: 'primary',
+    })
+    if (yes) publishAll.mutate(changed)
   }
 
   const managePages = canManagePages(site.access)

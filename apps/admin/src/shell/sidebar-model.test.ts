@@ -4,7 +4,7 @@ import { roleName, seesInstallation, siteSections } from './sidebar-model'
 const ids = (site: Parameters<typeof siteSections>[0]) => siteSections(site).map(({ id }) => id)
 
 describe('разделы сайта в панели', () => {
-  it('владелец и клиент видят заявки со счётчиком и уведомления, «SEO» и «Свои блоки» — только владелец', () => {
+  it('владелец и администратор сайта видят заявки, уведомления, шапку и SEO; тему и «Свои блоки» — только владелец', () => {
     expect(ids({ access: 'owner', newLeads: 3 })).toEqual([
       'overview',
       'pages',
@@ -20,9 +20,11 @@ describe('разделы сайта в панели', () => {
     expect(ids({ access: 'client', newLeads: 0 })).toEqual([
       'overview',
       'pages',
+      'header',
       'media',
       'leads',
       'notifications',
+      'seo',
       'settings',
     ])
     expect(
@@ -30,12 +32,10 @@ describe('разделы сайта в панели', () => {
     ).toEqual({ id: 'leads', label: 'Заявки', icon: 'leads', badge: 0 })
   })
 
-  it('редактор заявок не видит, а тему, шапку и меню меняет; клиенту их нет', () => {
+  it('редактору — страницы и медиатека: ни заявок, ни темы, ни шапки, ни SEO', () => {
     expect(ids({ access: 'editor', newLeads: null })).toEqual([
       'overview',
       'pages',
-      'theme',
-      'header',
       'media',
       'settings',
     ])
@@ -56,7 +56,7 @@ describe('установка и роль', () => {
     expect(roleName('owner', 'owner')).toBe('Владелец')
     expect(roleName('owner')).toBe('Владелец')
     expect(roleName('member', 'editor')).toBe('Редактор')
-    expect(roleName('member', 'client')).toBe('Клиент')
+    expect(roleName('member', 'client')).toBe('Администратор сайта')
     expect(roleName('member')).toBe('Участник')
   })
 })

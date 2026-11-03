@@ -41,6 +41,7 @@ import {
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button, iconButtonClassName } from '../ui/Button'
 import { CodeEditor, type LineMark } from '../ui/CodeEditor'
+import { useConfirm } from '../ui/Confirm'
 import { lineRange } from '../ui/code-highlight'
 import { Select, TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
@@ -153,6 +154,7 @@ function CustomBlockEditor({
       return res.json()
     },
   })
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async () => {
       const res = await blockApi.$delete({ param })
@@ -235,7 +237,13 @@ function CustomBlockEditor({
   }
 
   async function onDelete() {
-    if (!window.confirm(`Удалить свой блок «${form.title}»? Историю его публикаций тоже`)) return
+    const yes = await confirm({
+      title: `Удалить свой блок «${form.title}»?`,
+      description: 'Историю его публикаций тоже. Вернуть его не получится.',
+      confirmLabel: 'Удалить блок',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     try {
       await remove.mutateAsync()
       await queryClient.invalidateQueries({ queryKey: queryKeys.customBlocks(siteId) })
@@ -640,6 +648,7 @@ function HistoryPanel({
   onRestored: (view: { draft: unknown; published: unknown; unpublished: boolean }) => void
 }) {
   const { data, error, isPending } = useQuery(customBlockRevisionsQuery(siteId, blockKey))
+  const confirm = useConfirm()
   const restore = useMutation({
     mutationFn: async (revisionId: string) => {
       const res = await api.sites[':siteId']['custom-blocks'][':key'].revisions[
@@ -670,10 +679,16 @@ function HistoryPanel({
             <Button
               size="small"
               loading={restore.isPending && restore.variables === revision.id}
-              onClick={() => {
-                if (unsaved && !window.confirm('Несохранённые правки пропадут. Вернуть версию?'))
-                  return
-                void restore.mutateAsync(revision.id).then(onRestored)
+              onClick={async () => {
+                const yes =
+                  !unsaved ||
+                  (await confirm({
+                    title: 'Вернуть версию?',
+                    description: 'Несохранённые правки пропадут.',
+                    confirmLabel: 'Вернуть версию',
+                    cancelLabel: 'Оставить правки',
+                  }))
+                if (yes) void restore.mutateAsync(revision.id).then(onRestored)
               }}
             >
               Вернуть в черновик

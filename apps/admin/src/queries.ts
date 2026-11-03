@@ -18,6 +18,8 @@ export const queryKeys = {
   media: (siteId: string) => ['sites', siteId, 'media'] as const,
   build: (siteId: string) => ['sites', siteId, 'build'] as const,
   invitations: (siteId: string) => ['sites', siteId, 'invitations'] as const,
+  members: (siteId: string) => ['sites', siteId, 'members'] as const,
+  sessions: ['me', 'sessions'] as const,
   leads: (siteId: string) => ['sites', siteId, 'leads'] as const,
   leadList: (siteId: string, status: LeadStatus | undefined) =>
     ['sites', siteId, 'leads', 'list', status ?? 'all'] as const,
@@ -229,7 +231,32 @@ export const buildQuery = (siteId: string) =>
     },
   })
 
-/** Приглашения на сайт, новые сверху. Только у владельца: остальным API ответит 403 */
+/** Участники сайта: владельцы, администраторы сайта, редакторы и отключённые */
+export const membersQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.members(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].members.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Сколько ещё входов, кроме этого: экран «Профиль» */
+export const sessionsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.sessions,
+    queryFn: async () => {
+      const res = await api.me.sessions.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/**
+ * Приглашения на сайт, новые сверху. У владельца и администратора сайта: редактору API ответит
+ * 403
+ */
 export const invitationsQuery = (siteId: string) =>
   queryOptions({
     queryKey: queryKeys.invitations(siteId),
@@ -242,7 +269,7 @@ export const invitationsQuery = (siteId: string) =>
 
 /**
  * Заявки сайта, новые сверху (только новые или только обработанные — status), и уходят ли
- * уведомления о них. Видят владелец и клиент сайта, редактору API ответит 403
+ * уведомления о них. Видят владелец и администратор сайта, редактору API ответит 403
  */
 export const leadsQuery = (siteId: string, status?: LeadStatus) =>
   queryOptions({
@@ -414,7 +441,7 @@ export const notificationOutboxQuery = () =>
 
 /**
  * Получатели уведомлений о заявках сайта, готовность каналов (имя бота для привязки) и куда
- * уведомления уходят сейчас. Владельцу и клиенту, редактору API ответит 403
+ * уведомления уходят сейчас. Владельцу и администратору сайта, редактору API ответит 403
  */
 export const siteNotificationsQuery = (siteId: string) =>
   queryOptions({

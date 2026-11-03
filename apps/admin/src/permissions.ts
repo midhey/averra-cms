@@ -1,13 +1,39 @@
 // Что показывать роли на сайте. Решает всё равно API (таблица разрешений в
-// apps/api/src/auth/access.ts), а здесь — только чтобы не предлагать того, что он не разрешит
+// apps/api/src/auth/access.ts), а здесь — только чтобы не предлагать того, что он не разрешит.
+// Таблица ниже повторяет её строка в строку: поменяли там — поменяйте здесь (permissions.test.ts)
 
-export type SiteAccess = 'owner' | 'editor' | 'client'
+import type { SiteRoleKey } from '@averra/schema'
 
-/** Создавать, публиковать и удалять страницы могут владелец и редактор, клиент — только править */
-export const canPublish = (access: SiteAccess) => access !== 'client'
-export const canManagePages = (access: SiteAccess) => access !== 'client'
-/** Картинки загружают все, кто правит сайт, а удаляют, как и страницы, владелец и редактор */
-export const canDeleteMedia = (access: SiteAccess) => access !== 'client'
+/** Роль на сайте: владелец установки, администратор сайта (client) или редактор */
+export type SiteAccess = SiteRoleKey
+
+const everyone: readonly SiteAccess[] = ['owner', 'client', 'editor']
+const ownerAndAdmin: readonly SiteAccess[] = ['owner', 'client']
+const ownerOnly: readonly SiteAccess[] = ['owner']
+
+/** Действия API, от которых зависят экраны, и кому они открыты */
+export const siteRights = {
+  'page.publish': everyone,
+  'page.manage': everyone,
+  'media.delete': everyone,
+  'members.invite': ownerAndAdmin,
+  'leads.read': ownerAndAdmin,
+  'site.export': ownerAndAdmin,
+  'site.settings': ownerAndAdmin,
+  'header.edit': ownerAndAdmin,
+  'theme.edit': ownerOnly,
+  'blocks.define': ownerOnly,
+  'channels.manage': ownerOnly,
+} as const satisfies Record<string, readonly SiteAccess[]>
+
+const allowed = (right: keyof typeof siteRights) => (access: SiteAccess) =>
+  (siteRights[right] as readonly SiteAccess[]).includes(access)
+
+/** Создавать, публиковать и удалять страницы — все, кто работает с сайтом */
+export const canPublish = allowed('page.publish')
+export const canManagePages = allowed('page.manage')
+/** Картинки загружают и удаляют все, кто работает с сайтом */
+export const canDeleteMedia = allowed('media.delete')
 
 /**
  * Куда вернуть после входа. Только адрес внутри админки: ссылка вида /login?redirect=https://…
@@ -30,44 +56,64 @@ export function safeRedirect(target: unknown) {
 
 /**
  * Заявки с форм — персональные данные посетителей: их видят, обрабатывают и настраивают владелец
- * и клиент сайта (это его заявки). Редактору, который делает контент, они не нужны
+ * и администратор сайта (это его заявки). Редактору, который пишет контент, они не нужны
  */
-export const canSeeLeads = (access: SiteAccess) => access !== 'editor'
+export const canSeeLeads = allowed('leads.read')
 
 /**
- * Раздел «Уведомления»: получателей уведомлений о заявках меняют владелец и клиент (как настройки
- * заявок), а каналы, бота Telegram и служебные события — только владелец (сопровождение установки)
+ * Раздел «Уведомления»: получателей уведомлений о заявках меняют владелец и администратор сайта
+ * (как настройки заявок), а каналы, бота Telegram и служебные события — только владелец
  */
 export const canSeeNotifications = canSeeLeads
-export const canManageChannels = (access: SiteAccess) => access === 'owner'
-
-/** Приглашать участников и отзывать приглашения может только владелец */
-export const canInvite = (access: SiteAccess) => access === 'owner'
+export const canManageChannels = allowed('channels.manage')
 
 /**
- * Раздел «SEO» — только владелец: индексация, адрес, редиректы и счётчики решает студия, которая
- * ведёт установку (apps/api/src/auth/access.ts, site.settings)
+ * Участники: владелец и администратор сайта. Администратор сайта приглашает и отключает только
+ * редакторов (assignableRoles)
  */
-export const canEditSeo = (access: SiteAccess) => access === 'owner'
+export const canInvite = allowed('members.invite')
+
+/** Какие роли выдаёт роль — как assignableRoles в apps/api/src/auth/access.ts */
+export const assignableRoles: Record<SiteAccess, readonly SiteAccess[]> = {
+  owner: ['owner', 'client', 'editor'],
+  client: ['editor'],
+  editor: [],
+}
 
 /**
- * Тема сайта (экран «Тема»): меняют и публикуют те же, кто публикует страницы, — владелец и
- * редактор. Публикация темы пересобирает весь сайт (apps/api/src/auth/access.ts, theme.edit)
+ * Можно ли вошедшему менять участника с этой ролью. У отключённого (role — null) решает роль до
+ * отключения: администратор сайта возвращает только бывших редакторов, неизвестную — владелец
  */
-export const canEditTheme = (access: SiteAccess) => access !== 'client'
+export const canManageMember = (
+  access: SiteAccess,
+  role: SiteAccess | null,
+  disabledRole: SiteAccess | null = null,
+) => {
+  const effective = role ?? disabledRole
+  return effective === null ? access === 'owner' : assignableRoles[access].includes(effective)
+}
 
 /**
- * Шапка сайта и меню (экран «Шапка и подвал») — как тема: владелец и редактор, публикация
- * пересобирает весь сайт (apps/api/src/auth/access.ts, header.edit)
+ * Раздел «SEO»: индексация, адрес, счётчики, «Организация» (контакты и реквизиты) — владелец и
+ * администратор сайта (site.settings)
  */
-export const canEditHeader = (access: SiteAccess) => access !== 'client'
+export const canEditSeo = allowed('site.settings')
 
-/** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки: владелец и клиент */
-export const canExportData = (access: SiteAccess) => access !== 'editor'
+/**
+ * Тема сайта (экран «Тема») — только владелец: фирменный стиль делает студия, одна правка меняет
+ * весь сайт (theme.edit). Остальные видят её только для чтения
+ */
+export const canEditTheme = allowed('theme.edit')
+
+/** Шапка, меню и подвал — владелец и администратор сайта: его контакты и навигация (header.edit) */
+export const canEditHeader = allowed('header.edit')
+
+/** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки */
+export const canExportData = allowed('site.export')
 
 /**
  * Свои блоки (раздел «Свои блоки»): поля, шаблон и CSS — код на страницах сайта, его пишет
- * разработчик студии, владелец установки (apps/api/src/auth/access.ts, blocks.define). Редактор и
- * клиент только заполняют опубликованные свои блоки на страницах
+ * разработчик студии, владелец установки (blocks.define). Остальные только заполняют
+ * опубликованные свои блоки на страницах
  */
-export const canDefineBlocks = (access: SiteAccess) => access === 'owner'
+export const canDefineBlocks = allowed('blocks.define')

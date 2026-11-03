@@ -1,3 +1,4 @@
+import { roleLabels } from '@averra/schema'
 import {
   canDefineBlocks,
   canEditHeader,
@@ -33,10 +34,10 @@ export type SiteSection = {
 }
 
 /**
- * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и клиент
- * (у редактора и токена newLeads — null), «Уведомления» — им же. «Тема» — владельцу и редактору
- * (клиент тему не меняет), «Шапка и подвал» — им же, «Свои блоки» и «SEO и аналитика» — только
- * владельцу
+ * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и
+ * администратор сайта (у редактора и токена newLeads — null), «Уведомления», «Шапка и подвал» и
+ * «SEO и аналитика» — им же. «Тема» и «Свои блоки» — только владельцу. Редактору — страницы,
+ * медиатека и настройки сайта
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
   const sections: SiteSection[] = [
@@ -66,14 +67,8 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
 /** Почта и состояние установки — только у владельца установки */
 export const seesInstallation = (role: 'owner' | 'member') => role === 'owner'
 
-const siteRoleNames: Record<SiteAccess, string> = {
-  owner: 'Владелец',
-  editor: 'Редактор',
-  client: 'Клиент',
-}
-
 /** Подпись роли под именем: владелец — всегда владелец, участник — его роль на сайте установки */
 export function roleName(role: 'owner' | 'member', siteAccess?: SiteAccess) {
   if (role === 'owner') return 'Владелец'
-  return siteAccess ? siteRoleNames[siteAccess] : 'Участник'
+  return siteAccess ? roleLabels[siteAccess] : 'Участник'
 }

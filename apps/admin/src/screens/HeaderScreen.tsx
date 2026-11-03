@@ -35,6 +35,7 @@ import { canEditHeader, canEditSeo } from '../permissions'
 import { footerQuery, headerQuery, mediaQuery, pageQuery, queryKeys, siteQuery } from '../queries'
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { Checkbox, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -193,6 +194,7 @@ function HeaderEditor(props: EditorProps) {
       return res.json()
     },
   })
+  const confirm = useConfirm()
   const takeDown = useMutation({
     mutationFn: async () => {
       const res = await api.sites[':siteId'].header.$delete({ param: { siteId } })
@@ -276,9 +278,13 @@ function HeaderEditor(props: EditorProps) {
 
   /** Убрать шапку с сайта: настройки остаются черновиком, их можно опубликовать снова */
   async function onTakeDown() {
-    if (!window.confirm('Убрать шапку со всех страниц сайта? Настройки останутся черновиком.')) {
-      return
-    }
+    const yes = await confirm({
+      title: 'Убрать шапку со всех страниц сайта?',
+      description: 'Настройки останутся черновиком.',
+      confirmLabel: 'Убрать шапку',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     setNotice(undefined)
     try {
       const state = await takeDown.mutateAsync()
@@ -331,8 +337,8 @@ function HeaderEditor(props: EditorProps) {
       >
         {readOnly && (
           <InlineAlert tone="info" title="Только просмотр">
-            Шапку, меню и подвал меняют владелец и редактор сайта: их публикация пересобирает весь
-            сайт.
+            Шапку, меню и подвал меняют владелец и администратор сайта: их публикация пересобирает
+            весь сайт.
           </InlineAlert>
         )}
         <Tabs

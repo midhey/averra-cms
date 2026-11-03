@@ -86,6 +86,13 @@ function AdminSidebar() {
 
       <SidebarSection title={seesInstallation(me.role) ? 'Установка' : undefined} bottom>
         {seesInstallation(me.role) && <InstallationLinks />}
+        <NavList label="Вы">
+          <li>
+            <Link to="/profile" className={navLinkClassName}>
+              <NavLinkContent icon="user" label="Профиль" />
+            </Link>
+          </li>
+        </NavList>
         <UserBlock
           name={me.name}
           roleName={roleName(me.role, current ? current.access : undefined)}

@@ -123,10 +123,15 @@ describe('полоса редактора', () => {
     expect(status().textContent).toBe('Есть несохранённые правки')
   })
 
-  it('клиенту нет «Опубликовать»', async () => {
-    await renderWithRouter(<Editor site={{ ...site, access: 'client' }} page={published} />)
-    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Опубликовать' })).toBeNull()
+  it('администратор сайта и редактор публикуют сами: «Опубликовать» есть', async () => {
+    for (const access of ['client', 'editor'] as const) {
+      const { unmount } = await renderWithRouter(
+        <Editor site={{ ...site, access }} page={published} />,
+      )
+      expect(screen.getByRole('button', { name: 'Сохранить' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeTruthy()
+      unmount()
+    }
   })
 })
 

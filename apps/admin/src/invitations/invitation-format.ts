@@ -1,17 +1,18 @@
-// Подписи приглашений: роль и состояние словами. Решает всё API, здесь только слова
+// Подписи приглашений и участников: роль и состояние словами. Решает всё API, здесь только слова
+
+import { roleLabels, type SiteRoleKey } from '@averra/schema'
+
+export { roleLabels }
 
 export type InvitationRole = 'editor' | 'client'
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
 
-export const roleLabels: Record<InvitationRole, string> = {
-  editor: 'Редактор',
-  client: 'Клиент',
-}
-
-/** Что роль может — подсказка в форме приглашения и на экране принятия */
-export const roleHints: Record<InvitationRole, string> = {
-  editor: 'правит и публикует страницы сайта',
-  client: 'правит черновики, а публикует владелец или редактор',
+/** Что роль может — подсказка в форме приглашения, в окне роли и на экране принятия */
+export const roleHints: Record<SiteRoleKey, string> = {
+  owner: 'может всё: код своих блоков, тему, токены для ИИ, обновление установки и участников',
+  client:
+    'ведёт страницы, SEO и контакты, заявки и уведомления, шапку и подвал, приглашает редакторов',
+  editor: 'создаёт, правит и публикует страницы и картинки',
 }
 
 export const statusLabels: Record<InvitationStatus, string> = {
@@ -23,6 +24,9 @@ export const statusLabels: Record<InvitationStatus, string> = {
 
 /** Отозвать можно только ждущее: принятое уже дало доступ, а истёкшее и так не работает */
 export const canRevoke = (status: InvitationStatus) => status === 'pending'
+
+/** Отправить ещё раз — ждущее (письмо потерялось) и истёкшее: новая ссылка с той же ролью */
+export const canResend = (status: InvitationStatus) => status === 'pending' || status === 'expired'
 
 /** Ошибка ссылки приглашения (код API) — тогда экран предлагает не форму, а что делать дальше */
 export const isDeadInvitation = (code: string | undefined) =>

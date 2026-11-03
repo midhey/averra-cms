@@ -13,6 +13,11 @@ const mismatch = { path: ['repeat'], message: 'Пароли не совпада�
 /** Новый пароль по ссылке сброса */
 export const NewPasswordForm = z.object(passwordFields).refine(samePasswords, mismatch)
 
+/** Смена своего пароля в профиле: текущий и новый дважды */
+export const ChangePasswordForm = z
+  .object({ currentPassword: z.string().min(1, 'Введите текущий пароль'), ...passwordFields })
+  .refine(samePasswords, mismatch)
+
 /** Новый пользователь по приглашению: имя и пароль */
 export const InvitedUserForm = z
   .object({ name: UserName, ...passwordFields })

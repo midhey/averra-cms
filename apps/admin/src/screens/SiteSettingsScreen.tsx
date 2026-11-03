@@ -14,7 +14,7 @@ import { usePageTitle } from '../ui/use-page-title'
 import { useSiteId } from '../use-site'
 
 /**
- * Настройки сайта: заявки (владелец и клиент), участники (владелец), сайт на сервере и выгрузка.
+ * Настройки сайта: заявки и участники (владелец и администратор сайта), сайт на сервере и выгрузка.
  * Что роль не может, не показываем — решает всё равно API
  */
 export function SiteSettingsScreen() {
@@ -38,7 +38,9 @@ function SiteSettings({ siteId }: { siteId: string }) {
       <UnsavedChangesGuard>
         {canSeeLeads(site.access) && <LeadSettingsSection id="leads" siteId={siteId} />}
       </UnsavedChangesGuard>
-      {canInvite(site.access) && <InvitationsSection id="members" siteId={siteId} />}
+      {canInvite(site.access) && (
+        <InvitationsSection id="members" siteId={siteId} access={site.access} />
+      )}
       <BuildSection id="build" siteId={siteId} canBuild={canPublish(site.access)} />
       <ExportSection id="export" siteId={siteId} canExportData={canExportData(site.access)} />
     </Screen>

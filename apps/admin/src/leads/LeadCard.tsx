@@ -8,6 +8,7 @@ import { formatDateTime, pagePath } from '../pages-format'
 import { queryKeys } from '../queries'
 import { Button, buttonClassName } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
+import { useConfirm } from '../ui/Confirm'
 import { cx } from '../ui/cx'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -92,6 +93,7 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
     onError: (failure) => setError(`Не удалось поменять состояние: ${messageOf(failure)}`),
   })
 
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async () => {
       const res = await api.sites[':siteId'].leads[':leadId'].$delete({
@@ -111,9 +113,14 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
     onError: (failure) => setError(`Не удалось удалить заявку: ${messageOf(failure)}`),
   })
 
-  function confirmRemove() {
-    const question = `Удалить заявку «${name}» от ${created}? Вернуть её не получится.`
-    if (window.confirm(question)) remove.mutate()
+  async function confirmRemove() {
+    const yes = await confirm({
+      title: `Удалить заявку «${name}» от ${created}?`,
+      description: 'Вернуть её не получится.',
+      confirmLabel: 'Удалить заявку',
+      cancelLabel: 'Оставить',
+    })
+    if (yes) remove.mutate()
   }
 
   const busy = setStatus.isPending || remove.isPending

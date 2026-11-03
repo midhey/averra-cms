@@ -7,6 +7,7 @@ import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
 import { queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
+import { useConfirm } from '../ui/Confirm'
 
 type Notice = { kind: 'done' | 'error'; text: string }
 
@@ -61,6 +62,7 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
       return res.json()
     },
   })
+  const confirm = useConfirm()
   const takeDown = useMutation({
     mutationFn: async () => {
       const res = await api.sites[':siteId'].footer.$delete({ param: { siteId } })
@@ -144,13 +146,13 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
 
     /** Убрать подвал с сайта: внизу страниц снова только ссылки на документы */
     async takeDown() {
-      if (
-        !window.confirm(
-          'Убрать подвал со всех страниц сайта? Внизу останутся ссылки на документы, настройки — черновиком.',
-        )
-      ) {
-        return
-      }
+      const yes = await confirm({
+        title: 'Убрать подвал со всех страниц сайта?',
+        description: 'Внизу останутся ссылки на документы, настройки — черновиком.',
+        confirmLabel: 'Убрать подвал',
+        cancelLabel: 'Оставить',
+      })
+      if (!yes) return
       onNotice(undefined)
       try {
         updateCache(await takeDown.mutateAsync())

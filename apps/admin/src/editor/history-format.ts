@@ -37,7 +37,7 @@ export function restoreQuestion(revision: RevisionSummary, timeZone?: string) {
 export function restoredMessage(revision: RevisionSummary, canPublish: boolean) {
   const next = canPublish
     ? 'На сайт она попадёт после публикации'
-    : 'На сайт её выложит владелец или редактор сайта'
+    : 'На сайт её выложит владелец или администратор сайта'
   return `Версия ${revision.version} возвращена в черновик. ${next}`
 }
 

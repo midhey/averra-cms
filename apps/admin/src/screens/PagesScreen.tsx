@@ -12,6 +12,7 @@ import { canManagePages } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
 import { Button } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
+import { useConfirm } from '../ui/Confirm'
 import { EmptyState } from '../ui/EmptyState'
 import { TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -42,6 +43,7 @@ function SitePages({ siteId }: { siteId: string }) {
   // Клиент только правит черновики: создавать и удалять страницы ему API не даст
   const managePages = canManagePages(site.access)
 
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async ({ slug }: { slug: string; title: string }) => {
       const res = await api.sites[':siteId'].pages[':slug'].$delete({ param: { siteId, slug } })
@@ -61,9 +63,14 @@ function SitePages({ siteId }: { siteId: string }) {
       setNotice({ kind: 'error', text: `Не удалось удалить «${title}»: ${messageOf(error)}` }),
   })
 
-  function confirmRemove(page: { slug: string; title: string }) {
-    const question = `Удалить страницу «${page.title}» (${pagePath(page.slug)})? Вернуть её не получится.`
-    if (!window.confirm(question)) return
+  async function confirmRemove(page: { slug: string; title: string }) {
+    const yes = await confirm({
+      title: `Удалить страницу «${page.title}» (${pagePath(page.slug)})?`,
+      description: 'Вернуть её не получится.',
+      confirmLabel: 'Удалить страницу',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     setNotice(undefined)
     remove.mutate(page)
   }
@@ -126,7 +133,7 @@ function SitePages({ siteId }: { siteId: string }) {
         <NewPageForm siteId={siteId} />
       ) : (
         <InlineAlert tone="info">
-          Вы можете править черновики страниц. Публикует их владелец или редактор сайта.
+          Вы можете править черновики страниц. Публикует их владелец или администратор сайта.
         </InlineAlert>
       )}
     </Screen>

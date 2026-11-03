@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JsonSchema } from '../forms/json-schema'
 import { queryKeys } from '../queries'
+import { ConfirmProvider } from '../ui/Confirm'
 import { ImageField } from './ImageField'
 import type { MediaLibraryData } from './media-format'
 
@@ -54,17 +55,19 @@ function field(schema: JsonSchema, value: unknown) {
   const onChange = vi.fn()
   render(
     <QueryClientProvider client={queryClient}>
-      <ImageField
-        siteId={siteId}
-        schema={schema}
-        value={value}
-        path={['logo']}
-        label="Логотип"
-        required={false}
-        errors={{}}
-        onChange={onChange}
-        widgets={{}}
-      />
+      <ConfirmProvider>
+        <ImageField
+          siteId={siteId}
+          schema={schema}
+          value={value}
+          path={['logo']}
+          label="Логотип"
+          required={false}
+          errors={{}}
+          onChange={onChange}
+          widgets={{}}
+        />
+      </ConfirmProvider>
     </QueryClientProvider>,
   )
   return { onChange }

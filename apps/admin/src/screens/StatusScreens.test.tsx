@@ -48,21 +48,21 @@ describe('экран ошибки', () => {
   it('раздел закрыт для роли — «Нет доступа к разделу», а не «Не получилось открыть»', async () => {
     const forbidden = new ApiRequestError(
       403,
-      'Заявки видят владелец и клиент сайта',
+      'Заявки видят владелец и администратор сайта',
       [],
       'forbidden',
     )
     await renderWithRouter(<ErrorScreen error={forbidden} />)
     expect(screen.getByRole('heading', { name: 'Нет доступа к разделу' })).toBeTruthy()
     expect(screen.queryByText('Не получилось открыть')).toBeNull()
-    expect(screen.getByText('Заявки видят владелец и клиент сайта')).toBeTruthy()
+    expect(screen.getByText('Заявки видят владелец и администратор сайта')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'К обзору сайта' }).getAttribute('href')).toBe('/')
   })
 
   it('редактору на /notifications: заголовок называет раздел, текст — про уведомления', async () => {
     const forbidden = new ApiRequestError(
       403,
-      'Заявки видят владелец и клиент сайта',
+      'Заявки видят владелец и администратор сайта',
       [],
       'forbidden',
     )
@@ -70,8 +70,8 @@ describe('экран ошибки', () => {
     expect(
       screen.getByRole('heading', { name: 'Нет доступа к разделу «Уведомления»' }),
     ).toBeTruthy()
-    expect(screen.getByText('Уведомления настраивают владелец и клиент сайта')).toBeTruthy()
-    expect(screen.queryByText('Заявки видят владелец и клиент сайта')).toBeNull()
+    expect(screen.getByText('Уведомления настраивают владелец и администратор сайта')).toBeTruthy()
+    expect(screen.queryByText('Заявки видят владелец и администратор сайта')).toBeNull()
   })
 
   it('сбой остаётся «Не получилось открыть»', async () => {

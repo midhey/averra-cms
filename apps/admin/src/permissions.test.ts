@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { canDeleteMedia, canInvite, canManagePages, canPublish, safeRedirect } from './permissions'
+import {
+  assignableRoles,
+  canDefineBlocks,
+  canDeleteMedia,
+  canEditHeader,
+  canEditSeo,
+  canEditTheme,
+  canExportData,
+  canInvite,
+  canManageChannels,
+  canManageMember,
+  canManagePages,
+  canPublish,
+  canSeeLeads,
+  safeRedirect,
+} from './permissions'
 
 describe('возврат после входа', () => {
   it.each([
@@ -31,24 +46,39 @@ describe('возврат после входа', () => {
   })
 })
 
-describe('что показывать роли', () => {
-  it('клиенту — ни публикации, ни создания и удаления страниц', () => {
-    expect([canPublish('client'), canManagePages('client')]).toEqual([false, false])
-    expect([canPublish('editor'), canManagePages('editor')]).toEqual([true, true])
-    expect([canPublish('owner'), canManagePages('owner')]).toEqual([true, true])
+describe('что показывать роли (как access.ts)', () => {
+  const roles = ['owner', 'client', 'editor'] as const
+  it.each([
+    ['публикация и страницы', canPublish, [true, true, true]],
+    ['создание и удаление страниц', canManagePages, [true, true, true]],
+    ['удаление картинок', canDeleteMedia, [true, true, true]],
+    ['участники', canInvite, [true, true, false]],
+    ['заявки', canSeeLeads, [true, true, false]],
+    ['SEO и «Организация»', canEditSeo, [true, true, false]],
+    ['шапка и подвал', canEditHeader, [true, true, false]],
+    ['выгрузка', canExportData, [true, true, false]],
+    ['тема', canEditTheme, [true, false, false]],
+    ['свои блоки', canDefineBlocks, [true, false, false]],
+    ['каналы уведомлений', canManageChannels, [true, false, false]],
+  ] as const)('%s: владелец, администратор сайта, редактор → %j', (_, can, expected) => {
+    expect(roles.map((role) => can(role))).toEqual(expected)
   })
 
-  it('картинки удаляют владелец и редактор, клиент только загружает', () => {
-    expect((['client', 'editor', 'owner'] as const).map(canDeleteMedia)).toEqual([
-      false,
-      true,
-      true,
-    ])
+  it('администратор сайта управляет только редакторами, редактор — никем', () => {
+    expect(assignableRoles.client).toEqual(['editor'])
+    expect(canManageMember('client', 'editor')).toBe(true)
+    expect(canManageMember('client', 'client')).toBe(false)
+    expect(canManageMember('client', 'owner')).toBe(false)
+    expect(canManageMember('owner', 'owner')).toBe(true)
+    expect(canManageMember('editor', 'editor')).toBe(false)
+    // Отключённые: по роли до отключения
+    expect(canManageMember('client', null, 'editor')).toBe(true)
+    expect(canManageMember('client', null, 'client')).toBe(false)
+    expect(canManageMember('client', null, 'owner')).toBe(false)
+    expect(canManageMember('client', null, null)).toBe(false)
+    expect(canManageMember('owner', null, 'owner')).toBe(true)
+    expect(canManageMember('owner', null, null)).toBe(true)
+    expect(canManageMember('editor', null, 'editor')).toBe(false)
+    expect(canManageMember('editor', null)).toBe(false)
   })
-})
-
-it('приглашает только владелец', () => {
-  expect(canInvite('owner')).toBe(true)
-  expect(canInvite('editor')).toBe(false)
-  expect(canInvite('client')).toBe(false)
 })

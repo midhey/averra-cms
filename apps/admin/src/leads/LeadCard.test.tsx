@@ -57,20 +57,21 @@ describe('LeadCard', () => {
     const user = userEvent.setup()
     const fetch = vi.fn(async () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetch)
-    const confirm = vi.fn(() => false)
-    vi.stubGlobal('confirm', confirm)
     const onDeleted = vi.fn()
     const { router } = await renderWithRouter(
       <LeadCard site={site} lead={lead('')} status="new" onDeleted={onDeleted} />,
       '/leads/a0000000-0000-4000-8000-000000000001',
     )
 
+    // Окно админки, а не системный confirm(): вопрос называет заявку, «Оставить» ничего не делает
     await user.click(screen.getByRole('button', { name: 'Удалить' }))
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Удалить заявку «Мария»'))
+    const ask = screen.getByRole('alertdialog', { name: /^Удалить заявку «Мария»/ })
+    expect(ask.textContent).toContain('Вернуть её не получится.')
+    await user.click(within(ask).getByRole('button', { name: 'Оставить' }))
     expect(fetch).not.toHaveBeenCalled()
 
-    confirm.mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: 'Удалить' }))
+    await user.click(screen.getByRole('button', { name: 'Удалить заявку' }))
     await vi.waitFor(() => expect(onDeleted).toHaveBeenCalled())
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
     expect(String(url)).toContain(

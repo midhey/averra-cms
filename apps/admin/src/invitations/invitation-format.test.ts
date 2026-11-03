@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canResend,
   canRevoke,
   isDeadInvitation,
   pendingInvitationFor,
@@ -10,7 +11,7 @@ import {
 
 describe('подписи приглашений', () => {
   it('роли и состояния словами', () => {
-    expect(roleLabels.client).toBe('Клиент')
+    expect(roleLabels.client).toBe('Администратор сайта')
     expect(statusLabels.pending).toBe('Ждёт ответа')
     expect(statusLabels.expired).toBe('Истекло')
   })
@@ -20,6 +21,12 @@ describe('подписи приглашений', () => {
     for (const status of ['accepted', 'revoked', 'expired'] as const) {
       expect(canRevoke(status)).toBe(false)
     }
+  })
+
+  it('отправить ещё раз — ждущее и истёкшее', () => {
+    expect(['pending', 'expired'].map((s) => canResend(s as 'pending'))).toEqual([true, true])
+    expect(canResend('accepted')).toBe(false)
+    expect(canResend('revoked')).toBe(false)
   })
 
   it('мёртвая ссылка — только коды приглашений', () => {
@@ -52,7 +59,7 @@ describe('повторное приглашение', () => {
   it('другая роль — предупреждение называет обе, и что ссылка умрёт', () => {
     const warning = replaceWarning(invitations[0], 'client')
     expect(warning).toContain('с ролью «Редактор»')
-    expect(warning).toContain('роль станет «Клиент»')
+    expect(warning).toContain('роль станет «Администратор сайта»')
     expect(warning).toContain('ссылка из прежнего письма перестанет работать')
   })
 

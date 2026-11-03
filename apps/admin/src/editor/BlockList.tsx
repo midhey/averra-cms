@@ -1,6 +1,7 @@
 import { PAGE_MAX_BLOCKS } from '@averra/schema'
 import { type ReactNode, useId, useMemo } from 'react'
 import { Button, IconButton } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { StatusPill } from '../ui/StatusPill'
 import { useMoveButtons } from '../ui/use-move-buttons'
@@ -131,8 +132,15 @@ function BlockItem(props: BlockItemProps) {
   const arrows = useMoveButtons(index, count, actions.onMove)
   const name = blockName(block)
 
-  const remove = () => {
-    if (window.confirm(`Удалить блок «${name}»?`)) actions.onRemove(block.id)
+  const confirm = useConfirm()
+  const remove = async () => {
+    const yes = await confirm({
+      title: `Удалить блок «${name}»?`,
+      description: 'На сайте он пропадёт после публикации.',
+      confirmLabel: 'Удалить блок',
+      cancelLabel: 'Оставить',
+    })
+    if (yes) actions.onRemove(block.id)
   }
 
   return (

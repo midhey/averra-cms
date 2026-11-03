@@ -18,8 +18,9 @@ import { usePageTitle } from '../ui/use-page-title'
 import { useSiteId } from '../use-site'
 
 /**
- * Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и клиенту.
- * Что роль не может, не показываем — решает всё равно API (apps/api/src/auth/access.ts)
+ * Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и
+ * администратору сайта. Что роль не может, не показываем — решает всё равно API
+ * (apps/api/src/auth/access.ts)
  */
 export function NotificationsScreen() {
   const siteId = useSiteId()

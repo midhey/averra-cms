@@ -24,6 +24,7 @@ import {
   sectionTitle,
 } from '../editor/catalog'
 import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
+import { roleHints, roleLabels } from '../invitations/invitation-format'
 import { MediaCard } from '../media/MediaCard'
 import { MediaUsage } from '../media/MediaLibrary'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
@@ -46,6 +47,7 @@ import {
 import { Button, buttonClassName, IconButton, iconButtonClassName } from '../ui/Button'
 import { Card, cardClassName } from '../ui/Card'
 import { CodeEditor } from '../ui/CodeEditor'
+import { useConfirm } from '../ui/Confirm'
 import { CountBadge } from '../ui/CountBadge'
 import { DataTable } from '../ui/DataTable'
 import { Dialog } from '../ui/Dialog'
@@ -201,6 +203,9 @@ export function UiShowcase() {
   const [consent, setConsent] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Подтверждение админки (useConfirm): вместо системного confirm() во всех опасных действиях
+  const confirm = useConfirm()
+  const [confirmAnswer, setConfirmAnswer] = useState<string>()
   const [largeOpen, setLargeOpen] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [picked, setPicked] = useState('')
@@ -464,14 +469,14 @@ export function UiShowcase() {
               type="search"
               placeholder="Найти страницу"
             />
-            <Select label="Роль" defaultValue="client" hint="Клиент правит черновики">
-              <option value="client">Клиент</option>
-              <option value="editor">Редактор</option>
+            <Select label="Роль" defaultValue="client" hint={roleHints.client}>
+              <option value="client">{roleLabels.client}</option>
+              <option value="editor">{roleLabels.editor}</option>
             </Select>
             <TextInput label="Выключено" defaultValue="Нельзя изменить" disabled />
             <Select label="Список выключен" defaultValue="client" disabled>
-              <option value="client">Клиент</option>
-              <option value="editor">Редактор</option>
+              <option value="client">{roleLabels.client}</option>
+              <option value="editor">{roleLabels.editor}</option>
             </Select>
             <TextArea
               label="Описание длиннее предела"
@@ -932,7 +937,7 @@ export function UiShowcase() {
           <div>
             <h3>Нет доступа к разделу «Уведомления»</h3>
             <InlineAlert tone="warning">
-              Уведомления настраивают владелец и клиент сайта
+              Уведомления настраивают владелец и администратор сайта
             </InlineAlert>
           </div>
           {/* Медиатека: где стоит картинка; «Удалить» выключена, причина — рядом */}
@@ -963,6 +968,20 @@ export function UiShowcase() {
             <Button variant="danger" icon="trash" onClick={() => setDialogOpen(true)}>
               Удалить страницу…
             </Button>
+            <Button
+              onClick={async () => {
+                const yes = await confirm({
+                  title: 'Отключить доступ для Анны?',
+                  description:
+                    'Все её входы завершатся сразу, войти снова она не сможет. Вернуть доступ можно в списке участников.',
+                  confirmLabel: 'Отключить доступ',
+                  cancelLabel: 'Оставить',
+                })
+                setConfirmAnswer(yes ? 'Доступ отключён (понарошку).' : 'Оставили как было.')
+              }}
+            >
+              Подтверждение…
+            </Button>
             <Button onClick={() => setLargeOpen(true)}>Большое окно…</Button>
             <Button icon="plus" onClick={() => setCatalogOpen(true)}>
               Каталог блоков…
@@ -970,6 +989,7 @@ export function UiShowcase() {
             <p className={styles.muted} aria-live="polite">
               {deleted ? 'Страница «Отзывы» удалена (понарошку).' : ''}
               {picked ? `Выбран блок «${picked}» (понарошку).` : ''}
+              {confirmAnswer ?? ''}
             </p>
           </div>
           {/* Самое широкое окно — настоящий каталог редактора: поиск, разделы, наброски, «новый» */}

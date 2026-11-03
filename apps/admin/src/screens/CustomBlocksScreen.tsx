@@ -287,7 +287,7 @@ function CreateDialog({
       <form className={formClassName} onSubmit={onSubmit} noValidate>
         <TextInput
           label="Название"
-          hint="Его видят редактор и клиент в каталоге блоков"
+          hint="Его видят администратор сайта и редактор в каталоге блоков"
           value={title}
           maxChars={60}
           error={errors.title}

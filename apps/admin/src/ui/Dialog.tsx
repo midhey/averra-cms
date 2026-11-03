@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef } from 'react'
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from 'react'
 import { IconButton } from './Button'
 import { cx } from './cx'
 import styles from './Dialog.module.scss'
@@ -14,6 +14,16 @@ type DialogProps = {
   footer?: ReactNode
   /** large — сетка внутри окна (медиатека), wide — каталог блоков в четыре колонки */
   size?: 'small' | 'medium' | 'large' | 'wide'
+  /**
+   * alertdialog — вопрос, на который надо ответить (подтверждение): диктор сразу читает его
+   * вместе с описанием
+   */
+  role?: 'alertdialog'
+  /**
+   * Куда поставить фокус при открытии. Без него браузер ставит его на первую кнопку окна —
+   * «Закрыть». Подтверждение ставит его на безопасную кнопку («Отмена»), а не на «Удалить»
+   */
+  initialFocus?: RefObject<HTMLElement | null>
 }
 
 /**
@@ -29,6 +39,8 @@ export function Dialog({
   children,
   footer,
   size = 'medium',
+  role,
+  initialFocus,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -37,14 +49,18 @@ export function Dialog({
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      initialFocus?.current?.focus()
+    }
     if (!open && dialog.open) dialog.close()
-  }, [open])
+  }, [open, initialFocus])
 
   return (
     <dialog
       ref={ref}
       className={cx(styles.dialog, styles[size])}
+      role={role}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       // Событие close приходит и после Esc: экран узнаёт, что окна больше нет

@@ -7,6 +7,7 @@ import { apiRequestError, messageOf } from '../errors'
 import { canDefineBlocks, canEditHeader, canEditSeo } from '../permissions'
 import { mediaQuery, queryKeys, siteQuery } from '../queries'
 import { Button, buttonClassName, Spinner } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { cx } from '../ui/cx'
 import { EmptyState } from '../ui/EmptyState'
 import { Icon } from '../ui/Icon'
@@ -28,7 +29,7 @@ import { uploadMedia } from './upload'
 
 type MediaLibraryProps = {
   siteId: string
-  /** Удалять может владелец и редактор (решает всё равно API) */
+  /** Право media.delete (сейчас у всех ролей; решает всё равно API) */
   canDelete: boolean
   /** Режим выбора для поля «картинка»: карточка становится кнопкой «Выбрать» */
   onPick?: (media: MediaItem) => void
@@ -94,6 +95,7 @@ export function MediaLibrary({
     onSettled: () => setProgress(undefined),
   })
 
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async (media: MediaItem) => {
       const res = await api.sites[':siteId'].media[':mediaId'].$delete({
@@ -127,10 +129,16 @@ export function MediaLibrary({
     upload.mutate(file)
   }
 
-  function confirmRemove(media: MediaItem) {
+  async function confirmRemove(media: MediaItem) {
     // Кнопка выключена, но по клавише Enter её всё равно можно нажать (aria-disabled)
     if (media.usage.length > 0 || remove.isPending) return
-    if (!window.confirm(deleteQuestion(media))) return
+    const yes = await confirm({
+      title: 'Удалить картинку?',
+      description: deleteQuestion(media),
+      confirmLabel: 'Удалить картинку',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     setNotice(undefined)
     remove.mutate(media)
   }

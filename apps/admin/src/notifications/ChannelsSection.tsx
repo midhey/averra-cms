@@ -14,6 +14,7 @@ import { focusField } from '../forms/use-form-errors'
 import { notificationsQuery, queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { Checkbox, TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -341,6 +342,7 @@ function TelegramForm({
     onError: showError,
   })
 
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async () => {
       const res = await api.notifications.telegram.$delete({ json: { currentPassword } })
@@ -368,7 +370,7 @@ function TelegramForm({
     save.mutate()
   }
 
-  function runRemove() {
+  async function runRemove() {
     onStart()
     setNotice(undefined)
     const password = CurrentPassword.safeParse(currentPassword)
@@ -377,11 +379,13 @@ function TelegramForm({
       focusField(formRef.current, 'currentPassword')
       return
     }
-    if (
-      !window.confirm('Удалить бота? Все чаты отвяжутся, уведомления в Telegram перестанут уходить')
-    ) {
-      return
-    }
+    const yes = await confirm({
+      title: 'Удалить бота?',
+      description: 'Все чаты отвяжутся, уведомления в Telegram перестанут уходить',
+      confirmLabel: 'Удалить бота',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     remove.mutate()
   }
 

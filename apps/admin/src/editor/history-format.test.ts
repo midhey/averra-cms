@@ -34,7 +34,7 @@ describe('подписи истории', () => {
     expect(restoredMessage(revision, true)).toBe(
       'Версия 3 возвращена в черновик. На сайт она попадёт после публикации',
     )
-    expect(restoredMessage(revision, false)).toContain('владелец или редактор')
+    expect(restoredMessage(revision, false)).toContain('владелец или администратор сайта')
   })
 
   it('версию, которую не пропускают нынешние схемы блоков, в предпросмотр не пускает', () => {

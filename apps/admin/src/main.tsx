@@ -8,6 +8,7 @@ import { queryKeys } from './queries'
 import { createAdminRouter } from './router'
 import globalCss from './styles/global.scss?inline'
 import { installGlobalStyle } from './styles/global-style'
+import { ConfirmProvider } from './ui/Confirm'
 
 setupZodMessages()
 installGlobalStyle(document, globalCss)
@@ -45,7 +46,9 @@ if (!root) throw new Error('Не найден элемент #root')
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ConfirmProvider>
+        <RouterProvider router={router} />
+      </ConfirmProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

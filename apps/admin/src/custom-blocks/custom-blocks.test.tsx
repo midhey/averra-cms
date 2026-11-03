@@ -9,6 +9,7 @@ import { createBlock } from '../editor/draft'
 import { validateBlocks } from '../editor/validation'
 import { SchemaForm } from '../forms/SchemaForm'
 import { CodeEditor } from '../ui/CodeEditor'
+import { ConfirmProvider } from '../ui/Confirm'
 import { highlightCode, lineRange } from '../ui/code-highlight'
 import {
   blockStatus,
@@ -84,7 +85,7 @@ describe('форма своего блока: число', () => {
   }
 
   it('цифровая клавиатура, пределы в подсказке, значение — числом', async () => {
-    render(<NumberForm />)
+    render(<NumberForm />, { wrapper: ConfirmProvider })
     const input = screen.getByRole('textbox', { name: /Колонок/ })
     expect(input.getAttribute('inputmode')).toBe('numeric')
     expect(screen.getByText(/от 2 до 4/)).toBeTruthy()
@@ -151,7 +152,7 @@ describe('конструктор полей', () => {
         </>
       )
     }
-    render(<Builder />)
+    render(<Builder />, { wrapper: ConfirmProvider })
     await userEvent.click(screen.getByRole('button', { name: 'Добавить поле' }))
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Вид' }), 'repeater')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить поле внутрь' }))
@@ -178,7 +179,7 @@ describe('конструктор полей', () => {
         </>
       )
     }
-    render(<Builder />)
+    render(<Builder />, { wrapper: ConfirmProvider })
     const min = screen.getByRole('textbox', { name: 'Не меньше' })
     await userEvent.type(min, '-10')
     expect((min as HTMLInputElement).value).toBe('-10')
@@ -203,7 +204,7 @@ describe('конструктор полей', () => {
         </>
       )
     }
-    render(<Builder />)
+    render(<Builder />, { wrapper: ConfirmProvider })
     screen.getByRole('button', { name: 'Опустить поле «Заголовок»' }).focus()
     await userEvent.keyboard('{Enter}')
     expect(document.activeElement).toBe(
@@ -239,6 +240,7 @@ describe('конструктор полей', () => {
         errors={{}}
         path="fields"
       />,
+      { wrapper: ConfirmProvider },
     )
     expect(
       screen.getAllByRole('button', { name: 'Добавить поле' })[0]?.getAttribute('aria-disabled'),

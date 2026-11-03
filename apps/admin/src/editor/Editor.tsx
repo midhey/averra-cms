@@ -28,6 +28,7 @@ import {
   seoFieldLabels,
 } from '../seo/page-seo-format'
 import { Button, IconButton, iconButtonClassName } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { CountBadge } from '../ui/CountBadge'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -217,11 +218,11 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
       разделе <Link to="/theme">«Тема»</Link>, на сайт они попадут после публикации темы.
     </>
   ) : undefined
-  // Клиент публиковать не может: кнопки нет, и без слова «правки не опубликованы» висело бы без
-  // подсказки, что делать дальше
+  // Публиковать сейчас могут все роли, но право — по таблице: без него кнопки нет, и без слова
+  // «правки не опубликованы» висело бы без подсказки, что делать дальше
   const publishNote = canPublish(site.access)
     ? undefined
-    : 'Публикует владелец или редактор: когда правки готовы, сообщите им.'
+    : 'Публикует владелец или администратор сайта: когда правки готовы, сообщите им.'
   const adviceBadge =
     advice.length > 0 ? (
       <CountBadge
@@ -256,12 +257,18 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
+  const confirm = useConfirm()
   // И уйти по ссылке внутри админки («Назад к сайту») или кнопкой «Назад» браузера. Закрытие
   // вкладки ловит beforeunload выше, а свой у блокировщика по умолчанию включён всегда,
   // даже без правок
   useBlocker({
-    shouldBlockFn: () =>
-      !window.confirm('На странице есть несохранённые изменения. Уйти без сохранения?'),
+    shouldBlockFn: async () =>
+      !(await confirm({
+        title: 'Уйти без сохранения?',
+        description: 'На странице есть несохранённые изменения. Они пропадут.',
+        confirmLabel: 'Уйти без сохранения',
+        cancelLabel: 'Остаться',
+      })),
     disabled: !dirty,
     enableBeforeUnload: false,
   })
@@ -355,7 +362,17 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
   }
 
   async function restore(revision: HistoryRevision) {
-    if (dirty && !window.confirm(restoreQuestion(revision))) return
+    if (
+      dirty &&
+      !(await confirm({
+        title: `Вернуть версию ${revision.version}?`,
+        description: restoreQuestion(revision),
+        confirmLabel: 'Вернуть версию',
+        cancelLabel: 'Оставить правки',
+      }))
+    ) {
+      return
+    }
     setStatus({ kind: 'busy', message: 'Возвращаю версию…' })
     try {
       const restored = await restoreRevision.mutateAsync(revision.id)

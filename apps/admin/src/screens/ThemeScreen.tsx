@@ -243,7 +243,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
       >
         {readOnly && (
           <InlineAlert tone="info" title="Только просмотр">
-            Тему меняют владелец и редактор сайта: смена темы пересобирает весь сайт.
+            Тему меняет владелец установки (студия): смена темы пересобирает весь сайт.
           </InlineAlert>
         )}
         <Section title="Готовые темы" card>

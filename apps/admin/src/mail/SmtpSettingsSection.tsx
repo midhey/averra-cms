@@ -14,6 +14,7 @@ import { formatDateTime } from '../pages-format'
 import { mailSmtpQuery, meQuery, queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
+import { useConfirm } from '../ui/Confirm'
 import { TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -241,6 +242,7 @@ function SmtpSettingsForm({
     onError: showError,
   })
 
+  const confirm = useConfirm()
   const remove = useMutation({
     mutationFn: async () => {
       const res = await api.mail.smtp.$delete({ json: { currentPassword } })
@@ -289,7 +291,7 @@ function SmtpSettingsForm({
     }
   }
 
-  function runSave(mode: 'checked' | 'unchecked') {
+  async function runSave(mode: 'checked' | 'unchecked') {
     // Без правок сохранять нечего: как у остальных форм, кнопка выключена
     if (!unsaved) return
     startAction('save')
@@ -308,28 +310,31 @@ function SmtpSettingsForm({
     }
     if (
       mode === 'unchecked' &&
-      !window.confirm(
-        'Сохранить настройки SMTP без проверки? Если они неверны, письма (сброс пароля, приглашения) перестанут уходить',
-      )
+      !(await confirm({
+        title: 'Сохранить настройки SMTP без проверки?',
+        description: 'Если они неверны, письма (сброс пароля, приглашения) перестанут уходить',
+        confirmLabel: 'Сохранить без проверки',
+        tone: 'primary',
+      }))
     ) {
       return
     }
     save.mutate(proof.proof)
   }
 
-  function runRemove() {
+  async function runRemove() {
     startAction('remove')
     if (!currentParsed.success) {
       focusField(formRef.current, 'currentPassword')
       return
     }
-    if (
-      !window.confirm(
-        'Удалить настройки SMTP из админки? Почта вернётся к тому, что задано на сервере, — возможно, выключится',
-      )
-    ) {
-      return
-    }
+    const yes = await confirm({
+      title: 'Удалить настройки SMTP из админки?',
+      description: 'Почта вернётся к тому, что задано на сервере, — возможно, выключится',
+      confirmLabel: 'Удалить настройки',
+      cancelLabel: 'Оставить',
+    })
+    if (!yes) return
     remove.mutate()
   }
 
