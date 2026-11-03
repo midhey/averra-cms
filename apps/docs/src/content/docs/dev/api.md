@@ -183,9 +183,9 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 
 | Запрос | Что делает |
 |---|---|
-| `GET /api/sites/:siteId/media` | `{ items, maxBytes }`: картинки с вариантами и предел размера файла |
+| `GET /api/sites/:siteId/media` | `{ items, maxBytes }`: картинки с вариантами и предел размера файла; у каждой — `usage`, где она стоит: страницы (`kind: 'page'`, `state` — `draft`, `published` или `both`), логотип шапки (`header`), настройки SEO (`seo`, `roles`), свои блоки (`block`). Один проход по данным сайта на все картинки (`mediaUsage`) |
 | `POST /api/sites/:siteId/media` | загрузить: multipart, поле `file` → 201. JPEG, PNG, WebP, AVIF — с вариантами; SVG — очищается (`sanitizeSvg`) и хранится одним файлом `image.svg`, до 256 КБ (`MAX_SVG_BYTES`). Не тот тип, битый SVG, DOCTYPE с сущностями, не UTF-8, без размеров (`viewBox`), слишком глубокий или со вложенной картинкой не того формата — 415 с причиной; слишком большой — 413 (тело сверх лимита обрывается, не дочитанным) |
-| `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице или в настройках SEO (иконка, картинка для соцсетей, логотип) — 409 с тем, где стоит |
+| `DELETE /api/sites/:siteId/media/:mediaId` | удалить с файлами; стоит на странице, в настройках SEO (иконка, картинка для соцсетей, логотип), как логотип шапки или в своём блоке — 409 с тем, где стоит (черновики своих блоков названы только тому, кто их видит) |
 | `GET /api/media/:mediaId/:file` | файл варианта (`480.avif`, `960.webp`…) или `image.svg` (`image/svg+xml` с `Content-Security-Policy: default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox` — `SVG_CSP`), `immutable`, `nosniff`. **Открыт** |
 
 ## Участники
