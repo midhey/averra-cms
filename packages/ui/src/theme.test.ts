@@ -140,7 +140,11 @@ describe('тема Averra', () => {
 
   // Наведение должно быть заметно: заливка и рамка меняются, а не «чуть-чуть»
   it('наведение меняет заливку и рамку заметно', () => {
-    expect(contrast('--color-control-hover', '--color-surface')).toBeGreaterThanOrEqual(1.2)
+    // Порог выше старой заливки sand-200 (1,20:1 к поверхности): с ней наведение держалось бы на
+    // одной рамке. Значение по умолчанию — sand-300 (около 1,3:1); решение владельца ещё не принято
+    expect(contrast('--color-control-hover', '--color-surface')).toBeGreaterThanOrEqual(1.25)
+    // И не та же заливка, что у выключенного и приглушённого (surface-muted = sand-200)
+    expect(resolveColor('--color-control-hover')).not.toBe(resolveColor('--color-surface-muted'))
     expect(
       contrast('--color-control-border-hover', '--color-control-border'),
     ).toBeGreaterThanOrEqual(1.4)
