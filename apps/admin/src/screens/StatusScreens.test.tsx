@@ -74,6 +74,25 @@ describe('экран ошибки', () => {
     expect(screen.queryByText('Заявки видят владелец и администратор сайта')).toBeNull()
   })
 
+  it.each([
+    [
+      '/seo/cookies',
+      'Нет доступа к разделу «Cookie и согласие»',
+      'Cookie и согласие настраивают владелец и администратор сайта',
+    ],
+    [
+      '/blocks/le-hero',
+      'Нет доступа к разделу «Свой блок»',
+      'Экран своего блока открывает владелец установки: поля, шаблон и CSS блока пишет студия',
+    ],
+    ['/seo/redirects', 'Нет доступа к разделу «SEO и аналитика»', 'SEO настраивает владелец'],
+  ])('%s: заголовок называет свой раздел, а не чужой', async (path, heading, text) => {
+    const forbidden = new ApiRequestError(403, 'SEO настраивает владелец', [], 'forbidden')
+    await renderWithRouter(<ErrorScreen error={forbidden} />, path)
+    expect(screen.getByRole('heading', { name: heading })).toBeTruthy()
+    expect(screen.getByText(text)).toBeTruthy()
+  })
+
   it('сбой остаётся «Не получилось открыть»', async () => {
     await renderWithRouter(<ErrorScreen error={new ApiRequestError(500, 'API ответил 500')} />)
     expect(screen.getByRole('heading', { name: 'Не получилось открыть' })).toBeTruthy()

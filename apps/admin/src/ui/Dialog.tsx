@@ -24,6 +24,11 @@ type DialogProps = {
    * «Закрыть». Подтверждение ставит его на безопасную кнопку («Отмена»), а не на «Удалить»
    */
   initialFocus?: RefObject<HTMLElement | null>
+  /**
+   * Esc закрывает окно (по умолчанию да). false — Esc ничего не делает: окно с тем, что нельзя
+   * потерять случайно (токен, который показывается один раз). Закрывают кнопки окна
+   */
+  escapeCloses?: boolean
 }
 
 /**
@@ -41,20 +46,43 @@ export function Dialog({
   size = 'medium',
   role,
   initialFocus,
+  escapeCloses = true,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
+  // Кто был в фокусе до открытия: туда возвращаем фокус, если браузер сам этого не сделает
+  const opener = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
     if (open && !dialog.open) {
+      const active = document.activeElement
+      opener.current = active instanceof HTMLElement && active !== document.body ? active : null
       dialog.showModal()
       initialFocus?.current?.focus()
     }
-    if (!open && dialog.open) dialog.close()
+    if (!open && dialog.open) {
+      dialog.close()
+      // Фокус вернул браузер, а дальше им распоряжается экран
+      opener.current = null
+    }
   }, [open, initialFocus])
+
+  // Экран убрал окно из DOM открытым (`{item && <Dialog open …/>}`): закрытия не было, и браузер
+  // фокус не вернёт — он оказался бы на body. Возвращаем на кнопку, которая открыла окно, если
+  // она ещё на странице. В StrictMode React пробно размонтирует и монтирует эффекты заново (ref при
+  // этом тоже сбрасывается): тогда окно ещё в документе — это не уход, ничего не делаем
+  useEffect(() => {
+    const dialog = ref.current
+    return () => {
+      if (dialog?.isConnected) return
+      const element = opener.current
+      opener.current = null
+      if (element?.isConnected) element.focus()
+    }
+  }, [])
 
   return (
     <dialog
@@ -63,8 +91,13 @@ export function Dialog({
       role={role}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
+      // Esc при escapeCloses={false} не закрывает окно
+      onCancel={(event) => {
+        if (!escapeCloses) event.preventDefault()
+      }}
       // Событие close приходит и после Esc: экран узнаёт, что окна больше нет
       onClose={() => {
+        opener.current = null
         if (open) onClose()
       }}
     >

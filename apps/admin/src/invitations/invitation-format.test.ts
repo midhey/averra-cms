@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canResend,
   canRevoke,
+  disableDescription,
   isDeadInvitation,
   pendingInvitationFor,
   replaceWarning,
@@ -67,5 +68,16 @@ describe('повторное приглашение', () => {
     const warning = replaceWarning(invitations[0], 'editor')
     expect(warning).toContain('уже отправлено')
     expect(warning).not.toContain('роль станет')
+  })
+})
+
+describe('окно «Отключить доступ»', () => {
+  it('владельцу напоминает про токены для ИИ, остальным — нет', () => {
+    expect(disableDescription('owner')).toContain('Установка → Доступ для ИИ')
+    expect(disableDescription('owner')).toContain('продолжат работать')
+    for (const role of ['client', 'editor'] as const) {
+      expect(disableDescription(role)).not.toContain('токен')
+    }
+    expect(disableDescription('client')).toContain('Вернуть доступ можно здесь же')
   })
 })

@@ -1,5 +1,6 @@
 import { NO_SITE_ACCESS_CODE } from '@averra/schema'
 import { type ErrorComponentProps, Link, useRouterState } from '@tanstack/react-router'
+import { isSectionForbidden } from '../caught-error'
 import { ApiRequestError, messageOf, screenErrorOf } from '../errors'
 import { useLogout } from '../shell/use-logout'
 import { Button, buttonClassName, Spinner } from '../ui/Button'
@@ -37,8 +38,7 @@ const isNoSiteAccess = (error: unknown) =>
  * Раздел закрыт для роли (403 «forbidden»): это не сбой, а ответ «вам сюда нельзя». Нет доступа к
  * сайту целиком (NO_SITE_ACCESS_CODE) — другой случай: там выход, а не возврат к обзору
  */
-const isForbidden = (error: unknown) =>
-  error instanceof ApiRequestError && error.status === 403 && !isNoSiteAccess(error)
+const isForbidden = isSectionForbidden
 
 /**
  * Разделы по адресу: заголовок отказа называет раздел, куда не пустили. `who` — кому раздел
@@ -50,11 +50,23 @@ const sections: { prefix: string; title: string; who?: string }[] = [
     title: 'Уведомления',
     who: 'Уведомления настраивают владелец и администратор сайта',
   },
+  // Раньше /seo: у Cookie свой раздел и свои слова, а не «SEO и аналитика»
+  {
+    prefix: '/seo/cookies',
+    title: 'Cookie и согласие',
+    who: 'Cookie и согласие настраивают владелец и администратор сайта',
+  },
   { prefix: '/seo', title: 'SEO и аналитика' },
   { prefix: '/settings', title: 'Настройки' },
   { prefix: '/mail', title: 'Почта' },
   { prefix: '/status', title: 'Состояние' },
-  { prefix: '/blocks', title: 'Свои блоки' },
+  // Список блоков виден всем ролям, закрыт экран одного блока: человек его только открыл, а не
+  // менял, и ответ API («черновики меняет владелец») говорил бы про другое
+  {
+    prefix: '/blocks',
+    title: 'Свой блок',
+    who: 'Экран своего блока открывает владелец установки: поля, шаблон и CSS блока пишет студия',
+  },
   { prefix: '/theme', title: 'Тема' },
   { prefix: '/header', title: 'Шапка и подвал' },
   { prefix: '/leads', title: 'Заявки' },

@@ -222,7 +222,7 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
   // «правки не опубликованы» висело бы без подсказки, что делать дальше
   const publishNote = canPublish(site.access)
     ? undefined
-    : 'Публикует владелец или администратор сайта: когда правки готовы, сообщите им.'
+    : 'Публиковать вашей роли нельзя: когда правки готовы, сообщите владельцу.'
   const adviceBadge =
     advice.length > 0 ? (
       <CountBadge

@@ -390,9 +390,21 @@ export const mailSmtpQuery = () =>
  * Состояние установки: версия, бэкапы, обновление, сборки, почта, диск и список проблем.
  * Только владельцу: остальным API ответит 403
  */
+export const statusQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.status,
+    queryFn: async () => {
+      const res = await api.status.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
 /**
  * Токены API для MCP (раздел «Доступ для ИИ»), только владельцу: права, кто и когда выпустил,
- * когда пользовались. Самого токена в списке нет — его показывает только ответ на выпуск
+ * когда пользовались. Самого токена в списке нет — его показывает только ответ на выпуск.
+ * «Последний раз» меняется без админки (программа ходит со своим токеном), поэтому список
+ * перечитывается при возврате на вкладку и раз в полминуты, пока вкладка на виду
  */
 export const tokensQuery = () =>
   queryOptions({
@@ -402,16 +414,8 @@ export const tokensQuery = () =>
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
-  })
-
-export const statusQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.status,
-    queryFn: async () => {
-      const res = await api.status.$get()
-      if (res.status !== 200) throw await apiRequestError(res)
-      return res.json()
-    },
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 30_000,
   })
 
 /**

@@ -40,7 +40,8 @@ function SitePages({ siteId }: { siteId: string }) {
   const [notice, setNotice] = useState<Notice>()
   const [search, setSearch] = useState('')
   usePageTitle(site.name, 'страницы')
-  // Клиент только правит черновики: создавать и удалять страницы ему API не даст
+  // Создавать и удалять страницы сейчас могут все роли (auth/access.ts); проверка остаётся на
+  // случай, если таблицу сузят: решает API, экран только не предлагает лишнего
   const managePages = canManagePages(site.access)
 
   const confirm = useConfirm()
@@ -133,7 +134,8 @@ function SitePages({ siteId }: { siteId: string }) {
         <NewPageForm siteId={siteId} />
       ) : (
         <InlineAlert tone="info">
-          Вы можете править черновики страниц. Публикует их владелец или администратор сайта.
+          Вы можете править черновики страниц. Создавать страницы вашей роли нельзя: попросите об
+          этом владельца установки.
         </InlineAlert>
       )}
     </Screen>

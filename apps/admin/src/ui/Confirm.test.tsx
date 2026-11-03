@@ -72,6 +72,45 @@ describe('подтверждение', () => {
     expect(answer()).toBe('нет')
   })
 
+  it('запоздалое close прежнего окна не отвечает «нет» на новый вопрос (Esc и сразу Enter)', async () => {
+    const user = userEvent.setup()
+    const answers: Record<string, boolean | undefined> = {}
+    function Pair() {
+      const confirm = useConfirm()
+      return (
+        <>
+          {['первый', 'второй'].map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={async () => {
+                answers[name] = await confirm({ title: `Вопрос ${name}`, confirmLabel: 'Да' })
+              }}
+            >
+              Спросить {name}
+            </button>
+          ))}
+        </>
+      )
+    }
+    render(
+      <ConfirmProvider>
+        <Pair />
+      </ConfirmProvider>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Спросить первый' }))
+    const old = screen.getByRole('alertdialog', { name: 'Вопрос первый' })
+    // Esc закрыл окно, но его событие close ещё в пути; человек уже задал следующий вопрос
+    await user.click(screen.getByRole('button', { name: 'Спросить второй' }))
+    expect(answers.первый).toBe(false)
+    old.dispatchEvent(new Event('close'))
+    // Второй вопрос по-прежнему открыт и без ответа
+    expect(screen.getByRole('alertdialog', { name: 'Вопрос второй' })).toBeTruthy()
+    expect(answers.второй).toBeUndefined()
+    await user.click(screen.getByRole('button', { name: 'Да' }))
+    expect(answers.второй).toBe(true)
+  })
+
   it('без ConfirmProvider — ошибка, а не молчаливое «да»', () => {
     const quiet = console.error
     console.error = () => {}

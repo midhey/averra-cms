@@ -118,8 +118,12 @@
   overflow-wrap: anywhere;
 }
 
-// Шаблон письма — раскрывашка: свёрнутый занимает одну строку с названием, отступы между
-// частями — только у раскрытого, иначе под заголовком остаётся пустое место
+// Шаблон письма: название и описание — над раскрывашкой, письмо раскрывается кнопкой-summary.
+// Отступы между частями — только у раскрытого, иначе под строкой остаётся пустое место
+.templateBox {
+  margin-block-start: var(--space-3);
+}
+
 .templateBox[open] {
   display: flex;
   flex-direction: column;
@@ -159,6 +163,4 @@
   @include ui.focus-ring;
 }
 
-.templateSummary .templateTitle {
-  display: inline;
-}
+

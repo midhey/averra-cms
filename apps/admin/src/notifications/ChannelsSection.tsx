@@ -286,6 +286,10 @@ function TelegramForm({
   const [notice, setNotice] = useState<Notice>()
   // Набранный токен или пароль владельца — правка, которой нет на сервере: уход с ней спрашивает
   useReportUnsaved(token !== '' || currentPassword !== '')
+  // Что уйдёт на сервер: новый токен или другой прокси («Оставить» снято или адрес набран). Пароль
+  // владельца — подтверждение, а не правка. У ещё не подключённого бота кнопка всегда нужна
+  const proxyChanged = savedProxy !== '' ? !keepProxy : proxy !== ''
+  const changed = !configured || token !== '' || proxyChanged
 
   function localErrors(): FieldErrors {
     const found: Record<string, string> = {}
@@ -358,6 +362,8 @@ function TelegramForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Нечего сохранять: кнопка помечена aria-disabled, но Enter в поле всё равно отправит форму
+    if (!changed) return
     onStart()
     setNotice(undefined)
     const found = localErrors()
@@ -465,8 +471,9 @@ function TelegramForm({
           variant="primary"
           loading={save.isPending}
           disabled={busy && !save.isPending}
+          aria-disabled={!changed ? true : undefined}
         >
-          {configured ? 'Сохранить' : 'Подключить бота'}
+          {configured ? 'Сохранить бота' : 'Подключить бота'}
         </Button>
         {configured && (
           <Button

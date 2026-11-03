@@ -27,6 +27,7 @@ import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
 import { roleHints, roleLabels } from '../invitations/invitation-format'
 import { MediaCard } from '../media/MediaCard'
 import { MediaUsage } from '../media/MediaLibrary'
+import { deleteBlockedText, type MediaUse } from '../media/media-format'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { RedirectRows } from '../seo/RedirectRows'
 import { SearchSnippet } from '../seo/SearchSnippet'
@@ -189,6 +190,14 @@ function Section({ id, title, children }: { id: string; title: string; children:
     </section>
   )
 }
+
+/** Где стоит картинка в примере медиатеки: причина отказа удалить строится из тех же данных */
+const mediaUsageExample: readonly MediaUse[] = [
+  { kind: 'page', slug: 'ceny', title: 'Цены', state: 'both' },
+  { kind: 'header' },
+  { kind: 'seo', roles: ['картинка для соцсетей'] },
+  { kind: 'block', key: '', title: 'неопубликованный блок' },
+]
 
 export function UiShowcase() {
   usePageTitle('Витрина компонентов')
@@ -944,20 +953,13 @@ export function UiShowcase() {
           <Card>
             <MediaUsage
               links={{ header: true, seo: true, block: false }}
-              usage={[
-                { kind: 'page', slug: 'ceny', title: 'Цены', state: 'both' },
-                { kind: 'header' },
-                { kind: 'seo', roles: ['картинка для соцсетей'] },
-                { kind: 'block', key: '', title: 'неопубликованный блок' },
-              ]}
+              usage={mediaUsageExample}
             />
             <div className={styles.row}>
               <Button variant="danger" size="small" icon="trash" aria-disabled="true">
                 Удалить
               </Button>
-              <span className={styles.mono}>
-                Удалить нельзя: сначала уберите картинку со страниц
-              </span>
+              <span className={styles.mono}>{deleteBlockedText(mediaUsageExample)}</span>
             </div>
             <MediaUsage links={{ header: true, seo: true, block: false }} usage={[]} canDelete />
           </Card>
@@ -1059,7 +1061,7 @@ export function UiShowcase() {
               invalid
               action={<Button size="small">Заменить</Button>}
             />
-            {/* Только просмотр (клиент на экране шапки): без кнопки выбора */}
+            {/* Только просмотр (редактор на экране шапки): без кнопки выбора */}
             <MediaCard name="logo-remont.png" meta="512 × 512 · AVIF, WebP, PNG" square />
             {/* Логотип из SVG: формат в подписи, превью — сам файл */}
             <MediaCard

@@ -1,6 +1,6 @@
 import { NewToken, type TokenRights } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { type FormEvent, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { relativeTime } from '../format/time'
@@ -66,6 +66,14 @@ export function TokensScreen() {
   const [editing, setEditing] = useState<Token>()
   const [revoking, setRevoking] = useState<Token>()
   const [notice, setNotice] = useState<Notice>()
+  // После отзыва кнопки строки пропали, а окно закрылось над ними: фокус — на заголовок списка.
+  // Переносим его после закрытия окна (пока оно открыто, фон недоступен и focus() не сработает)
+  const [focusHeading, setFocusHeading] = useState(false)
+  useEffect(() => {
+    if (!focusHeading || revoking !== undefined) return
+    listHeadingRef.current?.focus()
+    setFocusHeading(false)
+  }, [focusHeading, revoking])
 
   const revoke = useMutation({
     mutationFn: async (token: Token) => {
@@ -79,8 +87,8 @@ export function TokensScreen() {
         kind: 'done',
         text: `Токен «${token.name}» отозван: программа с ним больше не войдёт`,
       })
-      // Кнопки строки пропали: фокус на заголовок списка, а не в никуда
-      listHeadingRef.current?.focus()
+      // Кнопки строки пропали: фокус на заголовок списка, а не в никуда (эффект выше)
+      setFocusHeading(true)
     },
   })
 
@@ -297,6 +305,8 @@ function IssueForm({ onIssued }: { onIssued: (token: Issued) => void }) {
   const form = useFormErrors(zodFieldErrors(parsed.error))
 
   const issue = useMutation({
+    // Ответ с токеном не держим в кэше мутаций: токен показывается один раз, в окне
+    gcTime: 0,
     mutationFn: async (body: NewToken) => {
       const res = await api.tokens.$post({ json: body })
       if (res.status !== 201) throw await apiRequestError(res)
@@ -309,6 +319,8 @@ function IssueForm({ onIssued }: { onIssued: (token: Issued) => void }) {
       setRights(DRAFTS_ONLY)
       form.reset()
       onIssued(token)
+      // Токен теперь только у окна: из состояния формы (data мутации) он уходит сразу
+      issue.reset()
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.issues.length > 0) {
@@ -375,13 +387,18 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
   const fragment = mcpConfigFragment(window.location.origin, token.token)
   const tokenRef = useRef<HTMLInputElement>(null)
   const fragmentRef = useRef<HTMLTextAreaElement>(null)
+  const copyTokenRef = useRef<HTMLButtonElement>(null)
   const [copied, setCopied] = useState<{ target: CopyTarget; ok: boolean }>()
+  // Хоть что-то скопировано: тогда Esc закрывает окно. Пока нет — токен можно потерять одним
+  // нажатием, поэтому Esc ничего не делает, а закрывают кнопки окна
+  const [copiedAny, setCopiedAny] = useState(false)
 
   async function copy(target: CopyTarget) {
     const text = target === 'token' ? token.token : fragment
     try {
       await navigator.clipboard.writeText(text)
       setCopied({ target, ok: true })
+      setCopiedAny(true)
     } catch {
       const field = target === 'token' ? tokenRef.current : fragmentRef.current
       field?.focus()
@@ -404,6 +421,10 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
       open
       onClose={onClose}
       size="large"
+      // Первый фокус — на «Скопировать токен», а не на «×»: лишний Enter сразу после выпуска
+      // копирует токен, а не закрывает окно
+      initialFocus={copyTokenRef}
+      escapeCloses={copiedAny}
       title={`Токен «${token.name}» выпущен`}
       description="Токен показывается один раз: после закрытия окна его не увидит никто, даже вы. Потеряете — выпустите новый, а этот отзовите."
       footer={
@@ -428,7 +449,9 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
             autoComplete="off"
             onFocus={(event) => event.target.select()}
           />
-          <Button onClick={() => void copy('token')}>Скопировать токен</Button>
+          <Button ref={copyTokenRef} onClick={() => void copy('token')}>
+            Скопировать токен
+          </Button>
         </div>
         <TextArea
           ref={fragmentRef}

@@ -54,6 +54,16 @@ describe('DataTable', () => {
         .getAllByRole('rowheader')
         .map((th) => th.textContent),
     ).toEqual(['Главная', 'Цены'])
+    // Роли записаны явно: на телефоне у table и его частей меняется display, и Safari с VoiceOver
+    // без ролей теряет семантику таблицы (в jsdom CSS нет, поэтому смотрим на атрибуты)
+    const roleOf = (selector: string) =>
+      [...table.querySelectorAll(selector)].map((element) => element.getAttribute('role'))
+    expect(table.getAttribute('role')).toBe('table')
+    expect(roleOf('thead, tbody')).toEqual(['rowgroup', 'rowgroup'])
+    expect(roleOf('tr')).toEqual(['row', 'row', 'row'])
+    expect(roleOf('thead th')).toEqual(['columnheader', 'columnheader'])
+    expect(roleOf('tbody th')).toEqual(['rowheader', 'rowheader'])
+    expect(roleOf('td')).toEqual(['cell', 'cell'])
     const region = screen.getByRole('group', { name: 'Страницы сайта' })
     await user.tab()
     expect(document.activeElement).toBe(region)
@@ -198,5 +208,80 @@ describe('Dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Отмена' }))
     expect((document.querySelector('dialog') as HTMLDialogElement).open).toBe(false)
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+/** Экран, который не рисует окно вовсе, когда нечего показывать: `{item && <Dialog open …/>}` */
+function ConditionalDialog({ escapeCloses }: { escapeCloses?: boolean }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <>
+      <Button onClick={() => setShown(true)}>Открыть</Button>
+      {shown && (
+        <Dialog
+          open
+          onClose={() => setShown(false)}
+          title="Окно"
+          escapeCloses={escapeCloses}
+          footer={<Button onClick={() => setShown(false)}>Готово</Button>}
+        />
+      )}
+    </>
+  )
+}
+
+describe('Dialog: фокус и Esc', () => {
+  it('убранное из DOM открытым окно возвращает фокус на кнопку, которая его открыла', async () => {
+    const user = userEvent.setup()
+    render(<ConditionalDialog />)
+    const opener = screen.getByRole('button', { name: 'Открыть' })
+    await user.click(opener)
+    expect(document.querySelector('dialog')?.open).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(document.querySelector('dialog')).toBeNull()
+    // Без возврата фокус оставался бы на body: браузер возвращает его только при закрытии окна
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('кнопка, открывшая окно, пропала: фокус не угоняется на чужое', async () => {
+    const user = userEvent.setup()
+    function Vanishing() {
+      const [step, setStep] = useState<'closed' | 'open' | 'gone'>('closed')
+      return (
+        <>
+          {step !== 'gone' && <Button onClick={() => setStep('open')}>Открыть</Button>}
+          <Button>Рядом</Button>
+          {step !== 'closed' && (
+            <Dialog
+              open
+              onClose={() => setStep('gone')}
+              title="Окно"
+              footer={<Button onClick={() => setStep('gone')}>Готово</Button>}
+            />
+          )}
+        </>
+      )
+    }
+    render(<Vanishing />)
+    await user.click(screen.getByRole('button', { name: 'Открыть' }))
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(screen.queryByRole('button', { name: 'Открыть' })).toBeNull()
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Рядом' }))
+  })
+
+  it('escapeCloses={false}: Esc (cancel) не закрывает окно, по умолчанию — закрывает', async () => {
+    const user = userEvent.setup()
+    const cancel = () => {
+      const event = new Event('cancel', { cancelable: true })
+      document.querySelector('dialog')?.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const first = render(<ConditionalDialog escapeCloses={false} />)
+    await user.click(screen.getByRole('button', { name: 'Открыть' }))
+    expect(cancel()).toBe(true)
+    first.unmount()
+    render(<ConditionalDialog />)
+    await user.click(screen.getByRole('button', { name: 'Открыть' }))
+    expect(cancel()).toBe(false)
   })
 })

@@ -138,7 +138,7 @@ export function deleteBlockedText(usage: readonly MediaUse[]) {
   if (pages.length > 0) {
     // Опубликовать нужно, только если картинка уже на сайте: из черновика она уходит сразу
     const onSite = pages.some((use) => use.state !== 'draft')
-    places.push(onSite ? 'со страниц (и опубликовать их)' : 'со страниц')
+    places.push(onSite ? 'со страниц (и опубликуйте их)' : 'со страниц')
   }
   if (usage.some((use) => use.kind === 'header')) places.push('из шапки')
   if (usage.some((use) => use.kind === 'seo')) places.push('из настроек SEO')

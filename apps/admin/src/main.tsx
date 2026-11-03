@@ -3,6 +3,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { reportCaughtError } from './caught-error'
 import { ApiRequestError } from './errors'
 import { queryKeys } from './queries'
 import { createAdminRouter } from './router'
@@ -43,7 +44,8 @@ const router = createAdminRouter(queryClient)
 const root = document.getElementById('root')
 if (!root) throw new Error('Не найден элемент #root')
 
-createRoot(root).render(
+// Отказ 403 при загрузке раздела — экран «Нет доступа», а не сбой: в консоль не пишем
+createRoot(root, { onCaughtError: reportCaughtError }).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ConfirmProvider>

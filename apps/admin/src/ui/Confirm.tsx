@@ -19,7 +19,7 @@ type Ask = (options: ConfirmOptions) => Promise<boolean>
 
 const ConfirmContext = createContext<Ask | undefined>(undefined)
 
-type Pending = { options: ConfirmOptions; resolve: (answer: boolean) => void }
+type Pending = { id: number; options: ConfirmOptions; resolve: (answer: boolean) => void }
 
 /**
  * Подтверждения админки — окном @averra/ui вместо системного confirm(): тот выглядит чужим,
@@ -29,6 +29,9 @@ type Pending = { options: ConfirmOptions; resolve: (answer: boolean) => void }
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending>()
   const cancelRef = useRef<HTMLButtonElement>(null)
+  // Номер вопроса: у каждого вопроса своё окно (key), а ответ привязан к своему вопросу
+  const lastId = useRef(0)
+  const shownId = useRef(0)
 
   const ask = useCallback<Ask>(
     (options) =>
@@ -36,25 +39,33 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         // Новый вопрос поверх незакрытого (так не бывает, но если будет) — прежний считается «нет»
         setPending((previous) => {
           previous?.resolve(false)
-          return { options, resolve }
+          lastId.current += 1
+          return { id: lastId.current, options, resolve }
         })
       }),
     [],
   )
 
-  const answer = (value: boolean) => {
-    pending?.resolve(value)
-    setPending(undefined)
+  // Ответ — на тот вопрос, который окно показывало. Событие close приходит отдельной задачей,
+  // через несколько миллисекунд после Esc: если за это время задан новый вопрос, запоздалое
+  // событие прежнего окна не должно ответить «нет» уже на новый (setPending ниже трогает только
+  // свой вопрос, а resolve повторно ничего не меняет)
+  const settle = (question: Pending, value: boolean) => {
+    question.resolve(value)
+    setPending((current) => (current === question ? undefined : current))
   }
+  if (pending) shownId.current = pending.id
 
   const options = pending?.options
   return (
     <ConfirmContext.Provider value={ask}>
       {children}
       <Dialog
+        // Новый вопрос — новое окно: прежнее, закрытое Esc, не показалось бы заново (open не менялся)
+        key={shownId.current}
         open={pending !== undefined}
         // Esc, «Закрыть» и клик мимо кнопок — безопасный ответ
-        onClose={() => answer(false)}
+        onClose={() => pending && settle(pending, false)}
         title={options?.title ?? ''}
         description={options?.description}
         size="small"
@@ -62,12 +73,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         initialFocus={cancelRef}
         footer={
           <>
-            <Button ref={cancelRef} onClick={() => answer(false)}>
+            <Button ref={cancelRef} onClick={() => pending && settle(pending, false)}>
               {options?.cancelLabel ?? 'Отмена'}
             </Button>
             <Button
               variant={options?.tone === 'primary' ? 'primary' : 'danger'}
-              onClick={() => answer(true)}
+              onClick={() => pending && settle(pending, true)}
             >
               {options?.confirmLabel}
             </Button>

@@ -16,7 +16,7 @@ import { mutedClassName } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill } from '../ui/StatusPill'
 import styles from './InvitationsSection.module.scss'
-import { roleHints } from './invitation-format'
+import { disableDescription, roleHints } from './invitation-format'
 
 type Member = {
   id: string
@@ -83,8 +83,7 @@ export function MembersTable({ siteId, access }: { siteId: string; access: SiteA
     setNotice(undefined)
     const yes = await confirm({
       title: `Отключить доступ для ${member.name}?`,
-      description:
-        'Все входы этого человека в админку завершатся сразу, войти снова не получится. Вернуть доступ можно здесь же.',
+      description: disableDescription(member.role),
       confirmLabel: 'Отключить доступ',
       cancelLabel: 'Оставить',
     })

@@ -324,16 +324,19 @@ function TemplatePreview({ template }: { template: TemplateInfo }) {
   const headingId = `template-${template.id}`
   return (
     <article aria-labelledby={headingId} className={cardClassName()}>
+      {/* Заголовок — над раскрывашкой, а не внутри summary: у summary роль кнопки, и часть
+          экранных дикторов теряет внутри неё уровень заголовка (навигация по заголовкам) */}
+      <div className={styles.templateHead}>
+        <h3 id={headingId} className={styles.templateTitle}>
+          {template.title}
+        </h3>
+        <p className={mutedClassName}>{template.description}</p>
+      </div>
       <details
         className={styles.templateBox}
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
-        <summary className={styles.templateSummary}>
-          <h3 id={headingId} className={styles.templateTitle}>
-            {template.title}
-          </h3>
-        </summary>
-        <p className={mutedClassName}>{template.description}</p>
+        <summary className={styles.templateSummary}>Показать письмо</summary>
         {!open ? null : preview.isPending ? (
           <p className={styles.loading} role="status">
             <Spinner />

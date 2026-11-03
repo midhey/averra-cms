@@ -61,6 +61,21 @@ function useMoreAtEnd(shown: boolean) {
   return [ref, more] as const
 }
 
+/**
+ * Явные роли таблицы. На телефоне у table, tbody, tr и td меняется display (строка — карточка), а
+ * Safari с VoiceOver при display: block/flex теряет семантику таблицы: заголовки колонок и связь
+ * ячеек с ними. Роль возвращает её. Подставляются распространением, а не атрибутом: для обычных
+ * элементов линтер счёл бы роль лишней, а здесь она нужна именно из-за CSS
+ */
+const tableRoles = {
+  table: { role: 'table' },
+  rowgroup: { role: 'rowgroup' },
+  row: { role: 'row' },
+  columnheader: { role: 'columnheader' },
+  rowheader: { role: 'rowheader' },
+  cell: { role: 'cell' },
+} as const
+
 /** Подпись значения в карточке: свой label, иначе заголовок-строка */
 const labelOf = <Row,>(column: Column<Row>) =>
   column.label ?? (typeof column.header === 'string' ? column.header : undefined)
@@ -119,6 +134,7 @@ export function DataTable<Row>({
       tabIndex={0}
     >
       <table
+        {...tableRoles.table}
         className={cx(styles.table, layout === 'fixed' && styles.fixed, compact && styles.compact)}
         style={{ '--table-min-width': minWidth } as CSSProperties}
       >
@@ -130,12 +146,13 @@ export function DataTable<Row>({
             ))}
           </colgroup>
         )}
-        <thead>
-          <tr>
+        <thead {...tableRoles.rowgroup}>
+          <tr {...tableRoles.row}>
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
+                {...tableRoles.columnheader}
                 className={cx(column.align === 'end' && styles.end, column.pinned && styles.pinned)}
                 style={column.minWidth ? { minWidth: column.minWidth } : undefined}
               >
@@ -144,9 +161,9 @@ export function DataTable<Row>({
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody {...tableRoles.rowgroup}>
           {rows.map((row) => (
-            <tr key={rowKey(row)}>
+            <tr key={rowKey(row)} {...tableRoles.row}>
               {columns.map((column, index) => {
                 const className = cx(
                   column.mono && styles.mono,
@@ -157,11 +174,21 @@ export function DataTable<Row>({
                   column.pinned && styles.pinned,
                 )
                 return index === 0 ? (
-                  <th key={column.key} scope="row" className={cx(styles.rowHeader, className)}>
+                  <th
+                    key={column.key}
+                    scope="row"
+                    {...tableRoles.rowheader}
+                    className={cx(styles.rowHeader, className)}
+                  >
                     {column.cell(row)}
                   </th>
                 ) : (
-                  <td key={column.key} className={className} data-label={labelOf(column)}>
+                  <td
+                    key={column.key}
+                    {...tableRoles.cell}
+                    className={className}
+                    data-label={labelOf(column)}
+                  >
                     {column.cell(row)}
                   </td>
                 )
