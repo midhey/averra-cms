@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../testing'
-import { can, type SiteRole } from './access'
+import { assignableRoles, can, type Permission, type SiteRole } from './access'
 
 // Права ролей через настоящие запросы: каждый тест получает сессию нужной роли или токен
 // из помощников createTestApi и проверяет, что API разрешает и что запрещает
@@ -64,53 +64,79 @@ async function ownerPage(slug: string) {
 }
 
 describe('таблица разрешений', () => {
-  const roles: SiteRole[] = ['owner', 'editor', 'client']
+  const roles: SiteRole[] = ['owner', 'client', 'editor']
+  // Решение владельца продукта 2026-11-02: владелец — всё; администратор сайта (client) — контент,
+  // SEO, медиа, заявки, уведомления, выгрузка, шапка и подвал, редакторы; редактор — страницы и
+  // медиа. Тема, свои блоки, обновление и токены — только владелец
   it.each([
     ['site.read', [true, true, true]],
     ['page.edit', [true, true, true]],
-    ['page.create', [true, true, false]],
-    ['page.publish', [true, true, false]],
-    ['page.delete', [true, true, false]],
+    ['page.create', [true, true, true]],
+    ['page.publish', [true, true, true]],
+    ['page.delete', [true, true, true]],
     ['media.upload', [true, true, true]],
-    ['media.delete', [true, true, false]],
-    ['members.invite', [true, false, false]],
-  ] as const)('%s: владелец, редактор, клиент → %j', (permission, expected) => {
-    expect(roles.map((role) => can(role, permission))).toEqual(expected)
+    ['media.delete', [true, true, true]],
+    ['members.invite', [true, true, false]],
+    ['leads.read', [true, true, false]],
+    ['leads.manage', [true, true, false]],
+    ['leads.settings', [true, true, false]],
+    ['site.export', [true, true, false]],
+    ['site.settings', [true, true, false]],
+    ['theme.edit', [true, false, false]],
+    ['header.edit', [true, true, false]],
+    ['blocks.define', [true, false, false]],
+    ['blocks.draft', [true, false, false]],
+    ['installation.update', [true, false, false]],
+    ['tokens.manage', [true, false, false]],
+  ] as const satisfies readonly (readonly [Permission, readonly boolean[]])[])(
+    '%s: владелец, администратор сайта, редактор → %j',
+    (permission, expected) => {
+      expect(roles.map((role) => can(role, permission))).toEqual(expected)
+    },
+  )
+
+  it('кого кто назначает: владелец — всех, администратор сайта — редакторов, редактор — никого', () => {
+    expect(assignableRoles).toEqual({
+      owner: ['owner', 'client', 'editor'],
+      client: ['editor'],
+      editor: [],
+    })
   })
 })
 
-describe('клиент', () => {
-  it('читает сайт и правит черновик существующей страницы', async () => {
+describe('администратор сайта (client)', () => {
+  it('читает сайт, создаёт, правит, публикует и удаляет страницы', async () => {
     await ownerPage('client-edit')
     const { headers } = await api.loginAs('client')
     expect((await request.site(headers)).status).toBe(200)
     expect(await (await request.site(headers)).json()).toMatchObject({ access: 'client' })
     expect((await request.pages(headers)).status).toBe(200)
-    expect((await request.get(headers)).status).toBe(200)
     expect((await request.save(headers, 'client-edit')).status).toBe(200)
+    expect((await request.publish(headers, 'client-edit')).status).toBe(200)
+    expect((await request.create(headers, 'client-new')).status).toBe(201)
+    expect((await request.remove(headers, 'client-new')).status).toBe(204)
+    expect((await request.remove(headers, 'client-edit')).status).toBe(204)
   })
 
-  it('не публикует: 403 в формате ApiError, опубликованное не меняется', async () => {
+  it('правит SEO и «Организацию», шапку; тему — нет (403 по-русски)', async () => {
     const { headers } = await api.loginAs('client')
-    const res = await request.publish(headers)
-    expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({
-      error: { code: 'forbidden', message: 'Публиковать может владелец или редактор сайта' },
+    const organization = { name: 'ИП Клиентова', phone: '+7 900 111-22-33' }
+    const settings = await app.request(`/api/sites/${demoSiteId}/settings`, {
+      method: 'PATCH',
+      headers: json(headers),
+      body: JSON.stringify({ organization }),
     })
-  })
-
-  it('не удаляет страницы — 403, страница на месте', async () => {
-    await ownerPage('client-delete')
-    const { headers } = await api.loginAs('client')
-    expect((await request.remove(headers, 'client-delete')).status).toBe(403)
-    expect((await request.get(owner.headers, 'client-delete')).status).toBe(200)
-  })
-
-  it('не создаёт страниц: ни через POST (403), ни сохранением по новому адресу (404)', async () => {
-    const { headers } = await api.loginAs('client')
-    expect((await request.create(headers, 'client-new')).status).toBe(403)
-    expect((await request.save(headers, 'client-new-put')).status).toBe(404)
-    expect((await request.get(owner.headers, 'client-new-put')).status).toBe(404)
+    expect(settings.status).toBe(200)
+    const header = await app.request(`/api/sites/${demoSiteId}/header`, { headers })
+    expect(header.status).toBe(200)
+    const theme = await app.request(`/api/sites/${demoSiteId}/theme/publish`, {
+      method: 'POST',
+      headers,
+    })
+    expect(theme.status).toBe(403)
+    expect(await theme.json()).toEqual({
+      error: { code: 'forbidden', message: 'Тему сайта меняет владелец установки' },
+    })
   })
 })
 
@@ -123,6 +149,17 @@ describe('редактор', () => {
     expect((await request.save(headers, 'editor-put')).status).toBe(200)
     expect((await request.publish(headers, 'editor-page')).status).toBe(200)
     expect((await request.remove(headers, 'editor-page')).status).toBe(204)
+  })
+
+  it('тему, шапку, SEO и заявки не трогает: 403', async () => {
+    const { headers } = await api.loginAs('editor')
+    const post = (path: string) =>
+      app.request(`/api/sites/${demoSiteId}/${path}`, { method: 'POST', headers })
+    expect((await post('theme/publish')).status).toBe(403)
+    expect((await post('header/publish')).status).toBe(403)
+    expect((await post('footer/publish')).status).toBe(403)
+    expect((await app.request(`/api/sites/${demoSiteId}/leads`, { headers })).status).toBe(403)
+    expect((await app.request(`/api/sites/${demoSiteId}/members`, { headers })).status).toBe(403)
   })
 
   it('видит организацию из «SEO» для сверки «Контактов», а токен — нет', async () => {
@@ -198,8 +235,9 @@ describe('участник и чужой сайт', () => {
     const second = await otherSite('Второй сайт участника')
     const { user, headers } = await api.loginAs('client')
     await api.addMember(second, user.id, 'editor')
-    expect((await request.publish(headers)).status).toBe(403)
-    expect((await request.publish(headers, 'extra', second)).status).toBe(200)
+    const leads = (siteId: string) => app.request(`/api/sites/${siteId}/leads`, { headers })
+    expect((await leads(demoSiteId)).status).toBe(200)
+    expect((await leads(second)).status).toBe(403)
     expect((await (await request.list(headers)).json()) as unknown[]).toHaveLength(2)
   })
 })

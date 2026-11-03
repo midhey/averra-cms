@@ -1,4 +1,4 @@
-import { MemberRole, UserEmail, Uuid } from '@averra/schema'
+import { MemberRole, roleLabels, UserEmail, Uuid } from '@averra/schema'
 import { z } from 'zod'
 import { createInvitation } from '../modules/invitations/service'
 import { usersRepo } from '../modules/users/repo'
@@ -15,6 +15,9 @@ import {
 
 const usage = `Пригласить участника на сайт установки письмом:
   pnpm member:invite --email anna@example.ru --role editor|client [--by <почта владельца>] [--site <id сайта>]
+
+client — администратор сайта (контент, SEO, заявки, шапка и подвал); editor — редактор
+(страницы и картинки).
 
 Человек получит письмо со ссылкой (действует 7 дней) и сам задаст имя и пароль. Письмо уйдёт,
 когда запустится API (pnpm dev или start). --by нужен, только если владельцев несколько.
@@ -71,8 +74,13 @@ await run(async () => {
       if (result.problem === 'owner') {
         throw new CliError(`${email} — владелец, ему и так открыт сайт`)
       }
+      if (result.problem === 'disabled') {
+        throw new CliError(
+          `Доступ ${email} отключён. Верните его в админке: Настройки сайта → Участники`,
+        )
+      }
       throw new CliError(
-        `${email} уже участник этого сайта (${result.role}). Сменить роль: pnpm member:add`,
+        `${email} уже участник этого сайта («${roleLabels[result.role]}»). Сменить роль: в админке (Настройки сайта → Участники) или pnpm member:add`,
       )
     }
     console.log(

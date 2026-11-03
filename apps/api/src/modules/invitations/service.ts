@@ -27,8 +27,9 @@ type NewInvitationInput = {
 
 /**
  * Приглашает участника: строка приглашения и письмо со ссылкой — одной транзакцией.
- * Владельца не приглашают (ему открыты все сайты), участника сайта — тоже: роль меняет
- * pnpm member:add. Прежнее открытое приглашение адреса на сайт отзывается
+ * Владельца не приглашают (ему открыты все сайты), участника сайта — тоже: роль меняют в списке
+ * участников. Отключённого — тоже: доступ ему возвращают там же. Прежнее открытое приглашение
+ * адреса на сайт отзывается
  */
 export async function createInvitation(db: Db, input: NewInvitationInput) {
   const { siteId, email, role, inviter, adminUrl, now = new Date() } = input
@@ -36,9 +37,10 @@ export async function createInvitation(db: Db, input: NewInvitationInput) {
   if (!site) return { ok: false as const, problem: 'site_not_found' as const }
 
   const [user] = await db
-    .select({ id: users.id, role: users.role })
+    .select({ id: users.id, role: users.role, disabledAt: users.disabledAt })
     .from(users)
     .where(eq(users.email, email))
+  if (user?.disabledAt) return { ok: false as const, problem: 'disabled' as const }
   if (user?.role === 'owner') return { ok: false as const, problem: 'owner' as const }
   if (user) {
     const [member] = await db
@@ -167,9 +169,9 @@ type Accept = {
 /**
  * Приглашение принимает тот, под кем вошли: доступ к сайту с ролью из приглашения и отметка
  * «принято». Другой адрес — 'wrong_user'. Владельцу доступ не нужен (ему открыто всё), но
- * приглашение всё равно гасится: ссылка одноразовая. Уже участник сайта (владелец выдал роль
- * командой pnpm member:add после приглашения) — роль не меняется: последнее решение владельца
- * важнее старой ссылки, а приглашение тоже гасится
+ * приглашение всё равно гасится: ссылка одноразовая. Уже участник сайта (роль выдали в списке
+ * участников или командой member:add после приглашения) — роль не меняется: последнее решение
+ * владельца важнее старой ссылки, а приглашение тоже гасится
  */
 export async function acceptInvitation(db: Db, { token, user, now = new Date() }: Accept) {
   const repo = invitationsRepo(db)

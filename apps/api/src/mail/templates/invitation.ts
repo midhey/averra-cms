@@ -5,8 +5,8 @@ import { button, note, paragraph } from '../layout'
 import { defineMailTemplate, formatDays } from './define'
 
 const roles = {
-  editor: 'редактор: правите и публикуете страницы',
-  client: 'клиент: правите черновики, а публикует редактор',
+  editor: 'редактор: правите и публикуете страницы и картинки',
+  client: 'администратор сайта: ведёте страницы, SEO, заявки, шапку и подвал',
 } as const
 
 /** Приглашение участника на сайт. Ставит в очередь createInvitation (modules/invitations) */

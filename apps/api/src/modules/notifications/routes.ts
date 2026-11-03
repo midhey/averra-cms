@@ -307,7 +307,7 @@ export function notificationsRoutes(input: Deps) {
 /**
  * Уведомления о заявках сайта: получатели (почта и чаты Telegram), привязка чата и проверка.
  * Монтируется на /sites/:siteId/notifications. Права — как у настроек заявок (leads.settings):
- * владелец и клиент сайта, редактору — 403, токену API — 403 всегда (персональные данные)
+ * владелец и администратор сайта, редактору — 403, токену API — 403 всегда (персональные данные)
  */
 export function siteNotificationsRoutes(input: Deps) {
   const { db, mail, notifications } = input

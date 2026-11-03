@@ -139,6 +139,12 @@ export const users = pgTable(
       .default('member'),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // Доступ отключён (участники в админке): вход не пускает (auth/auth.ts), сессий и строк
+    // site_members у него нет. Better Auth этого поля не знает и не трогает
+    disabledAt: timestamp({ withTimezone: true }),
+    // Роль на сайте до отключения: вернуть доступ администратор сайта может только бывшему
+    // редактору (members/routes.ts). Без CHECK: значения проверяет Zod, а откату колонка не мешает
+    disabledRole: text({ enum: ['owner', 'editor', 'client'] }),
   },
   (table) => [check('users_role_valid', sql`${table.role} IN ('owner', 'member')`)],
 )
@@ -206,7 +212,8 @@ export const siteMembers = pgTable(
     userId: uuid()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    // editor — правит и публикует; client — только правит черновики
+    // editor — редактор: страницы и картинки; client — администратор сайта (прежнее имя роли —
+    // «Клиент», ключ не меняли ради отката): контент, SEO, заявки, шапка и подвал, редакторы
     role: text({ enum: ['editor', 'client'] }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -623,8 +630,9 @@ export const notificationChannels = pgTable(
 
 /**
  * Получатели уведомлений: адрес в канале (почта или chat id Telegram) и на какие события он
- * подписан. Аудитория — по site_id: сайт — уведомления о его заявках (их меняют владелец и клиент),
- * NULL — служебные события установки (только владелец). Адрес в канале у аудитории один
+ * подписан. Аудитория — по site_id: сайт — уведомления о его заявках (их меняют владелец и
+ * администратор сайта), NULL — служебные события установки (только владелец). Адрес в канале у
+ * аудитории один
  */
 export const notificationRecipients = pgTable(
   'notification_recipients',

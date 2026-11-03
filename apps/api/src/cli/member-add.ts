@@ -6,7 +6,8 @@ import { args, CliError, check, openDb, resolveSite, run } from './common'
 const usage = `Дать участнику доступ к сайту установки:
   pnpm member:add --email anna@example.ru --role editor|client [--site <id сайта>]
 
-editor — правит и публикует; client — только правит черновики. Повторный вызов меняет роль.
+client — администратор сайта (контент, SEO, заявки, шапка и подвал); editor — редактор
+(страницы и картинки). Повторный вызов меняет роль. То же — в админке: Настройки сайта → Участники.
 --site не нужен: в установке один сайт. Он только для старых баз, где сайтов несколько.`
 
 const Args = z.object({
@@ -29,6 +30,11 @@ await run(async () => {
       throw new CliError(`Нет пользователя ${email}. Создай: pnpm user:create --role member …`)
     }
     if (user.role === 'owner') throw new CliError(`${email} — владелец, ему и так открыт сайт`)
+    if (user.disabledAt) {
+      throw new CliError(
+        `Доступ ${email} отключён. Верните его в админке: Настройки сайта → Участники`,
+      )
+    }
     const found = await resolveSite(db, site)
     await users.addMember(found.id, user.id, role)
     console.log(`${user.name} <${email}> — ${role} на сайте «${found.name}»`)

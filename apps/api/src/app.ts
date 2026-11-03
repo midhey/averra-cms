@@ -21,8 +21,10 @@ import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
+import { membersRoutes } from './modules/members/routes'
 import { notificationsRoutes, siteNotificationsRoutes } from './modules/notifications/routes'
 import { ogRoutes } from './modules/og/routes'
+import { profileRoutes } from './modules/profile/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { iconsRoutes } from './modules/settings/icons'
 import { settingsRoutes } from './modules/settings/routes'
@@ -155,10 +157,13 @@ export function createApp(deps: AppDeps) {
         resetResponseMs: deps.resetResponseMs ?? 300,
       }),
     )
+    // Свой профиль: имя и входы на других устройствах (modules/profile)
+    .route('/me', profileRoutes({ db, auth }))
     // Сайт установки без id в адресе: одна установка — один сайт (modules/site)
     .route('/site', siteRoutes({ db, siteUrl: deps.siteUrl, notFoundPage: deps.notFoundPage }))
     .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log, siteUrl: deps.siteUrl }))
-    // SEO и настройки сайта — владельцу; иконки сайта открыты: их берёт рендерер (modules/settings)
+    // SEO и настройки сайта — владельцу и администратору сайта; иконки сайта открыты: их берёт
+    // рендерер (modules/settings)
     .route(
       '/sites/:siteId/settings',
       settingsRoutes({
@@ -190,11 +195,14 @@ export function createApp(deps: AppDeps) {
     .route('/media', mediaFilesRoutes(deps))
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
+    // Участники сайта: роль, отключение, передача владения (modules/members)
+    .route('/sites/:siteId/members', membersRoutes({ db }))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
     // Токены API для MCP: выпуск, права, отзыв — только владельцу (modules/tokens)
     .route('/tokens', tokensRoutes({ db }))
     .route('/sites/:siteId/leads', leadsRoutes({ db, mail, notifications }))
-    // Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и клиенту
+    // Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и
+    // администратору сайта
     .route('/notifications', notificationsRoutes({ db, mail, notifications, passwords, log }))
     .route(
       '/sites/:siteId/notifications',

@@ -64,13 +64,15 @@ const issues = async (res: Response) =>
   ((await res.json()) as { error: { issues: { path: string; message: string }[] } }).error.issues
 
 describe('права', () => {
-  it('настройки видит и меняет только владелец: редактору, клиенту и токену — 403', async () => {
+  it('настройки видят и меняют владелец и администратор сайта; редактору и токену — 403', async () => {
     expect((await read()).status).toBe(200)
-    for (const role of ['editor', 'client'] as const) {
-      const { headers } = await api.loginAs(role)
-      expect((await read(headers)).status, role).toBe(403)
-      expect((await patch({ description: 'x' }, headers)).status, role).toBe(403)
-    }
+    const admin = await api.loginAs('client')
+    expect((await read(admin.headers)).status).toBe(200)
+    // То же, что уже стоит: остальные тесты файла видят демо-сайт нетронутым
+    expect((await patch({ hideFromSearch: true }, admin.headers)).status).toBe(200)
+    const editor = await api.loginAs('editor')
+    expect((await read(editor.headers)).status).toBe(403)
+    expect((await patch({ description: 'x' }, editor.headers)).status).toBe(403)
     const { token } = await api.createToken()
     const bearer = { authorization: `Bearer ${token}` }
     expect((await read(bearer)).status).toBe(403)
@@ -765,11 +767,13 @@ describe('cookie и согласие', () => {
     }
   })
 
-  it('шаблоны — только владельцу, токену API — 403; неизвестный документ — 400', async () => {
-    for (const role of ['editor', 'client'] as const) {
-      const { headers } = await api.loginAs(role)
-      expect((await legal('privacy', headers)).status, role).toBe(403)
-    }
+  it('шаблоны — владельцу и администратору сайта, редактору и токену — 403; неизвестный документ — 400', async () => {
+    const admin = await api.loginAs('client')
+    const created = await legal('privacy', admin.headers)
+    expect(created.status).toBe(201)
+    await removePage('privacy')
+    const editor = await api.loginAs('editor')
+    expect((await legal('privacy', editor.headers)).status).toBe(403)
     const { token } = await api.createToken()
     expect((await legal('privacy', { authorization: `Bearer ${token}` })).status).toBe(403)
     expect((await legal('terms')).status).toBe(400)

@@ -149,7 +149,7 @@ describe('состояние сборки и «Собрать заново»', (
     }
   })
 
-  it('смотреть может любой, кто видит сайт, а собирать — кто публикует', async () => {
+  it('смотреть и собирать может любой, кто публикует: владелец, администратор сайта, редактор', async () => {
     const recorder = recordingPublisher()
     const api = await createTestApi({ publisher: recorder.publisher })
     try {
@@ -157,7 +157,7 @@ describe('состояние сборки и «Собрать заново»', (
       const client = await api.loginAs('client')
       expect((await api.app.request(url, { headers: client.headers })).status).toBe(200)
       expect((await api.app.request(url, { method: 'POST', headers: client.headers })).status).toBe(
-        403,
+        202,
       )
       const editor = await api.loginAs('editor')
       expect((await api.app.request(url, { method: 'POST', headers: editor.headers })).status).toBe(
@@ -177,7 +177,7 @@ describe('состояние сборки и «Собрать заново»', (
       const otherId = await api.createSite('Чужой')
       const stranger = await api.loginAs('editor', otherId)
       expect((await api.app.request(url, { headers: stranger.headers })).status).toBe(404)
-      expect(recorder.requested).toEqual([api.demoSiteId, api.demoSiteId])
+      expect(recorder.requested).toEqual([api.demoSiteId, api.demoSiteId, api.demoSiteId])
       // Без входа — 401: маршрут не в списке открытых
       expect((await api.app.request(url)).status).toBe(401)
     } finally {

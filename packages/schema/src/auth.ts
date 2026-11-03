@@ -42,9 +42,32 @@ export const NewPassword = z
   .min(PASSWORD_LENGTH.min, `Пароль — от ${PASSWORD_LENGTH.min} символов`)
   .max(PASSWORD_LENGTH.max, `Пароль — до ${PASSWORD_LENGTH.max} символов`)
 
-/** Роль участника на сайте: editor правит и публикует, client только правит черновики */
+/**
+ * Роль участника на сайте (site_members). client — «Администратор сайта»: человек заказчика ведёт
+ * контент, SEO, заявки, шапку и подвал. editor — «Редактор»: страницы и картинки. Ключ client
+ * остался с тех пор, когда роль звалась «Клиент»: прошлая версия после отката читает базу
+ */
 export const MemberRole = z.enum(['editor', 'client'], 'Роль на сайте — editor или client')
 export type MemberRole = z.infer<typeof MemberRole>
+
+/** Роль человека на сайте в админке: владелец установки или участник сайта */
+export const SiteRoleKey = z.enum(['owner', 'client', 'editor'], 'Выберите роль')
+export type SiteRoleKey = z.infer<typeof SiteRoleKey>
+
+/** Подписи ролей — одни для админки, писем и команд */
+export const roleLabels: Record<SiteRoleKey, string> = {
+  owner: 'Владелец',
+  client: 'Администратор сайта',
+  editor: 'Редактор',
+}
+
+/** Сменить роль участника или вернуть ему доступ: роль — одна из тех, что выдаёт вошедший */
+export const MemberRoleChange = z.strictObject({ role: SiteRoleKey })
+export type MemberRoleChange = z.infer<typeof MemberRoleChange>
+
+/** Профиль: своё имя. Почту не меняем — по ней входят и приходят письма */
+export const ProfileUpdate = z.strictObject({ name: UserName })
+export type ProfileUpdate = z.input<typeof ProfileUpdate>
 
 /** «Забыли пароль?»: только почта. Куда вести после сброса, решает API, а не запрос */
 export const ForgotPassword = z.strictObject({ email: UserEmail })

@@ -24,8 +24,8 @@ import { createTestApi, sendNotifications, sendQueue, TEST_PASSWORD } from '../.
 import { RECIPIENT_CHANGES } from './routes'
 
 // Раздел «Уведомления» настоящими запросами, как их шлёт админка: бот Telegram (токен только на
-// запись, с паролем владельца), получатели заявок (владелец и клиент) и служебные (владелец),
-// привязка чата, проверка каналов. Telegram — фейковый Bot API в памяти
+// запись, с паролем владельца), получатели заявок (владелец и администратор сайта) и служебные
+// (владелец), привязка чата, проверка каналов. Telegram — фейковый Bot API в памяти
 
 const fake = await fakeTelegram()
 const mailer = memoryMailer()

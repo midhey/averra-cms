@@ -17,7 +17,7 @@ const RevisionParams = PageParams.extend({ revisionId: Uuid() })
 /**
  * История публикаций страницы. Монтируется на /sites/:siteId/pages/:slug/revisions.
  * Права — те же, что у страницы: смотреть — чтение сайта, возвращать — правка черновика
- * (её может и клиент: возврат меняет только черновик, а публикует всё равно редактор)
+ * (возврат меняет только черновик, на сайт его выкладывает публикация)
  */
 export function revisionsRoutes({ db }: { db: Db }) {
   const revisions = revisionsRepo(db)

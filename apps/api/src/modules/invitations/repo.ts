@@ -154,6 +154,22 @@ export function invitationsRepo(db: Db) {
       return row ? (invitationProblem(row, now) ?? 'used') : 'not_found'
     },
 
+    /** Приглашение сайта по id: адрес, роль и состояние — для отзыва и повторной отправки */
+    async find(siteId: string, id: string, now: Date) {
+      const [row] = await db
+        .select({
+          id: userInvitations.id,
+          email: userInvitations.email,
+          role: userInvitations.role,
+          expiresAt: userInvitations.expiresAt,
+          acceptedAt: userInvitations.acceptedAt,
+          revokedAt: userInvitations.revokedAt,
+        })
+        .from(userInvitations)
+        .where(and(eq(userInvitations.id, id), eq(userInvitations.siteId, siteId)))
+      return row && { ...row, status: invitationStatus(row, now) }
+    },
+
     /** Последние 100 приглашений сайта, новые сверху. Без хеша токена */
     async list(siteId: string, now: Date) {
       const rows = await db

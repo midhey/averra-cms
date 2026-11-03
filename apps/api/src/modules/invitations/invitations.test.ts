@@ -1,6 +1,6 @@
 import { eq, type SQL, sql } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { userInvitations } from '../../db/schema'
+import { userInvitations, users } from '../../db/schema'
 import type { MemoryMail } from '../../mail/memory-mailer'
 import { processOutbox } from '../../mail/worker'
 import { createTestApi, TEST_PASSWORD, type TestApi, testOrigins } from '../../testing'
@@ -51,6 +51,9 @@ const list = (siteId: string, headers: Headers = owner.headers) =>
 
 const revoke = (siteId: string, id: string, headers: Headers = owner.headers) =>
   app.request(`${invitationsUrl(siteId)}/${id}`, { method: 'DELETE', headers })
+
+const resend = (siteId: string, id: string, headers: Headers = owner.headers) =>
+  app.request(`${invitationsUrl(siteId)}/${id}/resend`, { method: 'POST', headers })
 
 const lookup = (token: string) =>
   app.request('/api/invitations/lookup', {
@@ -127,17 +130,43 @@ describe('права', () => {
     expect((await accept(`inv_${crypto.randomUUID()}_${'a'.repeat(64)}`, {})).status).toBe(401)
   })
 
-  it('редактор и клиент сайта — 403: приглашает только владелец', async () => {
-    for (const { headers } of [editor, client]) {
-      const res = await list(api.demoSiteId, headers)
-      expect(res.status).toBe(403)
-      expect(await res.json()).toEqual({
-        error: { code: 'forbidden', message: 'Приглашать участников может только владелец' },
-      })
-      const created = await invite(api.demoSiteId, { email: freshEmail(), role: 'client' }, headers)
-      expect(created.status).toBe(403)
-      expect((await revoke(api.demoSiteId, crypto.randomUUID(), headers)).status).toBe(403)
-    }
+  it('редактор — 403: приглашают владелец и администратор сайта', async () => {
+    const res = await list(api.demoSiteId, editor.headers)
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'forbidden',
+        message: 'Участников приглашают владелец и администратор сайта',
+      },
+    })
+    const body = { email: freshEmail(), role: 'editor' }
+    expect((await invite(api.demoSiteId, body, editor.headers)).status).toBe(403)
+    expect((await revoke(api.demoSiteId, crypto.randomUUID(), editor.headers)).status).toBe(403)
+  })
+
+  it('администратор сайта приглашает, повторяет и отзывает только редакторов', async () => {
+    const { headers } = client
+    expect((await list(api.demoSiteId, headers)).status).toBe(200)
+    const asAdmin = await invite(api.demoSiteId, { email: freshEmail(), role: 'client' }, headers)
+    expect(asAdmin.status).toBe(403)
+    expect(await asAdmin.json()).toEqual({
+      error: {
+        code: 'forbidden',
+        message:
+          'Администратор сайта приглашает только редакторов. Администратора сайта приглашает владелец',
+      },
+    })
+    const email = freshEmail()
+    const created = await invite(api.demoSiteId, { email, role: 'editor' }, headers)
+    expect(created.status).toBe(201)
+    const { id } = (await created.json()) as { id: string }
+    expect((await resend(api.demoSiteId, id, headers)).status).toBe(201)
+    // Приглашение администратора, которое отправил владелец, администратор сайта не трогает
+    const ownerInvite = await invite(api.demoSiteId, { email: freshEmail(), role: 'client' })
+    const ownerId = ((await ownerInvite.json()) as { id: string }).id
+    expect((await revoke(api.demoSiteId, ownerId, headers)).status).toBe(403)
+    expect((await resend(api.demoSiteId, ownerId, headers)).status).toBe(403)
+    expect((await revoke(api.demoSiteId, ownerId)).status).toBe(204)
   })
 
   it('токен API — 403, чужой сайт — 404', async () => {
@@ -221,8 +250,37 @@ describe('приглашение', () => {
     const memberRes = await invite(siteId, { email: member.email, role: 'editor' })
     expect(memberRes.status).toBe(409)
     expect(await memberRes.json()).toMatchObject({
-      error: { message: expect.stringContaining('Уже участник этого сайта (клиент)') },
+      error: {
+        message:
+          'Уже участник этого сайта («Администратор сайта»). Роль меняется в списке участников выше',
+      },
     })
+
+    const disabled = await api.createUser('member')
+    await api.db.update(users).set({ disabledAt: new Date() }).where(eq(users.id, disabled.id))
+    const disabledRes = await invite(siteId, { email: disabled.email, role: 'editor' })
+    expect(disabledRes.status).toBe(409)
+    expect(await disabledRes.json()).toMatchObject({
+      error: { message: `Доступ ${disabled.email} отключён. Верните его в списке участников выше` },
+    })
+  })
+
+  it('«Отправить ещё раз»: новое письмо с той же ролью, прежняя ссылка гаснет', async () => {
+    const siteId = await newSite()
+    const email = freshEmail()
+    const first = await invited(siteId, email, 'editor')
+    const res = await resend(siteId, first.id)
+    expect(res.status).toBe(201)
+    const again = (await res.json()) as { id: string; role: string }
+    expect(again.role).toBe('editor')
+    const mails = await inbox(email)
+    expect(mails).toHaveLength(2)
+    expect(await errorCode(await lookup(first.token))).toBe('invitation_revoked')
+    expect((await lookup(tokenOf(mails.at(-1)))).status).toBe(200)
+    // Отозванное повторно не отправить: пригласить заново формой
+    expect((await revoke(siteId, again.id)).status).toBe(204)
+    expect((await resend(siteId, again.id)).status).toBe(409)
+    expect((await resend(siteId, crypto.randomUUID())).status).toBe(404)
   })
 
   it('повторное приглашение того же адреса отзывает прежнее', async () => {

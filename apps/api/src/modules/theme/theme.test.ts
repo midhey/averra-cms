@@ -194,16 +194,17 @@ describe('контраст', () => {
 })
 
 describe('права', () => {
-  it('меняют владелец и редактор; клиент — только читает', async () => {
-    const editor = await api.loginAs('editor')
-    expect((await save(preset('calm'), editor.headers)).status).toBe(200)
-    expect((await publish(editor.headers)).status).toBe(200)
-
-    const client = await api.loginAs('client')
-    expect((await read(client.headers)).status).toBe(200)
-    const denied = await save(preset('fresh'), client.headers)
-    expect(denied.status).toBe(403)
-    expect((await publish(client.headers)).status).toBe(403)
+  it('меняет только владелец; администратор сайта и редактор — только читают', async () => {
+    for (const role of ['client', 'editor'] as const) {
+      const { headers } = await api.loginAs(role)
+      expect((await read(headers)).status, role).toBe(200)
+      const denied = await save(preset('fresh'), headers)
+      expect(denied.status, role).toBe(403)
+      expect(await denied.json()).toMatchObject({
+        error: { message: 'Тему сайта меняет владелец установки' },
+      })
+      expect((await publish(headers)).status, role).toBe(403)
+    }
   })
 
   it('токен API тему читает, но не меняет', async () => {

@@ -169,6 +169,13 @@
       "when": 1793694366242,
       "tag": "0023_token_rights",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793706539823,
+      "tag": "0024_user_disabled",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { CurrentPassword, ForgotPassword, NewPassword, ResetPasswordToken } from
 import { getIP } from 'better-auth/api'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { type Auth, CLOSED_AUTH_PATHS } from '../../auth/auth'
+import { ACCOUNT_DISABLED_MESSAGE, type Auth, CLOSED_AUTH_PATHS } from '../../auth/auth'
 import type { PasswordConfirmations } from '../../auth/confirm-password'
 import { type AuthEnv, forbidden, notFound, unauthorized } from '../../auth/middleware'
 import { mailDisabled } from '../../errors'
@@ -36,6 +36,7 @@ const messages = new Map([
   ['INVALID_TOKEN', INVALID_RESET_LINK],
   ['RESET_PASSWORD_DISABLED', 'Сброс пароля по почте не настроен'],
   ['BODY_MUST_BE_AN_OBJECT', 'Данные не прошли проверку'],
+  ['ACCOUNT_DISABLED', ACCOUNT_DISABLED_MESSAGE],
 ])
 
 // Остальные коды Better Auth — английским текстом библиотеки. Код отдаём как есть,

@@ -188,14 +188,14 @@ describe('подвал: права и контакты', () => {
     expect((await publish(bearer)).status).toBe(403)
   })
 
-  it('клиент читает, но не меняет; редактор меняет', async () => {
-    const client = await api.loginAs('client', siteId)
-    expect((await read(client.headers)).status).toBe(200)
-    expect((await save({ layout: 'columns' }, client.headers)).status).toBe(403)
-    expect((await publish(client.headers)).status).toBe(403)
-    expect((await takeDown(client.headers)).status).toBe(403)
+  it('редактор читает, но не меняет; администратор сайта меняет', async () => {
     const editor = await api.loginAs('editor', siteId)
-    expect((await save({ layout: 'columns' }, editor.headers)).status).toBe(200)
+    expect((await read(editor.headers)).status).toBe(200)
+    expect((await save({ layout: 'columns' }, editor.headers)).status).toBe(403)
+    expect((await publish(editor.headers)).status).toBe(403)
+    expect((await takeDown(editor.headers)).status).toBe(403)
+    const admin = await api.loginAs('client', siteId)
+    expect((await save({ layout: 'columns' }, admin.headers)).status).toBe(200)
   })
 })
 

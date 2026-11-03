@@ -96,7 +96,13 @@ export function usersRepo(db: Db, auth: Auth) {
 
     async findByEmail(email: string) {
       const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, role: users.role })
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+          disabledAt: users.disabledAt,
+        })
         .from(users)
         .where(eq(users.email, email.toLowerCase()))
       return user

@@ -153,7 +153,7 @@ const usageWhere = ({ draft, published }: MediaUsage) =>
 
 /**
  * Медиатека сайта: монтируется на /sites/:siteId/media. Права — как у страниц: смотреть —
- * чтение сайта, загружать может и клиент, удалять — владелец и редактор
+ * чтение сайта, загружать и удалять — все роли сайта (media.upload, media.delete)
  */
 export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
   const repo = mediaRepo(db)

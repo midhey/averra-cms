@@ -6,8 +6,8 @@ import { CurrentPassword } from './mail-settings'
 // строгие, как у почты: лишнее поле — ошибка, а не тихо выброшенные данные
 
 /**
- * Кому событие: заявки сайта (получателей меняют владелец и клиент) или служебные события
- * установки для студии (только владелец)
+ * Кому событие: заявки сайта (получателей меняют владелец и администратор сайта) или служебные
+ * события установки для студии (только владелец)
  */
 export const NotificationAudience = z.enum(['leads', 'service'])
 export type NotificationAudience = z.infer<typeof NotificationAudience>

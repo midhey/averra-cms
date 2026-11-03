@@ -501,7 +501,7 @@ describe('отдача файлов', () => {
 })
 
 describe('права', () => {
-  it('клиент видит медиатеку и загружает, но не удаляет', async () => {
+  it('администратор сайта видит медиатеку, загружает и удаляет', async () => {
     const client = await loginAs('client')
     const media = await uploaded(
       await upload(client.headers, await picture(300, 200, 'png'), 'c.png'),
@@ -511,9 +511,7 @@ describe('права', () => {
     const list = await app.request(mediaUrl(demoSiteId), { headers: client.headers })
     expect(list.status).toBe(200)
 
-    const res = await remove(client.headers, media.id)
-    expect(res.status).toBe(403)
-    expect(await res.json()).toMatchObject({ error: { code: 'forbidden' } })
+    expect((await remove(client.headers, media.id)).status).toBe(204)
   })
 
   it('редактор удаляет неиспользуемую картинку', async () => {

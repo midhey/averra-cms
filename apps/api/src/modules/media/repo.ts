@@ -16,7 +16,10 @@ const withUrls = (mediaId: string, variants: StoredVariant[]) =>
     url: mediaFileUrl(mediaId, file),
   }))
 
-/** Кто загрузил: имя человека или название токена. Почту не отдаём — медиатеку видит и клиент */
+/**
+ * Кто загрузил: имя человека или название токена. Почту не отдаём — медиатеку видят все роли
+ * сайта
+ */
 export type MediaAuthor = { kind: 'user' | 'token'; name: string } | null
 
 export type NewMedia = {

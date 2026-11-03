@@ -321,7 +321,7 @@ describe('права', () => {
     return { siteId, firstId: first.id }
   }
 
-  it('клиент смотрит историю и возвращает версию в черновик', async () => {
+  it('администратор сайта смотрит историю, возвращает версию и публикует её', async () => {
     const { siteId, firstId } = await siteWithHistory()
     const { headers } = await loginAs('client', siteId)
     const page = pageOf(client(headers), siteId, 'index')
@@ -330,8 +330,7 @@ describe('права', () => {
     expect((await page.revision(firstId)).status).toBe(200)
     expect((await page.restore(firstId)).status).toBe(200)
     expect((await page.get()).title).toBe('Первая')
-    // А опубликовать возвращённое — уже не его дело
-    expect((await page.publish()).status).toBe(403)
+    expect((await page.publish()).status).toBe(200)
   })
 
   it('редактор и токен своего сайта — тоже', async () => {

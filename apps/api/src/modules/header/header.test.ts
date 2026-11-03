@@ -188,8 +188,8 @@ describe('черновик и публикация', () => {
     requested.length = 0
     await ok(await app.request(url, { method: 'DELETE', headers: owner.headers }))
     expect(requested).toEqual([])
-    const client = await api.loginAs('client')
-    expect((await app.request(url, { method: 'DELETE', headers: client.headers })).status).toBe(403)
+    const editor = await api.loginAs('editor')
+    expect((await app.request(url, { method: 'DELETE', headers: editor.headers })).status).toBe(403)
   })
 
   it('черновик может вести на неопубликованную страницу — публикация с ним 409', async () => {
@@ -327,15 +327,15 @@ describe('логотип', () => {
 })
 
 describe('права', () => {
-  it('меняют владелец и редактор; клиент — только читает', async () => {
-    const editor = await api.loginAs('editor')
-    expect((await save({ menu }, editor.headers)).status).toBe(200)
-    expect((await publish(editor.headers)).status).toBe(200)
+  it('меняют владелец и администратор сайта; редактор — только читает', async () => {
+    const admin = await api.loginAs('client')
+    expect((await save({ menu }, admin.headers)).status).toBe(200)
+    expect((await publish(admin.headers)).status).toBe(200)
 
-    const client = await api.loginAs('client')
-    expect((await read(client.headers)).status).toBe(200)
-    expect((await save({ menu }, client.headers)).status).toBe(403)
-    expect((await publish(client.headers)).status).toBe(403)
+    const editor = await api.loginAs('editor')
+    expect((await read(editor.headers)).status).toBe(200)
+    expect((await save({ menu }, editor.headers)).status).toBe(403)
+    expect((await publish(editor.headers)).status).toBe(403)
   })
 
   it('токен API шапку читает, но не меняет', async () => {

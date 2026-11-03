@@ -1,6 +1,8 @@
 import { PASSWORD_LENGTH } from '@averra/schema'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { APIError } from 'better-auth/api'
+import { eq } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { accounts, sessions, users, verifications } from '../db/schema'
 import { errorForLog, withoutQueryParams } from '../log-error'
@@ -34,6 +36,10 @@ export type AuthOptions = {
  * disabledPaths не трогает. Варианты написания путей не доходят и до Better Auth (routes.ts)
  */
 export const CLOSED_AUTH_PATHS = ['/verify-password'] as const
+
+/** Отказ во входе тому, чей доступ отключён (раздел «Участники»). Код — как ApiError, по-русски */
+export const ACCOUNT_DISABLED_MESSAGE =
+  'Доступ к админке отключён. Если это ошибка, попросите владельца установки (студию) вернуть его'
 
 /** Сколько запросов сброса пароля пускать с одного IP: за 15 минут. Считает обёртка (routes.ts) */
 export const RESET_REQUESTS_PER_IP = { window: 15 * 60, max: 5 } as const
@@ -91,6 +97,26 @@ export function createAuth({
     // не даёт рабочих ссылок. В базе — reset-password#<хеш>: # вместо двоеточия, чтобы запасной
     // поиск Better Auth «по строке как есть» не принял хеш за токен (auth/password-reset.ts)
     verification: { storeIdentifier: { hash: hashVerificationIdentifier } },
+    // Отключённый участник (users.disabled_at) не входит: ни паролем, ни после сброса пароля, ни
+    // сменой пароля. Все его сессии удаляет само отключение (modules/members), а здесь — новые
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            const [user] = await db
+              .select({ disabledAt: users.disabledAt })
+              .from(users)
+              .where(eq(users.id, session.userId))
+            if (user?.disabledAt) {
+              throw APIError.from('FORBIDDEN', {
+                message: ACCOUNT_DISABLED_MESSAGE,
+                code: 'ACCOUNT_DISABLED',
+              })
+            }
+          },
+        },
+      },
+    },
     user: {
       additionalFields: {
         // input: false — роль не поменять через эндпоинты Better Auth (update-user и т.п.)
