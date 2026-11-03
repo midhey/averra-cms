@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { MailSendError } from '../../mail/mailer'
 import { memoryMailer } from '../../mail/memory-mailer'
 import { enqueueMail } from '../../mail/outbox'
+import { mailTemplates } from '../../mail/templates'
 import { processOutbox } from '../../mail/worker'
 import { createTestApi, type TestApi } from '../../testing'
 
@@ -226,6 +227,22 @@ describe('предпросмотр', () => {
       expect(mail.subject.length).toBeGreaterThan(0)
       expect(mail.html).toContain('<html lang="ru">')
       expect(mail.text.length).toBeGreaterThan(0)
+    },
+  )
+
+  it('примерное письмо — про сайт установки, а не про вымышленный', async () => {
+    const res = await get('/templates/lead-received/preview', owner.headers)
+    const mail = (await res.json()) as { subject: string }
+    expect(mail.subject).not.toContain('Ремонт квартир')
+    expect(mail.subject).toMatch(/^Заявка получена — .+/)
+  })
+
+  it.each(Object.keys(mailTemplates))(
+    '«%s»: нет вымышленного «Ремонт квартир»',
+    async (template) => {
+      const res = await get(`/templates/${template}/preview`, owner.headers)
+      const mail = (await res.json()) as { subject: string; text: string; html: string }
+      expect(`${mail.subject}${mail.text}${mail.html}`).not.toContain('Ремонт квартир')
     },
   )
 

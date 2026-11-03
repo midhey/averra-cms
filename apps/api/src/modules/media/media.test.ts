@@ -44,7 +44,8 @@ type Uploaded = {
   variants: { format: string; width: number; height: number; size: number; url: string }[]
 }
 
-type Library = { items: Uploaded[]; maxBytes: number }
+/** Медиатека: у каждой картинки — где она стоит (usage) */
+type Library = { items: (Uploaded & { usage: unknown[] })[]; maxBytes: number }
 
 async function library(testApp: typeof app, headers: Headers, siteId = demoSiteId) {
   const res = await testApp.request(mediaUrl(siteId), { headers })
@@ -591,6 +592,27 @@ describe('удаление', () => {
     expect(await res.json()).toMatchObject({
       error: { issues: [{ path: 'pages.na-sajte', message: 'сайт' }] },
     })
+  })
+
+  it('медиатека говорит, где стоит картинка: страница (черновик и сайт), нигде — пусто', async () => {
+    const used = await uploaded(await upload(owner.headers, await picture(700, 400, 'jpeg')))
+    const free = await uploaded(await upload(owner.headers, await picture(700, 400, 'jpeg')))
+    expect((await save('gde-stoit', 'Где стоит', heroWith(used.id))).status).toBe(200)
+    expect((await publish('gde-stoit')).status).toBe(200)
+
+    const { items } = await library(app, owner.headers)
+    const usageOf = (id: string) => items.find((item) => item.id === id)?.usage
+    expect(usageOf(used.id)).toEqual([
+      { kind: 'page', slug: 'gde-stoit', title: 'Где стоит', state: 'both' },
+    ])
+    expect(usageOf(free.id)).toEqual([])
+
+    // Убрали из черновика, на сайте осталась: место есть, состояние — «на сайте»
+    expect((await save('gde-stoit', 'Где стоит', { blocks: [] })).status).toBe(200)
+    const after = await library(app, owner.headers)
+    expect(after.items.find((item) => item.id === used.id)?.usage).toEqual([
+      { kind: 'page', slug: 'gde-stoit', title: 'Где стоит', state: 'published' },
+    ])
   })
 
   it('картинка другого сайта — 404, даже владельцу', async () => {

@@ -1,4 +1,5 @@
 import {
+  customH1Types,
   isCustomBlock,
   type MediaMap,
   mainHeadingBlock,
@@ -50,9 +51,13 @@ export function Page({
   onCustomBlockError,
   preview = false,
 }: PageProps) {
-  // h1 на странице один: его получает первый блок «Первый экран». Правило — в схеме: по нему же
-  // проверки SEO в редакторе говорят, есть ли h1
-  const mainHeroId = mainHeadingBlock(content.blocks)?.id
+  // h1 на странице один: его получает первый блок «Первый экран» или свой блок, у которого h1
+  // в шаблоне (тогда «Первый экран» после него — h2). Правило — в схеме: по нему же проверки SEO
+  // в редакторе и MCP говорят, есть ли h1
+  const mainHeroId = mainHeadingBlock(
+    content.blocks,
+    customH1Types(Object.values(customBlocks)),
+  )?.id
   const pageIds = content.blocks.map((block) => block.id)
   return (
     // id — цель «К содержимому» в шапке сайта (SiteHeader)

@@ -42,7 +42,7 @@ export const notificationTemplate = defineMailTemplate({
     link: z.strictObject({ label: MailLine(NOTIFICATION_LIMITS.label), url: MailUrl }).optional(),
   }),
   example: {
-    title: 'Ремонт квартир: бэкап не прошёл',
+    title: 'Бэкап установки не прошёл',
     lines: [
       'Последний бэкап установки не удался. Данные после прошлого удачного бэкапа не защищены.',
     ],

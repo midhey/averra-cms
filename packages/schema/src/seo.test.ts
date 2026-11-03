@@ -4,6 +4,7 @@ import { type BlockSchemaNode, blockPropsSchema } from './media-svg'
 import { PageContent, PageSeo } from './page'
 import {
   canonicalElsewhere,
+  customH1Types,
   isWeakAlt,
   mainHeadingBlock,
   ogCardOf,
@@ -15,6 +16,7 @@ import {
   type SeoCheckPage,
   type SiteSeo,
   seoAdvice,
+  templateHasH1,
 } from './seo'
 import { Theme } from './theme'
 
@@ -42,8 +44,12 @@ const page = (patch: Partial<SeoCheckPage> = {}): SeoCheckPage => ({
   ...patch,
 })
 
-const check = (id: string, p: SeoCheckPage = page(), s: SiteSeo = site) =>
-  pageSeoChecks(p, s).find((item) => item.id === id)
+const check = (
+  id: string,
+  p: SeoCheckPage = page(),
+  s: SiteSeo = site,
+  options: { ownH1?: ReadonlySet<string> } = {},
+) => pageSeoChecks(p, s, options).find((item) => item.id === id)
 
 describe('PageSeo', () => {
   it('принимает все поля и не требует ни одного', () => {
@@ -187,6 +193,47 @@ describe('h1', () => {
       level: 'good',
       title: 'Главный заголовок (h1) один: «Ремонт квартир под ключ»',
     })
+  })
+})
+
+describe('h1 в своих блоках', () => {
+  const mine = { id: 'top', type: 'custom:le-hero', props: { title: 'Привет, я *Лера*' } }
+  const ownH1 = customH1Types([
+    { key: 'le-hero', template: '<section><h1>{{ title }}</h1></section>' },
+    { key: 'plain', template: '<h2>{{ title }}</h2>' },
+  ])
+
+  it('h1 в шаблоне: литеральный <h1 вне комментариев', () => {
+    expect(templateHasH1('<h1 class="a">{{ t }}</h1>')).toBe(true)
+    expect(templateHasH1('<H1>x</H1>')).toBe(true)
+    expect(templateHasH1('<h2>x</h2><h10>')).toBe(false)
+    expect(templateHasH1('{% comment %}<h1>x</h1>{% endcomment %}<h2>x</h2>')).toBe(false)
+    expect(templateHasH1('<!-- <h1> --><p>x</p>')).toBe(false)
+    expect([...ownH1]).toEqual(['custom:le-hero'])
+  })
+
+  it('свой блок с h1 — главный заголовок: не «нет h1», а хорошо, текст без звёздочек', () => {
+    expect(mainHeadingBlock([cta, mine], ownH1)?.id).toBe('top')
+    expect(check('h1', page({ blocks: [mine] }), site, { ownH1 })).toEqual({
+      id: 'h1',
+      level: 'good',
+      title: 'Главный заголовок (h1) один: «Привет, я Лера»',
+    })
+    expect(check('h1', page({ blocks: [cta, mine] }), site, { ownH1 })?.level).toBe('warning')
+  })
+
+  it('без определений (MCP не получил блоки) совет прежний — нет h1', () => {
+    expect(check('h1', page({ blocks: [mine] }))?.level).toBe('problem')
+  })
+
+  it('два h1 — «Первый экран» и свой блок, или два своих — предупреждение', () => {
+    const second = { id: 'second', type: 'custom:le-hero', props: { title: 'Ещё' } }
+    expect(check('h1', page({ blocks: [mine, hero()] }), site, { ownH1 })?.level).toBe('good')
+    expect(check('h1', page({ blocks: [hero(), mine] }), site, { ownH1 })).toMatchObject({
+      level: 'warning',
+      title: 'На странице несколько главных заголовков (h1): 2',
+    })
+    expect(check('h1', page({ blocks: [mine, second] }), site, { ownH1 })?.level).toBe('warning')
   })
 })
 

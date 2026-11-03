@@ -314,6 +314,7 @@ export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
 export {
   canonicalElsewhere,
   canonicalPath,
+  customH1Types,
   isWeakAlt,
   mainHeadingBlock,
   OG_CARD_DESIGN,
@@ -334,6 +335,7 @@ export {
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,
+  templateHasH1,
 } from './seo'
 export { SITE_NAME_MAX, SiteName } from './site'
 export {
@@ -405,7 +407,13 @@ export {
   updateBlock,
   updateResultText,
 } from './status'
-export { parseTextBody, plainTextValue, splitParagraphs, type TextPart } from './text-body'
+export {
+  parseTextBody,
+  plainAccent,
+  plainTextValue,
+  splitParagraphs,
+  type TextPart,
+} from './text-body'
 export {
   type ContrastCheck,
   type ContrastPair,

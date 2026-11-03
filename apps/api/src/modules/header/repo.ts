@@ -5,6 +5,7 @@ import {
   type HeaderTargetPage,
   MAIN_PAGE_SLUG,
   overlayFits,
+  plainAccent,
   sameHeader,
 } from '@averra/schema'
 import { and, asc, eq, sql } from 'drizzle-orm'
@@ -36,7 +37,8 @@ type StoredContent = { blocks?: StoredBlock[]; hideHeader?: unknown; hideFooter?
 /** Заголовок блока, если он есть: «Наши цены» понятнее, чем #pricing-1 */
 function blockLabel(block: StoredBlock) {
   const props = block.props as { title?: unknown } | undefined
-  const title = typeof props?.title === 'string' ? props.title.trim() : ''
+  // Заголовки с *акцентом* в списке цели — без звёздочек: это подпись, а не разметка
+  const title = typeof props?.title === 'string' ? plainAccent(props.title).trim() : ''
   return title === '' ? null : title
 }
 

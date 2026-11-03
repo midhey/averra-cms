@@ -433,6 +433,49 @@ describe('свои блоки: черновики через MCP', () => {
     })
   })
 
+  it('свой блок с <h1> в шаблоне — главный заголовок: совет «нет h1» не приходит', async () => {
+    const own = SaveCustomBlockInput.parse({
+      definition: {
+        ...definition.definition,
+        key: 'mcp-hero',
+        title: 'Первый экран от нейронки',
+        template: '<section><h1>{{ title }}</h1></section>',
+      },
+    })
+    await drafts.saveCustomBlockDraft(own)
+    expect(
+      (
+        await api.app.request(`${base}/mcp-hero/publish`, {
+          method: 'POST',
+          headers: ownerHeaders,
+          body: JSON.stringify({ draft: own.definition }),
+        })
+      ).status,
+    ).toBe(200)
+    const content = (type: string) =>
+      PageContent.parse({ blocks: [{ id: 'top', type, props: { title: 'Привет, я *Лера*' } }] })
+
+    const withOwn = await tools.saveDraft({
+      slug: 'svoj-h1',
+      title: 'Свой h1',
+      content: content('custom:mcp-hero'),
+    })
+    // Совет «нет h1» — «Важно»; со своим блоком его нет (хорошие проверки в список не попадают)
+    expect(withOwn.seoChecks?.map((check) => check.title)).not.toContain(
+      'На странице нет главного заголовка (h1)',
+    )
+
+    // Свой блок без h1 на странице — совет прежний: h1 нет
+    const withoutH1 = await tools.saveDraft({
+      slug: 'bez-h1',
+      title: 'Без h1',
+      content: content('custom:mcp-promo'),
+    })
+    expect(withoutH1.seoChecks?.map((check) => check.title)).toContain(
+      'На странице нет главного заголовка (h1)',
+    )
+  })
+
   it('ошибки шаблона возвращаются со строкой и частью — нейронка правит по ним', async () => {
     const broken = SaveCustomBlockInput.parse({
       definition: {

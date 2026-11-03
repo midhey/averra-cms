@@ -6,8 +6,10 @@ import {
   CustomBlockKey,
   customBlockProps,
   customBlockType,
+  customH1Types,
   describeApiError,
   headerLayoutTitles,
+  isCustomBlockType,
   PageContent,
   PageSlug,
   PageTitle,
@@ -112,7 +114,7 @@ type SaveDraftInput = z.output<typeof SaveDraftInput>
 const rules = [
   'Страница — это { blocks: [...] }, не больше 50 блоков.',
   'У каждого блока уникальный id: латиница, цифры, _ и -. Он же якорь: кнопка с href "#contact" ведёт к блоку с id "contact".',
-  'Главный заголовок страницы (h1) получает первый блок hero, поэтому начинай страницу с него.',
+  'Главный заголовок страницы (h1) получает первый блок hero (или свой блок с <h1> в шаблоне, если он первый экран), поэтому начинай страницу с него.',
   'Ссылки только https://, http://, /, #, mailto: и tel:.',
   'Лишних полей быть не должно: используй только поля из схем блоков.',
   'Картинка — { mediaId, alt }: mediaId из медиатеки этого сайта (её пополняют в админке), alt обязателен — коротко, что на картинке. Чужой или выдуманный mediaId API не примет. hero в вариантах split («С картинкой», картинка сбоку) и cover («На фото», фото на весь блок, прозрачная шапка ложится на него) без картинки не пройдёт, в других вариантах картинки быть не должно. SVG из медиатеки (mimeType image/svg+xml) — только для логотипа и иконки сайта и для логотипов клиентов (clients, поле logo — { mediaId } без alt): в остальные картинки блоков и seo.image его ставить нельзя.',
@@ -307,6 +309,14 @@ export function cmsTools(client: Api | undefined) {
     )
     return site.success ? site.data.seo : undefined
   }
+  const ownH1Of = async (siteId: string) => {
+    try {
+      const body = await unwrap(() => customBlocksApi.$get({ param: { siteId } }))
+      return customH1Types(publishedCustomBlocks(body))
+    } catch {
+      return undefined
+    }
+  }
   /**
    * Советы SEO по черновику — те же проверки, что в панели «SEO» редактора. Советы — добавка:
    * MCP студии ходит и в установки клиентов старее себя, и черновик к этому моменту уже сохранён.
@@ -321,7 +331,16 @@ export function cmsTools(client: Api | undefined) {
       const siteSeo = await siteSeoOf(siteId)
       if (!siteSeo) return undefined
       const { title, draft } = parsed.data
-      const checks = pageSeoChecks({ slug, title, blocks: draft.blocks, seo: draft.seo }, siteSeo)
+      // h1 бывает у своего блока: без его определений совет «нет h1» был бы ложным. Определения
+      // читаем, только если на странице есть свои блоки; не прочитались — совет по встроенным
+      const ownH1 = draft.blocks.some((block) => isCustomBlockType(block.type))
+        ? await ownH1Of(siteId)
+        : undefined
+      const checks = pageSeoChecks(
+        { slug, title, blocks: draft.blocks, seo: draft.seo },
+        siteSeo,
+        ownH1 ? { ownH1 } : {},
+      )
       return seoAdvice(checks).map(({ level, title, advice }) => ({ level, title, advice }))
     } catch {
       return undefined

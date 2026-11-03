@@ -195,6 +195,29 @@ export function customBlocksRepo(db: Db) {
         .orderBy(asc(pages.slug))
     },
 
+    /**
+     * Тексты определений (черновик и опубликованное) в нижнем регистре: медиатека по ним находит,
+     * в каких своих блоках стоит картинка. Один запрос на все картинки сразу
+     */
+    async definitionTexts(siteId: string) {
+      const rows = await db
+        .select({
+          key: customBlocks.key,
+          draft: customBlocks.draft,
+          published: customBlocks.published,
+        })
+        .from(customBlocks)
+        .where(eq(customBlocks.siteId, siteId))
+      return rows.map((row) => ({
+        key: row.key,
+        title: readDefinition(row.draft)?.title ?? row.key,
+        // Опубликованное название и текст: людям без права на черновики показывается только оно
+        publishedTitle: row.published ? (readDefinition(row.published)?.title ?? row.key) : null,
+        publishedText: JSON.stringify(row.published ?? '').toLowerCase(),
+        text: `${JSON.stringify(row.draft)} ${JSON.stringify(row.published ?? '')}`.toLowerCase(),
+      }))
+    },
+
     /** Свои блоки, в определении которых есть картинка (CSS или пример): её нельзя удалить */
     async usingMedia(siteId: string, mediaId: string) {
       const id = mediaId.toLowerCase()
@@ -217,6 +240,10 @@ export function customBlocksRepo(db: Db) {
       return rows.map((row) => ({
         key: row.key,
         title: readDefinition(row.draft)?.title ?? row.key,
+        publishedTitle: row.published ? (readDefinition(row.published)?.title ?? row.key) : null,
+        inPublished: JSON.stringify(row.published ?? '')
+          .toLowerCase()
+          .includes(id),
       }))
     },
 

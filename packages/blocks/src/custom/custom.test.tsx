@@ -253,9 +253,9 @@ describe('шаблон: проверка при сохранении', () => {
     expect(problems[0]?.message).toMatch(message)
   })
 
-  it('h1 и картинка без alt — предупреждения', () => {
+  it('картинка без alt — предупреждение, h1 — нет: свой первый экран вправе его вывести', () => {
     const problems = checkTemplateHtml('<h1>a</h1><img src="/a.png">')
-    expect(problems.map((problem) => problem.level)).toEqual(['warning', 'warning'])
+    expect(problems.map((problem) => problem.level)).toEqual(['warning'])
   })
 
   it('неизвестные переменная, фильтр, тег, include — ошибки со строкой', () => {

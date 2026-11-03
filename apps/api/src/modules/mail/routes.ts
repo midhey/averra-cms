@@ -5,6 +5,7 @@ import type { Actor } from '../../auth/access'
 import type { PasswordConfirmations } from '../../auth/confirm-password'
 import { type AuthEnv, forbidden, notFound, requireOwner } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { sites } from '../../db/schema'
 import { checkStale, conflict, mailSettingsLocked } from '../../errors'
 import { createCheckTokens } from '../../mail/check-token'
 import { localLinkWarning } from '../../mail/link-warning'
@@ -214,9 +215,18 @@ export function mailRoutes({
       })
 
       // Предпросмотр на примерных данных: те же renderMail и макет, что у настоящих писем
-      .get('/templates/:template/preview', validate('param', TemplateParams), (c) => {
+      .get('/templates/:template/preview', validate('param', TemplateParams), async (c) => {
         const { template } = c.req.valid('param')
-        return c.json(previewMail(template), 200)
+        // Одна установка — один сайт: в примере стоит его название
+        const [site] = await db
+          .select({ name: sites.name })
+          .from(sites)
+          .orderBy(sites.createdAt)
+          .limit(1)
+        return c.json(
+          previewMail(template, site ? toMailLine(site.name, 80, 'сайт') : undefined),
+          200,
+        )
       })
   )
 }

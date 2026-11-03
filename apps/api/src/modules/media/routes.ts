@@ -6,7 +6,6 @@ import {
   MAX_SVG_BYTES,
   type MediaMimeType,
   mediaMimeTypes,
-  type SiteSettings,
   SVG_MIME_TYPE,
   svgTooLargeMessage,
   Uuid,
@@ -37,6 +36,13 @@ import { customBlocksRepo } from '../custom-blocks/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
+import {
+  HIDDEN_BLOCK_KEY,
+  HIDDEN_BLOCK_TITLE,
+  mediaUsage,
+  seesBlockDrafts,
+  settingsMediaRoles,
+} from './usage'
 
 export type MediaDeps = {
   db: Db
@@ -141,15 +147,6 @@ function displayName(name: string) {
 }
 
 const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
-
-/** Где в настройках SEO стоит картинка — словами для сообщения */
-function settingsMediaRoles(settings: SiteSettings, mediaId: string) {
-  return [
-    settings.icon === mediaId && 'иконка сайта',
-    settings.ogImage === mediaId && 'картинка для соцсетей',
-    settings.organization.logo === mediaId && 'логотип организации',
-  ].filter((role): role is string => role !== false)
-}
 
 const usageWhere = ({ draft, published }: MediaUsage) =>
   draft && published ? 'черновик и сайт' : draft ? 'черновик' : 'сайт'
@@ -257,7 +254,18 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
       // через прокси) увидит сетевой сбой вместо понятного «файл больше N МБ»
       .get('/', validate('param', SiteParams), requireSite(db, 'site.read'), async (c) => {
         const { siteId } = c.req.valid('param')
-        return c.json({ items: await repo.list(siteId), maxBytes }, 200)
+        const items = await repo.list(siteId)
+        // Где стоит каждая картинка — на карточке медиатеки, чтобы не узнавать это отказом удалить
+        const usage = await mediaUsage(
+          db,
+          siteId,
+          items.map((item) => item.id),
+          seesBlockDrafts(c.var.actor, c.var.siteRole),
+        )
+        return c.json(
+          { items: items.map((item) => ({ ...item, usage: usage.get(item.id) ?? [] })), maxBytes },
+          200,
+        )
       })
 
       .post(
@@ -359,12 +367,24 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
           }
 
           // Картинка в CSS или примере своего блока: на сайте пропал бы фон, в каталоге — пример
-          const blocks = await customBlocksRepo(db).usingMedia(siteId, mediaId)
+          const drafts = seesBlockDrafts(c.var.actor, c.var.siteRole)
+          const using = await customBlocksRepo(db).usingMedia(siteId, mediaId)
+          const blocks = using.flatMap((block) =>
+            drafts
+              ? [{ key: block.key, title: block.title }]
+              : block.publishedTitle !== null && block.inPublished
+                ? [{ key: block.key, title: block.publishedTitle }]
+                : [],
+          )
+          // Только в черновике: удалить нельзя, но имя блока без права на черновики не называем
+          const hiddenOnly =
+            !drafts && using.some((block) => block.publishedTitle === null || !block.inPublished)
+          if (hiddenOnly) blocks.push({ key: HIDDEN_BLOCK_KEY, title: HIDDEN_BLOCK_TITLE })
           if (blocks.length > 0) {
             const list = blocks.map((block) => `«${block.title}»`).join(', ')
             const message = `Картинка в своих блоках: ${list} (CSS или пример). Уберите её оттуда, тогда её можно будет удалить`
             const issues = blocks.map((block) => ({
-              path: `customBlocks.${block.key}`,
+              path: block.key === HIDDEN_BLOCK_KEY ? 'customBlocks' : `customBlocks.${block.key}`,
               message: block.title,
             }))
             return c.json(conflict(message, issues), 409)

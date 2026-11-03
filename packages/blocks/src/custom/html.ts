@@ -437,7 +437,8 @@ export function maskLiquid(template: string) {
 /**
  * Проверка HTML шаблона при сохранении: запрещённые элементы и атрибуты, опасные ссылки, вывод
  * {{ }} в атрибуте без кавычек (значение с пробелом добавило бы атрибуты) — ошибки со строкой.
- * h1 и картинка без alt — предупреждения
+ * Картинка без alt — предупреждение. h1 не предупреждаем: свой первый экран вправе его вывести,
+ * а «несколько h1» скажет проверка SEO страницы
  */
 export function checkTemplateHtml(template: string): CustomBlockProblem[] {
   const { masked, raws } = scanLiquid(template)
@@ -462,13 +463,6 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
       if (FORBIDDEN_ELEMENTS.has(tag)) {
         add('error', line, forbiddenElementMessage(tag))
         continue
-      }
-      if (tag === 'h1') {
-        add(
-          'warning',
-          line,
-          'h1 на странице один — у первого экрана. Заголовок своего блока — h2, внутри — h3',
-        )
       }
       if (tag === 'img' && !node.attrs.some((attr) => attr.name === 'alt')) {
         add('warning', line, 'У картинки нет alt: возьмите фильтр image — он ставит alt из поля')

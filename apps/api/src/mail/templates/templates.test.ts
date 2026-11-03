@@ -109,9 +109,10 @@ describe('шаблоны писем', () => {
 
   it('проверочное письмо говорит, кто его отправил: команда или кнопка в админке', () => {
     const data = mailTemplates['mail-test'].example
-    expect(renderMail('mail-test', data).text).toContain('команда pnpm mail:test')
-    const admin = renderMail('mail-test', { ...data, via: 'admin' })
-    expect(admin.text).toContain('кнопка «Проверить подключение» на странице «Почта»')
+    expect(renderMail('mail-test', data).text).toContain('кнопка «Проверить подключение»')
+    expect(renderMail('mail-test', data).text).not.toContain('pnpm')
+    const command = renderMail('mail-test', { ...data, via: 'command' })
+    expect(command.text).toContain('команда pnpm mail:test')
     expect(() => renderMail('mail-test', { ...data, via: 'cron' })).toThrow(MailDataError)
   })
 

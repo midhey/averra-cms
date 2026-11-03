@@ -1,5 +1,6 @@
 import { blocks as blockCatalog } from './blocks'
 import { samePhone } from './contact'
+import { customBlockType } from './custom-blocks'
 import { type BlockSchemaNode, blockPropsSchema, schemaStep } from './media-svg'
 import {
   MAIN_PAGE_SLUG,
@@ -9,6 +10,7 @@ import {
 } from './page'
 import { pluralRu } from './plural'
 import { applyTitleTemplate, normalizeRedirectPath } from './site-settings'
+import { plainAccent } from './text-body'
 import type { Theme } from './theme'
 import { isInternalPath } from './url'
 
@@ -20,11 +22,40 @@ import { isInternalPath } from './url'
 export type SeoBlock = { readonly id: string; readonly type: string; readonly props?: unknown }
 
 /**
- * Какой блок получает главный заголовок страницы (h1): первый «Первый экран». Остальные блоки —
- * h2, поэтому h1 на странице не больше одного. Это правило рисует Page (@averra/blocks)
+ * Есть ли в шаблоне своего блока h1: литеральный `<h1` вне комментариев Liquid и HTML. Признак
+ * берётся из текста шаблона, а не из отрендеренной разметки: так он одинаков у рендерера, админки
+ * и MCP (им не нужен движок Liquid) и не зависит от данных блока. `<h1` внутри {% if %} считается
+ * присутствующим: совет получается оптимистичнее, но ложного «нет h1» нет
  */
-export const mainHeadingBlock = <B extends SeoBlock>(blocks: readonly B[]) =>
-  blocks.find((block) => block.type === 'hero')
+export function templateHasH1(template: string) {
+  const visible = template
+    .replace(/\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\}/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+  return /<h1[\s>/]/i.test(visible)
+}
+
+/**
+ * Типы (custom:ключ) своих блоков, которые сами выводят h1: «Первый экран» своими руками.
+ * Определения — опубликованные: на сайт попадают они
+ */
+export function customH1Types(definitions: Iterable<{ key: string; template: string }>) {
+  const types = new Set<string>()
+  for (const { key, template } of definitions) {
+    if (templateHasH1(template)) types.add(customBlockType(key))
+  }
+  return types as ReadonlySet<string>
+}
+
+/**
+ * Какой блок получает главный заголовок страницы (h1): первый из «Первого экрана» и своих блоков
+ * с h1 в шаблоне (`ownH1` — их типы, customH1Types). Остальные «Первые экраны» и встроенные блоки —
+ * h2: h1 у встроенных не больше одного. Это правило рисует Page (@averra/blocks). Свой блок с h1
+ * движок не переписывает — h1 он выводит как написан, и совет «несколько h1» говорит об этом
+ */
+export const mainHeadingBlock = <B extends SeoBlock>(
+  blocks: readonly B[],
+  ownH1?: ReadonlySet<string>,
+) => blocks.find((block) => block.type === 'hero' || ownH1?.has(block.type) === true)
 
 /**
  * Что сайт сообщает странице для SEO: GET /api/sites/:siteId отдаёт это всем, кто правит страницы
@@ -293,15 +324,26 @@ const textProp = (props: unknown, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function headingCheck(blocks: readonly SeoBlock[]): SeoCheck {
-  const main = mainHeadingBlock(blocks)
+function headingCheck(blocks: readonly SeoBlock[], ownH1?: ReadonlySet<string>): SeoCheck {
+  const main = mainHeadingBlock(blocks, ownH1)
   if (!main) {
     return {
       id: 'h1',
       level: 'problem',
       title: 'На странице нет главного заголовка (h1)',
       advice:
-        'Его даёт блок «Первый экран». Поставьте его в начало: по h1 поисковик и экранный диктор понимают, о чём страница.',
+        'Его даёт блок «Первый экран» или свой блок, в шаблоне которого есть <h1>. Поставьте его в начало: по h1 поисковик и экранный диктор понимают, о чём страница.',
+    }
+  }
+  // Свои блоки с h1 после главного: встроенные получают h2, а свой выводит h1 как написан
+  const extra = blocks.filter((block) => block !== main && ownH1?.has(block.type) === true)
+  if (extra.length > 0) {
+    return {
+      id: 'h1',
+      level: 'warning',
+      title: `На странице несколько главных заголовков (h1): ${extra.length + 1}`,
+      advice:
+        'h1 должен быть один. Лишний выводит свой блок: замените в его шаблоне <h1> на <h2> или уберите блок со страницы.',
     }
   }
   if (blocks[0] !== main) {
@@ -310,10 +352,10 @@ function headingCheck(blocks: readonly SeoBlock[]): SeoCheck {
       level: 'warning',
       title: 'Главный заголовок (h1) не в начале страницы',
       advice:
-        'h1 получает первый «Первый экран», а перед ним стоят другие блоки. Поставьте «Первый экран» первым.',
+        'h1 получает первый «Первый экран» (или свой блок с h1), а перед ним стоят другие блоки. Поставьте его первым.',
     }
   }
-  const text = textProp(main.props, 'title')
+  const text = plainAccent(textProp(main.props, 'title'))
   return {
     id: 'h1',
     level: 'good',
@@ -417,7 +459,11 @@ function slugCheck(slug: string): SeoCheck {
  * по темам; что показать первым, решает экран. Страница 404 не индексируется: у неё только
  * заголовок, h1 и картинки
  */
-export function pageSeoChecks(page: SeoCheckPage, site: SiteSeo): SeoCheck[] {
+export function pageSeoChecks(
+  page: SeoCheckPage,
+  site: SiteSeo,
+  options: { ownH1?: ReadonlySet<string> } = {},
+): SeoCheck[] {
   const seo = page.seo ?? {}
   const notFound = page.slug === NOT_FOUND_PAGE_SLUG
   const documentTitle = pageDocumentTitle(page, site.titleTemplate)
@@ -429,7 +475,7 @@ export function pageSeoChecks(page: SeoCheckPage, site: SiteSeo): SeoCheck[] {
       : titleCheck(documentTitle, Boolean(seo.title?.trim())),
   ]
   if (!notFound) checks.push(descriptionCheck(seo.description?.trim() ?? '', site.description))
-  checks.push(headingCheck(page.blocks))
+  checks.push(headingCheck(page.blocks, options.ownH1))
   const alt = altCheck(page.blocks)
   if (alt) checks.push(alt)
   if (notFound) return checks

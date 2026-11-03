@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import {
+  CustomBlockDraft,
+  customH1Types,
   demoPage,
   legalPageContent,
   type MediaMap,
@@ -53,6 +55,46 @@ describe('Page', () => {
     })
     expect(countH1(html)).toBe(1)
     expect(html).toMatch(/<h2[^>]*>Второй<\/h2>/)
+  })
+
+  describe('свой блок с h1', () => {
+    const own = CustomBlockDraft.parse({
+      key: 'le-hero',
+      title: 'Первый экран Леры',
+      description: 'Свой первый экран',
+      fields: [{ type: 'text', name: 'title', label: 'Заголовок', required: true }],
+      template: '<section><h1>{{ title }}</h1></section>',
+      example: { title: 'Привет' },
+    })
+    const customBlocks = { 'le-hero': own }
+    const renderCustom = (input: unknown) =>
+      renderToStaticMarkup(<Page content={PageContent.parse(input)} customBlocks={customBlocks} />)
+    const mine = { id: 'top', type: 'custom:le-hero', props: { title: 'Привет, я Лера' } }
+    const hero = { id: 'h', type: 'hero', props: { title: 'Второй' } }
+
+    it('h1 страницы — он, а «Первый экран» после него становится h2', () => {
+      const content = PageContent.parse({ blocks: [mine, hero] })
+      const html = renderCustom(content)
+      expect(countH1(html)).toBe(1)
+      expect(html).toContain('<h1>Привет, я Лера</h1>')
+      expect(html).toMatch(/<h2[^>]*>Второй<[/]h2>/)
+      expect(mainHeadingBlock(content.blocks, customH1Types([own]))?.id).toBe('top')
+    })
+
+    it('проверка SEO видит этот h1 и не говорит «нет h1»', () => {
+      const site = { titleTemplate: '', description: '', ogImage: null, url: null }
+      const check = (blocks: unknown[], ownH1?: ReadonlySet<string>) =>
+        pageSeoChecks(
+          { slug: 'a', title: 'А', blocks: PageContent.parse({ blocks }).blocks },
+          { ...site, hideFromSearch: false },
+          ownH1 ? { ownH1 } : {},
+        ).find((item) => item.id === 'h1')
+      const ownH1 = customH1Types([own])
+      expect(check([mine], ownH1)).toMatchObject({ level: 'good' })
+      expect(check([mine], ownH1)?.title).toContain('Привет, я Лера')
+      // Без определений (старый MCP, не загрузились блоки) совет прежний
+      expect(check([mine])?.level).toBe('problem')
+    })
   })
 
   it.each([

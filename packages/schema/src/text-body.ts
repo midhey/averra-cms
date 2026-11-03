@@ -74,3 +74,11 @@ export function splitParagraphs(text: string) {
     )
     .filter(Boolean)
 }
+
+/**
+ * Текст без разметки акцента: *слово* в заголовке выделяет его в блоке, а в списках, подписях и
+ * советах звёздочки были бы видны как есть. Звёздочка без пары остаётся звёздочкой
+ */
+export function plainAccent(value: string) {
+  return value.replace(/\*([^*\n]+)\*/g, '$1')
+}

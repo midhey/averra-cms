@@ -190,6 +190,54 @@ describe('определение: черновик, публикация, ист
 })
 
 describe('права', () => {
+  it('медиатека не выдаёт черновики блоков тем, кому они закрыты', async () => {
+    const mediaId = await uploadImage()
+    // Блок только в черновике: картинка в CSS, название — секретное
+    await ok(await send('POST', '', { key: 'secret-promo', title: 'Секретная акция' }), 201)
+    await ok(
+      await send(
+        'PUT',
+        '/secret-promo',
+        tariffs({
+          key: 'secret-promo',
+          title: 'Секретная акция',
+          css: `.a { background: url(media:${mediaId}) }`,
+        }),
+      ),
+    )
+    const usageFor = async (headers: Headers) => {
+      const res = await app.request(`/api/sites/${demoSiteId}/media`, { headers })
+      const { items } = (await res.json()) as { items: { id: string; usage: unknown[] }[] }
+      return items.find((item) => item.id === mediaId)?.usage
+    }
+    // Владелец и токен с правом видят блок по имени
+    const named = [{ kind: 'block', key: 'secret-promo', title: 'Секретная акция' }]
+    expect(await usageFor(owner.headers)).toEqual(named)
+    expect(await usageFor(withGrant)).toEqual(named)
+    // Остальные — безымянное место: ни ключа, ни названия черновика
+    for (const headers of [editor.headers, client.headers, bearer]) {
+      const usage = await usageFor(headers)
+      expect(usage).toEqual([{ kind: 'block', key: '', title: 'неопубликованный блок' }])
+      expect(JSON.stringify(usage)).not.toContain('secret')
+    }
+    // Отказ удалить тоже не называет черновик
+    const del = await app.request(`/api/sites/${demoSiteId}/media/${mediaId}`, {
+      method: 'DELETE',
+      headers: editor.headers,
+    })
+    expect(del.status).toBe(409)
+    expect(JSON.stringify(await del.json())).not.toContain('Секретная')
+
+    // Опубликовали: людям виден опубликованный блок по имени
+    await ok(await publish('secret-promo'))
+    await ok(
+      await send('PUT', '/secret-promo', tariffs({ key: 'secret-promo', title: 'Новое имя' })),
+    )
+    expect(await usageFor(client.headers)).toEqual([
+      { kind: 'block', key: 'secret-promo', title: 'Секретная акция' },
+    ])
+  })
+
   it('редактор, клиент и токен видят только опубликованные определения', async () => {
     await createAndPublish()
     await ok(await send('POST', '', { key: 'draft-only', title: 'Черновик' }), 201)

@@ -89,6 +89,41 @@ describe('шапка до публикации', () => {
     })
   })
 
+  it('подпись цели без разметки *акцента*: звёздочек в списке «Куда ведёт» нет', async () => {
+    const [main] = await db
+      .select()
+      .from(pages)
+      .where(and(eq(pages.siteId, demoSiteId), eq(pages.slug, 'index')))
+    if (!main) throw new Error('Нет главной')
+    const draft = main.draft as {
+      blocks: { id: string; type: string; props: { title?: string } }[]
+    }
+    const withAccent = {
+      ...draft,
+      blocks: draft.blocks.map((block) =>
+        block.id === 'benefits'
+          ? {
+              ...block,
+              props: { ...block.props, title: 'Английский, *который вписывается* в жизнь' },
+            }
+          : block,
+      ),
+    }
+    await db
+      .update(pages)
+      .set({ draft: withAccent as typeof main.draft })
+      .where(eq(pages.id, main.id))
+    try {
+      const view = await ok(await read())
+      const label = view.targets
+        ?.find((page) => page.slug === 'index')
+        ?.blocks.find((block) => block.id === 'benefits')?.label
+      expect(label).toBe('Английский, который вписывается в жизнь')
+    } finally {
+      await db.update(pages).set({ draft: main.draft }).where(eq(pages.id, main.id))
+    }
+  })
+
   it('телефон и адрес организации — людям для предпросмотра, токену — нет', async () => {
     expect((await ok(await read())).contacts).toEqual({ phone: '', address: '' })
     const { token } = await api.createToken()

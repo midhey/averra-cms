@@ -121,5 +121,9 @@ export const mailTemplateList = () =>
   }))
 
 /** Предпросмотр шаблона на примерных данных */
-export const previewMail = (template: MailTemplateId) =>
-  renderMail(template, mailTemplates[template].example)
+export function previewMail(template: MailTemplateId, siteName?: string) {
+  const example: Record<string, unknown> = { ...mailTemplates[template].example }
+  // Примерное письмо — про сайт этой установки, а не про вымышленный «Ремонт квартир»
+  if (siteName !== undefined && 'siteName' in example) example.siteName = siteName
+  return renderMail(template, example)
+}
