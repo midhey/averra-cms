@@ -45,6 +45,13 @@ test('приглашение с очень длинной почтой: на 375
   await form.getByRole('button', { name: 'Пригласить' }).click()
   await expect(members.getByRole('status')).toHaveText(`Приглашение отправлено на ${email}`)
   expect(site.id).toBeTruthy()
+  // Рядом — приглашение редактора: в строке с другой ролью и теми же кнопками таблица тоже
+  // должна помещаться (раньше на 1440 она становилась на 5 px шире рамки)
+  const editorEmail = `editor-for-layout-${Date.now()}@example-company.test`
+  await form.getByLabel('Почта').fill(editorEmail)
+  await form.getByRole('radio', { name: /^Редактор/ }).check()
+  await form.getByRole('button', { name: 'Пригласить' }).click()
+  await expect(members.getByRole('status')).toHaveText(`Приглашение отправлено на ${editorEmail}`)
 
   const overflow = () =>
     page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
@@ -84,9 +91,11 @@ test('приглашение с очень длинной почтой: на 375
   await page.setViewportSize({ width: 1440, height: 900 })
   // На 1440 длинная почта переносится, таблица не листается: «Состояние» и
   // «Действует до» лежат левее прижатой колонки, а не под ней
-  const wide = await layoutOf(page, email)
-  expect(wide.scrolls).toBe(false)
-  expect(wide.leftOfActions).toBe(true)
+  for (const address of [email, editorEmail]) {
+    const wide = await layoutOf(page, address)
+    expect(wide.scrolls, address).toBe(false)
+    expect(wide.leftOfActions, address).toBe(true)
+  }
 })
 
 test('владелец приглашает клиента → клиент по ссылке задаёт пароль и сразу работает с сайтом', async ({

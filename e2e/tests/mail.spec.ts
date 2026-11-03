@@ -65,7 +65,9 @@ test('владелец открывает «Почту» из панели: со
     await expect(article).toBeVisible()
     // Шаблоны свёрнуты: письмо собирается, когда его раскрыли
     await expect(article.locator('iframe')).toHaveCount(0)
-    await article.getByText(title, { exact: true }).click()
+    // Название — заголовок над раскрывашкой (h3 вне summary: читалки не теряют его уровень)
+    await expect(article.getByRole('heading', { level: 3, name: title })).toBeVisible()
+    await article.getByText('Показать письмо').click()
     // Письмо в iframe без скриптов: его содержимое — HTML шаблона на примерных данных
     const frame = article.frameLocator(`iframe[title="Предпросмотр письма «${title}»"]`)
     await expect(frame.locator('body')).toContainText(text)

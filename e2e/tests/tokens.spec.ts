@@ -48,6 +48,12 @@ test('выпустить токен, скопировать фрагмент .mc
   const token = await dialog.getByLabel('Токен', { exact: true }).inputValue()
   expect(token).toMatch(/^cms_[0-9a-f-]{36}_[0-9a-f]{64}$/)
 
+  // Первый фокус — не на «×»: лишний Enter копирует токен, а не закрывает окно. Пока ничего не
+  // скопировано, Esc окно не закрывает: токен показывается один раз
+  await expect(dialog.getByRole('button', { name: 'Скопировать токен' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeVisible()
+
   await dialog.getByRole('button', { name: 'Скопировать фрагмент .mcp.json' }).click()
   await expect(dialog.getByRole('status')).toHaveText('Фрагмент .mcp.json скопирован')
   const copied = JSON.parse(
@@ -75,6 +81,8 @@ test('выпустить токен, скопировать фрагмент .mc
   // Закрыли окно — токена на экране больше нет, в списке — имя и права без него
   await dialog.getByRole('button', { name: 'Готово, я сохранил токен' }).click()
   await expect(dialog).toBeHidden()
+  // Окно убрано из страницы открытым: фокус возвращается на кнопку, которая его открыла
+  await expect(form.getByRole('button', { name: 'Выпустить токен' })).toBeFocused()
   await page.reload()
   await expect(page.locator('body')).not.toContainText(token.slice(-64))
   const table = page.getByRole('table', { name: 'Токены' })
@@ -97,6 +105,7 @@ test('выпустить токен, скопировать фрагмент .mc
   await expect(confirm).toContainText('сразу потеряет доступ')
   await confirm.getByRole('button', { name: 'Отмена' }).click()
   await expect(confirm).toBeHidden()
+  await expect(revokeButton).toBeFocused()
   expect((await request.get(pageUrl, { headers })).status()).toBe(200)
 
   await revokeButton.click()
@@ -107,6 +116,8 @@ test('выпустить токен, скопировать фрагмент .mc
   )
   await expect(row).toContainText('Отозван')
   await expect(row.getByRole('button')).toHaveCount(0)
+  // Кнопки строки пропали: фокус — на заголовке списка, а не на body
+  await expect(page.getByRole('heading', { level: 2, name: 'Токены', exact: true })).toBeFocused()
   expect((await request.get(pageUrl, { headers })).status()).toBe(401)
 })
 
@@ -127,6 +138,7 @@ test('права токена меняются в окне и действуют
   await rights.getByRole('button', { name: 'Сохранить права' }).click()
   await expect(rights).toBeHidden()
   await expect(page.getByRole('status').filter({ hasText: 'сохранены' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Права токена «${name}»` })).toBeFocused()
   const row = page.getByRole('table', { name: 'Токены' }).getByRole('row').filter({ hasText: name })
   await expect(row).toContainText('публикация страниц')
   await expect(row).not.toContainText('Только черновики')
@@ -137,6 +149,12 @@ test('права токена меняются в окне и действуют
     { headers },
   )
   expect(publish.status()).toBe(200)
+  // Токеном пользовались вне админки: при возврате на вкладку список сам перечитывается, без
+  // перезагрузки страницы — «не пользовались» сменяется на «только что»
+  await expect(async () => {
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))")
+    await expect(row).not.toContainText('не пользовались', { timeout: 1000 })
+  }).toPass()
   // Убираем за собой: токен с правом публикации не должен пережить тест
   await page.getByRole('button', { name: `Отозвать токен «${name}»` }).click()
   await page

@@ -149,10 +149,19 @@ test('раздел закрыт для роли: «Нет доступа к ра
       },
     }),
   )
+  // Отказ — экран, а не сбой: в консоли не остаётся «необработанной» ошибки от границы маршрута
+  // (сам ответ 403 браузер записывает отдельной строкой «Failed to load resource» — её не считаем)
+  const consoleErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !/Failed to load resource/.test(message.text())) {
+      consoleErrors.push(message.text())
+    }
+  })
   await page.goto('/notifications')
   await expect(
     page.getByRole('heading', { level: 1, name: 'Нет доступа к разделу «Уведомления»' }),
   ).toBeVisible()
+  expect(consoleErrors).toEqual([])
   await expect(
     page.getByText('Уведомления настраивают владелец и администратор сайта'),
   ).toBeVisible()
@@ -221,7 +230,9 @@ test('редактор страницы подписывает тему: опу�
   await expect(note).toBeVisible()
   await page.getByRole('link', { name: '«Тема»' }).click()
   await expect(page).toHaveURL('/theme')
-  await expect(page.getByText(/редактор страницы показывает опубликованную тему/)).toBeVisible()
+  await expect(
+    page.getByText(/Редактор страницы показывает тему, которая сейчас на сайте/),
+  ).toBeVisible()
 })
 
 test('медиатека: у картинки видно, где она стоит; используемую удалить нельзя, ненужную — можно', async ({

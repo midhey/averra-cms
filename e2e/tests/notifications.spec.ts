@@ -66,6 +66,21 @@ test('владелец подключает Telegram и адрес — заяв�
     await expect(bot.getByLabel('Токен бота', { exact: true })).toHaveValue('')
     await expect(page.locator('body')).not.toContainText(telegramTest.token)
 
+    // У подключённого бота «Сохранить бота» неактивна, пока не набран новый токен (пароль не в
+    // счёт), и называется иначе, чем «Сохранить адреса» ниже
+    const saveBot = bot.getByRole('button', { name: 'Сохранить бота' })
+    await expect(saveBot).toHaveAttribute('aria-disabled', 'true')
+    await bot.getByLabel('Ваш пароль от админки').fill(e2eOwner.password)
+    await expect(saveBot).toHaveAttribute('aria-disabled', 'true')
+    // force: Playwright считает aria-disabled недоступной кнопкой и ждал бы её, а нужно проверить,
+    // что нажатие ничего не делает
+    await saveBot.click({ force: true })
+    await expect(bot.getByRole('alert')).toHaveCount(0)
+    await bot.getByLabel('Токен бота', { exact: true }).fill('1')
+    await expect(saveBot).not.toHaveAttribute('aria-disabled', 'true')
+    await bot.getByLabel('Токен бота', { exact: true }).fill('')
+    await bot.getByLabel('Ваш пароль от админки').fill('')
+
     // «Проверить» у каждого канала — его адаптер в API: Telegram отвечает сразу по шагам,
     // почта ставит письмо себе в очередь
     await bot.getByRole('button', { name: 'Проверить' }).click()
