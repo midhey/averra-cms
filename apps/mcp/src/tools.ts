@@ -254,8 +254,9 @@ export function blockCatalog(custom: readonly CustomBlockDraft[] = []) {
 }
 
 const createTokenHint =
-  'Создай токен: pnpm token:create --name mcp (на сайт установки) и положи строку ' +
-  'CMS_API_TOKEN=… из вывода в apps/mcp/.env. Потом перезапусти MCP-сервер'
+  'Попроси владельца выпустить токен в админке (Установка → Доступ для ИИ) или выпусти его ' +
+  'командой pnpm token:create --name mcp и положи строку CMS_API_TOKEN=… в apps/mcp/.env ' +
+  '(или в env сервера averra в .mcp.json). Потом перезапусти MCP-сервер'
 
 export const missingTokenMessage = `Нужен токен API: без него MCP не пускают в Averra CMS. ${createTokenHint}`
 
@@ -639,7 +640,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Свои блоки: определения',
       description:
-        'Свои блоки этого сайта с определениями (поля, шаблон Liquid, CSS, пример) и инструкция rules — как писать свой блок: без JavaScript, на переменных темы, доступно, на телефоне 375 px. Черновики видны, если владелец включил токену право на черновики блоков (pnpm token:grant); иначе — только опубликованное. Вызови перед save_custom_block_draft.',
+        'Свои блоки этого сайта с определениями (поля, шаблон Liquid, CSS, пример) и инструкция rules — как писать свой блок: без JavaScript, на переменных темы, доступно, на телефоне 375 px. Черновики видны, если владелец включил токену право на черновики блоков (в админке: Установка → Доступ для ИИ); иначе — только опубликованное. Вызови перед save_custom_block_draft.',
       annotations: { readOnlyHint: true },
     },
     async () => asText(await tools.listCustomBlocks()),
@@ -701,7 +702,8 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     'publish_page',
     {
       title: 'Опубликовать страницу',
-      description: 'Публикует черновик: он заменит то, что сейчас на сайте.',
+      description:
+        'Публикует черновик: он заменит то, что сейчас на сайте. Токен «только черновики» публиковать не может — тогда скажи человеку, что черновик готов и его публикуют в админке.',
       inputSchema: PageRef,
       annotations: { destructiveHint: true, idempotentHint: true },
     },

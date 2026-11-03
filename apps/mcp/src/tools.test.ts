@@ -267,6 +267,39 @@ describe('токен', () => {
     await expect(stale.listSites()).rejects.toThrow(/не принял токен.*pnpm token:create/s)
   })
 
+  it('отозванный в админке токен получает отказ на следующем же вызове', async () => {
+    const owner = await api.loginAs('owner')
+    const res = await api.app.request('/api/tokens', {
+      method: 'POST',
+      headers: { ...owner.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Claude Code' }),
+    })
+    const issued = z.object({ id: z.string(), token: z.string() }).parse(await res.json())
+    const fresh = cmsTools(clientWith(issued.token))
+    expect(await fresh.listSites()).toHaveLength(1)
+    const revoke = await api.app.request(`/api/tokens/${issued.id}`, {
+      method: 'DELETE',
+      headers: owner.headers,
+    })
+    expect(revoke.status).toBe(204)
+    await expect(fresh.listSites()).rejects.toThrow(/не принял токен.*Доступ для ИИ/s)
+  })
+
+  it('«только черновики»: save_draft работает, publish_page — отказ со словами, где включить право', async () => {
+    const draftsOnly = await api.createToken(api.demoSiteId, 'черновики', {
+      publish: false,
+      delete: false,
+    })
+    const drafter = cmsTools(clientWith(draftsOnly.token))
+    const ref = { slug: 'tolko-chernovik-mcp' }
+    await drafter.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Черновик', content: demoPage }))
+    await expect(drafter.publishPage(ref)).rejects.toThrow(
+      /Публиковать этому токену не разрешено.*Доступ для ИИ/s,
+    )
+    const page = z.object({ published: PageContent.nullable() }).parse(await drafter.getPage(ref))
+    expect(page.published).toBeNull()
+  })
+
   it('токен другого сайта не видит этот сайт', async () => {
     // Так бывает только в старых базах: API сайтов не создаёт, сайт кладётся напрямую
     const other = await api.createSite('Другой сайт')
