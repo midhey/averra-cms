@@ -129,6 +129,13 @@ const icons = {
       <path d="M3.5 15.5c1-3 3-4.5 5.5-4.5s4.5 1.5 5.5 4.5" />
     </>
   ),
+  // Ключ: раздел «Доступ для ИИ» (токены API)
+  key: (
+    <>
+      <circle cx="6" cy="9" r="3.25" />
+      <path d="M9.25 9h6.25M13 9v2.5M15.5 9v2" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof icons

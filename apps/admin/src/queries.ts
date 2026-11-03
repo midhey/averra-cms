@@ -44,6 +44,7 @@ export const queryKeys = {
   mailSmtp: ['mail', 'smtp'] as const,
   mailPreview: (template: string) => ['mail', 'templates', template] as const,
   status: ['status'] as const,
+  tokens: ['tokens'] as const,
 }
 
 /**
@@ -362,6 +363,20 @@ export const mailSmtpQuery = () =>
  * Состояние установки: версия, бэкапы, обновление, сборки, почта, диск и список проблем.
  * Только владельцу: остальным API ответит 403
  */
+/**
+ * Токены API для MCP (раздел «Доступ для ИИ»), только владельцу: права, кто и когда выпустил,
+ * когда пользовались. Самого токена в списке нет — его показывает только ответ на выпуск
+ */
+export const tokensQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.tokens,
+    queryFn: async () => {
+      const res = await api.tokens.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
 export const statusQuery = () =>
   queryOptions({
     queryKey: queryKeys.status,

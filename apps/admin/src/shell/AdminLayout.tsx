@@ -95,7 +95,10 @@ function AdminSidebar() {
   )
 }
 
-/** Почта и состояние установки: только у владельца, данные — загрузчик макета (allSettled) */
+/**
+ * Почта, доступ для ИИ (токены MCP) и состояние установки: только у владельца, данные почты и
+ * состояния — загрузчик макета (allSettled)
+ */
 function InstallationLinks() {
   const mail = useQuery({ ...mailQuery(), retryOnMount: false })
   const status = useQuery({ ...statusQuery(), retryOnMount: false })
@@ -115,6 +118,11 @@ function InstallationLinks() {
               )
             }
           />
+        </Link>
+      </li>
+      <li>
+        <Link to="/tokens" className={navLinkClassName}>
+          <NavLinkContent icon="key" label="Доступ для ИИ" />
         </Link>
       </li>
       <li>

@@ -1,0 +1,88 @@
+@use "@averra/ui" as ui;
+
+.intro {
+  max-width: 70ch;
+  color: var(--color-text-muted);
+}
+
+// Права в форме выпуска и в окне прав: группа с подписью, флажки столбиком
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.legend {
+  float: inline-start;
+  width: 100%;
+  margin-block-end: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+}
+
+// Ячейки таблицы: имя и автор, права — столбиком
+.nameCell,
+.rights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.author {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.draftsOnly {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+// Окно с токеном: поле токена и кнопка в строку, на телефоне — кнопка под полем
+.issued {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.issuedRights {
+  max-width: 70ch;
+}
+
+.copyRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: stretch;
+  min-width: 0;
+
+  @include ui.breakpoint(medium) {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+.copyField {
+  flex: 1;
+  min-width: 0;
+
+  input {
+    font-family: var(--font-mono);
+  }
+}

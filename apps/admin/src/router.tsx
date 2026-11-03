@@ -39,6 +39,7 @@ import {
   siteSettingsQuery,
   statusQuery,
   themeQuery,
+  tokensQuery,
 } from './queries'
 import { CookiesScreen } from './screens/CookiesScreen'
 import { CustomBlockScreen } from './screens/CustomBlockScreen'
@@ -61,6 +62,7 @@ import { SeoScreen } from './screens/SeoScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { ThemeScreen } from './screens/ThemeScreen'
+import { TokensScreen } from './screens/TokensScreen'
 import { AdminLayout } from './shell/AdminLayout'
 
 // Маршруты описаны в коде, без генератора: всё дерево видно здесь.
@@ -437,6 +439,15 @@ const statusRoute = createRoute({
   component: InstallationScreen,
 })
 
+// Доступ для ИИ (токены MCP) — только владельцу: участнику API ответит 403, и экран ошибки скажет
+// почему. Всегда свежий список: «последний раз пользовались» меняется без админки
+const tokensRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/tokens',
+  loader: ({ context: { queryClient } }) => queryClient.fetchQuery(tokensQuery()),
+  component: TokensScreen,
+})
+
 // Редактор — вне оболочки: в концепте у него своя полноэкранная раскладка
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -490,6 +501,7 @@ const routeTree = rootRoute.addChildren([
     cookiesRoute,
     settingsRoute,
     mailRoute,
+    tokensRoute,
     statusRoute,
   ]),
   editorRoute,
