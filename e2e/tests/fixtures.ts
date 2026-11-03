@@ -322,13 +322,67 @@ export function sidebar(page: Page) {
   }
 }
 
-/** Считает диалоги confirm и отвечает на них по очереди: true — «ОК», false — «Отмена» */
+/**
+ * Окно подтверждения админки (useConfirm, role=alertdialog). Что в нём проверяет человек —
+ * фокус, Esc, подписи кнопок — проверяет confirm.spec.ts; здесь только найти и ответить
+ */
+export const confirmDialog = (page: Page) => page.getByRole('alertdialog')
+
+/**
+ * Скрипт в странице для answerDialogs: следит за окном подтверждения, отдаёт его текст
+ * (вопрос и описание) в __averraConfirm и нажимает кнопку по ответу. Внизу окна две кнопки:
+ * безопасная, потом действие. Строкой: у e2e нет типов DOM, а скрипт работает в браузере
+ */
+const WATCH_CONFIRMS = `(() => {
+  if (window.__averraConfirmWatch) return
+  window.__averraConfirmWatch = true
+  const busy = new WeakSet()
+  const check = () => {
+    for (const dialog of document.querySelectorAll('dialog[role=alertdialog]')) {
+      if (!dialog.open) {
+        busy.delete(dialog)
+        continue
+      }
+      if (busy.has(dialog)) continue
+      busy.add(dialog)
+      const title = dialog.querySelector('h2')?.textContent ?? ''
+      const described = dialog.getAttribute('aria-describedby')
+      const details = described ? (document.getElementById(described)?.textContent ?? '') : ''
+      window.__averraConfirm(\`\${title} \${details}\`.trim()).then((yes) => {
+        const buttons = [...dialog.querySelectorAll('button')]
+        buttons.at(yes ? -1 : -2)?.click()
+      })
+    }
+  }
+  new MutationObserver(check).observe(document, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['open'],
+  })
+  check()
+})()`
+
+/**
+ * Считает подтверждения и отвечает на них по очереди: true — действие («Удалить»), false —
+ * безопасная кнопка («Оставить»). Подтверждения админки — её окно, а не confirm() браузера:
+ * в странице следит MutationObserver, текст (вопрос и описание) уходит сюда, ответ — нажатием
+ * кнопки окна. Системные окна (beforeunload при перезагрузке с правками) — из той же очереди
+ */
 export function answerDialogs(page: Page, answers: boolean[]) {
   const messages: string[] = []
-  page.on('dialog', (dialog) => {
-    messages.push(dialog.message())
-    return answers.shift() ? dialog.accept() : dialog.dismiss()
-  })
+  const answer = (text: string) => {
+    messages.push(text)
+    return answers.shift() ?? false
+  }
+  page.on('dialog', (dialog) => (answer(dialog.message()) ? dialog.accept() : dialog.dismiss()))
+  const ignore = () => {}
+  void page
+    .exposeFunction('__averraConfirm', answer)
+    .then(() =>
+      Promise.all([page.addInitScript({ content: WATCH_CONFIRMS }), page.evaluate(WATCH_CONFIRMS)]),
+    )
+    .catch(ignore)
   return messages
 }
 

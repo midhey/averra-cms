@@ -1,4 +1,4 @@
-import { demo, editor, expect, openSite, test } from './fixtures'
+import { answerDialogs, demo, editor, expect, openSite, test } from './fixtures'
 
 test('редактор открывается с демо-лендингом', async ({ page }) => {
   const ed = editor(page)
@@ -178,22 +178,14 @@ test('блок удаляется только после подтвержден
   await ed.selectBlock('Призыв к действию')
   const remove = ed.block('Призыв к действию').getByRole('button', { name: 'Удалить блок' })
 
-  // Считаем диалоги: без этого «блоков всё ещё три» было бы верно и без вопроса
-  const dialogs: string[] = []
-  page.once('dialog', (dialog) => {
-    dialogs.push(dialog.message())
-    return dialog.dismiss()
-  })
+  // Считаем подтверждения: без этого «блоков всё ещё три» было бы верно и без вопроса
+  const dialogs = answerDialogs(page, [false, true])
   await remove.click()
   await expect.poll(() => dialogs.length).toBe(1)
   expect(dialogs[0]).toContain(demo.ctaTitle)
   await expect(ed.blocks).toHaveCount(3)
   await expect(ed.block('Призыв к действию')).toBeVisible()
 
-  page.once('dialog', (dialog) => {
-    dialogs.push(dialog.message())
-    return dialog.accept()
-  })
   await remove.click()
 
   await expect(ed.blocks).toHaveCount(2)

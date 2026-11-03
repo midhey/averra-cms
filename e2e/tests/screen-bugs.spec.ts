@@ -119,7 +119,9 @@ test('«Заявки»: правка → уход спрашивает; «Сох
     await sidebar(page).section('Обзор').click()
     await expect(page).toHaveURL('/settings')
     await expect(days).toHaveValue('90')
-    expect(dialogs).toEqual(['На странице есть несохранённые правки. Уйти без сохранения?'])
+    await expect
+      .poll(() => dialogs)
+      .toEqual(['Уйти без сохранения? На странице есть несохранённые правки. Они пропадут.'])
 
     await save.click()
     await expect(form.getByText('Настройки заявок сохранены')).toBeVisible()
@@ -140,7 +142,10 @@ test('раздел закрыт для роли: «Нет доступа к ра
     route.fulfill({
       status: 403,
       json: {
-        error: { code: 'forbidden', message: 'Получателей заявок настраивают владелец и клиент' },
+        error: {
+          code: 'forbidden',
+          message: 'Получателей заявок настраивают владелец и администратор сайта',
+        },
       },
     }),
   )
@@ -148,12 +153,14 @@ test('раздел закрыт для роли: «Нет доступа к ра
   await expect(
     page.getByRole('heading', { level: 1, name: 'Нет доступа к разделу «Уведомления»' }),
   ).toBeVisible()
-  await expect(page.getByText('Уведомления настраивают владелец и клиент сайта')).toBeVisible()
+  await expect(
+    page.getByText('Уведомления настраивают владелец и администратор сайта'),
+  ).toBeVisible()
   await expect(page.getByText('Не получилось открыть')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'К обзору сайта' })).toBeVisible()
 })
 
-async function invite(page: Page, email: string, role: 'Клиент' | 'Редактор') {
+async function invite(page: Page, email: string, role: 'Администратор сайта' | 'Редактор') {
   const form = page.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
   await form.getByRole('radio', { name: new RegExp(`^${role}`) }).check()
@@ -177,12 +184,12 @@ test('повторное приглашение предупреждает, чт
   )
   await waitForMail(email, `Приглашение на сайт «${demoSite.name}» в Averra CMS`)
   // Роль после отправки вернулась к умолчанию, а не «залипла» на «Редактор»
-  await expect(form.getByRole('radio', { name: /^Клиент/ })).toBeChecked()
+  await expect(form.getByRole('radio', { name: /^Администратор сайта/ })).toBeChecked()
 
   // Тот же адрес с другой ролью: до отправки видно, что роль сменится и ссылка умрёт
-  await invite(page, email, 'Клиент')
+  await invite(page, email, 'Администратор сайта')
   await expect(form.getByText(/с ролью «Редактор»/)).toBeVisible()
-  await expect(form.getByText(/роль станет «Клиент»/)).toBeVisible()
+  await expect(form.getByText(/роль станет «Администратор сайта»/)).toBeVisible()
   await expect(form.getByText(/ссылка из прежнего письма перестанет работать/)).toBeVisible()
   await expect(form.getByRole('button', { name: 'Заменить приглашение' })).toBeVisible()
 
@@ -305,7 +312,9 @@ test('«Cookie и согласие»: правка → уход спрашива
   // «Отмена» — остаёмся на экране с правкой (раньше экран уводил молча)
   await sidebar(page).section('Обзор').click()
   await expect(page).toHaveURL('/seo/cookies')
-  expect(dialogs).toEqual(['На странице есть несохранённые правки. Уйти без сохранения?'])
+  await expect
+    .poll(() => dialogs)
+    .toEqual(['Уйти без сохранения? На странице есть несохранённые правки. Они пропадут.'])
 })
 
 test('SEO: Enter в поле сохраняет всё, а закрытие вкладки с правкой предупреждает', async ({
@@ -358,7 +367,9 @@ test('SMTP: «Сохранить» выключена без правок, с п
   await expect(save).not.toHaveAttribute(aria, 'true')
   await sidebar(page).section('Обзор').click()
   await expect(page).toHaveURL('/mail')
-  expect(dialogs).toEqual(['На странице есть несохранённые правки. Уйти без сохранения?'])
+  await expect
+    .poll(() => dialogs)
+    .toEqual(['Уйти без сохранения? На странице есть несохранённые правки. Они пропадут.'])
 })
 
 test('«Тема», «Шапка» и «Подвал»: «Сохранить» выключена, пока правок нет', async ({ page }) => {
@@ -402,7 +413,9 @@ test('«Уведомления»: адреса — правка → уход с�
   await expect(save).not.toHaveAttribute(aria, 'true')
   await sidebar(page).section('Обзор').click()
   await expect(page).toHaveURL('/notifications')
-  expect(dialogs).toEqual(['На странице есть несохранённые правки. Уйти без сохранения?'])
+  await expect
+    .poll(() => dialogs)
+    .toEqual(['Уйти без сохранения? На странице есть несохранённые правки. Они пропадут.'])
 })
 
 test('редактор страницы: h1 с названием, а не со слэшем; предпросмотр — «Десктоп»', async ({
@@ -442,16 +455,33 @@ test('SEO: Tab по полям не уводит фокус под липкую 
     const covered: string[] = []
     for (let i = 0; i < 40; i++) {
       await page.keyboard.press('Tab')
-      // Строкой: у e2e нет DOM-типов, а код выполняется в странице
-      const state = await page.evaluate<string | null>(`(() => {
+      // Строкой: у e2e нет DOM-типов, а код выполняется в странице. Меряем, когда прокрутка к
+      // полю закончилась (три кадра подряд без сдвига): плавная прокрутка под нагрузкой полного
+      // прогона ещё шла, и поле ловилось на полпути под полосой
+      const state = await page.evaluate<string | null>(`(async () => {
+        const frame = () => new Promise((done) => requestAnimationFrame(done))
+        const scrollers = () => [...document.querySelectorAll('*')]
+          .filter((el) => el.scrollHeight > el.clientHeight)
+          .map((el) => el.scrollTop)
+          .join(',') + ',' + window.scrollY
+        let last = scrollers()
+        for (let still = 0, guard = 0; still < 3 && guard < 120; guard++) {
+          await frame()
+          const now = scrollers()
+          still = now === last ? still + 1 : 0
+          last = now
+        }
         const active = document.activeElement
         const bar = [...document.querySelectorAll('div')].find((el) => /_bar_/.test(el.className))
         if (!active || !bar || bar.contains(active) || active === document.body) return null
+        // Закрыто полосой — только если прямоугольники пересекаются: в конце страницы полоса
+        // стоит на своём месте и кнопки под ней видны, а ссылки панели слева её не касаются
         const box = active.getBoundingClientRect()
-        const barTop = bar.getBoundingClientRect().top
-        return box.bottom > barTop && box.top < window.innerHeight
-          ? active.tagName + '#' + active.id
-          : null
+        const cover = bar.getBoundingClientRect()
+        const overlaps =
+          box.bottom > cover.top && box.top < cover.bottom &&
+          box.right > cover.left && box.left < cover.right
+        return overlaps ? active.tagName + '#' + active.id : null
       })()`)
       if (state) covered.push(state)
     }
@@ -517,5 +547,7 @@ test('«Уведомления»: набранный токен бота — н�
   await page.getByLabel('Токен бота').fill('123456:abc')
   await sidebar(page).section('Обзор').click()
   await expect(page).toHaveURL('/notifications')
-  expect(dialogs).toEqual(['На странице есть несохранённые правки. Уйти без сохранения?'])
+  await expect
+    .poll(() => dialogs)
+    .toEqual(['Уйти без сохранения? На странице есть несохранённые правки. Они пропадут.'])
 })

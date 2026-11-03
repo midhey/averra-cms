@@ -134,7 +134,7 @@ test('владелец подключает Telegram и адрес — заяв�
 test('редактор по прямому адресу /notifications — понятный отказ, а не пустой экран', async ({
   page,
 }) => {
-  const message = 'Заявки видят владелец и клиент сайта'
+  const message = 'Заявки видят владелец и администратор сайта'
   await page.route(/\/api\/me$/, async (route) => {
     const response = await route.fetch()
     const body = await response.json()
@@ -155,7 +155,7 @@ test('редактор по прямому адресу /notifications — по�
   )
   // Текст — про раздел, а не про заявки из ответа API
   await expect(page.getByRole('alert')).toHaveText(
-    'Уведомления настраивают владелец и клиент сайта',
+    'Уведомления настраивают владелец и администратор сайта',
   )
   await expect(page.getByRole('region', { name: 'Новые заявки' })).toHaveCount(0)
 })

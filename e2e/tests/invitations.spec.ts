@@ -82,7 +82,7 @@ test('приглашение с очень длинной почтой: на 375
   // Тень проявляется плавно после того, как DataTable заметил прокрутку
   await expect.poll(async () => (await read()).shadowOpacity).toBe('1')
   await page.setViewportSize({ width: 1440, height: 900 })
-  // На 1440 длинная почта переносится, таблица не листается: «Состояние», «Пригласил» и
+  // На 1440 длинная почта переносится, таблица не листается: «Состояние» и
   // «Действует до» лежат левее прижатой колонки, а не под ней
   const wide = await layoutOf(page, email)
   expect(wide.scrolls).toBe(false)
@@ -100,20 +100,22 @@ test('владелец приглашает клиента → клиент по
   const members = page.getByRole('region', { name: 'Участники' })
   const form = members.getByRole('form', { name: 'Пригласить участника' })
   await form.getByLabel('Почта').fill(email)
-  await form.getByRole('radio', { name: /^Клиент/ }).check()
+  await form.getByRole('radio', { name: /^Администратор сайта/ }).check()
   await form.getByRole('button', { name: 'Пригласить' }).click()
   await expect(members.getByRole('status')).toHaveText(`Приглашение отправлено на ${email}`)
   const row = members
     .getByRole('table', { name: 'Приглашения' })
     .getByRole('row')
     .filter({ hasText: email })
-  await expect(row).toContainText('Клиент')
+  await expect(row).toContainText('Администратор сайта')
   await expect(row).toContainText('Ждёт ответа')
   // На широком экране почта и роль не рвутся посреди слова: раньше узкая колонка давала
   // «client@…tes / t» и «Клиен / т»
   await page.setViewportSize({ width: 1440, height: 900 })
-  expect(await lineCount(row.getByRole('rowheader'))).toBe(1)
-  expect(await lineCount(row.getByRole('cell', { name: 'Клиент', exact: true }))).toBe(1)
+  expect(await lineCount(row.getByRole('rowheader').getByText(email, { exact: true }))).toBe(1)
+  // «Администратор сайта» — не больше двух строк: рвётся между словами, а не посреди слова
+  const roleCell = row.getByRole('cell', { name: 'Администратор сайта', exact: true })
+  expect(await lineCount(roleCell)).toBeLessThanOrEqual(2)
 
   // Действие строки не обрезано рамкой таблицы: кнопка «Отозвать» целиком внутри неё и на широком
   // экране (раньше от неё было видно «Отс»), и на телефоне, где строка — карточка
@@ -122,7 +124,7 @@ test('владелец приглашает клиента → клиент по
   expect(short.scrolls).toBe(false)
   expect(short.leftOfActions).toBe(true)
   // Дата не рвётся на три строки
-  expect(await lineCount(row.getByRole('cell').nth(3))).toBeLessThanOrEqual(2)
+  expect(await lineCount(row.getByRole('cell').nth(2))).toBeLessThanOrEqual(2)
 
   const revoke = row.getByRole('button', { name: `Отозвать приглашение для ${email}` })
   const fits = () =>
@@ -152,7 +154,7 @@ test('владелец приглашает клиента → клиент по
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText('Приглашение на сайт')
     const about = guest.getByRole('region', { name: 'О приглашении' })
     await expect(about).toContainText(`с сайтом «${site.name}»`)
-    await expect(about).toContainText('Роль — клиент')
+    await expect(about).toContainText('Роль — администратор сайта')
     await expect(about).toContainText(email)
     // Токен убран из адресной строки сразу после открытия
     await expect(guest).toHaveURL(`${urls.admin}/invite`)
@@ -166,12 +168,19 @@ test('владелец приглашает клиента → клиент по
     await expect(guest).toHaveURL(`${urls.admin}/`)
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText(site.name)
     await expect(guest.getByText('Мария Клиентова')).toBeVisible()
-    await expect(guest.getByText('Клиент', { exact: true })).toBeVisible()
-    // Клиент правит черновики, но доступ к сайту не раздаёт: в настройках нет «Участников»
+    await expect(guest.getByText('Администратор сайта', { exact: true })).toBeVisible()
+    // Администратор сайта приглашает только редакторов: роль в форме не выбирается
     await guest.getByRole('link', { name: /^Настройки сайта/ }).click()
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText('Настройки сайта')
     await expect(guest.getByRole('region', { name: 'Заявки' })).toBeVisible()
-    await expect(guest.getByRole('region', { name: 'Участники' })).toHaveCount(0)
+    const guestMembers = guest.getByRole('region', { name: 'Участники' })
+    await expect(guestMembers).toBeVisible()
+    await expect(
+      guestMembers.getByRole('form', { name: 'Пригласить участника' }).getByRole('radio'),
+    ).toHaveCount(0)
+    await expect(guestMembers).toContainText(
+      'Роль — редактор. Администратора сайта приглашает владелец.',
+    )
 
     // Выбирать сайт не из чего: в установке он один, его название — заголовок панели
     await guest.goto('/')

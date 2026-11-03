@@ -73,7 +73,7 @@ test('«Опубликовать правки» публикует изменё�
   await page.getByRole('button', { name: 'Опубликовать правки' }).click()
   await expect.poll(() => dialogs.length).toBe(1)
   expect(dialogs[0]).toBe(
-    `Опубликовать правки на сайте: «${demo.pageTitle}»? Сайт обновится после сборки.`,
+    `Опубликовать правки? Опубликовать правки на сайте: «${demo.pageTitle}»? Сайт обновится после сборки.`,
   )
   await expect(screen.row(demo.pageTitle)).toContainText('Есть правки')
   await page.getByRole('button', { name: 'Опубликовать правки' }).click()

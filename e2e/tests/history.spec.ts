@@ -116,7 +116,7 @@ test('с несохранёнными правками возврат спраш
   await history.version(1).click()
 
   await history.restoreButton.click()
-  expect(dialogs).toHaveLength(1)
+  await expect.poll(() => dialogs.length).toBe(1)
   expect(dialogs[0]).toContain('несохранённые правки')
   expect(dialogs[0]).toContain('версией 1')
   await expect(ed.pageTitle).toHaveValue('Несохранённое название')
