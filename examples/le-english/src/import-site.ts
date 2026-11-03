@@ -36,9 +36,9 @@ export type ImportOptions = {
    */
   publish: boolean
   /**
-   * Заменить черновики /privacy и /consent свежим шаблоном, даже если их правили (правки в
-   * черновике пропадут). Опубликованная версия остаётся до публикации человеком. Без флага
-   * черновик пересобирается, только если политика не описывает форму заявки
+   * Заменить черновики /privacy и /consent свежим шаблоном целиком, даже если их правили (правки
+   * в черновике пропадут). Опубликованная версия остаётся до публикации человеком. Без флага
+   * заменяется только блок с фразой шаблона «нет форм заявок», остальной текст не трогается
    */
   rebuildDocuments?: boolean
   log?: (line: string) => void
@@ -51,8 +51,10 @@ export type ImportResult = {
   warnings: string[]
   pages: string[]
   legalDrafts: string[]
-  /** Документы, чей черновик заменён свежим шаблоном */
+  /** Документы, чей черновик заменён свежим шаблоном целиком (флаг --rebuild-documents) */
   rebuiltDocuments: string[]
+  /** Документы, у которых заменён только блок с ложной фразой, остальные правки на месте */
+  repairedDocuments: string[]
   /** Опубликованные документы, которые говорят «нет форм заявок»: правит и публикует человек */
   staleDocuments: string[]
   published: boolean
@@ -62,7 +64,7 @@ export type ImportResult = {
 
 type Json = Record<string, unknown>
 
-type PageRecord = { draft: unknown; published: unknown }
+type PageRecord = { title: string; draft: unknown; published: unknown }
 
 /**
  * Документ явно врёт про форму: в нём есть фраза шаблона «на нём нет форм заявок» (политика
@@ -73,7 +75,41 @@ type PageRecord = { draft: unknown; published: unknown }
 const NO_FORMS_PHRASE = 'нет форм заявок'
 const claimsNoForms = (document: string, value: unknown) =>
   document === 'privacy' && JSON.stringify(value ?? null).includes(NO_FORMS_PHRASE)
-const mentionsForm = (value: unknown) => /форм/i.test(JSON.stringify(value ?? null))
+/**
+ * Слово «форма» целиком, а не «информация», «оформление» и «платформа»: границы слова — не
+ * кириллическая буква (в JSON перенос строки — `\n`, латинская n, слову не мешает)
+ */
+const FORM_WORD = /(^|[^а-яё])форм(а|е|у|ой|ы|ам|ами|ах)?([^а-яё]|$)/i
+const mentionsForm = (value: unknown) => FORM_WORD.test(JSON.stringify(value ?? null))
+
+type DocBlock = { id?: unknown }
+type DocContent = { blocks?: DocBlock[] } & Json
+
+/** Id блока шаблона, где политика перечисляет данные («Какие данные мы обрабатываем») */
+const DATA_BLOCK_ID = 'data'
+
+/**
+ * Черновик человека, в котором блок с ложной фразой заменён свежим блоком данных из шаблона.
+ * Остальные блоки остаются как есть. Нет ложного блока или в шаблоне нет блока данных —
+ * undefined: ничего не меняем
+ */
+function repairStaleBlocks(draft: DocContent, fresh: DocContent): DocContent | undefined {
+  const replacement = fresh.blocks?.find((block) => block.id === DATA_BLOCK_ID)
+  const blocks = draft.blocks
+  if (!replacement || !blocks) return undefined
+  const stale = (block: DocBlock) => JSON.stringify(block).includes(NO_FORMS_PHRASE)
+  if (!blocks.some(stale)) return undefined
+  let put = false
+  const next: DocBlock[] = []
+  for (const block of blocks) {
+    if (!stale(block)) next.push(block)
+    else if (!put) {
+      next.push(replacement)
+      put = true
+    }
+  }
+  return { ...draft, blocks: next }
+}
 
 const MIME: Record<string, string> = {
   webp: 'image/webp',
@@ -241,6 +277,9 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   // какие сервисы), и политика, созданная до страницы /zapis, говорила бы «на сайте нет форм»
   const legalDrafts: string[] = []
   const rebuiltDocuments: string[] = []
+  const repairedDocuments: string[] = []
+  // Опубликованные ложные документы, чей черновик исправлен в этом же запуске
+  const fixedDrafts = new Set<string>()
   const staleDocuments: string[] = []
   const existing = await client.get<{ slug: string; publishedAt: string | null }[]>(`${base}/pages`)
   for (const document of DOCUMENTS) {
@@ -257,26 +296,60 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     const draftStale = claimsNoForms(document, page.draft)
     // Что видят посетители: у опубликованного документа — опубликованный текст
     const liveStale = published && claimsNoForms(document, page.published)
-    // Черновик пересобираем, только если он прямо говорит «форм нет» (создан до страницы /zapis)
-    // или владелец попросил флагом. Любую другую правку, в том числе переписанный раздел про
-    // форму, не трогаем: черновики не попадают в историю версий, затёртое не вернуть
-    if (draftStale || options.rebuildDocuments) {
-      await client.post(`${base}/settings/legal-pages`, { document, replaceDraft: true })
+    // Что в черновике сейчас: после замены — новое, предупреждение про слова о форме смотрит на него
+    let draftNow: unknown = page.draft
+    // Целиком черновик заменяет только флаг владельца. Без флага, когда черновик прямо говорит
+    // «форм нет» (создан до страницы /zapis), заменяется один блок с этой фразой, а все остальные
+    // правки человека остаются: черновики не попадают в историю версий, затёртое не вернуть
+    let draftReplaced = false
+    if (options.rebuildDocuments) {
+      const fresh = await client.post<PageRecord>(`${base}/settings/legal-pages`, {
+        document,
+        replaceDraft: true,
+      })
+      draftNow = fresh.draft
       rebuiltDocuments.push(document)
+      draftReplaced = true
       log(
         published
           ? `Документ /${document}: черновик заменён свежим шаблоном, опубликованная версия остаётся — проверьте и опубликуйте`
           : `Документ /${document}: черновик пересобран из шаблона`,
       )
-    } else {
-      log(
-        published
-          ? `Документ /${document}: опубликован, не трогаю`
-          : `Документ /${document}: правили вручную, не трогаю (пересобрать — флаг --rebuild-documents)`,
+    } else if (draftStale) {
+      // Свежий шаблон приходит только в ответе на замену черновика: заменяем, берём из ответа блок
+      // данных, а прежний текст человека кладём обратно с этим одним блоком вместо ложного
+      const fresh = await client.post<PageRecord & { title: string }>(
+        `${base}/settings/legal-pages`,
+        { document, replaceDraft: true },
       )
+      const merged = repairStaleBlocks(page.draft as DocContent, fresh.draft as DocContent)
+      try {
+        await client.put(`${base}/pages/${document}`, {
+          title: page.title,
+          content: merged ?? page.draft,
+        })
+      } catch (error) {
+        // Не вышло вернуть текст — положить его назад как был, а не оставить шаблон поверх правок
+        await client.put(`${base}/pages/${document}`, { title: page.title, content: page.draft })
+        throw error
+      }
+      if (merged) {
+        draftNow = merged
+        repairedDocuments.push(document)
+        draftReplaced = true
+        log(
+          `Документ /${document}: блок «нет форм заявок» заменён свежим из шаблона, остальной текст на месте. Проверьте и опубликуйте документ`,
+        )
+      } else {
+        log(`Документ /${document}: в шаблоне нет блока данных, черновик оставлен как был`)
+      }
+    } else {
+      log(`Документ /${document}: ${published ? 'опубликован, ' : 'черновик есть, '}не трогаю`)
     }
-    if (liveStale) staleDocuments.push(document)
-    else if (document === 'privacy' && !mentionsForm(published ? page.published : page.draft)) {
+    if (liveStale) {
+      staleDocuments.push(document)
+      if (draftReplaced) fixedDrafts.add(document)
+    } else if (document === 'privacy' && !mentionsForm(published ? page.published : draftNow)) {
       log(
         `Предупреждение: в /${document} не нашлось слов про форму заявки. Проверьте, что текст описывает форму записи`,
       )
@@ -284,7 +357,9 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   }
   for (const document of staleDocuments) {
     log(
-      `ВНИМАНИЕ: опубликованный /${document} говорит, что на сайте нет форм заявок. Откройте его в «Страницах», исправьте раздел про заявки и опубликуйте (или запустите скрипт с --rebuild-documents: черновик заменится свежим шаблоном)`,
+      fixedDrafts.has(document)
+        ? `ВНИМАНИЕ: опубликованный /${document} говорит, что на сайте нет форм заявок. Черновик уже исправлен в этом запуске: проверьте его в «Страницах» и опубликуйте`
+        : `ВНИМАНИЕ: опубликованный /${document} говорит, что на сайте нет форм заявок. Откройте его в «Страницах», исправьте раздел про заявки и опубликуйте (или запустите скрипт с --rebuild-documents: черновик заменится свежим шаблоном)`,
     )
   }
   await client.patch(`${base}/settings`, {
@@ -333,6 +408,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     pages: ['index', 'zapis'],
     legalDrafts,
     rebuiltDocuments,
+    repairedDocuments,
     staleDocuments,
     published: publish,
     missingDocuments,

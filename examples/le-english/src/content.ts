@@ -79,8 +79,14 @@ const items = (value: unknown, map: (item: Json, index: number) => Json) =>
 
 const texts = (value: unknown) => list(value).map((one) => ({ text: text(one) }))
 
+/**
+ * Конечная стрелка «↗» в исходном тексте — украшение: шаблон блока рисует её сам в span с
+ * aria-hidden, и экранная читалка не произносит «стрелка вверх вправо». Из текста поля её убираем
+ */
+const withoutArrow = (value: string) => value.replace(/\s*↗\s*$/u, '')
+
 const link = (label: unknown, href: string) => {
-  const caption = text(label).trim()
+  const caption = withoutArrow(text(label).trim())
   return caption === '' ? undefined : { label: caption, href }
 }
 
@@ -102,7 +108,7 @@ export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, J
       title: text(hero.title),
       lead: text(hero.lead),
       button: link(hero.button, SIGNUP_HREF),
-      note: text(hero.note),
+      note: withoutArrow(text(hero.note)),
       badges: texts(hero.badges),
       photo: mediaOf(hero.photo),
       photo_caption: text(hero.photoCaption),
@@ -170,7 +176,7 @@ export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, J
       text: text(signup.text),
       button: link(signup.button, SIGNUP_HREF),
       note: text(signup.note),
-      telegram: link('или напиши мне в Telegram ↗', telegram),
+      telegram: link('или напиши мне в Telegram', telegram),
     }),
   }
 }

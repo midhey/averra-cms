@@ -115,6 +115,32 @@ describe('файл выгрузки блоков', () => {
     }
   })
 
+  it('стрелка «↗» не в тексте поля, а в шаблоне: в span с aria-hidden, читалка её не произносит', () => {
+    const arrowed = {
+      ...content,
+      hero: { ...content.hero, note: 'знакомимся ↗' },
+      faq: { ...content.faq, aside: 'отвечу ↗' },
+    }
+    const props = homeBlocks(arrowed, () => undefined)
+    const propsOf = (id: string) =>
+      props.find((block) => block.id === id)?.props as Record<string, unknown>
+    // Из текста поля стрелка убрана при импорте (у подписи ссылки и у обычного текста)
+    expect(propsOf('top').note).toBe('знакомимся')
+    expect((propsOf('faq').aside as { label: string }).label).toBe('отвечу')
+    expect((propsOf('signup').telegram as { label: string }).label).toBe(
+      'или напиши мне в Telegram',
+    )
+    // Шаблон рисует её сам и прячет от читалки
+    const arrow = '<span aria-hidden="true">↗</span>'
+    expect(html('le-hero', { note: 'знакомимся' })).toContain(`знакомимся ${arrow}`)
+    expect(html('le-faq', { aside: { label: 'отвечу', href: '/zapis/' } })).toContain(
+      `отвечу ${arrow}`,
+    )
+    expect(html('le-signup', { telegram: { label: 'Пиши', href: '/zapis/' } })).toContain(
+      `Пиши ${arrow}`,
+    )
+  })
+
   it('кнопки «Записаться» ведут на /zapis/ со слэшем: без лишнего редиректа', () => {
     const blocks = homeBlocks(content, () => undefined)
     const hrefOf = (id: string, field: string) => {
@@ -135,6 +161,34 @@ describe('файл выгрузки блоков', () => {
   it('карточке цели под клавиатурным фокусом подсказана клавиша: Enter флажок не переворачивает', () => {
     expect(html('le-goals')).toContain('goal-card__by-key')
     expect(html('le-goals')).not.toContain('goal-card__keyhint')
+  })
+
+  // CSS-правила проверяются по тексту стилей блоков из buildFile(): браузера в unit-тестах нет,
+  // а без этих тестов правило можно удалить, и всё останется зелёным
+  const cssOf = (key: string) => built.blocks.find((one) => one.key === key)?.css ?? ''
+
+  it.each(['le-about', 'le-faq', 'le-goals', 'le-prices', 'le-reviews', 'le-steps'])(
+    '%s: заголовок раздела на телефоне не мельче 30px',
+    (key) => {
+      expect(cssOf(key)).toMatch(
+        /@media \(max-width: 540px\) \{\s*\.section-title \{[^}]*font-size: clamp\(30px,/,
+      )
+    },
+  )
+
+  it('кнопка «Записаться» в первом экране при наведении светлеет, а не только поднимается', () => {
+    expect(cssOf('le-hero')).toMatch(/\.cta-dark:hover \{[^}]*filter: brightness\(1\.25\)/)
+  })
+
+  it('подсказка клавиши у карточки цели показывается по :focus-visible и прячет подпись мыши', () => {
+    const css = cssOf('le-goals')
+    expect(css).toMatch(/\.goal-card__by-key \{\s*display: none;/)
+    expect(css).toMatch(
+      /\.goal-card__toggle:focus-visible ~ \.goal-card__inner \.goal-card__by-key \{\s*display: inline;/,
+    )
+    expect(css).toMatch(
+      /\.goal-card__toggle:focus-visible ~ \.goal-card__inner \.goal-card__by-mouse \{\s*display: none;/,
+    )
   })
 
   it('форма записи: контакт проверяется по способу связи (видов связи у каналов — по числу каналов)', () => {
@@ -321,15 +375,19 @@ describe('скрипт переноса на настоящем API', () => {
     })
     await client.signIn(owner.email, TEST_PASSWORD)
     const base = `/api/sites/${api.demoSiteId}`
-    const run = (extra: { publish?: boolean; rebuildDocuments?: boolean } = {}) =>
-      importSite({
+    let logs: string[] = []
+    const run = (extra: { publish?: boolean; rebuildDocuments?: boolean } = {}) => {
+      logs = []
+      return importSite({
         client,
         contentFile: join(dir, 'content.json'),
         publicDir: join(dir, 'public'),
         blocksFile: BLOCKS_FILE,
         publish: false,
+        log: (line) => logs.push(line),
         ...extra,
       })
+    }
     type Block = { id: string; type: string; props: Record<string, unknown> }
     type Doc = { draft: { blocks: Block[] }; published: unknown }
     const doc = (slug: string) => client.get<Doc>(`${base}/pages/${slug}`)
@@ -342,7 +400,9 @@ describe('скрипт переноса на настоящем API', () => {
 
     // Чистый старт: документы первого прогона (опубликованные) убираем
     for (const slug of ['privacy', 'consent']) await client.delete(`${base}/pages/${slug}`)
-    expect((await run()).rebuiltDocuments).toEqual([])
+    const clean = await run()
+    expect(clean.rebuiltDocuments).toEqual([])
+    expect(clean.repairedDocuments).toEqual([])
 
     // Правка, пометка шаблона ещё на месте (её убирают последней): повторный запуск не стирает
     const fresh = await doc('privacy')
@@ -355,8 +415,12 @@ describe('скрипт переноса на настоящем API', () => {
     })
     const second = await run()
     expect(second.rebuiltDocuments).toEqual([])
+    expect(second.repairedDocuments).toEqual([])
     expect(text((await doc('privacy')).draft)).toContain('Моя правка')
     expect(text((await doc('privacy')).draft)).toContain('template-note')
+    // Черновик не тронут: сообщение нейтральное, не «правили вручную»
+    expect(logs.join('\n')).not.toContain('правили вручную')
+    expect(logs).toContain('Документ /privacy: черновик есть, не трогаю')
 
     // Юрист переписал раздел про форму своими словами (фразы шаблона нет вовсе): это не ложь,
     // повторный запуск без флага черновик не трогает
@@ -369,18 +433,63 @@ describe('скрипт переноса на настоящем API', () => {
     })
     expect((await run()).rebuiltDocuments).toEqual([])
     expect(text((await doc('privacy')).draft)).toContain('форме записи на пробный урок')
+    // Слово «форма» в тексте юриста есть («форме записи»): предупреждения нет
+    expect(logs.join('\n')).not.toContain('не нашлось слов про форму')
+
+    // Слов про форму нет вовсе («информация», «оформление» и «платформа» не в счёт): скрипт
+    // предупреждает, но текст не трогает
+    await client.put(`${base}/pages/privacy`, {
+      title: 'Политика',
+      content: {
+        blocks: [
+          {
+            id: 'lawyer',
+            type: 'text',
+            props: { title: 'Данные', body: 'Информация, оформление заказа, платформа.' },
+          },
+        ],
+      },
+    })
+    expect((await run()).repairedDocuments).toEqual([])
+    expect(logs.join('\n')).toContain('не нашлось слов про форму')
+    expect(text((await doc('privacy')).draft)).toContain('оформление заказа')
 
     // Черновик, который говорит «форм нет» при форме на сайте (создан старой версией скрипта),
-    // пересобирается сам
-    await client.put(`${base}/pages/privacy`, { title: 'Политика', content: staleText })
+    // чинится по одному блоку: правка юристом другого раздела остаётся
+    await client.put(`${base}/pages/privacy`, {
+      title: 'Политика',
+      content: {
+        blocks: [
+          ...staleText.blocks,
+          { id: 'lawyer', type: 'text', props: { title: 'Хранение', body: 'Храним три года.' } },
+        ],
+      },
+    })
     const third = await run()
-    expect(third.rebuiltDocuments).toEqual(['privacy'])
-    expect(text((await doc('privacy')).draft)).toContain('форме заявки')
+    expect(third.rebuiltDocuments).toEqual([])
+    expect(third.repairedDocuments).toEqual(['privacy'])
+    const repaired = text((await doc('privacy')).draft)
+    expect(repaired).toContain('форме заявки')
+    expect(repaired).not.toContain('нет форм заявок')
+    expect(repaired).toContain('Храним три года.')
+    // Блок встал на место ложного: порядок прежний («данные», затем «хранение»)
+    expect(repaired.indexOf('"id":"data"')).toBeLessThan(repaired.indexOf('"id":"lawyer"'))
 
-    // Флаг заменяет и правленый черновик
+    // Флаг заменяет и правленый черновик целиком: правка без ложной фразы пропадает, пометка
+    // шаблона и текст про форму возвращаются
+    const edited = await doc('privacy')
+    await client.put(`${base}/pages/privacy`, {
+      title: 'Политика',
+      content: { blocks: [...edited.draft.blocks, { ...mine, id: 'my-edit-2' }] },
+    })
+    expect(text((await doc('privacy')).draft)).toContain('Моя правка')
     const fourth = await run({ rebuildDocuments: true })
     expect(fourth.rebuiltDocuments).toEqual(['privacy', 'consent'])
-    expect(text((await doc('privacy')).draft)).not.toContain('Моя правка')
+    const rebuilt = text((await doc('privacy')).draft)
+    expect(rebuilt).not.toContain('Моя правка')
+    expect(rebuilt).not.toContain('Храним три года.')
+    expect(rebuilt).toContain('template-note')
+    expect(rebuilt).toContain('форме заявки')
 
     // Опубликованный текст юриста без фразы шаблона: не трогаем и не блокируем публикацию сайта
     const published = await doc('privacy')
@@ -400,9 +509,12 @@ describe('скрипт переноса на настоящем API', () => {
     await client.put(`${base}/pages/privacy`, { title: 'Политика', content: staleText })
     for (const slug of ['privacy', 'consent']) await client.post(`${base}/pages/${slug}/publish`)
     const stale = await run({ publish: true })
-    expect(stale.rebuiltDocuments).toEqual(['privacy'])
+    expect(stale.repairedDocuments).toEqual(['privacy'])
     expect(stale.staleDocuments).toEqual(['privacy'])
     expect(stale.published).toBe(false)
+    // Черновик уже исправлен в этом запуске: совет «запустите с флагом» был бы лишним
+    expect(logs.join('\n')).toContain('Черновик уже исправлен в этом запуске')
+    expect(logs.join('\n')).not.toContain('--rebuild-documents')
     const after = await doc('privacy')
     expect(text(after.published)).toContain('нет форм заявок')
     expect(text(after.draft)).toContain('форме заявки')
