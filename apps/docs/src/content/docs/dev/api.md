@@ -15,8 +15,9 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 
 - **Cookie сессии** Better Auth (httpOnly, `SameSite=Lax`, в проде `Secure`) — для людей из админки.
   Изменяющие запросы с cookie принимаются только с `Origin` админки (`ADMIN_URL`).
-- **`Authorization: Bearer <токен>`** — токен API, редактор на одном сайте. Origin не проверяется:
-  браузер сам токен не подставит.
+- **`Authorization: Bearer <токен>`** — токен API, редактор на одном сайте, но публикация, удаление
+  и черновики своих блоков — только по правам токена (`tokenGrants` в `src/auth/access.ts`,
+  [Токены](/averra-cms/mcp/tokens/)). Origin не проверяется: браузер сам токен не подставит.
 - **Закрыто по умолчанию.** Без входа открыты только маршруты с пометкой «открыт» ниже и
   `/api/auth/*` — там решает Better Auth. Остальное без входа — 401.
 - **Права сайта** решает одна таблица действий (`src/auth/access.ts`): маршрут объявляет действие
@@ -67,7 +68,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `POST /api/auth/request-password-reset` | «Забыли пароль?»: `{ email }`. Ответ всегда `200 { status: "sent" }` и не раньше 300 мс. 5 запросов за 15 минут с IP, 3 — на адрес. Нет почты — 503 |
 | `POST /api/auth/reset-password` | новый пароль по ссылке `{ token, newPassword }`; ссылка негодная — 400 `invalid_token`. Все сессии завершаются |
 | `GET /api/auth/reset-password/:token` | закрыт (404): токен в пути попал бы в лог |
-| `GET /api/me` | кто вошёл: `{ kind: "user", user }` или `{ kind: "token", token: { id, siteId } }` |
+| `GET /api/me` | кто вошёл: `{ kind: "user", user }` или `{ kind: "token", token: { id, siteId, rights } }` |
 
 ## Сайты и страницы
 
@@ -215,6 +216,18 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `POST /api/mail/outbox/:id/retry` | вернуть письмо в очередь; отправленное или с истёкшей ссылкой — 409 |
 | `GET /api/mail/templates/:template/preview` | шаблон на примерных данных: `subject`, `html`, `text` |
 
+## Токены API (только владелец)
+
+Раздел «Доступ для ИИ». Действие `tokens.manage`: редактору и клиенту — 403, токену — 403 всегда.
+Права — `{ blocksDraft, publish, delete }` (`TokenRights` в `@averra/schema`).
+
+| Запрос | Что делает |
+|---|---|
+| `GET /api/tokens` | токены, новые сверху: `id`, `name`, `rights`, `createdBy` (имя), `createdAt`, `lastUsedAt`, `revokedAt`. Без самих токенов и хешей |
+| `POST /api/tokens` | выпустить на сайт установки: `{ name, rights? }` (`NewToken`; не названные права — «только черновики»: `blocksDraft: true`, остальные `false`) → 201, то же, что в списке, и `token` — единственный раз |
+| `PATCH /api/tokens/:id` | поменять названные права (`TokenRightsPatch`, хотя бы одно) → токен. Действует сразу. Отозванный — 409, нет такого — 404 |
+| `DELETE /api/tokens/:id` | отозвать → 204, повторный — тоже 204. Нет такого — 404 |
+
 ## Заявки (владелец и клиент, токену — 403)
 
 | Запрос | Что делает |
@@ -263,7 +276,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | Запрос | Что делает |
 |---|---|
 | `GET /api/sites/:siteId/build` | сборка на сервере: `enabled`, последняя (`latest`) и та, что на сайте (`live`) |
-| `POST /api/sites/:siteId/build` | «Собрать заново» (владелец, редактор, токен) → 202; без `PUBLISH_DIR` — 409 `publish_disabled` |
+| `POST /api/sites/:siteId/build` | «Собрать заново» (владелец, редактор, токен с правом «Публикация страниц») → 202; без `PUBLISH_DIR` — 409 `publish_disabled` |
 | `GET /api/sites/:siteId/export/static` | ZIP текущей версии сайта потоком; токену — 403. Без сборки — 409 `not_built`, больше 3,5 ГБ — 413 |
 | `GET /api/sites/:siteId/export/data` | ZIP с `site.json`, оригиналами картинок и `README.txt` — владелец и клиент |
 

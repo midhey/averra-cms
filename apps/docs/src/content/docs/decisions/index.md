@@ -43,6 +43,7 @@ sidebar:
 - [Учебный режим только явно](/averra-cms/decisions/dev-mode/)
 - [Токены и ссылки только хешем](/averra-cms/decisions/hashed-tokens/)
 - [Пароль SMTP в базе и повторный пароль владельца](/averra-cms/decisions/smtp-password/)
+- [Права токена MCP](/averra-cms/decisions/token-rights/)
 
 ## Почта и формы
 
