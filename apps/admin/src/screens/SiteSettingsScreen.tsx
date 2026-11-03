@@ -7,6 +7,7 @@ import { LeadSettingsSection } from '../leads/LeadSettingsSection'
 import { canExportData, canInvite, canPublish, canSeeLeads } from '../permissions'
 import { BuildSection } from '../publish/BuildSection'
 import { siteQuery } from '../queries'
+import { UnsavedChangesGuard } from '../seo/unsaved'
 import { PageHeader } from '../ui/PageHeader'
 import { Screen } from '../ui/Screen'
 import { usePageTitle } from '../ui/use-page-title'
@@ -34,7 +35,9 @@ function SiteSettings({ siteId }: { siteId: string }) {
   return (
     <Screen narrow>
       <PageHeader eyebrow={site.name} title="Настройки сайта" />
-      {canSeeLeads(site.access) && <LeadSettingsSection id="leads" siteId={siteId} />}
+      <UnsavedChangesGuard>
+        {canSeeLeads(site.access) && <LeadSettingsSection id="leads" siteId={siteId} />}
+      </UnsavedChangesGuard>
       {canInvite(site.access) && <InvitationsSection id="members" siteId={siteId} />}
       <BuildSection id="build" siteId={siteId} canBuild={canPublish(site.access)} />
       <ExportSection id="export" siteId={siteId} canExportData={canExportData(site.access)} />

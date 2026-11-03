@@ -117,3 +117,48 @@
   border-radius: var(--radius-inner);
   overflow-wrap: anywhere;
 }
+
+// Шаблон письма — раскрывашка: свёрнутый занимает одну строку с названием, отступы между
+// частями — только у раскрытого, иначе под заголовком остаётся пустое место
+.templateBox[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.templateSummary {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  // Маркер раскрытия — шеврон из рамки, как у остальных переключателей админки, не системный
+  &::after {
+    flex: none;
+    inline-size: ui.rem(8);
+    block-size: ui.rem(8);
+    margin-inline-end: var(--space-1);
+    content: "";
+    border-inline-end: ui.rem(2) solid var(--color-text-muted);
+    border-block-end: ui.rem(2) solid var(--color-text-muted);
+    transform: translateY(-25%) rotate(45deg);
+  }
+}
+
+.templateBox[open] > .templateSummary::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.templateSummary:focus-visible {
+  @include ui.focus-ring;
+}
+
+.templateSummary .templateTitle {
+  display: inline;
+}

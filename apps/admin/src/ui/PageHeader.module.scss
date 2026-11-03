@@ -8,9 +8,12 @@
   justify-content: space-between;
 }
 
+// «Назад» — строкой над заголовком: заголовок начинается от общего левого края, как на всех
+// экранах, а не сдвинут кнопкой
 .main {
   display: flex;
-  gap: ui.rem(14);
+  flex-direction: column;
+  gap: var(--space-2);
   align-items: flex-start;
   min-width: 0;
 }

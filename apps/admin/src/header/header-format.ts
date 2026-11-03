@@ -26,27 +26,35 @@ export type TargetGroup = {
 
 /**
  * Варианты «куда ведёт», по страницам: сама страница и её блоки (по заголовку блока и якорю).
- * Неопубликованная страница — с пометкой: на сайт её пункт попадёт только после публикации.
- * Цель, которой уже нет (удалили страницу или блок), остаётся в списке отдельной группой — иначе
- * выбор молча показал бы другую
+ * Блоки — только текущей версии, черновика: меню собирается из него и им же публикуется, а блоки
+ * прежней опубликованной версии (демо-главная до импорта) только путали бы выбор. Неопубликованная
+ * страница — с пометкой: на сайт её пункт попадёт только после публикации. Цель, которой нет в
+ * черновике (удалили страницу или блок), остаётся в списке отдельной группой — иначе выбор молча
+ * показал бы другую
  */
 export function targetGroups(pages: readonly HeaderTargetPage[], current?: SiteLink) {
   const groups: TargetGroup[] = pages.map((page) => ({
     label: page.published ? pageLinkTitle(page) : `${pageLinkTitle(page)} — не опубликована`,
     options: [
       { value: page.slug, label: `${page.title} — вся страница` },
-      ...page.blocks.map((block) => ({
-        value: `${page.slug}#${block.id}`,
-        label: `${block.label ?? 'Блок'} · #${block.id}`,
-      })),
+      ...page.blocks
+        .filter((block) => block.draft)
+        .map((block) => ({
+          value: `${page.slug}#${block.id}`,
+          label: `${block.label ?? 'Блок'} · #${block.id}`,
+        })),
     ],
   }))
   if (current) {
     const value = targetValue(current)
     const known = groups.some((group) => group.options.some((option) => option.value === value))
     if (!known) {
+      // Блок убрали из черновика, но на сайте он ещё есть: пункт работает, пока не опубликуют
+      const onlyOnSite = pages
+        .find((page) => page.slug === current.page)
+        ?.blocks.find((block) => block.id === current.block && block.published)
       groups.push({
-        label: 'Больше нет на сайте',
+        label: onlyOnSite ? 'Убран из черновика, пока есть на сайте' : 'Больше нет на сайте',
         options: [{ value, label: siteLinkHref(current) }],
       })
     }

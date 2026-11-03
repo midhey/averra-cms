@@ -1,11 +1,11 @@
-import type { BlockType } from '@averra/schema'
+import { type BlockType, plainAccent } from '@averra/schema'
 import { countRu } from '../format/plural'
 import type { EditorBlock } from './draft'
 
 /** Имя блока для диктора и вопросов: его заголовок, если он есть, иначе якорь */
 export function blockName(block: EditorBlock) {
   const title = block.props.title
-  return typeof title === 'string' && title.trim() !== '' ? title : `#${block.id}`
+  return typeof title === 'string' && title.trim() !== '' ? plainAccent(title) : `#${block.id}`
 }
 
 type Forms = readonly [string, string, string]
@@ -17,7 +17,9 @@ const itemNouns: Partial<Record<BlockType, Forms>> = {
   clients: ['клиент', 'клиента', 'клиентов'],
 }
 
-const text = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : '')
+// *Акцент* в заголовке своего блока — разметка, в подписях звёздочек быть не должно
+const text = (value: unknown) =>
+  typeof value === 'string' && value.trim() !== '' ? plainAccent(value) : ''
 
 /**
  * Краткая подсказка содержимого под типом блока в списке: заголовок; без заголовка — сколько

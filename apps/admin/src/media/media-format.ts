@@ -106,3 +106,44 @@ export const mediaLabel = (media: LabelledMedia, timeZone?: string) =>
 /** Подтверждение удаления: чтобы не удалить не ту картинку из похожих превью */
 export const deleteQuestion = (media: LabelledMedia, timeZone?: string) =>
   `Удалить картинку ${mediaLabel(media, timeZone)} из медиатеки? Вернуть её не получится.`
+
+/** Место, где стоит картинка, так, как его отдаёт API (медиатека) */
+export type MediaUse = MediaItem['usage'][number]
+
+/** Где стоит картинка — словами для карточки медиатеки */
+export function mediaUseText(use: MediaUse) {
+  switch (use.kind) {
+    case 'page': {
+      const state = { draft: 'черновик', published: 'на сайте', both: 'черновик и сайт' }[use.state]
+      return `Страница «${use.title}» — ${state}`
+    }
+    case 'header':
+      return 'Логотип шапки'
+    case 'seo':
+      return `SEO: ${use.roles.join(', ')}`
+    case 'block':
+      return use.key === '' ? 'Свой неопубликованный блок' : `Свой блок «${use.title}»`
+  }
+}
+
+/**
+ * Почему картинку нельзя удалить, пока она стоит на сайте: одной строкой и по видам мест. Нет
+ * мест — undefined. Совпадает с тем, что ответит API на удаление: страницы, шапка, SEO и свои
+ * блоки не дают удалить картинку
+ */
+export function deleteBlockedText(usage: readonly MediaUse[]) {
+  if (usage.length === 0) return undefined
+  const places: string[] = []
+  const pages = usage.filter((use) => use.kind === 'page')
+  if (pages.length > 0) {
+    // Опубликовать нужно, только если картинка уже на сайте: из черновика она уходит сразу
+    const onSite = pages.some((use) => use.state !== 'draft')
+    places.push(onSite ? 'со страниц (и опубликовать их)' : 'со страниц')
+  }
+  if (usage.some((use) => use.kind === 'header')) places.push('из шапки')
+  if (usage.some((use) => use.kind === 'seo')) places.push('из настроек SEO')
+  if (usage.some((use) => use.kind === 'block')) places.push('из своего блока')
+  const list =
+    places.length > 1 ? `${places.slice(0, -1).join(', ')} и ${places.at(-1)}` : places[0]
+  return `Удалить нельзя: сначала уберите картинку ${list}`
+}

@@ -146,3 +146,27 @@ describe('Checkbox', () => {
     )
   })
 })
+
+describe('показать пароль', () => {
+  it('поле пароля — с кнопкой-глазом: показывает и скрывает символы, пароль не теряется', async () => {
+    const user = userEvent.setup()
+    render(<TextInput label="Пароль" type="password" defaultValue="секрет-1" />)
+    const input = screen.getByLabelText('Пароль') as HTMLInputElement
+    expect(input.type).toBe('password')
+
+    const show = screen.getByRole('button', { name: 'Показать символы' })
+    expect(show.getAttribute('aria-pressed')).toBe('false')
+    await user.click(show)
+    expect(input.type).toBe('text')
+    expect(input.value).toBe('секрет-1')
+    const hide = screen.getByRole('button', { name: 'Скрыть символы' })
+    expect(hide.getAttribute('aria-pressed')).toBe('true')
+    await user.click(hide)
+    expect(input.type).toBe('password')
+  })
+
+  it('обычному полю кнопки нет', () => {
+    render(<TextInput label="Имя" />)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+})

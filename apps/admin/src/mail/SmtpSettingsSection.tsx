@@ -12,6 +12,7 @@ import {
 import { focusField } from '../forms/use-form-errors'
 import { formatDateTime } from '../pages-format'
 import { mailSmtpQuery, meQuery, queryKeys } from '../queries'
+import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
@@ -158,6 +159,11 @@ function SmtpSettingsForm({
       ? { currentPassword: currentParsed.error.issues[0]?.message ?? 'Введите пароль' }
       : {}),
   }
+  // Правки, которых нет на сервере (или набранный пароль): уход с ними спрашивает, как везде
+  const unsaved =
+    form.password !== '' ||
+    JSON.stringify(settings) !== JSON.stringify(settingsOf(formOf(smtp.settings)))
+  useReportUnsaved(unsaved)
   const fingerprint = checkedFingerprint(form, to)
   const checkIsFresh = checked?.ok === true && checked.fingerprint === fingerprint
 
@@ -284,6 +290,8 @@ function SmtpSettingsForm({
   }
 
   function runSave(mode: 'checked' | 'unchecked') {
+    // Без правок сохранять нечего: как у остальных форм, кнопка выключена
+    if (!unsaved) return
     startAction('save')
     if (!fieldsParsed.success) {
       focusField(formRef.current, firstInvalidField(fieldOrder, zodFieldErrors(fieldsParsed.error)))
@@ -400,8 +408,8 @@ function SmtpSettingsForm({
       <fieldset className={styles.group}>
         <legend className={styles.legend}>Проверка подключения</legend>
         <p className={mutedClassName}>
-          Те же шаги, что у pnpm mail:test: DNS, соединение, TLS, вход и проверочное письмо — по
-          настройкам из формы, ещё не сохранённым.
+          DNS, соединение, TLS, вход и проверочное письмо — по настройкам из формы, ещё не
+          сохранённым.
         </p>
         <div className={formClassName}>
           <TextInput
@@ -480,10 +488,15 @@ function SmtpSettingsForm({
             variant="primary"
             loading={save.isPending}
             disabled={busy && !save.isPending}
+            aria-disabled={!unsaved ? true : undefined}
           >
             Сохранить
           </Button>
-          <Button onClick={() => runSave('unchecked')} disabled={busy}>
+          <Button
+            onClick={() => runSave('unchecked')}
+            disabled={busy}
+            aria-disabled={!unsaved ? true : undefined}
+          >
             Сохранить без проверки
           </Button>
           {smtp.source === 'database' && (

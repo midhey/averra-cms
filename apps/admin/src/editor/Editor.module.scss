@@ -51,6 +51,11 @@
   min-width: 0;
 }
 
+.publishHint {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
 .siteName {
   overflow: hidden;
   font-size: var(--font-size-small);

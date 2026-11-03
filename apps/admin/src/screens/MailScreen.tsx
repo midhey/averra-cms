@@ -18,6 +18,7 @@ import {
   mailQuery,
   queryKeys,
 } from '../queries'
+import { UnsavedChangesGuard } from '../seo/unsaved'
 import { Button, Spinner } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
 import { type Column, DataTable } from '../ui/DataTable'
@@ -61,7 +62,9 @@ export function MailScreen() {
         }
       />
       <MailState mail={mail} />
-      <SmtpSettingsSection />
+      <UnsavedChangesGuard>
+        <SmtpSettingsSection />
+      </UnsavedChangesGuard>
       <Outbox titles={titles} />
       <Templates templates={mail.templates} />
     </Screen>
@@ -314,43 +317,51 @@ function Templates({ templates }: { templates: readonly TemplateInfo[] }) {
 }
 
 function TemplatePreview({ template }: { template: TemplateInfo }) {
-  const preview = useQuery(mailPreviewQuery(template.id))
+  // Письмо собирается и грузится, только когда его раскрыли: восемь предпросмотров подряд — это
+  // экран на 7800 px и восемь запросов, которых никто не просил
+  const [open, setOpen] = useState(false)
+  const preview = useQuery({ ...mailPreviewQuery(template.id), enabled: open })
   const headingId = `template-${template.id}`
   return (
     <article aria-labelledby={headingId} className={cardClassName()}>
-      <div className={styles.templateHead}>
-        <h3 id={headingId} className={styles.templateTitle}>
-          {template.title}
-        </h3>
+      <details
+        className={styles.templateBox}
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+      >
+        <summary className={styles.templateSummary}>
+          <h3 id={headingId} className={styles.templateTitle}>
+            {template.title}
+          </h3>
+        </summary>
         <p className={mutedClassName}>{template.description}</p>
-      </div>
-      {preview.isPending ? (
-        <p className={styles.loading} role="status">
-          <Spinner />
-          Собираю письмо…
-        </p>
-      ) : preview.isError ? (
-        <InlineAlert tone="danger">
-          Предпросмотр не собрался: {messageOf(preview.error)}
-        </InlineAlert>
-      ) : (
-        <>
-          <p>
-            <span className={mutedClassName}>Тема:</span> {preview.data.subject}
+        {!open ? null : preview.isPending ? (
+          <p className={styles.loading} role="status">
+            <Spinner />
+            Собираю письмо…
           </p>
-          {/* sandbox без разрешений: в письме нет скриптов, iframe не получает доступ к админке */}
-          <iframe
-            className={styles.frame}
-            title={`Предпросмотр письма «${template.title}»`}
-            sandbox=""
-            srcDoc={preview.data.html}
-          />
-          <details className={styles.details}>
-            <summary>Текстовая версия</summary>
-            <pre className={styles.text}>{preview.data.text}</pre>
-          </details>
-        </>
-      )}
+        ) : preview.isError ? (
+          <InlineAlert tone="danger">
+            Предпросмотр не собрался: {messageOf(preview.error)}
+          </InlineAlert>
+        ) : (
+          <>
+            <p>
+              <span className={mutedClassName}>Тема:</span> {preview.data.subject}
+            </p>
+            {/* sandbox без разрешений: в письме нет скриптов, iframe не получает доступ к админке */}
+            <iframe
+              className={styles.frame}
+              title={`Предпросмотр письма «${template.title}»`}
+              sandbox=""
+              srcDoc={preview.data.html}
+            />
+            <details className={styles.details}>
+              <summary>Текстовая версия</summary>
+              <pre className={styles.text}>{preview.data.text}</pre>
+            </details>
+          </>
+        )}
+      </details>
     </article>
   )
 }

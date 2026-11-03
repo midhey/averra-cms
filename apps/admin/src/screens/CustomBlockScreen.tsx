@@ -96,6 +96,7 @@ function CustomBlockEditor({
   const [saved, setSaved] = useState<unknown>(view.draft)
   const [published, setPublished] = useState(view.published !== null)
   const [unpublished, setUnpublished] = useState(view.unpublished)
+  // Название и ключ человек уже ввёл в окне создания: следующее дело — поля, а не «Основное»
   const [part, setPart] = useState<Part>('fields')
   const [notice, setNotice] = useState<Notice>()
   const templateRef = useRef<HTMLTextAreaElement>(null)
@@ -694,10 +695,8 @@ function BlockPreview({
   theme: Parameters<typeof Preview>[0]['theme']
   draft: CustomBlockDraft | null
 }) {
-  // «Десктоп» (1280 px) в колонке предпросмотра ужат вдвое и не читается: начинаем с планшета
-  const [device, setDevice] = useState<Device>(() =>
-    initialDevice() === 'phone' ? 'phone' : 'tablet',
-  )
+  // Как в редакторе, «Теме» и «Шапке»: десктоп, на узком экране — телефон
+  const [device, setDevice] = useState<Device>(initialDevice)
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
   const content = useMemo(

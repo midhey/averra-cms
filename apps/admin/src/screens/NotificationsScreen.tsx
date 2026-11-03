@@ -8,6 +8,7 @@ import { ServiceRecipientsSection } from '../notifications/ServiceRecipientsSect
 import { formatDateTime } from '../pages-format'
 import { canManageChannels, canSeeNotifications } from '../permissions'
 import { notificationOutboxQuery, siteQuery } from '../queries'
+import { UnsavedChangesGuard } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -29,10 +30,14 @@ export function NotificationsScreen() {
   return (
     <Screen narrow>
       <PageHeader eyebrow={site.name} title="Уведомления" />
-      {owner && <ChannelsSection />}
-      {canSeeNotifications(site.access) && <LeadRecipientsSection siteId={siteId} />}
-      {owner && <ServiceRecipientsSection />}
-      {owner && <RecentMessages />}
+      <UnsavedChangesGuard>
+        {owner && <ChannelsSection />}
+        {canSeeNotifications(site.access) && (
+          <LeadRecipientsSection siteId={siteId} channelsAbove={owner} />
+        )}
+        {owner && <ServiceRecipientsSection />}
+        {owner && <RecentMessages />}
+      </UnsavedChangesGuard>
     </Screen>
   )
 }

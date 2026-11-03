@@ -202,6 +202,28 @@ describe('заголовок страницы', () => {
 })
 
 describe('узкий экран', () => {
+  it('«SEO» — своя вкладка, видна сразу; «Поля» закрывают панель SEO', async () => {
+    narrow = true
+    const user = userEvent.setup()
+    await renderWithRouter(<Editor site={site} page={published} />)
+    const tabs = screen.getByRole('tablist', { name: 'Части редактора' })
+    const seoTab = within(tabs).getByRole('tab', { name: /^SEO/ })
+    expect(seoTab.getAttribute('aria-selected')).toBe('false')
+    await user.click(seoTab)
+    expect(seoTab.getAttribute('aria-selected')).toBe('true')
+    const panel = document.getElementById(seoTab.getAttribute('aria-controls') ?? '')
+    expect(panel?.hidden).toBe(false)
+    expect(
+      within(panel as HTMLElement).getByRole('complementary', { name: 'SEO страницы' }),
+    ).toBeTruthy()
+    // Повторный выбор вкладки не закрывает панель
+    await user.click(seoTab)
+    expect(seoTab.getAttribute('aria-selected')).toBe('true')
+    await user.click(within(tabs).getByRole('tab', { name: 'Поля' }))
+    expect(seoTab.getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByRole('complementary', { name: 'SEO страницы' })).toBeNull()
+  })
+
   it('колонки — вкладки; выбор блока открывает «Поля» и ставит фокус на вкладку', async () => {
     narrow = true
     const user = userEvent.setup()
@@ -211,7 +233,7 @@ describe('узкий экран', () => {
       within(tabs)
         .getAllByRole('tab')
         .map((tab) => tab.textContent),
-    ).toEqual(['Блоки', 'Предпросмотр', 'Поля'])
+    ).toEqual(['Блоки', 'Предпросмотр', 'Поля', 'SEO · 2'])
     const fieldsTab = within(tabs).getByRole('tab', { name: 'Поля' })
     const fieldsPanel = document.getElementById(fieldsTab.getAttribute('aria-controls') ?? '')
     expect(fieldsPanel?.hidden).toBe(true)

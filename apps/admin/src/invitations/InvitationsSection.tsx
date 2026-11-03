@@ -21,6 +21,8 @@ import {
   canRevoke,
   type InvitationRole,
   type InvitationStatus,
+  pendingInvitationFor,
+  replaceWarning,
   roleHints,
   roleLabels,
   statusLabels,
@@ -167,6 +169,7 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
       <div className={cardClassName()}>
         <InviteForm
           siteId={siteId}
+          invitations={invitations.data ?? []}
           disabled={mailOff !== undefined}
           onInvited={(email) =>
             setNotice({ kind: 'done', text: `Приглашение отправлено на ${email}` })
@@ -223,14 +226,18 @@ export function InvitationsSection({ siteId, id }: { siteId: string; id?: string
 }
 
 const roles: readonly InvitationRole[] = ['client', 'editor']
+const defaultRole: InvitationRole = 'client'
 const fieldOrder = ['email', 'role']
 
 function InviteForm({
   siteId,
+  invitations,
   disabled,
   onInvited,
 }: {
   siteId: string
+  /** Приглашения сайта: по ним видно, что адрес уже приглашён */
+  invitations: readonly Invitation[]
   disabled: boolean
   onInvited: (email: string) => void
 }) {
@@ -238,8 +245,11 @@ function InviteForm({
   const formRef = useRef<HTMLFormElement>(null)
   const headingId = useId()
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<InvitationRole>('client')
+  const [role, setRole] = useState<InvitationRole>(defaultRole)
   const [formError, setFormError] = useState<string>()
+  // Повторное приглашение заменяет прежнее вместе с ролью: говорим об этом до отправки
+  const existing = pendingInvitationFor(invitations, email)
+  const warning = replaceWarning(existing, role)
 
   const parsed = NewInvitation.safeParse({ email, role })
   const form = useFormErrors(zodFieldErrors(parsed.error))
@@ -253,6 +263,8 @@ function InviteForm({
     onSuccess: async (invitation) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.invitations(siteId) })
       setEmail('')
+      // Роль не «залипает»: следующее приглашение начинается с умолчания, а не с прошлого выбора
+      setRole(defaultRole)
       form.reset()
       onInvited(invitation.email)
     },
@@ -318,10 +330,15 @@ function InviteForm({
             {roleLabels[role]} {roleHints[role]}.
           </p>
         </div>
+        {warning && (
+          <InlineAlert tone="warning" live>
+            {warning}
+          </InlineAlert>
+        )}
         {formError && <InlineAlert tone="danger">{formError}</InlineAlert>}
         <div>
           <Button type="submit" variant="primary" disabled={disabled} loading={invite.isPending}>
-            Пригласить
+            {existing ? 'Заменить приглашение' : 'Пригласить'}
           </Button>
         </div>
       </form>

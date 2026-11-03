@@ -1,14 +1,14 @@
 import { type SiteSettings, SiteSettingsPatch, type SiteSettingsPatchInput } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
-import { type FormEvent, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { type FieldErrors, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
 import { queryKeys, siteSettingsQuery } from '../queries'
 import { fieldError, hasUnsavedChanges } from './seo-format'
-import { useReportUnsaved } from './unsaved'
+import { useReportUnsaved, useSaveAll } from './unsaved'
 
 /** Настройки так, как их отдаёт API: сами настройки, адрес установки и адрес сайта */
 export type SettingsView = InferResponseType<(typeof api.sites)[':siteId']['settings']['$get'], 200>
@@ -54,7 +54,6 @@ export function useSettingsForm({ siteId, patch, done, onSaved }: SettingsFormOp
   // Сохранённое — из того же запроса, что у экрана: после сохранения его заменяет ответ API
   const { data: view } = useSuspenseQuery(siteSettingsQuery(siteId))
   const unsaved = hasUnsavedChanges(patch, view.settings)
-  useReportUnsaved(unsaved)
 
   const save = useMutation({
     mutationFn: async (body: SiteSettingsPatch) => {
@@ -86,15 +85,56 @@ export function useSettingsForm({ siteId, patch, done, onSaved }: SettingsFormOp
     },
   })
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  /** Показать ошибки полей. false — сохранять нечего из-за ошибки */
+  function validate() {
     form.attempt()
     setNotice(undefined)
-    if (!parsed.success) {
-      focusFirstError(formRef.current, zodFieldErrors(parsed.error))
+    return parsed.success
+  }
+  const focusError = () => {
+    if (!parsed.success) focusFirstError(formRef.current, zodFieldErrors(parsed.error))
+  }
+  // Единая «Сохранить» экрана (SEO) сохраняет карточки по очереди через эти функции
+  useReportUnsaved(unsaved, {
+    validate,
+    focusError,
+    save: async () => {
+      if (!parsed.success) return false
+      try {
+        await save.mutateAsync(parsed.data)
+        return true
+      } catch {
+        // Причину показал onError: ошибка у поля или сообщение карточки
+        return false
+      }
+    },
+  })
+  const everything = useSaveAll()
+
+  // У карточек экрана с одной кнопкой нет submit-кнопки, а форма из нескольких полей без неё сама
+  // не отправляется: Enter в текстовом поле сохраняет всё сам
+  function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (!everything || event.key !== 'Enter' || event.defaultPrevented) return
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) return
+    if (['button', 'submit', 'checkbox', 'radio', 'reset', 'file'].includes(target.type)) return
+    event.preventDefault()
+    everything.saveAll()
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    // У экрана одна кнопка: Enter в поле сохраняет всё, а не только эту карточку
+    if (everything) {
+      everything.saveAll()
       return
     }
-    save.mutate(parsed.data)
+    if (!unsaved) return
+    if (!validate()) {
+      focusError()
+      return
+    }
+    if (parsed.success) save.mutate(parsed.data)
   }
 
   return {
@@ -105,10 +145,13 @@ export function useSettingsForm({ siteId, patch, done, onSaved }: SettingsFormOp
     /** Поле поправили — ошибка от API у него уходит */
     clear: form.clearServerError,
     submit,
+    onKeyDown,
     notice,
     pending: save.isPending,
     /** Есть правки, которых нет на сервере */
     unsaved,
+    /** У экрана одна кнопка «Сохранить»: карточка своей не рисует */
+    singleSave: everything !== null,
   }
 }
 

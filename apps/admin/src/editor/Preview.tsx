@@ -66,7 +66,7 @@ type PreviewProps = {
   media: MediaMap
   device: Device
   /** Что показано, если не черновик: например, версия из истории */
-  note?: string | undefined
+  note?: ReactNode
   /** Выбранный блок черновика: он подсвечен рамкой */
   selectedId: string | null
   /** Щелчок по блоку в предпросмотре. Без него (версия из истории) выбирать нечего */

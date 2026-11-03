@@ -34,13 +34,29 @@ export function SettingsCard({
         aria-label={title}
         className={formClassName}
         onSubmit={form.submit}
+        onKeyDown={form.onKeyDown}
         noValidate
       >
         {children}
         {form.notice?.kind === 'error' && (
           <InlineAlert tone="danger">{form.notice.text}</InlineAlert>
         )}
-        <SettingsCardActions saveLabel={saveLabel} pending={form.pending} unsaved={form.unsaved} />
+        {form.singleSave ? (
+          // Кнопка одна на экран — в полосе внизу. У карточки остаётся пометка, что в ней правки
+          form.unsaved && (
+            <FormActions>
+              <StatusPill tone="warning" appearance="dot">
+                Не сохранено
+              </StatusPill>
+            </FormActions>
+          )
+        ) : (
+          <SettingsCardActions
+            saveLabel={saveLabel}
+            pending={form.pending}
+            unsaved={form.unsaved}
+          />
+        )}
         {form.notice?.kind === 'done' && (
           <InlineAlert tone="success" live>
             {form.notice.text}
@@ -66,7 +82,14 @@ export function SettingsCardActions({
 }) {
   return (
     <FormActions>
-      <Button type="submit" variant="primary" loading={pending}>
+      {/* Без правок сохранять нечего: кнопка выключена, как в редакторе страницы. aria-disabled,
+          а не disabled: после «Сохранить» кнопка гаснет, и фокус с клавиатуры не должен пропасть */}
+      <Button
+        type="submit"
+        variant="primary"
+        loading={pending}
+        aria-disabled={!unsaved ? true : undefined}
+      >
         {saveLabel}
       </Button>
       {unsaved && !pending && (

@@ -23,22 +23,14 @@ import {
 } from '@tanstack/react-query'
 import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { publishedDefinitions } from '../custom-blocks/custom-block-format'
+import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
 import { mediaMapOf } from '../media/media-format'
 import { canEditTheme } from '../permissions'
-import {
-  customBlocksQuery,
-  mediaQuery,
-  pageQuery,
-  pagesQuery,
-  queryKeys,
-  siteQuery,
-  themeQuery,
-} from '../queries'
+import { mediaQuery, pageQuery, pagesQuery, queryKeys, siteQuery, themeQuery } from '../queries'
 import { fieldError } from '../seo/seo-format'
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { ColorRow, ThemeSwatch } from '../theme/ThemeParts'
@@ -207,6 +199,8 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Без правок сохранять нечего: кнопка выключена, Enter в поле тоже ничего не делает
+    if (!unsaved) return
     setNotice(undefined)
     if (await saveDraft()) {
       setNotice({
@@ -384,7 +378,11 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
           )}
           {!readOnly && (
             <FormActions>
-              <Button type="submit" loading={save.isPending && !publish.isPending}>
+              <Button
+                type="submit"
+                loading={save.isPending && !publish.isPending}
+                aria-disabled={!unsaved ? true : undefined}
+              >
                 Сохранить
               </Button>
               <Button
@@ -423,14 +421,7 @@ function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
   // Свои блоки страницы — в новой теме тоже: их CSS построен на ролях темы
-  const custom = useQuery(customBlocksQuery(siteId))
-  const customBlocks = useMemo(
-    () =>
-      Object.fromEntries(
-        publishedDefinitions(custom.data?.blocks ?? []).map((item) => [item.key, item]),
-      ),
-    [custom.data],
-  )
+  const customBlocks = useCustomBlockMap(siteId)
   const draft = page.data?.draft
   const empty = draft !== undefined && draft.blocks.length === 0
   const content = useMemo(
@@ -459,7 +450,7 @@ function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
           ? 'Страницу не загрузить — тема показана на примере лендинга. '
           : empty
             ? 'На странице пока нет блоков — тема показана на примере лендинга. '
-            : 'Черновик страницы в новой теме. '}
+            : 'Черновик страницы в черновике темы (редактор страницы показывает опубликованную тему). '}
         Правки видны сразу, на сайт попадут после публикации.
       </p>
       <div className={styles.frame} aria-busy={page.isFetching && page.isPlaceholderData}>

@@ -7,6 +7,7 @@ import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { parseRecipients, recipientsError } from '../leads/lead-format'
 import { queryKeys, siteNotificationsQuery } from '../queries'
+import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -22,7 +23,14 @@ type Notice = { kind: 'done' | 'error'; text: string }
  * и клиент. Любая смена — письмо владельцам и прежним получателям: заявки нельзя перенаправить
  * молча. Никого нет — письма владельцам админки
  */
-export function LeadRecipientsSection({ siteId }: { siteId: string }) {
+export function LeadRecipientsSection({
+  siteId,
+  channelsAbove = false,
+}: {
+  siteId: string
+  /** Каналы настраиваются выше, в этом же экране (владелец): отправляем туда, а не к «владельцу» */
+  channelsAbove?: boolean
+}) {
   const { data } = useSuspenseQuery(siteNotificationsQuery(siteId))
   const queryClient = useQueryClient()
   const formRef = useRef<HTMLFormElement>(null)
@@ -35,6 +43,9 @@ export function LeadRecipientsSection({ siteId }: { siteId: string }) {
   const list = parseRecipients(addresses)
   const parsed = LeadEmailRecipients.safeParse({ addresses: list })
   const form = useFormErrors(zodFieldErrors(parsed.error))
+  // Адреса, которых нет на сервере: уход с ними спрашивает, «Сохранить адреса» без них выключена
+  const unsaved = list.join(',') !== emails.map((row) => row.address).join(',')
+  useReportUnsaved(unsaved)
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.siteNotifications(siteId) })
@@ -111,6 +122,7 @@ export function LeadRecipientsSection({ siteId }: { siteId: string }) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!unsaved) return
     form.attempt()
     setNotice(undefined)
     if (!parsed.success) {
@@ -164,7 +176,12 @@ export function LeadRecipientsSection({ siteId }: { siteId: string }) {
             hint="Через запятую, до 10 адресов. «Ответить» в письме напишет посетителю"
           />
           <FormActions>
-            <Button type="submit" variant="primary" loading={saveEmails.isPending}>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saveEmails.isPending}
+              aria-disabled={!unsaved ? true : undefined}
+            >
               Сохранить адреса
             </Button>
           </FormActions>
@@ -207,16 +224,29 @@ export function LeadRecipientsSection({ siteId }: { siteId: string }) {
             />
           ) : (
             <p className={mutedClassName}>
-              {telegram?.reason ?? 'Telegram не подключён'}. Бота подключает владелец админки в
-              разделе «Уведомления».
+              {telegram?.reason ?? 'Telegram не подключён'}.{' '}
+              {channelsAbove
+                ? 'Подключите бота выше, в блоке «Каналы».'
+                : 'Бота подключает владелец админки в разделе «Уведомления».'}
             </p>
           )}
         </fieldset>
 
         <FormActions>
-          <Button icon="bell" loading={test.isPending} onClick={() => test.mutate()}>
+          {/* Ни один канал не работает — отправлять некуда: кнопка выключена, причина — рядом */}
+          <Button
+            icon="bell"
+            loading={test.isPending}
+            aria-disabled={!summary.enabled ? true : undefined}
+            onClick={() => {
+              if (summary.enabled) test.mutate()
+            }}
+          >
             Отправить тестовое уведомление
           </Button>
+          {!summary.enabled && (
+            <span className={mutedClassName}>Сначала подключите хотя бы один канал</span>
+          )}
         </FormActions>
 
         {notice?.kind === 'error' && <InlineAlert tone="danger">{notice.text}</InlineAlert>}

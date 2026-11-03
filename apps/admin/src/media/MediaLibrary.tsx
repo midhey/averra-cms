@@ -1,9 +1,11 @@
 import { formatBytes, imageMimeTypes, mediaMimeTypes } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { type ChangeEvent, useId, useState } from 'react'
 import { api } from '../api'
 import { apiRequestError, messageOf } from '../errors'
-import { mediaQuery, queryKeys } from '../queries'
+import { canDefineBlocks, canEditHeader, canEditSeo } from '../permissions'
+import { mediaQuery, queryKeys, siteQuery } from '../queries'
 import { Button, buttonClassName, Spinner } from '../ui/Button'
 import { cx } from '../ui/cx'
 import { EmptyState } from '../ui/EmptyState'
@@ -11,11 +13,14 @@ import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import styles from './MediaLibrary.module.scss'
 import {
+  deleteBlockedText,
   deleteQuestion,
   isSvgItem,
   type MediaItem,
+  type MediaUse,
   mediaLabel,
   mediaSummary,
+  mediaUseText,
   thumbnailUrl,
   tooLargeMessage,
 } from './media-format'
@@ -56,6 +61,8 @@ export function MediaLibrary({
 }: MediaLibraryProps) {
   const queryClient = useQueryClient()
   const { data, error, isPending } = useQuery(mediaQuery(siteId))
+  // Роль нужна только ссылкам «где стоит»: раздел, закрытый роли, ссылкой не предлагаем
+  const { data: site } = useQuery({ ...siteQuery(siteId), enabled: !onPick })
   const items = allowSvg ? data?.items : data?.items.filter((media) => !isSvgItem(media))
   const hiddenSvg = (data?.items.length ?? 0) - (items?.length ?? 0)
   const maxBytes = data?.maxBytes
@@ -121,6 +128,8 @@ export function MediaLibrary({
   }
 
   function confirmRemove(media: MediaItem) {
+    // Кнопка выключена, но по клавише Enter её всё равно можно нажать (aria-disabled)
+    if (media.usage.length > 0 || remove.isPending) return
     if (!window.confirm(deleteQuestion(media))) return
     setNotice(undefined)
     remove.mutate(media)
@@ -208,6 +217,18 @@ export function MediaLibrary({
               />
               <span className={styles.name}>{media.originalName}</span>
               <span className={styles.muted}>{mediaSummary(media)}</span>
+              {/* В выборе для поля «где стоит» не нужно: там выбирают, а не наводят порядок */}
+              {!onPick && (
+                <MediaUsage
+                  usage={media.usage}
+                  canDelete={canDelete}
+                  links={{
+                    header: site ? canEditHeader(site.access) : false,
+                    seo: site ? canEditSeo(site.access) : false,
+                    block: site ? canDefineBlocks(site.access) : false,
+                  }}
+                />
+              )}
               <div className={styles.actions}>
                 {onPick && (
                   <Button
@@ -227,17 +248,73 @@ export function MediaLibrary({
                     size="small"
                     icon="trash"
                     aria-label={`Удалить ${mediaLabel(media)}`}
-                    disabled={remove.isPending}
+                    aria-disabled={media.usage.length > 0 || remove.isPending ? true : undefined}
+                    aria-describedby={media.usage.length > 0 ? `${media.id}-blocked` : undefined}
                     onClick={() => confirmRemove(media)}
                   >
                     Удалить
                   </Button>
                 )}
               </div>
+              {canDelete && media.usage.length > 0 && (
+                <p id={`${media.id}-blocked`} className={styles.blocked}>
+                  {deleteBlockedText(media.usage)}
+                </p>
+              )}
             </li>
           ))}
         </ul>
       )}
     </div>
   )
+}
+
+export type UseLinks = { header: boolean; seo: boolean; block: boolean }
+
+/** Где стоит картинка: список мест со ссылками туда, куда роль может зайти. Нигде — так и сказано */
+export function MediaUsage({
+  usage,
+  links,
+  canDelete = false,
+}: {
+  usage: readonly MediaUse[]
+  links: UseLinks
+  canDelete?: boolean
+}) {
+  if (usage.length === 0) {
+    return <span className={styles.muted}>Нигде не стоит{canDelete ? ' — можно удалить' : ''}</span>
+  }
+  return (
+    <ul className={styles.usage} aria-label="Где стоит картинка">
+      {usage.map((use) => (
+        <li key={useKey(use)}>
+          <UseLink use={use} links={links} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const useKey = (use: MediaUse) =>
+  use.kind === 'page' ? `page-${use.slug}` : use.kind === 'block' ? `block-${use.key}` : use.kind
+
+function UseLink({ use, links }: { use: MediaUse; links: UseLinks }) {
+  const text = mediaUseText(use)
+  if (use.kind === 'page') {
+    return (
+      <Link to="/pages/$slug" params={{ slug: use.slug }}>
+        {text}
+      </Link>
+    )
+  }
+  if (use.kind === 'header' && links.header) return <Link to="/header">{text}</Link>
+  if (use.kind === 'seo' && links.seo) return <Link to="/seo">{text}</Link>
+  if (use.kind === 'block' && links.block && use.key !== '') {
+    return (
+      <Link to="/blocks/$key" params={{ key: use.key }}>
+        {text}
+      </Link>
+    )
+  }
+  return <>{text}</>
 }

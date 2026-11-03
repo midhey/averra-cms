@@ -227,6 +227,7 @@ const themeRoute = createRoute({
       Promise.allSettled([
         queryClient.ensureQueryData(pageQuery(siteId, MAIN_PAGE_SLUG)),
         queryClient.ensureQueryData(mediaQuery(siteId)),
+        queryClient.ensureQueryData(customBlocksQuery(siteId)),
       ]),
     ])
   },
@@ -247,6 +248,8 @@ const headerRoute = createRoute({
       Promise.allSettled([
         queryClient.ensureQueryData(pageQuery(siteId, MAIN_PAGE_SLUG)),
         queryClient.ensureQueryData(mediaQuery(siteId)),
+        // Свои блоки главной: без их определений предпросмотр писал бы «блока нет на сайте»
+        queryClient.ensureQueryData(customBlocksQuery(siteId)),
       ]),
     ])
   },
@@ -288,7 +291,9 @@ const mediaRoute = createRoute({
   path: '/media',
   loader: async ({ context: { queryClient } }) => {
     const { siteId } = await loadSite(queryClient)
-    await queryClient.ensureQueryData(mediaQuery(siteId))
+    // Свежий список, не из кеша: «где стоит» меняется с каждой правкой страниц и шапки, а кеш
+    // медиатеки живёт, пока открыт редактор
+    await queryClient.fetchQuery(mediaQuery(siteId))
   },
   component: MediaScreen,
 })

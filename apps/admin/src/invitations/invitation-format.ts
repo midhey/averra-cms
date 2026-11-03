@@ -27,3 +27,30 @@ export const canRevoke = (status: InvitationStatus) => status === 'pending'
 /** Ошибка ссылки приглашения (код API) — тогда экран предлагает не форму, а что делать дальше */
 export const isDeadInvitation = (code: string | undefined) =>
   code !== undefined && /^invitation_(not_found|used|revoked|expired)$/.test(code)
+
+type PendingCandidate = { email: string; role: InvitationRole; status: InvitationStatus }
+
+/** Ждущее приглашение на этот адрес (почту сравниваем без регистра, как API) */
+export function pendingInvitationFor<T extends PendingCandidate>(
+  invitations: readonly T[],
+  email: string,
+) {
+  const wanted = email.trim().toLowerCase()
+  if (wanted === '') return undefined
+  return invitations.find(
+    (invitation) => invitation.status === 'pending' && invitation.email.toLowerCase() === wanted,
+  )
+}
+
+/**
+ * Что сказать до отправки, если адрес уже приглашён: новое приглашение молча заменяет прежнее —
+ * отзывает его ссылку и ставит выбранную сейчас роль. Нет ждущего приглашения — предупреждать
+ * не о чем
+ */
+export function replaceWarning(existing: PendingCandidate | undefined, role: InvitationRole) {
+  if (!existing) return undefined
+  if (existing.role === role) {
+    return `На ${existing.email} приглашение уже отправлено. Новое заменит его: ссылка из прежнего письма перестанет работать.`
+  }
+  return `На ${existing.email} уже отправлено приглашение с ролью «${roleLabels[existing.role]}». Новое заменит его: роль станет «${roleLabels[role]}», а ссылка из прежнего письма перестанет работать.`
+}

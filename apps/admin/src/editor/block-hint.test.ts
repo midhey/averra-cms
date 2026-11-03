@@ -13,6 +13,12 @@ describe('blockHint', () => {
     expect(blockHint(block({ title: 'Почему мы', items: [{}] }))).toBe('Почему мы')
   })
 
+  it('заголовок с *акцентом* — без звёздочек, и в подсказке, и в имени для диктора', () => {
+    const accented = block({ title: 'Привет, я *Лера*' }, 'hero')
+    expect(blockHint(accented)).toBe('Привет, я Лера')
+    expect(blockName(accented)).toBe('Привет, я Лера')
+  })
+
   it('без заголовка — число пунктов со склонением', () => {
     expect(blockHint(block({ items: [{}] }))).toBe('1 пункт')
     expect(blockHint(block({ items: [{}, {}, {}] }))).toBe('3 пункта')

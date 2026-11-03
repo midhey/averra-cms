@@ -25,6 +25,7 @@ import {
 } from '../editor/catalog'
 import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
 import { MediaCard } from '../media/MediaCard'
+import { MediaUsage } from '../media/MediaLibrary'
 import { CookieLookSketch } from '../seo/CookieLookSketch'
 import { RedirectRows } from '../seo/RedirectRows'
 import { SearchSnippet } from '../seo/SearchSnippet'
@@ -140,6 +141,7 @@ const sections = [
   { id: 'header', label: 'Шапка и меню', icon: 'header' },
   { id: 'cards', label: 'Карточки и таблица', icon: 'media' },
   { id: 'alerts', label: 'Сообщения', icon: 'info' },
+  { id: 'screens', label: 'Экраны: правки, доступ, медиатека', icon: 'pages' },
   { id: 'dialog', label: 'Окно', icon: 'mail' },
   { id: 'seo', label: 'SEO', icon: 'search' },
   { id: 'icons', label: 'Иконки', icon: 'settings' },
@@ -442,6 +444,18 @@ export function UiShowcase() {
               type="email"
               defaultValue="ivan@remont"
               error="Неверный адрес почты"
+            />
+            <TextInput
+              label="Пароль"
+              type="password"
+              defaultValue="секрет-для-примера"
+              hint="Глаз показывает символы"
+            />
+            <TextInput
+              label="Новый пароль"
+              type="password"
+              defaultValue="1234"
+              error="Пароль короче 12 символов"
             />
             <TextInput
               label="Найти страницу"
@@ -898,6 +912,50 @@ export function UiShowcase() {
           >
             API не отвечает. Правки на месте, попробуйте ещё раз.
           </InlineAlert>
+        </Section>
+
+        <Section id="screens" title="Экраны: правки, доступ, медиатека">
+          {/* Единая «Сохранить» экрана: без правок выключена, с правками — рядом число карточек */}
+          <div className={styles.row}>
+            <Button variant="primary" aria-disabled="true">
+              Сохранить
+            </Button>
+            <span className={styles.mono}>без правок</span>
+          </div>
+          <div className={styles.row}>
+            <Button variant="primary">Сохранить</Button>
+            <StatusPill tone="warning" appearance="dot">
+              Не сохранено карточек: 2
+            </StatusPill>
+          </div>
+          {/* Раздел закрыт для роли: спокойное предупреждение с причиной, а не красная ошибка */}
+          <div>
+            <h3>Нет доступа к разделу «Уведомления»</h3>
+            <InlineAlert tone="warning">
+              Уведомления настраивают владелец и клиент сайта
+            </InlineAlert>
+          </div>
+          {/* Медиатека: где стоит картинка; «Удалить» выключена, причина — рядом */}
+          <Card>
+            <MediaUsage
+              links={{ header: true, seo: true, block: false }}
+              usage={[
+                { kind: 'page', slug: 'ceny', title: 'Цены', state: 'both' },
+                { kind: 'header' },
+                { kind: 'seo', roles: ['картинка для соцсетей'] },
+                { kind: 'block', key: '', title: 'неопубликованный блок' },
+              ]}
+            />
+            <div className={styles.row}>
+              <Button variant="danger" size="small" icon="trash" aria-disabled="true">
+                Удалить
+              </Button>
+              <span className={styles.mono}>
+                Удалить нельзя: сначала уберите картинку со страниц
+              </span>
+            </div>
+            <MediaUsage links={{ header: true, seo: true, block: false }} usage={[]} canDelete />
+          </Card>
         </Section>
 
         <Section id="dialog" title="Окно">

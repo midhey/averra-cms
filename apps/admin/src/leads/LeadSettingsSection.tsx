@@ -7,6 +7,7 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { firstInvalidField, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { leadSettingsQuery, queryKeys } from '../queries'
+import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { Checkbox, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
@@ -33,6 +34,10 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
     confirmToVisitor,
   })
   const form = useFormErrors(zodFieldErrors(parsed.error))
+  // Правки, которых нет на сервере: уход с ними спрашивает, «Сохранить» без них выключена
+  const unsaved =
+    retentionDays !== String(saved.retentionDays) || confirmToVisitor !== saved.confirmToVisitor
+  useReportUnsaved(unsaved)
 
   const save = useMutation({
     mutationFn: async (body: LeadSettings) => {
@@ -56,6 +61,7 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!unsaved) return
     form.attempt()
     setNotice(undefined)
     if (!parsed.success) {
@@ -104,7 +110,12 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
         />
         {notice?.kind === 'error' && <InlineAlert tone="danger">{notice.text}</InlineAlert>}
         <FormActions>
-          <Button type="submit" variant="primary" loading={save.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={save.isPending}
+            aria-disabled={!unsaved ? true : undefined}
+          >
             Сохранить настройки
           </Button>
         </FormActions>

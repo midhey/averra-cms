@@ -57,6 +57,30 @@ describe('цель пункта меню', () => {
     ])
   })
 
+  it('в «Куда ведёт» только блоки черновика, прежние опубликованные не мешают', () => {
+    const mixed = [
+      page({
+        blocks: [
+          {
+            id: 'le-hero',
+            type: 'custom:le-hero',
+            label: 'Привет, я Лера',
+            draft: true,
+            published: false,
+          },
+          { id: 'hero', type: 'hero', label: 'Ремонт под ключ', draft: false, published: true },
+        ],
+      }),
+    ]
+    const values = targetGroups(mixed).flatMap((group) => group.options.map((o) => o.value))
+    expect(values).toEqual(['index', 'index#le-hero'])
+    // Пункт уже ведёт на блок, которого нет в черновике, но он на сайте: остаётся с пометкой
+    expect(targetGroups(mixed, { page: 'index', block: 'hero' }).at(-1)).toEqual({
+      label: 'Убран из черновика, пока есть на сайте',
+      options: [{ value: 'index#hero', label: '/#hero' }],
+    })
+  })
+
   it('пропавшая цель остаётся в списке отдельной группой, а не подменяется другой', () => {
     const groups = targetGroups(pages, { page: 'blog', block: 'top' })
     expect(groups.at(-1)).toEqual({

@@ -1,4 +1,4 @@
-import { type ComponentPropsWithRef, type ReactNode, useId } from 'react'
+import { type ComponentPropsWithRef, type ReactNode, useId, useState } from 'react'
 import { cx } from './cx'
 import styles from './Field.module.scss'
 import { Icon, type IconName } from './Icon'
@@ -129,6 +129,9 @@ export function TextInput({
   'aria-describedby': ownDescribedBy,
   ...rest
 }: TextInputProps) {
+  // Пароль можно показать: набрать длинный пароль вслепую на телефоне — гадание
+  const [revealed, setRevealed] = useState(false)
+  const isPassword = rest.type === 'password'
   return (
     <Field
       label={label}
@@ -140,7 +143,13 @@ export function TextInput({
       className={className}
     >
       {(control) => (
-        <div className={cx(styles.control, icon && styles.withIcon)}>
+        <div
+          className={cx(
+            styles.control,
+            icon && styles.withIcon,
+            isPassword && styles.withRevealBox,
+          )}
+        >
           {icon && <Icon name={icon} size={16} className={styles.icon} />}
           {prefix && (
             <span className={styles.prefix} aria-hidden="true">
@@ -150,9 +159,27 @@ export function TextInput({
           <input
             {...rest}
             {...control}
+            type={isPassword && revealed ? 'text' : rest.type}
             autoComplete={autoComplete}
-            className={cx(styles.input, mono && styles.mono, prefix && styles.withPrefix)}
+            className={cx(
+              styles.input,
+              mono && styles.mono,
+              prefix && styles.withPrefix,
+              isPassword && styles.withReveal,
+            )}
           />
+          {isPassword && (
+            <button
+              type="button"
+              className={styles.reveal}
+              aria-label={revealed ? 'Скрыть символы' : 'Показать символы'}
+              title={revealed ? 'Скрыть символы' : 'Показать символы'}
+              aria-pressed={revealed}
+              onClick={() => setRevealed((current) => !current)}
+            >
+              <Icon name={revealed ? 'eye-off' : 'eye'} size={16} />
+            </button>
+          )}
         </div>
       )}
     </Field>

@@ -1,5 +1,5 @@
 import { NO_SITE_ACCESS_CODE } from '@averra/schema'
-import { type ErrorComponentProps, Link } from '@tanstack/react-router'
+import { type ErrorComponentProps, Link, useRouterState } from '@tanstack/react-router'
 import { ApiRequestError, messageOf, screenErrorOf } from '../errors'
 import { useLogout } from '../shell/use-logout'
 import { Button, buttonClassName, Spinner } from '../ui/Button'
@@ -33,13 +33,62 @@ const backHome = (
 const isNoSiteAccess = (error: unknown) =>
   error instanceof ApiRequestError && error.code === NO_SITE_ACCESS_CODE
 
+/**
+ * Раздел закрыт для роли (403 «forbidden»): это не сбой, а ответ «вам сюда нельзя». Нет доступа к
+ * сайту целиком (NO_SITE_ACCESS_CODE) — другой случай: там выход, а не возврат к обзору
+ */
+const isForbidden = (error: unknown) =>
+  error instanceof ApiRequestError && error.status === 403 && !isNoSiteAccess(error)
+
+/**
+ * Разделы по адресу: заголовок отказа называет раздел, куда не пустили. `who` — кому раздел
+ * доступен, когда ответ API про другое (уведомления закрыты тем же правом, что и заявки)
+ */
+const sections: { prefix: string; title: string; who?: string }[] = [
+  {
+    prefix: '/notifications',
+    title: 'Уведомления',
+    who: 'Уведомления настраивают владелец и клиент сайта',
+  },
+  { prefix: '/seo', title: 'SEO и аналитика' },
+  { prefix: '/settings', title: 'Настройки' },
+  { prefix: '/mail', title: 'Почта' },
+  { prefix: '/status', title: 'Состояние' },
+  { prefix: '/blocks', title: 'Свои блоки' },
+  { prefix: '/theme', title: 'Тема' },
+  { prefix: '/header', title: 'Шапка и подвал' },
+  { prefix: '/leads', title: 'Заявки' },
+]
+
+const sectionOf = (pathname: string) =>
+  sections.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+
 /** Не загрузился сайт или страница (или экран сломался): что случилось и куда вернуться */
 export function ErrorScreen({ error }: Pick<ErrorComponentProps, 'error'>) {
-  usePageTitle('Ошибка')
+  const forbidden = isForbidden(error)
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const section = forbidden ? sectionOf(pathname) : undefined
+  usePageTitle(forbidden ? 'Нет доступа' : 'Ошибка')
   return (
     <Screen narrow>
-      <PageHeader title="Не получилось открыть" />
-      <InlineAlert tone="danger">{screenErrorOf(error)}</InlineAlert>
+      <PageHeader
+        title={
+          forbidden
+            ? section
+              ? `Нет доступа к разделу «${section.title}»`
+              : 'Нет доступа к разделу'
+            : 'Не получилось открыть'
+        }
+      />
+      {/* Текст отказа — ответ API: он называет, кому раздел доступен. Тон спокойный, не «ошибка» */}
+      {forbidden ? (
+        // role="alert": диктор прочитает отказ сразу, как у ошибки, но вид — спокойный, не красный
+        <div role="alert">
+          <InlineAlert tone="warning">{section?.who ?? screenErrorOf(error)}</InlineAlert>
+        </div>
+      ) : (
+        <InlineAlert tone="danger">{screenErrorOf(error)}</InlineAlert>
+      )}
       {isNoSiteAccess(error) ? <LogoutAction /> : <div>{backHome}</div>}
     </Screen>
   )

@@ -12,6 +12,7 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { type FieldErrors, issueFieldErrors } from '../forms/field-errors'
 import { focusField } from '../forms/use-form-errors'
 import { notificationsQuery, queryKeys } from '../queries'
+import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { Checkbox, TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
@@ -282,6 +283,8 @@ function TelegramForm({
   const [currentPassword, setCurrentPassword] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [notice, setNotice] = useState<Notice>()
+  // Набранный токен или пароль владельца — правка, которой нет на сервере: уход с ней спрашивает
+  useReportUnsaved(token !== '' || currentPassword !== '')
 
   function localErrors(): FieldErrors {
     const found: Record<string, string> = {}

@@ -18,6 +18,7 @@ import {
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
+import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { FooterFields } from '../footer/FooterFields'
@@ -262,9 +263,11 @@ function HeaderEditor(props: EditorProps) {
     event.preventDefault()
     // Enter в поле вкладки «Подвал» сохраняет подвал: у него своя кнопка и своя публикация
     if (tab === 'footer') {
-      if (!footer.pending) await footer.save()
+      if (!footer.pending && footer.unsaved) await footer.save()
       return
     }
+    // Без правок сохранять нечего: кнопка выключена, Enter в поле тоже ничего не делает
+    if (!unsaved) return
     setNotice(undefined)
     if (await saveDraft()) {
       setNotice({ kind: 'done', text: 'Шапка сохранена. На сайте она появится после публикации' })
@@ -546,9 +549,9 @@ function HeaderEditor(props: EditorProps) {
             <FormActions>
               <Button
                 loading={footer.saving}
-                aria-disabled={footer.pending ? true : undefined}
+                aria-disabled={footer.pending || !footer.unsaved ? true : undefined}
                 onClick={() => {
-                  if (!footer.pending) void footer.save()
+                  if (!footer.pending && footer.unsaved) void footer.save()
                 }}
               >
                 Сохранить подвал
@@ -588,7 +591,11 @@ function HeaderEditor(props: EditorProps) {
           )}
           {!readOnly && tab !== 'footer' && (
             <FormActions>
-              <Button type="submit" loading={save.isPending && !publish.isPending}>
+              <Button
+                type="submit"
+                loading={save.isPending && !publish.isPending}
+                aria-disabled={!unsaved ? true : undefined}
+              >
                 Сохранить
               </Button>
               <Button
@@ -668,6 +675,8 @@ function HeaderPreview(props: PreviewProps) {
   const main = useQuery(pageQuery(siteId, MAIN_PAGE_SLUG))
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
+  // Главная со своими блоками (le-english): без их определений на их месте было бы «блока нет»
+  const customBlocks = useCustomBlockMap(siteId)
   const draft = main.data?.draft
   const empty = draft === undefined || draft.blocks.length === 0
   const content = useMemo(
@@ -721,6 +730,7 @@ function HeaderPreview(props: PreviewProps) {
           media={media}
           device={device}
           selectedId={null}
+          customBlocks={customBlocks}
           before={view && <SiteHeader view={view} media={media} />}
           extra={footerView && <SiteFooter view={footerView} preview />}
           scrollToEnd={scrollKey}

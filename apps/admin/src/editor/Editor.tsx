@@ -1,5 +1,6 @@
 import {
   type CustomBlockDraft,
+  customH1Types,
   type PageContent,
   type PageSeo,
   PageTitle,
@@ -18,7 +19,7 @@ import { ImageField } from '../media/ImageField'
 import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
 import { canPublish, type SiteAccess } from '../permissions'
-import { mediaQuery, queryKeys, revisionQuery } from '../queries'
+import { mediaQuery, queryKeys, revisionQuery, themeQuery } from '../queries'
 import {
   adviceText,
   checkPageSeo,
@@ -69,7 +70,7 @@ export type EditorPage = {
 type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 
 /** Колонка редактора; на узком экране — вкладка */
-type Column = 'blocks' | 'preview' | 'fields'
+type Column = 'blocks' | 'preview' | 'fields' | 'seo'
 
 /** Скрыть шапку и подвал сайта на этой странице (флажки в панели «SEO») */
 type Chrome = { hideHeader: boolean; hideFooter: boolean }
@@ -194,15 +195,33 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
       }
     : null
   // Советы SEO по черновику как есть: видны на кнопке «SEO» до публикации и публиковать не мешают
+  // h1 бывает и у своего блока (свой первый экран): его видно по шаблону опубликованного определения
+  const ownH1 = useMemo(() => customH1Types(customBlocks), [customBlocks])
   const seoChecks = useMemo(
     () =>
       pageSeoChecks(
         { slug: page.slug, title: title.trim(), blocks, seo: normalizedSeo(seo) },
         site.seo,
+        { ownH1 },
       ),
-    [page.slug, title, blocks, seo, site.seo],
+    [page.slug, title, blocks, seo, site.seo, ownH1],
   )
   const advice = seoAdvice(seoChecks)
+  // Предпросмотр — в опубликованной теме: на сайт страница выйдет в ней. Черновик темы виден на
+  // экране «Тема»; без этой подписи правка темы казалась бы «потерянной» в редакторе. Не suspense:
+  // подпись — добавка, её сбой редактору не помеха
+  const theme = useQuery(themeQuery(site.id))
+  const themeNote = theme.data?.unpublished ? (
+    <>
+      Страница показана в опубликованной теме. В теме есть непубликованные правки — их видно в
+      разделе <Link to="/theme">«Тема»</Link>, на сайт они попадут после публикации темы.
+    </>
+  ) : undefined
+  // Клиент публиковать не может: кнопки нет, и без слова «правки не опубликованы» висело бы без
+  // подсказки, что делать дальше
+  const publishNote = canPublish(site.access)
+    ? undefined
+    : 'Публикует владелец или редактор: когда правки готовы, сообщите им.'
   const adviceBadge =
     advice.length > 0 ? (
       <CountBadge
@@ -427,15 +446,30 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
   const deviceSwitch = <DeviceSwitch value={device} onChange={setDevice} />
 
   // Колонка: на широком экране — просто колонка, на узком — панель своей вкладки
-  const columnProps = (column: Column) =>
-    narrow
-      ? {
-          role: 'tabpanel',
-          id: panelId(column),
-          'aria-labelledby': tabId(column),
-          hidden: tab !== column,
-        }
-      : {}
+  // «SEO» на узком экране — своя вкладка, но панель у неё та же, что у «Полей»
+  const shownTab: Column = tab === 'fields' && seoOpen ? 'seo' : tab
+  const columnProps = (column: Column) => {
+    if (!narrow) return {}
+    const own: Column = column === 'fields' && shownTab === 'seo' ? 'seo' : column
+    return {
+      role: 'tabpanel',
+      // Один id на «Поля» и «SEO»: обе вкладки ведут в одну и ту же колонку
+      id: panelId(column),
+      'aria-labelledby': tabId(own),
+      hidden: tab !== column,
+    }
+  }
+
+  function chooseTab(next: Column) {
+    if (next === 'seo') {
+      if (!seoOpen) toggleSeo()
+      else setTab('fields')
+      return
+    }
+    // «Поля» и «SEO» делят панель: выбор «Полей» закрывает SEO
+    if (next === 'fields' && seoOpen) setSeoOpen(false)
+    setTab(next)
+  }
 
   return (
     <div className={styles.editor}>
@@ -452,7 +486,9 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
             <Icon name="chevron-left" />
           </Link>
           <div className={styles.titles}>
-            <h1 className="visually-hidden">Редактор страницы {pagePath(page.slug)}</h1>
+            <h1 className="visually-hidden">
+              Редактор страницы «{title.trim() || pagePath(page.slug)}»
+            </h1>
             <span className={styles.siteName}>{site.name}</span>
             <div className={styles.titleRow}>
               <label className="visually-hidden" htmlFor={`${ids}-title`}>
@@ -480,13 +516,15 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
                 </StatusPill>
               </span>
             </div>
+            {/* Подсказка — рядом со статусом, на любой ширине, а не только в предпросмотре */}
+            {publishNote && <span className={styles.publishHint}>{publishNote}</span>}
           </div>
         </section>
 
         {!narrow && <div className={styles.devices}>{deviceSwitch}</div>}
 
         <div className={styles.actions}>
-          {/* На узком экране в полосе места нет: «SEO» — под списком блоков. На среднем —
+          {/* На узком экране в полосе места нет: «SEO» — четвёртая вкладка. На среднем —
               иконкой, как «История»: с подписями кнопки не встают в одну строку. Число советов —
               значком, а словами — в подписи для диктора */}
           {!narrow &&
@@ -597,15 +635,13 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
               items={[
                 { id: 'blocks', label: 'Блоки' },
                 { id: 'preview', label: 'Предпросмотр' },
-                {
-                  id: 'fields',
-                  label: historyOpen ? 'История' : seoOpen ? 'SEO' : 'Поля',
-                },
+                { id: 'fields', label: historyOpen ? 'История' : 'Поля' },
+                { id: 'seo', label: 'SEO', count: advice.length > 0 ? advice.length : undefined },
               ]}
-              value={tab}
-              onChange={setTab}
+              value={shownTab}
+              onChange={chooseTab}
               tabId={tabId}
-              panelId={panelId}
+              panelId={(column) => panelId(column === 'seo' ? 'fields' : column)}
             />
           </div>
         )}
@@ -621,20 +657,6 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
             onAdd={() => setAdding(true)}
             actionsOnEvery={narrow}
             titleOf={titleOf}
-            footer={
-              narrow && (
-                <Button
-                  icon="search"
-                  aria-expanded={seoOpen}
-                  aria-controls={seoOpen ? seoPanelId : undefined}
-                  onClick={toggleSeo}
-                >
-                  SEO страницы
-                  {adviceBadge}
-                  {adviceWords}
-                </Button>
-              )
-            }
           />
         </div>
 
@@ -644,7 +666,7 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
             theme={site.theme}
             media={media}
             device={device}
-            note={previewNote(shownRevision, shown, shownPreview?.error)}
+            note={previewNote(shownRevision, shown, shownPreview?.error) ?? themeNote}
             selectedId={showingRevision ? null : selectedId}
             onSelectBlock={showingRevision ? undefined : previewSelect}
             toolbar={narrow ? deviceSwitch : undefined}

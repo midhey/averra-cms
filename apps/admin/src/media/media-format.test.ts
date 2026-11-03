@@ -1,11 +1,13 @@
 import { formatBytes, MAX_SVG_BYTES, svgTooLargeMessage } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
+  deleteBlockedText,
   deleteQuestion,
   mediaFormats,
   mediaLabel,
   mediaMapOf,
   mediaSummary,
+  mediaUseText,
   thumbnailUrl,
   tooLargeMessage,
 } from './media-format'
@@ -123,5 +125,54 @@ describe('форматы под превью', () => {
 
   it('нет вариантов — пустая строка', () => {
     expect(mediaFormats([])).toBe('')
+  })
+})
+
+describe('где стоит картинка', () => {
+  it('слова для каждого места', () => {
+    expect(mediaUseText({ kind: 'page', slug: 'index', title: 'Главная', state: 'both' })).toBe(
+      'Страница «Главная» — черновик и сайт',
+    )
+    expect(mediaUseText({ kind: 'page', slug: 'a', title: 'А', state: 'draft' })).toBe(
+      'Страница «А» — черновик',
+    )
+    expect(mediaUseText({ kind: 'page', slug: 'a', title: 'А', state: 'published' })).toBe(
+      'Страница «А» — на сайте',
+    )
+    expect(mediaUseText({ kind: 'header' })).toBe('Логотип шапки')
+    expect(mediaUseText({ kind: 'seo', roles: ['иконка сайта', 'картинка для соцсетей'] })).toBe(
+      'SEO: иконка сайта, картинка для соцсетей',
+    )
+    expect(mediaUseText({ kind: 'block', key: 'le-hero', title: 'Первый экран' })).toBe(
+      'Свой блок «Первый экран»',
+    )
+    // Блок, который виден только владельцу: ни ключа, ни названия
+    expect(mediaUseText({ kind: 'block', key: '', title: 'неопубликованный блок' })).toBe(
+      'Свой неопубликованный блок',
+    )
+  })
+
+  it('удалять можно только то, что нигде не стоит', () => {
+    expect(deleteBlockedText([])).toBeUndefined()
+    expect(deleteBlockedText([{ kind: 'header' }])).toBe(
+      'Удалить нельзя: сначала уберите картинку из шапки',
+    )
+  })
+
+  it('причина удаления — по видам мест, публиковать просят только для страниц на сайте', () => {
+    const page = (state: 'draft' | 'published' | 'both') => ({
+      kind: 'page' as const,
+      slug: 'a',
+      title: 'A',
+      state,
+    })
+    expect(deleteBlockedText([page('draft')])).toBe(
+      'Удалить нельзя: сначала уберите картинку со страниц',
+    )
+    expect(
+      deleteBlockedText([page('both'), { kind: 'seo', roles: ['карточка'] }, { kind: 'header' }]),
+    ).toBe(
+      'Удалить нельзя: сначала уберите картинку со страниц (и опубликовать их), из шапки и из настроек SEO',
+    )
   })
 })

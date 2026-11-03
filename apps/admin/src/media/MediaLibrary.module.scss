@@ -126,3 +126,22 @@
   padding: var(--space-2);
   object-fit: contain;
 }
+
+// Где стоит картинка: короткий список под размерами, перенос по словам — названия страниц длинные
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: ui.rem(2);
+  padding: 0;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+// Почему «Удалить» выключена: видимым текстом, а не только цветом кнопки
+.blocked {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}

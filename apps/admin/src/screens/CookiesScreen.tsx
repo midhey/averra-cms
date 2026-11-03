@@ -64,6 +64,16 @@ const legalTitles: Record<LegalDocument, string> = {
  * компонентами, что собирают сайт. Шаблоны политики и согласия создают черновики страниц
  */
 export function CookiesScreen() {
+  // Охранник стоит выше формы: хук формы сообщает о правках через его контекст, а в том же
+  // компоненте, что и охранник, контекста ещё нет
+  return (
+    <UnsavedChangesGuard>
+      <CookiesBody />
+    </UnsavedChangesGuard>
+  )
+}
+
+function CookiesBody() {
   const siteId = useSiteId()
   const { data: view } = useSuspenseQuery(siteSettingsQuery(siteId))
   const { data: pages } = useSuspenseQuery(pagesQuery(siteId))
@@ -91,7 +101,12 @@ export function CookiesScreen() {
     <Screen>
       <PageHeader
         back={
-          <Link to="/seo" className={iconButtonClassName()} aria-label="Назад к SEO">
+          <Link
+            to="/seo"
+            className={iconButtonClassName({ variant: 'secondary' })}
+            aria-label="Назад к SEO"
+            title="Назад к SEO"
+          >
             <Icon name="chevron-left" />
           </Link>
         }
@@ -99,127 +114,124 @@ export function CookiesScreen() {
         title="Cookie и согласие"
         meta="Как сайт предупреждает посетителей о cookie и когда подключает аналитику"
       />
-      <UnsavedChangesGuard>
-        <div className={styles.layout}>
-          <form
-            ref={form.formRef}
-            aria-label="Cookie и согласие"
-            className={cx(formClassName, styles.form)}
-            onSubmit={form.submit}
-            noValidate
-          >
-            {!shown && (
-              <InlineAlert
-                tone="info"
-                title="На сайте нет счётчиков — уведомления нет"
-                action={
-                  <Link to="/seo" hash="analytics" className={buttonClassName({ size: 'small' })}>
-                    Аналитика
-                  </Link>
-                }
-              >
-                Без Метрики и GA4 сайт не ставит cookie, и предупреждать не о чем. Настройки ниже
-                заработают, когда вы добавите счётчик. Ссылка на политику внизу страниц есть и
-                сейчас.
-              </InlineAlert>
-            )}
-            <Section title="Режим" card>
-              <SegmentedControl
-                legend="Режим"
-                hideLegend
-                appearance="list"
-                name="cookies.mode"
-                options={CookieMode.options.map((mode) => ({
-                  value: mode,
-                  label:
-                    mode === 'consent'
-                      ? `${cookieModeTitles[mode]} · рекомендуем`
-                      : cookieModeTitles[mode],
-                  description: modeDescriptions[mode],
-                }))}
-                value={values.mode}
-                onChange={(mode) => set('mode', mode)}
-              />
-            </Section>
-            <Section title="Вид" card>
-              <SegmentedControl
-                legend="Вид уведомления"
-                hideLegend
-                appearance="cards"
-                fill
-                name="cookies.look"
-                options={CookieLook.options.map((look) => ({
-                  value: look,
-                  label: cookieLookTitles[look],
-                  thumbnail: <CookieLookSketch look={look} />,
-                }))}
-                value={values.look}
-                onChange={(look) => set('look', look)}
-              />
-            </Section>
-            <Section title="Тексты и политика" card>
-              <TextArea
-                label="Текст уведомления"
-                name="cookies.text"
-                rows={3}
-                maxChars={COOKIE_TEXT_MAX}
-                value={values.text}
-                placeholder={defaultCookieText(values.mode, previewAnalytics(analytics))}
-                onChange={(event) => set('text', event.target.value)}
-                error={form.error('cookies.text')}
-                hint="Пусто — текст по умолчанию: он называет счётчики сайта. Ссылка на политику добавляется сама"
-              />
-              <div className={styles.policyRow}>
-                <Select
-                  label="Страница политики конфиденциальности"
-                  name="cookies.policyPage"
-                  value={values.policyPage}
-                  onChange={(event) => set('policyPage', event.target.value)}
-                  error={form.error('cookies.policyPage')}
-                >
-                  {policyOptions(pages, values.policyPage).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              {problem && <InlineAlert tone="warning">{problem}</InlineAlert>}
-              <LegalTemplates
-                siteId={siteId}
-                onCreated={(document) => {
-                  if (document === 'privacy' && values.policyPage === '') {
-                    set('policyPage', legalPages.privacy.slug)
-                  }
-                }}
-              />
-            </Section>
-            {form.notice?.kind === 'error' && (
-              <InlineAlert tone="danger">{form.notice.text}</InlineAlert>
-            )}
-            <SettingsCardActions
-              saveLabel="Сохранить"
-              pending={form.pending}
-              unsaved={form.unsaved}
+      <div className={styles.layout}>
+        <form
+          ref={form.formRef}
+          aria-label="Cookie и согласие"
+          className={cx(formClassName, styles.form)}
+          onSubmit={form.submit}
+          noValidate
+        >
+          {!shown && (
+            <InlineAlert
+              tone="info"
+              title="На сайте нет счётчиков — уведомления нет"
+              action={
+                <Link to="/seo" hash="analytics" className={buttonClassName({ size: 'small' })}>
+                  Аналитика
+                </Link>
+              }
+            >
+              Без Метрики и GA4 сайт не ставит cookie, и предупреждать не о чем. Настройки ниже
+              заработают, когда вы добавите счётчик. Ссылка на политику внизу страниц есть и сейчас.
+            </InlineAlert>
+          )}
+          <Section title="Режим" card>
+            <SegmentedControl
+              legend="Режим"
+              hideLegend
+              appearance="list"
+              name="cookies.mode"
+              options={CookieMode.options.map((mode) => ({
+                value: mode,
+                label:
+                  mode === 'consent'
+                    ? `${cookieModeTitles[mode]} · рекомендуем`
+                    : cookieModeTitles[mode],
+                description: modeDescriptions[mode],
+              }))}
+              value={values.mode}
+              onChange={(mode) => set('mode', mode)}
             />
-            {form.notice?.kind === 'done' && (
-              <InlineAlert tone="success" live>
-                {form.notice.text}
-              </InlineAlert>
-            )}
-          </form>
-          <CookiePreview
-            cookies={values}
-            analytics={analytics}
-            published={pages.flatMap((page) => (page.publishedAt === null ? [] : [page.slug]))}
-            theme={site.theme}
-            siteName={view.settings.name}
-            shown={shown}
-            siteFooter={siteFooter.published}
-            contacts={siteFooter.contacts ?? emptyFooterContacts}
+          </Section>
+          <Section title="Вид" card>
+            <SegmentedControl
+              legend="Вид уведомления"
+              hideLegend
+              appearance="cards"
+              fill
+              name="cookies.look"
+              options={CookieLook.options.map((look) => ({
+                value: look,
+                label: cookieLookTitles[look],
+                thumbnail: <CookieLookSketch look={look} />,
+              }))}
+              value={values.look}
+              onChange={(look) => set('look', look)}
+            />
+          </Section>
+          <Section title="Тексты и политика" card>
+            <TextArea
+              label="Текст уведомления"
+              name="cookies.text"
+              rows={3}
+              maxChars={COOKIE_TEXT_MAX}
+              value={values.text}
+              placeholder={defaultCookieText(values.mode, previewAnalytics(analytics))}
+              onChange={(event) => set('text', event.target.value)}
+              error={form.error('cookies.text')}
+              hint="Пусто — текст по умолчанию: он называет счётчики сайта. Ссылка на политику добавляется сама"
+            />
+            <div className={styles.policyRow}>
+              <Select
+                label="Страница политики конфиденциальности"
+                name="cookies.policyPage"
+                value={values.policyPage}
+                onChange={(event) => set('policyPage', event.target.value)}
+                error={form.error('cookies.policyPage')}
+              >
+                {policyOptions(pages, values.policyPage).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {problem && <InlineAlert tone="warning">{problem}</InlineAlert>}
+            <LegalTemplates
+              siteId={siteId}
+              onCreated={(document) => {
+                if (document === 'privacy' && values.policyPage === '') {
+                  set('policyPage', legalPages.privacy.slug)
+                }
+              }}
+            />
+          </Section>
+          {form.notice?.kind === 'error' && (
+            <InlineAlert tone="danger">{form.notice.text}</InlineAlert>
+          )}
+          <SettingsCardActions
+            saveLabel="Сохранить"
+            pending={form.pending}
+            unsaved={form.unsaved}
           />
-        </div>
-      </UnsavedChangesGuard>
+          {form.notice?.kind === 'done' && (
+            <InlineAlert tone="success" live>
+              {form.notice.text}
+            </InlineAlert>
+          )}
+        </form>
+        <CookiePreview
+          cookies={values}
+          analytics={analytics}
+          published={pages.flatMap((page) => (page.publishedAt === null ? [] : [page.slug]))}
+          theme={site.theme}
+          siteName={view.settings.name}
+          shown={shown}
+          siteFooter={siteFooter.published}
+          contacts={siteFooter.contacts ?? emptyFooterContacts}
+        />
+      </div>
     </Screen>
   )
 }
