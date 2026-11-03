@@ -98,8 +98,8 @@ type Scalar = string | number | boolean | null
 export type ChannelDetails = { [key: string]: Scalar | { [key: string]: Scalar } }
 
 /**
- * Кому канал описывает себя: owner — владельцу в «Каналах» (всё, кроме секретов), site — клиенту
- * сайта (только то, что нужно, чтобы привязать получателя)
+ * Кому канал описывает себя: owner — владельцу в «Каналах» (всё, кроме секретов), site —
+ * администратору сайта (только то, что нужно, чтобы привязать получателя)
  */
 export type DescribeView = 'owner' | 'site'
 

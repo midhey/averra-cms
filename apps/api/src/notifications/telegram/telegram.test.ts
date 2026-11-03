@@ -222,7 +222,8 @@ describe('Bot API', () => {
       expect(proxy.tunnels()).toBeGreaterThan(0)
       const error = await denied.getMe().catch((caught: TelegramApiError) => caught)
       expect(error).toMatchObject({ kind: 'network' })
-      // Адреса прокси в тексте нет: его видит и клиент (у ссылки привязки, в сводке заявок)
+      // Адреса прокси в тексте нет: его видит и администратор сайта (у ссылки привязки, в сводке
+      // заявок)
       expect((error as Error).message).toContain('через прокси:')
       for (const part of ['wrong-pass', 'averra', '127.0.0.1', new URL(proxy.url).port]) {
         expect((error as Error).message).not.toContain(part)

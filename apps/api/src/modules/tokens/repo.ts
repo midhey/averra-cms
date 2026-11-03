@@ -11,6 +11,9 @@ import { randomSecret, sha256 } from '../../secrets'
 const TOKEN_FORMAT =
   /^cms_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_[0-9a-f]{64}$/
 
+/** Что отвечают API и CLI на попытку поменять права отозванному токену */
+export const REVOKED_TOKEN_MESSAGE = 'Токен отозван: права ему уже не нужны. Выпустите новый'
+
 /** Права токена из строки api_tokens */
 const rightsOf = (row: { blocksDraft: boolean; canPublish: boolean; canDelete: boolean }) =>
   ({

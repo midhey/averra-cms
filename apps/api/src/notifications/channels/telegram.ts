@@ -80,8 +80,8 @@ function ready(config: ChannelConfig) {
 }
 
 /**
- * Telegram в админке: бот (клиенту — только он, чтобы собрать ссылку привязки), владельцу ещё
- * прокси без пароля и состояние токена. Сам токен — никогда
+ * Telegram в админке: бот (администратору сайта — только он, чтобы собрать ссылку привязки),
+ * владельцу ещё прокси без пароля и состояние токена. Сам токен — никогда
  */
 function describe(config: ChannelConfig, view: 'owner' | 'site'): TelegramChannelDetails {
   const settings = telegramSettingsOf(config)

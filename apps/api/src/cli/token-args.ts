@@ -1,7 +1,7 @@
 import { DRAFTS_ONLY, TokenName, type TokenRights, tokenRightLabels, Uuid } from '@averra/schema'
 import { z } from 'zod'
 import type { Db } from '../db/client'
-import { tokensRepo } from '../modules/tokens/repo'
+import { REVOKED_TOKEN_MESSAGE, tokensRepo } from '../modules/tokens/repo'
 import { UserEmail } from '../modules/users/repo'
 import { args, CliError, check } from './common'
 
@@ -120,9 +120,16 @@ export function describeRights(rights: Partial<TokenRights>) {
     .join(', ')
 }
 
-/** Меняет права; нет токена — CliError. Возвращает строку для человека */
+/**
+ * Меняет права; нет токена или он отозван — CliError, как 404 и 409 у PATCH /api/tokens/:id.
+ * Возвращает строку для человека
+ */
 export async function grantRights(db: Db, id: string, rights: Partial<TokenRights>) {
-  const after = await tokensRepo(db).setRights(id, rights)
+  const repo = tokensRepo(db)
+  const current = (await repo.list()).find((token) => token.id === id)
+  if (!current) throw new CliError(`Нет токена ${id}`)
+  if (current.revokedAt) throw new CliError(REVOKED_TOKEN_MESSAGE)
+  const after = await repo.setRights(id, rights)
   if (!after) throw new CliError(`Нет токена ${id}`)
   return `Права токена ${id}: ${describeRights(after)}. Действуют сразу`
 }

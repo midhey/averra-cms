@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../testing'
-import { assignableRoles, can, type Permission, type SiteRole } from './access'
+import { assignableRoles, can, type Permission, type SiteRole, tokenDenied } from './access'
 
 // Права ролей через настоящие запросы: каждый тест получает сессию нужной роли или токен
 // из помощников createTestApi и проверяет, что API разрешает и что запрещает
@@ -319,6 +319,32 @@ describe('токен API', () => {
     const { token } = await api.createToken()
     const res = await request.save({ ...bearer(token), origin: 'https://evil.example' }, 'origin')
     expect(res.status).toBe(200)
+  })
+
+  it('запреты токену — отдельные проверки, а не следствие таблицы ролей', async () => {
+    // Список из mcp/tokens.md («Чего токену нельзя никогда»): каждое действие закрыто в tokenDenied
+    for (const permission of [
+      'theme.edit',
+      'header.edit',
+      'installation.update',
+      'blocks.define',
+      'tokens.manage',
+      'site.settings',
+    ] as const) {
+      expect(tokenDenied[permission], permission).toBeTruthy()
+    }
+    const { token } = await api.createToken()
+    for (const method of ['GET', 'PATCH']) {
+      const res = await app.request(`/api/sites/${demoSiteId}/settings`, {
+        method,
+        headers: json(bearer(token)),
+        ...(method === 'PATCH' && { body: JSON.stringify({ organization: { name: 'Х' } }) }),
+      })
+      expect(res.status, method).toBe(403)
+      expect(await res.json()).toMatchObject({
+        error: { message: expect.stringContaining('токену API') },
+      })
+    }
   })
 
   it('GET /api/me отвечает, чей это токен', async () => {

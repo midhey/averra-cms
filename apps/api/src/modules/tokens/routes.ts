@@ -6,7 +6,7 @@ import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { validate } from '../../validate'
 import { sitesRepo } from '../sites/repo'
-import { tokensRepo } from './repo'
+import { REVOKED_TOKEN_MESSAGE, tokensRepo } from './repo'
 
 const TokenParams = z.object({ id: Uuid() })
 
@@ -68,9 +68,7 @@ export function tokensRoutes({ db }: { db: Db }) {
           const { id } = c.req.valid('param')
           const current = await find(id)
           if (!current) return c.json(notFound('Токен не найден'), 404)
-          if (current.revokedAt) {
-            return c.json(conflict('Токен отозван: права ему уже не нужны. Выпустите новый'), 409)
-          }
+          if (current.revokedAt) return c.json(conflict(REVOKED_TOKEN_MESSAGE), 409)
           await tokens.setRights(id, c.req.valid('json'))
           const updated = await find(id)
           if (!updated) return c.json(notFound('Токен не найден'), 404)

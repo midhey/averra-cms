@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { tokensRepo } from '../modules/tokens/repo'
+import { REVOKED_TOKEN_MESSAGE, tokensRepo } from '../modules/tokens/repo'
 import { createTestApi } from '../testing'
 import { CliError } from './common'
 import { grantRights, parseTokenCreate, parseTokenGrant } from './token-args'
@@ -83,5 +83,16 @@ describe('token:grant', () => {
     )
     expect((await tokensRepo(api.db).verify(token))?.rights.blocksDraft).toBe(false)
     await expect(grantRights(api.db, id, { publish: true })).rejects.toThrow(`Нет токена ${id}`)
+  })
+
+  it('отозванному токену права не меняет: тот же отказ, что у PATCH /api/tokens/:id', async () => {
+    const { id: tokenId } = await api.createToken(undefined, 'отозванный', { publish: false })
+    await api.revokeToken(tokenId)
+    await expect(grantRights(api.db, tokenId, { publish: true })).rejects.toThrow(
+      REVOKED_TOKEN_MESSAGE,
+    )
+    // Права в базе остались прежними
+    const row = (await tokensRepo(api.db).list()).find((token) => token.id === tokenId)
+    expect(row?.rights.publish).toBe(false)
   })
 })

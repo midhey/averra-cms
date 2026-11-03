@@ -121,19 +121,30 @@ describe('вход', () => {
     expect((await signIn('new@example.test', TEST_PASSWORD)).status).toBe(401)
   })
 
-  it('роль через эндпоинты Better Auth не поменять', async () => {
+  it('update-user закрыт по HTTP: ни роль, ни имя с переводом строки так не поменять', async () => {
     const member = await api.loginAs('client')
-    const res = await app.request('/api/auth/update-user', {
-      method: 'POST',
-      headers: { ...member.headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ role: 'owner' }),
-    })
-    expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({
-      error: { code: 'field_not_allowed', message: 'Это поле так поменять нельзя' },
-    })
+    const before = (await (await app.request('/api/me', { headers: member.headers })).json()) as {
+      user: { name: string }
+    }
+    for (const body of [{ role: 'owner' }, { name: 'a\nb' }]) {
+      const res = await app.request('/api/auth/update-user', {
+        method: 'POST',
+        headers: { ...member.headers, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      expect(res.status, JSON.stringify(body)).toBe(404)
+      // И напрямую в Better Auth, мимо наших маршрутов: disabledPaths
+      const direct = await api.auth.handler(
+        new Request(`${testOrigins.api}/api/auth/update-user`, {
+          method: 'POST',
+          headers: { ...member.headers, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      )
+      expect(direct.status, JSON.stringify(body)).toBe(404)
+    }
     const me = await app.request('/api/me', { headers: member.headers })
-    expect(await me.json()).toMatchObject({ user: { role: 'member' } })
+    expect(await me.json()).toMatchObject({ user: { role: 'member', name: before.user.name } })
   })
 
   it('смена почты закрыта — ответ по-русски, код Better Auth как есть', async () => {

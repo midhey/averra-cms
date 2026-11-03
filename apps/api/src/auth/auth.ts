@@ -33,9 +33,12 @@ export type AuthOptions = {
  * только SERVER_ONLY. С уведённой сессией через него подбирали бы пароль мимо общего счётчика
  * неудач (auth/confirm-password.ts) — с лимитом Better Auth по умолчанию, 100 запросов
  * за 10 секунд с IP. Нам он нужен только серверным вызовом auth.api.verifyPassword, а его
- * disabledPaths не трогает. Варианты написания путей не доходят и до Better Auth (routes.ts)
+ * disabledPaths не трогает. Варианты написания путей не доходят и до Better Auth (routes.ts).
+ * update-user (имя и картинка) закрыт тоже: имя меняет только PATCH /api/me с проверкой
+ * ProfileUpdate (одна строка до 80 символов), а открытый эндпоинт принимал имя с переводом строки
+ * и обходил эту проверку. Админка его не вызывает
  */
-export const CLOSED_AUTH_PATHS = ['/verify-password'] as const
+export const CLOSED_AUTH_PATHS = ['/verify-password', '/update-user'] as const
 
 /** Отказ во входе тому, чей доступ отключён (раздел «Участники»). Код — как ApiError, по-русски */
 export const ACCOUNT_DISABLED_MESSAGE =
@@ -119,7 +122,8 @@ export function createAuth({
     },
     user: {
       additionalFields: {
-        // input: false — роль не поменять через эндпоинты Better Auth (update-user и т.п.)
+        // input: false — роль не поменять через эндпоинты Better Auth (даже если какой-то из них
+        // когда-нибудь откроют: update-user сейчас закрыт целиком, CLOSED_AUTH_PATHS)
         role: { type: ['owner', 'member'], required: false, defaultValue: 'member', input: false },
       },
     },

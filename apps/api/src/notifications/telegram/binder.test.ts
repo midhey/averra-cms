@@ -164,7 +164,7 @@ describe('привязка чата Telegram', () => {
     ])
   })
 
-  it('код клиента ведёт только к заявкам его сайта', async () => {
+  it('код администратора сайта ведёт только к заявкам его сайта', async () => {
     const client = await api.loginAs('client', siteId)
     const link = await issue(`/api/sites/${siteId}/notifications/telegram/link`, client.headers)
     const id = nextChat()
