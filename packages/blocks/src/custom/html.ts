@@ -355,6 +355,8 @@ type LiquidScan = {
   /** Шаблон, где comment и raw (с тегами) вычеркнуты: в них нет кода Liquid */
   code: string
   raws: Array<[number, number]>
+  /** Сами теги {% raw %} и {% endraw %}: сами они ничего не выводят и «кодом» не считаются */
+  rawTags: Array<[number, number]>
 }
 
 /**
@@ -364,6 +366,7 @@ type LiquidScan = {
  */
 function scanLiquid(template: string): LiquidScan {
   const raws: Array<[number, number]> = []
+  const rawTags: Array<[number, number]> = []
   let masked = ''
   let code = ''
   try {
@@ -391,10 +394,12 @@ function scanLiquid(template: string): LiquidScan {
       if (inRaw) {
         // Единственный токен-тег в режиме raw — endraw
         inRaw = false
+        rawTags.push([token.begin, token.end])
         masked += blank(text, ' ')
         code += blank(text, ' ')
       } else if (name === 'raw' && !inComment) {
         inRaw = true
+        rawTags.push([token.begin, token.end])
         masked += blank(text, ' ')
         code += blank(text, ' ')
       } else {
@@ -406,7 +411,7 @@ function scanLiquid(template: string): LiquidScan {
         if (name === 'endcomment') inComment = false
       }
     }
-    return { masked, code, raws }
+    return { masked, code, raws, rawTags }
   } catch {
     return {
       masked: template.replace(LIQUID_FALLBACK, (part) =>
@@ -414,6 +419,7 @@ function scanLiquid(template: string): LiquidScan {
       ),
       code: template.replace(NOT_CODE_FALLBACK, (part) => blank(part, ' ')),
       raws: [],
+      rawTags: [],
     }
   }
 }
@@ -441,7 +447,7 @@ export function maskLiquid(template: string) {
  * а «несколько h1» скажет проверка SEO страницы
  */
 export function checkTemplateHtml(template: string): CustomBlockProblem[] {
-  const { masked, raws } = scanLiquid(template)
+  const { masked, raws, rawTags } = scanLiquid(template)
   const problems: CustomBlockProblem[] = []
   const add = (level: CustomBlockProblem['level'], line: number | undefined, message: string) =>
     problems.push({ part: 'template', level, line, message })
@@ -475,15 +481,15 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
           ? template.slice(attrLocation.startOffset, attrLocation.endOffset)
           : ''
         const sourceStart = attrLocation?.startOffset ?? 0
-        // Скобки Liquid внутри raw — обычные символы значения, не вывод
+        // Скобки Liquid внутри raw — обычные символы значения, не вывод; сами теги raw и endraw
+        // тоже ничего не выводят
+        const inside = (ranges: Array<[number, number]>, at: number) =>
+          ranges.some(([start, end]) => at >= start && at < end)
         const liquidAt = (from: number, to: number) =>
-          [...source.slice(from, to).matchAll(/{{|{%/g)].some(
-            (hit) =>
-              !raws.some(
-                ([start, end]) =>
-                  sourceStart + from + hit.index >= start && sourceStart + from + hit.index < end,
-              ),
-          )
+          [...source.slice(from, to).matchAll(/{{|{%/g)].some((hit) => {
+            const at = sourceStart + from + hit.index
+            return !inside(raws, at) && !inside(rawTags, at)
+          })
         const hasOutput = liquidAt(0, source.length)
         const nameSource = source.split('=')[0] ?? ''
         if (liquidAt(0, nameSource.length)) {
@@ -499,7 +505,11 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
             `Значение атрибута ${name} с Liquid — в кавычках: ${name}="{{ … }}"`,
           )
         }
-        const problem = attributeProblem(tag, name, hasOutput ? undefined : attr.value)
+        const problem = attributeProblem(
+          tag,
+          name,
+          hasOutput ? undefined : staticValue(tag, source, sourceStart, rawTags, attr.value),
+        )
         if (problem) add('error', attrLine, problem)
       }
       visit(node)
@@ -509,6 +519,34 @@ export function checkTemplateHtml(template: string): CustomBlockProblem[] {
   visit(tree)
   checkIdReferences(template, tree, add)
   return problems
+}
+
+/**
+ * Значение атрибута без Liquid так, как его выведет LiquidJS: теги raw и endraw ничего не пишут,
+ * поэтому `java{% raw %}{% endraw %}script:` склеивается в `javascript:`. В маске эти теги —
+ * пробелы (позиции должны совпадать с шаблоном), поэтому значение берётся заново из исходного
+ * текста атрибута без этих тегов. Тегов нет — прежнее значение парсера
+ */
+function staticValue(
+  tag: string,
+  source: string,
+  sourceStart: number,
+  rawTags: Array<[number, number]>,
+  parsed: string,
+) {
+  const own = rawTags.filter(
+    ([start, end]) => start >= sourceStart && end <= sourceStart + source.length,
+  )
+  if (own.length === 0) return parsed
+  let stripped = ''
+  let at = 0
+  for (const [start, end] of own) {
+    stripped += source.slice(at, start - sourceStart)
+    at = end - sourceStart
+  }
+  stripped += source.slice(at)
+  const reparsed = parseFragment(`<${tag} ${stripped}>`).childNodes[0]
+  return reparsed && isElement(reparsed) ? (reparsed.attrs[0]?.value ?? parsed) : parsed
 }
 
 /**

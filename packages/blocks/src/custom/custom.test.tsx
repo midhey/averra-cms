@@ -443,6 +443,30 @@ describe('HTML шаблона и разметка сайта', () => {
     }
   })
 
+  it('теги raw и endraw в значении атрибута — не вывод: опасный href виден проверке со строкой', () => {
+    const bad = [
+      // Весь адрес внутри raw
+      '<a href="{% raw %}javascript:alert(1){% endraw %}">x</a>',
+      // Пустой raw между кусками: LiquidJS склеивает их в javascript:
+      '<a href="java{% raw %}{% endraw %}script:alert(1)">x</a>',
+      '<p>a</p>\n<a href="java{% raw %}{% endraw %}script:alert(1)">x</a>',
+      // Обработчик событий тем же способом
+      '<img src="x" alt="" onerror="{% raw %}alert(1){% endraw %}">',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+    // Строка ошибки — строка атрибута
+    expect(
+      templateErrors('<p>a</p>\n<a href="java{% raw %}{% endraw %}script:alert(1)">x</a>')[0]?.line,
+    ).toBe(2)
+    // Безопасное значение с теми же тегами — не ошибка, и настоящий вывод по-прежнему не проверяется
+    expect(templateErrors('<a href="/{% raw %}{{ page }}{% endraw %}">x</a>')).toEqual([])
+    expect(templateErrors('<a href="{{ url }}">x</a>')).toEqual([])
+    // Вывод рядом с raw — всё ещё вывод: значение известно только при рендере
+    expect(templateErrors('<a href="{% raw %}x{% endraw %}{{ url }}">x</a>')).toEqual([])
+  })
+
   it('popover с display: block не выходит из-под защитного слоя base.css', () => {
     const file = '../base.css'
     const css = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
