@@ -31,6 +31,7 @@ import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
 import { themeRoutes } from './modules/theme/routes'
+import { tokensRoutes } from './modules/tokens/routes'
 import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
 import type { OgCardRenderers } from './og/card'
 import type { SitePublisher } from './publish/queue'
@@ -190,6 +191,8 @@ export function createApp(deps: AppDeps) {
     .route('/sites/:siteId/invitations', siteInvitationsRoutes({ db, mail, adminUrl }))
     .route('/invitations', invitationsRoutes({ db, auth }))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
+    // Токены API для MCP: выпуск, права, отзыв — только владельцу (modules/tokens)
+    .route('/tokens', tokensRoutes({ db }))
     .route('/sites/:siteId/leads', leadsRoutes({ db, mail, notifications }))
     // Уведомления: каналы и служебные события — владельцу, получатели заявок — владельцу и клиенту
     .route('/notifications', notificationsRoutes({ db, mail, notifications, passwords, log }))

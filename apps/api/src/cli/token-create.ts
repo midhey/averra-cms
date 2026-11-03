@@ -1,10 +1,10 @@
 import { tokensRepo } from '../modules/tokens/repo'
 import { usersRepo } from '../modules/users/repo'
 import { CliError, openDb, resolveSite, run } from './common'
-import { parseTokenCreate, tokenCreateUsage } from './token-args'
+import { describeRights, parseTokenCreate, tokenCreateUsage } from './token-args'
 
 await run(async () => {
-  const { site, name, by, blocksDraft } = parseTokenCreate()
+  const { site, name, by, rights } = parseTokenCreate()
   const { db, auth, close } = await openDb()
   try {
     const found = await resolveSite(db, site)
@@ -17,11 +17,11 @@ await run(async () => {
       siteId: found.id,
       name,
       createdBy: author.id,
-      blocksDraft,
+      rights,
     })
     console.log(`Токен «${name}» для сайта «${found.name}», id токена ${id}.`)
     console.log('Он показывается один раз: в базе остаётся только его хеш.')
-    if (blocksDraft) console.log('Право на черновики своих блоков: включено.')
+    console.log(`Права: черновики страниц; ${describeRights(rights)}.`)
     console.log('Для MCP положи эту строку в apps/mcp/.env:\n')
     console.log(`CMS_API_TOKEN=${token}\n`)
     console.log(`Отозвать: pnpm token:revoke --id ${id}`)

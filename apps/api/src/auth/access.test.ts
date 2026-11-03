@@ -286,6 +286,13 @@ describe('токен API', () => {
   it('GET /api/me отвечает, чей это токен', async () => {
     const { id, token } = await api.createToken()
     const res = await app.request('/api/me', { headers: bearer(token) })
-    expect(await res.json()).toEqual({ kind: 'token', token: { id, siteId: demoSiteId } })
+    expect(await res.json()).toEqual({
+      kind: 'token',
+      token: {
+        id,
+        siteId: demoSiteId,
+        rights: { blocksDraft: false, publish: true, delete: true },
+      },
+    })
   })
 })

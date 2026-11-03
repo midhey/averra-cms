@@ -1,28 +1,35 @@
-import { Uuid } from '@averra/schema'
+import { DRAFTS_ONLY, TokenName, type TokenRights, tokenRightLabels, Uuid } from '@averra/schema'
 import { z } from 'zod'
 import type { Db } from '../db/client'
 import { tokensRepo } from '../modules/tokens/repo'
 import { UserEmail } from '../modules/users/repo'
 import { args, CliError, check } from './common'
 
-// Разбор аргументов token:create и token:grant и выдача права — отдельно от самих команд: команды
-// запускаются при импорте, а это проверяют тесты
+// Разбор аргументов token:create и token:grant и выдача прав — отдельно от самих команд: команды
+// запускаются при импорте, а это проверяют тесты. Права и их значения по умолчанию — те же, что у
+// выпуска в админке (NewToken и DRAFTS_ONLY в @averra/schema)
 
-export const tokenCreateUsage = `Выпустить токен API (права редактора на сайте установки), например для MCP:
-  pnpm token:create --name mcp [--by <почта владельца>] [--site <id сайта>] [--blocks-draft]
+export const tokenCreateUsage = `Выпустить токен API для MCP на сайт установки:
+  pnpm token:create --name mcp [--publish] [--delete] [--no-blocks-draft] [--by <почта владельца>]
 
---blocks-draft даёт токену право сохранять черновики своих блоков (MCP: save_custom_block_draft).
-Публиковать блок токен не может в любом случае: это делает человек в админке. Без флага право
-выключено; позже его включают и выключают командой pnpm token:grant.
+По умолчанию токен — «только черновики», как в админке: черновики страниц и своих блоков, новые
+страницы, загрузка картинок. --publish разрешает публиковать страницы (MCP: publish_page) и
+«Собрать заново», --delete — удалять страницы и картинки, --no-blocks-draft снимает черновики
+своих блоков. Опубликовать свой блок токен не может никогда: это делает человек в админке.
+Позже права меняют в админке (Установка → Доступ для ИИ) или командой pnpm token:grant.
 
-Токен показывается один раз. --by нужен, только если владельцев несколько. --site не нужен:
-в установке один сайт. Он только для старых баз, где сайтов несколько.`
+Токен показывается один раз. --by нужен, только если владельцев несколько. --site <id сайта> не
+нужен: в установке один сайт. Он только для старых баз, где сайтов несколько.`
 
 const TokenCreateArgs = z.object({
   site: Uuid('Нужен id сайта').optional(),
-  name: z.string().trim().min(1).max(80),
+  name: TokenName,
   by: UserEmail.optional(),
+  publish: z.boolean().optional(),
+  delete: z.boolean().optional(),
+  // Прежний флаг: право на черновики своих блоков теперь и так есть по умолчанию
   'blocks-draft': z.boolean().optional(),
+  'no-blocks-draft': z.boolean().optional(),
 })
 
 export function parseTokenCreate(argv?: string[]) {
@@ -33,47 +40,89 @@ export function parseTokenCreate(argv?: string[]) {
         site: { type: 'string' },
         name: { type: 'string' },
         by: { type: 'string' },
+        publish: { type: 'boolean' },
+        delete: { type: 'boolean' },
         'blocks-draft': { type: 'boolean' },
+        'no-blocks-draft': { type: 'boolean' },
       },
       tokenCreateUsage,
       argv,
     ),
     tokenCreateUsage,
   )
-  return {
-    site: values.site,
-    name: values.name,
-    by: values.by,
-    blocksDraft: values['blocks-draft'] === true,
+  if (values['blocks-draft'] && values['no-blocks-draft']) {
+    throw new CliError(`Либо --blocks-draft, либо --no-blocks-draft\n\n${tokenCreateUsage}`)
   }
+  const rights: TokenRights = {
+    blocksDraft: values['no-blocks-draft'] !== true && DRAFTS_ONLY.blocksDraft,
+    publish: values.publish === true,
+    delete: values.delete === true,
+  }
+  return { site: values.site, name: values.name, by: values.by, rights }
 }
 
-export const tokenGrantUsage = `Включить или выключить право токена API на черновики своих блоков:
-  pnpm token:grant --id <id токена> --blocks-draft on|off
+export const tokenGrantUsage = `Включить или выключить права токена API:
+  pnpm token:grant --id <id токена> [--blocks-draft on|off] [--publish on|off] [--delete on|off]
   (на сервере: node dist/server/token-grant.js с теми же параметрами)
 
-С правом MCP читает черновики своих блоков, создаёт блок, сохраняет черновик и проверяет шаблон.
-Публиковать, удалять и откатывать блоки токен не может никогда: это делает человек в админке.
-Право действует сразу, перевыпускать токен не нужно. id видно в pnpm token:list.`
+--blocks-draft — черновики своих блоков (MCP читает их, создаёт блок, сохраняет черновик,
+проверяет шаблон), --publish — публикация страниц и «Собрать заново», --delete — удаление страниц
+и картинок. Не названные права не меняются. Опубликовать, удалить или откатить свой блок токен не
+может никогда: это делает человек в админке. Права действуют сразу, перевыпускать токен не нужно.
+id видно в pnpm token:list. То же — в админке: Установка → Доступ для ИИ.`
+
+const OnOff = z.enum(['on', 'off'], 'Нужно on или off').optional()
 
 const TokenGrantArgs = z.object({
   id: Uuid('Нужен id токена'),
-  'blocks-draft': z.enum(['on', 'off'], 'Нужно on или off'),
+  'blocks-draft': OnOff,
+  publish: OnOff,
+  delete: OnOff,
 })
 
 export function parseTokenGrant(argv?: string[]) {
   const values = check(
     TokenGrantArgs,
-    args({ id: { type: 'string' }, 'blocks-draft': { type: 'string' } }, tokenGrantUsage, argv),
+    args(
+      {
+        id: { type: 'string' },
+        'blocks-draft': { type: 'string' },
+        publish: { type: 'string' },
+        delete: { type: 'string' },
+      },
+      tokenGrantUsage,
+      argv,
+    ),
     tokenGrantUsage,
   )
-  return { id: values.id, allowed: values['blocks-draft'] === 'on' }
+  const rights: Partial<TokenRights> = {}
+  const pairs = [
+    ['blocksDraft', values['blocks-draft']],
+    ['publish', values.publish],
+    ['delete', values.delete],
+  ] as const
+  for (const [right, value] of pairs) {
+    if (value !== undefined) rights[right] = value === 'on'
+  }
+  if (Object.keys(rights).length === 0) {
+    throw new CliError(
+      `Укажите право: --blocks-draft, --publish или --delete со значением on или off\n\n${tokenGrantUsage}`,
+    )
+  }
+  return { id: values.id, rights }
 }
 
-/** Включает или выключает право; нет токена — CliError. Возвращает строку для человека */
-export async function grantBlocksDraft(db: Db, id: string, allowed: boolean) {
-  if (!(await tokensRepo(db).setBlocksDraft(id, allowed))) throw new CliError(`Нет токена ${id}`)
-  return allowed
-    ? `Токену ${id} разрешены черновики своих блоков. Публикует блок по-прежнему человек в админке`
-    : `У токена ${id} право на черновики своих блоков выключено`
+/** Права словами: «черновики своих блоков — да, публикация страниц — нет, …» */
+export function describeRights(rights: Partial<TokenRights>) {
+  return (Object.keys(tokenRightLabels) as (keyof TokenRights)[])
+    .filter((right) => rights[right] !== undefined)
+    .map((right) => `${tokenRightLabels[right]} — ${rights[right] ? 'да' : 'нет'}`)
+    .join(', ')
+}
+
+/** Меняет права; нет токена — CliError. Возвращает строку для человека */
+export async function grantRights(db: Db, id: string, rights: Partial<TokenRights>) {
+  const after = await tokensRepo(db).setRights(id, rights)
+  if (!after) throw new CliError(`Нет токена ${id}`)
+  return `Права токена ${id}: ${describeRights(after)}. Действуют сразу`
 }

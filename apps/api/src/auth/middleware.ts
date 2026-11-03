@@ -87,7 +87,7 @@ export function authenticate({ db, auth, trustedOrigins }: AuthenticateOptions) 
         kind: 'token',
         tokenId: token.id,
         siteId: token.siteId,
-        blocksDraft: token.blocksDraft,
+        rights: token.rights,
       })
       return next()
     }
@@ -139,7 +139,7 @@ export function requireSite(db: Db, permission: Permission) {
     const grant = tokenGrants[permission]
     if (actor.kind === 'token' && grant) {
       // Право выдано токену отдельно от роли: есть — пускаем, нет — подсказка, как его включить
-      if (!actor[grant.grant]) return c.json(forbidden(grant.message), 403)
+      if (!actor.rights[grant.grant]) return c.json(forbidden(grant.message), 403)
     } else if (!can(role, permission)) {
       return c.json(forbidden(forbiddenMessages[permission]), 403)
     }

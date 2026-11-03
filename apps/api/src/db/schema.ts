@@ -272,9 +272,15 @@ export const apiTokens = pgTable(
       .references(() => sites.id, { onDelete: 'cascade' }),
     name: text().notNull(),
     tokenHash: text().notNull(),
-    // Право сохранять черновики своих блоков (MCP). Выключено по умолчанию, включает владелец
-    // командой token:grant; публикует определение только человек
+    // Права токена сверх черновиков страниц (TokenRights в @averra/schema). Значение задаёт
+    // выпуск (по умолчанию «только черновики»), DEFAULT — для вставок прежней версии API.
+    // Черновики своих блоков: публикует определение всё равно только человек
     blocksDraft: boolean().notNull().default(false),
+    // Публикация страниц и «Собрать заново». Токены до этой колонки умели это всегда — миграция
+    // 0023 оставила им право
+    canPublish: boolean().notNull().default(false),
+    // Удаление страниц и картинок медиатеки — так же
+    canDelete: boolean().notNull().default(false),
     // Кто выпустил. Удалили пользователя — токен остаётся, просто без автора
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

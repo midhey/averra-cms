@@ -587,3 +587,39 @@ describe('миграция 0016_notifications', () => {
     expect(sites[0]?.lead_recipients).toEqual(['boss@example.ru', 'Manager@Example.ru'])
   })
 })
+
+describe('миграция 0023_token_rights', () => {
+  it('старым токенам оставляет публикацию и удаление, право на черновики блоков — как было; новым по умолчанию — нет', async () => {
+    client = new PGlite()
+    const before = readdirSync(new URL('../../drizzle', import.meta.url))
+      .filter((name) => name.endsWith('.sql') && name < '0023')
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort()
+    for (const name of before) await applyMigration(client, name)
+    const siteId = '00000000-0000-4000-8000-000000000023'
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO api_tokens (site_id, name, token_hash, blocks_draft) VALUES
+        ('${siteId}', 'старый', 'a', false),
+        ('${siteId}', 'старый с блоками', 'b', true);
+    `)
+
+    await applyMigration(client, '0023_token_rights')
+
+    // Прежняя версия API вставляет токен без новых колонок: он получает DEFAULT
+    await client.exec(
+      `INSERT INTO api_tokens (site_id, name, token_hash) VALUES ('${siteId}', 'после отката', 'c')`,
+    )
+    const { rows } = await client.query<{
+      name: string
+      blocks_draft: boolean
+      can_publish: boolean
+      can_delete: boolean
+    }>('SELECT name, blocks_draft, can_publish, can_delete FROM api_tokens ORDER BY token_hash')
+    expect(rows).toEqual([
+      { name: 'старый', blocks_draft: false, can_publish: true, can_delete: true },
+      { name: 'старый с блоками', blocks_draft: true, can_publish: true, can_delete: true },
+      { name: 'после отката', blocks_draft: false, can_publish: false, can_delete: false },
+    ])
+  })
+})

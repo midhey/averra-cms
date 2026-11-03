@@ -335,7 +335,7 @@ describe('токен с правом на черновики (MCP)', () => {
     const own = await api.createToken(demoSiteId, 'временный', { blocksDraft: true })
     const headers = { authorization: `Bearer ${own.token}` }
     expect((await send('POST', '', { key: 'tmp-block', title: 'Врем' }, headers)).status).toBe(201)
-    await api.setTokenBlocksDraft(own.id, false)
+    await api.setTokenRights(own.id, { blocksDraft: false })
     expect((await send('GET', '/tmp-block', undefined, headers)).status).toBe(403)
     // Опубликованное токен читает и без права
     expect((await send('GET', '', undefined, headers)).status).toBe(200)

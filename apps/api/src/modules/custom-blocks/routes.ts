@@ -95,7 +95,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
         // Токен с правом на черновики читает их же: иначе он не увидел бы свою работу
         const defines =
           (actor.kind === 'user' && can(c.var.siteRole, 'blocks.define')) ||
-          (actor.kind === 'token' && actor.blocksDraft === true)
+          (actor.kind === 'token' && actor.rights.blocksDraft)
         const views = (await repo.list(siteId)).map(viewOf)
         const blocks = defines
           ? views

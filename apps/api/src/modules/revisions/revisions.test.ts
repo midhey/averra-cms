@@ -187,7 +187,12 @@ describe('публикация пишет историю', () => {
     expect((await page.save('Не опубликуется')).status).toBe(200)
 
     // Токена с таким id нет: вставка версии нарушит внешний ключ уже после UPDATE страницы
-    const ghost = { kind: 'token', tokenId: missingId, siteId } as const
+    const ghost = {
+      kind: 'token',
+      tokenId: missingId,
+      siteId,
+      rights: { blocksDraft: false, publish: true, delete: false },
+    } as const
     await expect(sitesRepo(db).publish(siteId, 'index', ghost)).rejects.toThrow()
 
     const after = await page.get()

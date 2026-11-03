@@ -207,13 +207,13 @@ export function authRoutes({
   return (
     new Hono<AuthEnv>()
       // Кто вошёл: имя для шапки админки и роль. Токен в админку не ходит, но ответ
-      // для него тоже есть: так MCP или скрипт может проверить свой токен
+      // для него тоже есть: так MCP или скрипт может проверить свой токен и его права
       .get('/me', (c) => {
         const { actor } = c.var
         if (actor.kind === 'token') {
           return c.json({
             kind: 'token' as const,
-            token: { id: actor.tokenId, siteId: actor.siteId },
+            token: { id: actor.tokenId, siteId: actor.siteId, rights: actor.rights },
           })
         }
         return c.json({ kind: 'user' as const, user: actor.user })

@@ -41,22 +41,50 @@ describe('токены API', () => {
     expect(a.token).not.toBe(b.token)
   })
 
-  it('право на черновики блоков: выключено по умолчанию, включается и выключается, читается при проверке', async () => {
+  it('новый токен по умолчанию — «только черновики»; права меняются по одному и читаются при проверке', async () => {
     const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'mcp' })
-    expect((await rowOf(id)).blocksDraft).toBe(false)
-    expect(await tokens.setBlocksDraft(id, true)).toBe(true)
-    expect((await tokens.verify(token))?.blocksDraft).toBe(true)
-    expect(await tokens.setBlocksDraft(id, false)).toBe(true)
-    expect((await tokens.verify(token))?.blocksDraft).toBe(false)
-    expect(await tokens.setBlocksDraft(crypto.randomUUID(), true)).toBe(false)
-    const granted = await tokens.create({ siteId: api.demoSiteId, name: 'mcp2', blocksDraft: true })
-    expect((await tokens.verify(granted.token))?.blocksDraft).toBe(true)
+    expect(await rowOf(id)).toMatchObject({
+      blocksDraft: true,
+      canPublish: false,
+      canDelete: false,
+    })
+    expect(await tokens.setRights(id, { publish: true })).toEqual({
+      blocksDraft: true,
+      publish: true,
+      delete: false,
+    })
+    expect((await tokens.verify(token))?.rights).toEqual({
+      blocksDraft: true,
+      publish: true,
+      delete: false,
+    })
+    await tokens.setRights(id, { blocksDraft: false, delete: true })
+    expect((await tokens.verify(token))?.rights).toEqual({
+      blocksDraft: false,
+      publish: true,
+      delete: true,
+    })
+    expect(await tokens.setRights(crypto.randomUUID(), { publish: true })).toBeUndefined()
+    const all = await tokens.create({
+      siteId: api.demoSiteId,
+      name: 'mcp2',
+      rights: { blocksDraft: false, publish: true, delete: true },
+    })
+    expect((await tokens.verify(all.token))?.rights).toEqual({
+      blocksDraft: false,
+      publish: true,
+      delete: true,
+    })
   })
 
   it('проверка отдаёт сайт и отмечает, когда токеном пользовались', async () => {
     const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'mcp' })
     expect((await rowOf(id)).lastUsedAt).toBeNull()
-    expect(await tokens.verify(token)).toEqual({ id, siteId: api.demoSiteId, blocksDraft: false })
+    expect(await tokens.verify(token)).toEqual({
+      id,
+      siteId: api.demoSiteId,
+      rights: { blocksDraft: true, publish: false, delete: false },
+    })
     expect((await rowOf(id)).lastUsedAt).toBeInstanceOf(Date)
   })
 
@@ -97,6 +125,7 @@ describe('токены API', () => {
     const item = (await tokens.list()).find((token) => token.id === id)
     expect(item).toMatchObject({ name: 'в списке', siteId: api.demoSiteId, createdBy: owner.email })
     expect(item).not.toHaveProperty('tokenHash')
+    expect(item?.rights).toEqual({ blocksDraft: true, publish: false, delete: false })
   })
 
   it('удаляется вместе с сайтом', async () => {

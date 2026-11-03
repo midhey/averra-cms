@@ -1,3 +1,4 @@
+import type { TokenRights } from '@averra/schema'
 import { and, eq } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { siteMembers, sites } from '../db/schema'
@@ -16,13 +17,17 @@ export type Actor =
       kind: 'token'
       tokenId: string
       siteId: string
-      /** Право на черновики своих блоков (token:grant): без него действие blocks.draft закрыто */
-      blocksDraft?: boolean
+      /**
+       * Права токена сверх черновиков страниц (api_tokens): без права действие из tokenGrants
+       * закрыто, как бы ни решала таблица ролей
+       */
+      rights: TokenRights
     }
 
 /**
  * Что можно делать на сайте. Одна таблица на все маршруты: маршрут объявляет действие,
- * а решает эта таблица. Токен MCP получает права редактора на своём сайте
+ * а решает эта таблица. Токен MCP получает права редактора на своём сайте, но публикация,
+ * удаление и черновики своих блоков — только по своим правам (tokenGrants)
  */
 const permissions = {
   'site.read': ['owner', 'editor', 'client'],
@@ -76,6 +81,10 @@ const permissions = {
   // владелец установки. Редактор и клиент о сервере не решают, токену API — никогда (tokenDenied).
   // Проверяет его requireInstallation, а не requireSite: в адресе нет сайта
   'installation.update': ['owner'],
+  // Токены API (раздел «Доступ для ИИ»): выпустить, посмотреть, поменять права, отозвать. Токен —
+  // ключ к сайту в чужой программе; кому его дать, решает студия, которая отвечает за установку.
+  // Токену — никогда (tokenDenied): иначе программа выдала бы себе права или новый токен
+  'tokens.manage': ['owner'],
 } as const satisfies Record<string, readonly SiteRole[]>
 
 export type Permission = keyof typeof permissions
@@ -112,17 +121,38 @@ export const tokenDenied: Partial<Record<Permission, string>> = {
   // черновик, а что уйдёт на сайт, решает человек, прочитав код
   'blocks.define':
     'Публикует, удаляет и откатывает свои блоки только владелец в админке: токену API доступны черновики, если владелец их разрешил',
+  'tokens.manage': 'Токены API выпускает и отзывает владелец в админке: токену это недоступно',
 }
+
+/** Где владелец включает право токена: одна подсказка для всех отказов по праву */
+const GRANT_HINT =
+  'Владелец включает его в админке (Установка → Доступ для ИИ) или командой token:grant (pnpm token:grant, на сервере — node dist/server/token-grant.js)'
 
 /**
  * Действия, которые токен получает не по роли, а по отдельному праву, выданному владельцем
- * (колонка api_tokens). Роль «редактор» у токена их не открывает, а без права — 403 с подсказкой
+ * (колонки api_tokens). Роль «редактор» у токена их не открывает, а без права — 403 с подсказкой.
+ * Новый токен — «только черновики» (DRAFTS_ONLY): ему открыто только blocks.draft
  */
-export const tokenGrants: Partial<Record<Permission, { grant: 'blocksDraft'; message: string }>> = {
+export const tokenGrants: Partial<
+  Record<Permission, { grant: keyof TokenRights; message: string }>
+> = {
   'blocks.draft': {
     grant: 'blocksDraft',
-    message:
-      'Черновики своих блоков этому токену не разрешены. Владелец включает право командой token:grant (pnpm token:grant, на сервере — node dist/server/token-grant.js) с параметрами --id <id токена> --blocks-draft on',
+    message: `Черновики своих блоков этому токену не разрешены. ${GRANT_HINT}: право «Черновики своих блоков», в команде --blocks-draft on`,
+  },
+  // Публикация уводит черновик на сайт к посетителям, «Собрать заново» — тоже публикация
+  'page.publish': {
+    grant: 'publish',
+    message: `Публиковать этому токену не разрешено: он сохраняет только черновики, а публикует человек в админке. ${GRANT_HINT}: право «Публикация страниц», в команде --publish on`,
+  },
+  // Удалённую страницу и картинку не вернуть: удаление — отдельное право
+  'page.delete': {
+    grant: 'delete',
+    message: `Удалять страницы этому токену не разрешено. ${GRANT_HINT}: право «Удаление страниц и картинок», в команде --delete on`,
+  },
+  'media.delete': {
+    grant: 'delete',
+    message: `Удалять картинки этому токену не разрешено. ${GRANT_HINT}: право «Удаление страниц и картинок», в команде --delete on`,
   },
 }
 
@@ -150,6 +180,7 @@ export const forbiddenMessages: Record<Permission, string> = {
   'blocks.define': 'Свои блоки создаёт и меняет только владелец установки',
   'blocks.draft': 'Черновики своих блоков меняет владелец установки',
   'installation.update': 'Обновить установку может только владелец',
+  'tokens.manage': 'Токены API выпускает и отзывает только владелец',
 }
 
 /** Роль на сайте или undefined, если сайта нет или он чужой — снаружи это неразличимо */

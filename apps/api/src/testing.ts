@@ -2,7 +2,12 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { demoSiteId, type NotificationChannelKind, setupZodMessages } from '@averra/schema'
+import {
+  demoSiteId,
+  type NotificationChannelKind,
+  setupZodMessages,
+  type TokenRights,
+} from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { createApp } from './app'
 import type { MemberRole } from './auth/access'
@@ -283,13 +288,18 @@ export async function createTestApi({
     createUser,
     sessionHeaders,
     loginAs,
-    /** Токен API с правами редактора на сайте. Возвращает и сам токен, и его id для отзыва */
-    createToken: (
-      siteId: string = demoSiteId,
-      name = 'тест',
-      options: { blocksDraft?: boolean } = {},
-    ) => tokens.create({ siteId, name, ...options }),
-    setTokenBlocksDraft: (id: string, allowed: boolean) => tokens.setBlocksDraft(id, allowed),
+    /**
+     * Токен API. По умолчанию — как токены до прав (миграция 0023): публикует и удаляет, без
+     * черновиков своих блоков, — на нём проверяют всё остальное. «Только черновики» — явно:
+     * `{ publish: false, delete: false }`. Возвращает и сам токен, и его id для отзыва
+     */
+    createToken: (siteId: string = demoSiteId, name = 'тест', rights: Partial<TokenRights> = {}) =>
+      tokens.create({
+        siteId,
+        name,
+        rights: { blocksDraft: false, publish: true, delete: true, ...rights },
+      }),
+    setTokenRights: (id: string, rights: Partial<TokenRights>) => tokens.setRights(id, rights),
     revokeToken: (id: string) => tokens.revoke(id),
     addMember: users.addMember,
     /**

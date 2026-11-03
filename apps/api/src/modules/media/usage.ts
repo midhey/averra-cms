@@ -127,5 +127,5 @@ export async function mediaUsage(
 
 /** Видит ли тот, кто спрашивает, черновики своих блоков: как `GET /custom-blocks` */
 export function seesBlockDrafts(actor: Actor, siteRole: SiteRole) {
-  return actor.kind === 'user' ? can(siteRole, 'blocks.define') : actor.blocksDraft === true
+  return actor.kind === 'user' ? can(siteRole, 'blocks.define') : actor.rights.blocksDraft
 }

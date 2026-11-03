@@ -1,11 +1,11 @@
 import { openDb, run } from './common'
-import { grantBlocksDraft, parseTokenGrant } from './token-args'
+import { grantRights, parseTokenGrant } from './token-args'
 
 await run(async () => {
-  const { id, allowed } = parseTokenGrant()
+  const { id, rights } = parseTokenGrant()
   const { db, close } = await openDb()
   try {
-    console.log(await grantBlocksDraft(db, id, allowed))
+    console.log(await grantRights(db, id, rights))
   } finally {
     await close()
   }
