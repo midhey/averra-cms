@@ -40,7 +40,7 @@ sidebar:
 |---|---|---|
 | `pnpm user:create --email … --name … [--role owner\|member] [--if-missing]` | `user-create.js` | пользователь админки, по умолчанию владелец. `--if-missing` — такой уже есть: выйти без ошибки и не спрашивать пароль |
 | `pnpm user:password --email …` | `user-password.js` | новый пароль, все входы пользователя завершаются, ссылки сброса сгорают. Путь вернуть доступ без почты |
-| `pnpm member:add --email … --role editor\|client [--site <id>]` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль |
+| `pnpm member:add --email … --role editor\|client [--site <id>]` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль. `client` — администратор сайта. То же в админке: «Настройки сайта → Участники» |
 | `pnpm member:invite --email … --role editor\|client [--by <почта владельца>] [--site <id>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
 | `pnpm token:create --name … [--publish] [--delete] [--no-blocks-draft] [--by <почта>] [--site <id>]` | `token-create.js` | токен API для MCP «только черновики», как в админке; флаги добавляют публикацию и удаление или снимают черновики своих блоков. Показывается один раз |
 | `pnpm token:grant --id <id> [--blocks-draft on\|off] [--publish on\|off] [--delete on\|off]` | `token-grant.js` | поменять названные права токена, как «Права» в админке |

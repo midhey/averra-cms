@@ -158,7 +158,7 @@ Object Storage и два релиза подряд (например, `0.2.0` и
     — обновления нет, в «Состоянии» «Сервер отклонил заявку на обновление» — «Заявка не по
     формату», в `update.log` — `---- … отклонена`, файла заявки нет, `systemctl is-failed
     averra-update-request` — не failed.
-50. Редактор и клиент кнопки не видят, `POST /api/status/update` с токеном API — 403.
+50. Администратор сайта и редактор кнопки не видят, `POST /api/status/update` с токеном API — 403.
 51. `ADMIN_UPDATE=off` и `averra.sh install-units` — path-юнит disabled, в админке «выключено на
     сервере». Вернуть, затем `systemctl disable averra-update-request.path` и
     `averra.sh check-update` — в админке «некому забирать», кнопки нет; `averra.sh install-units` —
