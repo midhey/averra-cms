@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto'
 import type { Page } from '@playwright/test'
 import { urls } from '../urls'
-import { confirmDialog, expect, sidebar, sites, test } from './fixtures'
+import { confirmDialog, expect, ownerApi, sidebar, sites, test } from './fixtures'
 import { linkFrom, waitForMail } from './mailbox'
 import { disablePerson, newMember, type Person, signInContext } from './people'
 
@@ -111,6 +111,69 @@ test('«Отключить»: второй браузер участника п�
     await own.goto('/')
     await expect(own.getByText('Редактор', { exact: true })).toBeVisible()
   } finally {
+    await disablePerson(demoSite.id, member)
+  }
+})
+
+test('окно «Отключить» напоминает про токены по их числу: выпустил владелец, которого потом понизили', async ({
+  page,
+  browser,
+  demoSite,
+}) => {
+  const member = await newMember(browser, demoSite, 'editor')
+  const siteParam = { siteId: demoSite.id, userId: member.id }
+  let tokenId = ''
+  try {
+    // Человек был владельцем и выпустил токен, потом его понизили до редактора: роль уже ни о чём
+    // не говорит, а токен работает
+    const promoted = await sites[':siteId'].members[':userId'].$patch({
+      param: siteParam,
+      json: { role: 'owner' },
+    })
+    expect(promoted.status).toBe(200)
+    const issued = await member.context.request.post(`${urls.admin}/api/tokens`, {
+      data: { name: `Токен ушедшего ${Date.now()}` },
+      headers: { origin: urls.admin },
+    })
+    expect(issued.status(), await issued.text()).toBe(201)
+    tokenId = ((await issued.json()) as { id: string }).id
+
+    // Пока он владелец, окно «Роль» напоминает про токен при выборе роли ниже, и только тогда
+    await page.goto('/settings')
+    const row = memberRow(page, member.email)
+    await row.getByRole('button', { name: `Роль: ${member.name}` }).click()
+    const role = page.getByRole('dialog', { name: `Роль: ${member.name}` })
+    await expect(role).not.toContainText('Выпущен')
+    await role.getByRole('radio', { name: /^Редактор/ }).check()
+    await expect(role).toContainText('Выпущен им 1 токен для ИИ: он продолжит работать')
+    await expect(role).toContainText('отзовите его в «Установка → Доступ для ИИ»')
+    await role.getByRole('radio', { name: /^Владелец/ }).check()
+    await expect(role).not.toContainText('Выпущен')
+    await role.getByRole('button', { name: 'Отмена' }).click()
+    await expect(role).toBeHidden()
+
+    const demoted = await sites[':siteId'].members[':userId'].$patch({
+      param: siteParam,
+      json: { role: 'editor' },
+    })
+    expect(demoted.status).toBe(200)
+
+    await page.reload()
+    await row.getByRole('button', { name: `Отключить доступ: ${member.name}` }).click()
+    const ask = confirmDialog(page)
+    await expect(ask).toContainText('Выпущен им 1 токен для ИИ: он продолжит работать')
+    await expect(ask).toContainText('отзовите его в «Установка → Доступ для ИИ»')
+    await ask.getByRole('button', { name: 'Оставить' }).click()
+
+    // Токен отозван — напоминания нет
+    const revoked = await ownerApi.tokens[':id'].$delete({ param: { id: tokenId } })
+    expect(revoked.status).toBe(204)
+    await page.reload()
+    await row.getByRole('button', { name: `Отключить доступ: ${member.name}` }).click()
+    await expect(confirmDialog(page)).not.toContainText('токен')
+    await confirmDialog(page).getByRole('button', { name: 'Оставить' }).click()
+  } finally {
+    if (tokenId) await ownerApi.tokens[':id'].$delete({ param: { id: tokenId } })
     await disablePerson(demoSite.id, member)
   }
 })

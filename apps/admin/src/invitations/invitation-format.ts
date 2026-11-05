@@ -1,6 +1,7 @@
 // Подписи приглашений и участников: роль и состояние словами. Решает всё API, здесь только слова
 
 import { roleLabels, type SiteRoleKey } from '@averra/schema'
+import { pluralRu } from '../format/plural'
 
 export { roleLabels }
 
@@ -60,13 +61,28 @@ export function replaceWarning(existing: PendingCandidate | undefined, role: Inv
 }
 
 /**
- * Что сказать в окне «Отключить доступ»: сессии гаснут сразу, а токены для ИИ, которые выпустил
- * владелец, остаются рабочими (они не привязаны к входу). Владельцу прямо говорим, где их
- * отозвать; у других ролей токенов быть не может
+ * Токены для ИИ, которые выпустил человек, от его входа не зависят: ни отключение, ни понижение
+ * роли их не гасят. Поэтому напоминание решается по числу его рабочих токенов (`activeTokens` из
+ * списка участников), а не по нынешней роли: токены мог выпустить владелец, которого потом
+ * перевели в «Администратор сайта» или «Редактор». Отзывает токены только владелец
  */
-export function disableDescription(role: SiteRoleKey | null) {
+export function tokensReminder(activeTokens: number, canRevoke: boolean) {
+  if (activeTokens <= 0) return undefined
+  // 1, 21, 31… — единственное число во всей фразе: «Выпущен им 21 токен для ИИ: он продолжит…»
+  const single = pluralRu(activeTokens, ['one', 'few', 'many']) === 'one'
+  const tokens = `${activeTokens} ${pluralRu(activeTokens, ['токен', 'токена', 'токенов'])} для ИИ`
+  const issued = single ? `Выпущен им ${tokens}` : `Выпущено им ${tokens}`
+  const them = single ? 'его' : 'их'
+  const continues = single ? 'он продолжит' : 'они продолжат'
+  return canRevoke
+    ? `${issued}: ${continues} работать, отзовите ${them} в «Установка → Доступ для ИИ».`
+    : `${issued}: ${continues} работать, отозвать ${them} может только владелец установки.`
+}
+
+/** Что сказать в окне «Отключить доступ»: сессии гаснут сразу, а токены остаются рабочими */
+export function disableDescription(activeTokens: number, canRevoke: boolean) {
   const base =
     'Все входы этого человека в админку завершатся сразу, войти снова не получится. Вернуть доступ можно здесь же.'
-  if (role !== 'owner') return base
-  return `${base} Токены для ИИ, которые он выпустил, продолжат работать: отзовите их в «Установка → Доступ для ИИ».`
+  const reminder = tokensReminder(activeTokens, canRevoke)
+  return reminder ? `${base} ${reminder}` : base
 }

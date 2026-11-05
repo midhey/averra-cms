@@ -1,7 +1,7 @@
 import type { SiteRoleKey } from '@averra/schema'
 import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm'
 import type { Db } from '../../db/client'
-import { sessions, siteMembers, users } from '../../db/schema'
+import { apiTokens, sessions, siteMembers, users } from '../../db/schema'
 import type { DbOrTx } from '../../mail/outbox'
 
 // Участники сайта: владельцы установки (users.role = owner) и участники сайта (site_members),
@@ -18,6 +18,12 @@ export type MemberRow = {
   disabledRole: SiteRoleKey | null
   /** С какого времени человек в админке: пользователь или его доступ к сайту */
   since: Date
+  /**
+   * Сколько рабочих (не отозванных) токенов API он выпустил. Токены от входа не зависят:
+   * отключение и смена роли их не гасят, поэтому окна об этом предупреждают по этому числу, а не
+   * по нынешней роли (токены мог выпустить владелец, которого потом понизили)
+   */
+  activeTokens: number
 }
 
 /** Последнего владельца не стало: откатывает транзакцию. Проверяем после изменения, в ней же */
@@ -100,15 +106,22 @@ export function membersRepo(db: Db) {
         .from(users)
         .where(isNotNull(users.disabledAt))
         .orderBy(asc(users.createdAt))
+      const tokenRows = await db
+        .select({ userId: apiTokens.createdBy, value: count() })
+        .from(apiTokens)
+        .where(and(isNull(apiTokens.revokedAt), isNotNull(apiTokens.createdBy)))
+        .groupBy(apiTokens.createdBy)
+      const tokens = new Map(tokenRows.map((row) => [row.userId, row.value]))
+      const withTokens = <T extends { id: string }>(row: T) => ({
+        ...row,
+        activeTokens: tokens.get(row.id) ?? 0,
+      })
       return [
-        ...owners.map((row) => ({
-          ...row,
-          role: 'owner' as const,
-          disabledAt: null,
-          disabledRole: null,
-        })),
-        ...members.map((row) => ({ ...row, disabledAt: null, disabledRole: null })),
-        ...disabled.map((row) => ({ ...row, role: null })),
+        ...owners.map((row) =>
+          withTokens({ ...row, role: 'owner' as const, disabledAt: null, disabledRole: null }),
+        ),
+        ...members.map((row) => withTokens({ ...row, disabledAt: null, disabledRole: null })),
+        ...disabled.map((row) => withTokens({ ...row, role: null })),
       ]
     },
 

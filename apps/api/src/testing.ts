@@ -293,10 +293,16 @@ export async function createTestApi({
      * черновиков своих блоков, — на нём проверяют всё остальное. «Только черновики» — явно:
      * `{ publish: false, delete: false }`. Возвращает и сам токен, и его id для отзыва
      */
-    createToken: (siteId: string = demoSiteId, name = 'тест', rights: Partial<TokenRights> = {}) =>
+    createToken: (
+      siteId: string = demoSiteId,
+      name = 'тест',
+      rights: Partial<TokenRights> = {},
+      createdBy?: string,
+    ) =>
       tokens.create({
         siteId,
         name,
+        ...(createdBy && { createdBy }),
         rights: { blocksDraft: false, publish: true, delete: true, ...rights },
       }),
     setTokenRights: (id: string, rights: Partial<TokenRights>) => tokens.setRights(id, rights),

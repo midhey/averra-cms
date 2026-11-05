@@ -21,6 +21,7 @@ const viewOf = (member: MemberRow, selfId: string) => ({
   disabledAt: member.disabledAt,
   disabledRole: member.disabledRole,
   since: member.since,
+  activeTokens: member.activeTokens,
   self: member.id === selfId,
 })
 

@@ -25,6 +25,7 @@ const list = async (headers: Headers) => {
     self: boolean
     email: string
     disabledRole: string | null
+    activeTokens: number
   }[]
 }
 const setRole = (headers: Headers, userId: string, role: string) =>
@@ -84,6 +85,32 @@ describe('доступ к разделу', () => {
     expect(rows.find((row) => row.id === client.user.id)).toMatchObject({ role: 'client' })
     // Администратор сайта видит тот же список
     expect((await list(client.headers)).length).toBe(rows.length)
+  })
+})
+
+describe('токены, выпущенные человеком', () => {
+  it('список считает его рабочие токены: отозванные и чужие не в счёт, роль значения не имеет', async () => {
+    const member = await api.loginAs('editor')
+    const other = await api.loginAs('editor')
+    const countOf = async (id: string) =>
+      (await list(owner.headers)).find((row) => row.id === id)?.activeTokens
+    expect(await countOf(member.user.id)).toBe(0)
+    const first = await api.createToken(demoSiteId, 'один', {}, member.user.id)
+    await api.createToken(demoSiteId, 'два', {}, member.user.id)
+    await api.createToken(demoSiteId, 'чужой', {}, other.user.id)
+    // Токен выпустил владелец, которого потом понизили до редактора: роль не при чём
+    expect(await countOf(member.user.id)).toBe(2)
+    expect(await countOf(other.user.id)).toBe(1)
+    await api.revokeToken(first.id)
+    expect(await countOf(member.user.id)).toBe(1)
+    // Отключение токены не гасит — число остаётся, а окно напомнит их отозвать
+    expect((await disable(owner.headers, member.user.id)).status).toBe(200)
+    expect(await countOf(member.user.id)).toBe(1)
+    // Администратор сайта видит то же число
+    const client = await api.loginAs('client')
+    expect(
+      (await list(client.headers)).find((row) => row.id === member.user.id)?.activeTokens,
+    ).toBe(1)
   })
 })
 

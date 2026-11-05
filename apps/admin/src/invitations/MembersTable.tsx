@@ -16,7 +16,7 @@ import { mutedClassName } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill } from '../ui/StatusPill'
 import styles from './InvitationsSection.module.scss'
-import { disableDescription, roleHints } from './invitation-format'
+import { disableDescription, roleHints, tokensReminder } from './invitation-format'
 
 type Member = {
   id: string
@@ -26,6 +26,8 @@ type Member = {
   /** Роль до отключения: кто может вернуть доступ и что предложить в окне */
   disabledRole: SiteAccess | null
   status: 'active' | 'disabled'
+  /** Рабочие токены для ИИ, которые выпустил этот человек: отключение и смена роли их не гасят */
+  activeTokens: number
   self: boolean
 }
 
@@ -83,7 +85,7 @@ export function MembersTable({ siteId, access }: { siteId: string; access: SiteA
     setNotice(undefined)
     const yes = await confirm({
       title: `Отключить доступ для ${member.name}?`,
-      description: disableDescription(member.role),
+      description: disableDescription(member.activeTokens, access === 'owner'),
       confirmLabel: 'Отключить доступ',
       cancelLabel: 'Оставить',
     })
@@ -322,6 +324,10 @@ function RoleDialog({
 
   if (!member) return null
   const toOwner = role === 'owner'
+  const demotionReminder =
+    !restoring && member.role === 'owner' && role !== 'owner'
+      ? tokensReminder(member.activeTokens, access === 'owner')
+      : undefined
   const unchanged = !restoring && role === member.role
   const submitLabel = transfer
     ? 'Передать владение'
@@ -380,6 +386,8 @@ function RoleDialog({
             понизить или отключить других владельцев, в том числе вас.
           </InlineAlert>
         )}
+        {/* Понизили владельца, который выпускал токены: токены остаются рабочими */}
+        {demotionReminder && <InlineAlert tone="warning">{demotionReminder}</InlineAlert>}
         {/* Тот уже владелец — передавать нечего: окно предлагает только сменить ему роль */}
         {toOwner && !restoring && access === 'owner' && member.role !== 'owner' && (
           <Checkbox
