@@ -30,6 +30,10 @@ const usage = `Перенос сайта le-english на Averra через API.
                      заменить черновики /privacy и /consent свежим шаблоном целиком, даже если их
                      правили (опубликованное остаётся). Без флага заменяется только блок с фразой
                      шаблона «нет форм заявок», остальной текст не трогается
+  --backup-dir <папка>
+                     куда перед заменой черновика /privacy или /consent сохраняется его прежний
+                     текст (по умолчанию ~/.averra/le-english-backup): черновики не попадают
+                     в историю версий
   --publish          опубликовать страницы, тему, шапку и подвал (без флага — только черновики);
                      сработает, только когда /privacy и /consent уже опубликованы: форма записи
                      собирает персональные данные
@@ -78,6 +82,7 @@ async function main() {
       logo: { type: 'string' },
       publish: { type: 'boolean', default: false },
       'rebuild-documents': { type: 'boolean', default: false },
+      'backup-dir': { type: 'string' },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -112,6 +117,7 @@ async function main() {
     ...(values['site-url'] && { siteUrl: values['site-url'] }),
     publish: values.publish,
     rebuildDocuments: values['rebuild-documents'],
+    ...(values['backup-dir'] && { backupDir: resolve(values['backup-dir']) }),
     log: (line) => console.log(line),
   })
 

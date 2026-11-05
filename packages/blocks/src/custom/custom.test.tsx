@@ -9,11 +9,11 @@ import {
   PageContent,
 } from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Page } from '../Page'
 import { compileCustomCss } from './css'
-import { checkTemplateHtml, maskLiquid, sanitizeHtml } from './html'
-import { liquidLint } from './liquid'
+import { checkTemplateHtml, maskLiquid, RAW_HTML_FILTERS, sanitizeHtml } from './html'
+import { liquid, liquidLint, renderTemplate } from './liquid'
 import { CUSTOM_BLOCK_ATTRIBUTE, isReservedDataAttribute } from './marker'
 import { customBlockProblems, customBlocksCss, renderCustomBlockHtml } from './render'
 
@@ -465,6 +465,879 @@ describe('HTML шаблона и разметка сайта', () => {
     expect(templateErrors('<a href="{{ url }}">x</a>')).toEqual([])
     // Вывод рядом с raw — всё ещё вывод: значение известно только при рендере
     expect(templateErrors('<a href="{% raw %}x{% endraw %}{{ url }}">x</a>')).toEqual([])
+  })
+
+  it('комментарии и {% # %} в значении атрибута — не вывод: склеенный href виден проверке', () => {
+    const bad = [
+      '<a href="java{% comment %}x{% endcomment %}script:alert(1)">x</a>',
+      '<a href="java{%- comment -%} x {%- endcomment -%}script:alert(1)">x</a>',
+      '<a href="java{% # c %}script:alert(1)">x</a>',
+      '<a href="{% comment %}x{% endcomment %}javascript:alert(1)">x</a>',
+      // Комментарий с кавычкой внутри не сдвигает границы атрибута
+      '<a href="java{% comment %}"{% endcomment %}script:alert(1)">x</a>',
+      // Raw внутри комментария — часть комментария
+      '<a href="java{% comment %}{% raw %}x{% endraw %}{% endcomment %}script:alert(1)">x</a>',
+      '<img src="x" alt="" onerror="{% # c %}alert(1)">',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+    expect(templateErrors('<p>a</p>\n<a href="java{% # c %}script:alert(1)">x</a>')[0]?.line).toBe(
+      2,
+    )
+    // Безопасное значение с комментарием — не ошибка; вывод рядом с комментарием — всё ещё вывод
+    expect(templateErrors('<a href="/{% comment %}x{% endcomment %}page">x</a>')).toEqual([])
+    expect(templateErrors('<a href="{% # c %}{{ url }}">x</a>')).toEqual([])
+    // Текст в комментарии со скобками Liquid не считается выводом: значение известно целиком
+    expect(
+      templateErrors('<a href="{% comment %}{{ x }}{% endcomment %}javascript:a">x</a>').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('тег Liquid вплотную к имени атрибута склеил бы имя — ошибка со строкой', () => {
+    const bad = [
+      '<a h{% raw %}{% endraw %}ref="javascript:alert(1)">x</a>',
+      '<a h{% if true %}{% endif %}ref="javascript:alert(1)">x</a>',
+      '<a h{% comment %}x{% endcomment %}ref="javascript:alert(1)">x</a>',
+      '<a h{% # c %}ref="javascript:alert(1)">x</a>',
+      '<img src="x" alt="" on{% if true %}{% endif %}error="alert(1)">',
+      '<input disabled{% if on %}checked{% endif %}>',
+    ]
+    for (const template of bad) {
+      const found = templateErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.map((one) => one.message).join('|'), template).toMatch(
+        /вплотную к имени атрибута/,
+      )
+    }
+    expect(templateErrors('<p>a</p>\n<a h{% if 1 %}{% endif %}ref="/x">x</a>')[0]?.line).toBe(2)
+    // Обычные записи: тег после пробела или кавычки, тег вокруг целого атрибута
+    for (const template of [
+      '<a class="a" {% if on %}id="x-menu"{% endif %}>x</a>',
+      '<a class="a"{% if on %} id="x-menu"{% endif %}>x</a>',
+      '<a {% if on %}class="a"{% endif %}>x</a>',
+      '<input type="checkbox"{% if on %} checked{% endif %}>',
+      '<a href="/{% if on %}a{% endif %}">x</a>',
+    ]) {
+      expect(templateErrors(template), template).toEqual([])
+    }
+  })
+
+  // Что LiquidJS выводит на самом деле: тест ниже держит это допущение под проверкой
+  const output = (template: string) =>
+    renderTemplate(template, { title: 't' }, { media: {}, priority: false })
+
+  it('срез пробелов {%- и -%} склеивает имя атрибута: проверка читает его так же, как Liquid', () => {
+    const bad = [
+      '<a h {%- if true -%}{%- endif -%} ref="javascript:alert(1)">x</a>',
+      '<a h {%- # c -%} ref="javascript:alert(1)">x</a>',
+      '<a h {%- comment -%}x{%- endcomment -%} ref="javascript:alert(1)">x</a>',
+      '<a h {%- raw %}{% endraw -%} ref="javascript:alert(1)">x</a>',
+      '<img src="x" alt="" on {%- if true -%}{%- endif -%} error="alert(1)">',
+      '<div st {%- if true -%}{%- endif -%} yle="color:red">x</div>',
+      // Срез только с одной стороны: пробел после тега уходит, перед ним — нет
+      '<a h{% if true %}{% endif -%} ref="javascript:alert(1)">x</a>',
+    ]
+    for (const template of bad) {
+      const found = templateErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.map((one) => one.message).join('|'), template).toMatch(
+        /вплотную к имени атрибута/,
+      )
+      // Допущение: Liquid и правда склеивает имя (а не оставляет два атрибута), и на сайте
+      // склеенное вырезает очистка
+      expect(output(template), template).toMatch(/\b(?:href|onerror|style)=/)
+      expect(sanitizeHtml(output(template)), template).not.toMatch(/\b(?:href|onerror|style)=/)
+    }
+    expect(templateErrors('<p>a</p>\n<a h {%- if 1 -%}{%- endif -%} ref="/x">x</a>')[0]?.line).toBe(
+      2,
+    )
+    // Перевод строки LiquidJS не срезает (greedy: false): это два атрибута, склейки нет
+    const apart = '<a h\n  {%- if true -%}\n  {%- endif -%}\n  ref="javascript:alert(1)">x</a>'
+    expect(output(apart)).not.toContain('href=')
+    expect(templateErrors(apart)).toEqual([])
+    // Имя элемента через срез пробелов — тоже собирается: <script> проверка видит
+    expect(templateErrors('<scr {%- if t -%}{%- endif -%} ipt>x</script>')[0]?.message).toMatch(
+      /script/,
+    )
+    // Законный срез пробелов: между атрибутами и вокруг целого атрибута
+    for (const template of [
+      '<a class="a" {%- if on %} id="x-menu"{% endif %}>x</a>',
+      '<a class="a"\n  {%- if on %} id="x-menu"{% endif %}>x</a>',
+      '<a class="a" {%- if on -%} id="x-menu"{%- endif %}>x</a>',
+      '<a href="/x"\n  {%- if on %}\n  class="y"\n  {%- endif %}>x</a>',
+      '<a href="/{%- if on -%} a {%- endif -%}">x</a>',
+    ]) {
+      expect(templateErrors(template), template).toEqual([])
+    }
+  })
+
+  it('javascript: в значении из любых конструкций Liquid виден при сохранении', () => {
+    const bad = [
+      '<a href="{% if true %}javascript:alert(1){% endif %}">x</a>',
+      '<a href="{% if t %}/x{% else %}javascript:alert(1){% endif %}">x</a>',
+      '<a href="{% unless t %}javascript:alert(1){% endunless %}">x</a>',
+      '<a href="java{% if true %}{% endif %}script:alert(1)">x</a>',
+      '<a href="java{% assign a = 1 %}script:alert(1)">x</a>',
+      '<a href="java{% capture c %}x{% endcapture %}script:alert(1)">x</a>',
+      '<a href="{% case t %}{% when 1 %}javascript:alert(1){% endcase %}">x</a>',
+      '<a href="{% for i in (1..1) %}javascript:alert(1){% endfor %}">x</a>',
+      '<a href="{% echo \'javascript:alert(1)\' %}">x</a>',
+      '<a href="{{ \'javascript:alert(1)\' }}">x</a>',
+      '<a href="{% liquid\n  echo \'javascript:alert(1)\' %}">x</a>',
+      // Вывод вместо пустого поля: схема собирается вокруг него
+      '<a href="java{{ empty }}script:alert(1)">x</a>',
+      '<a href="javascript:{{ title }}">x</a>',
+      '<img src="{% if t %}data:text/html,x{% endif %}" alt="">',
+      '<svg><use href="{% if t %}javascript:alert(1){% endif %}"/></svg>',
+    ]
+    for (const template of bad) {
+      const found = templateErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.map((one) => one.message).join('|'), template).toMatch(/запрещена/)
+    }
+    expect(
+      templateErrors('<p>a</p>\n<a href="{% if t %}javascript:alert(1){% endif %}">x</a>')[0]?.line,
+    ).toBe(2)
+    // Теги в несколько строк до атрибута не сдвигают его строку
+    expect(
+      templateErrors(
+        '{% comment %}\nа\n{% endcomment %}\n{% assign\n  a = 1 %}\n<a href="{% if t %}javascript:alert(1){% endif %}">x</a>',
+      )[0]?.line,
+    ).toBe(6)
+    // Законные значения с теми же конструкциями — не ошибки
+    for (const template of [
+      '<a href="{% if t %}/x{% else %}#y{% endif %}">x</a>',
+      '<a href="{% if t %}https://a.ru{% else %}tel:+70000000000{% endif %}">x</a>',
+      '<a href="{% if title == \'a: b\' %}/x{% endif %}">x</a>'.replace('a: b', 'ab'),
+      '<a href="{% echo \'https://a.ru\' %}">x</a>',
+      '<a href="{{ title }}">x</a>',
+      '<a href="mailto:{{ title }}">x</a>',
+      '<a href="{{ title | link }}">x</a>',
+      '<a href="{% for i in (1..2) %}/p{{ i }}{% endfor %}">x</a>',
+      '<img src="{% if t %}/a.png{% else %}/b.png{% endif %}" alt="">',
+      '{% for i in (1..2) %}<a href="/p{{ i }}">{{ i }}</a>{% endfor %}',
+      '<a title="{% if t %}javascript: это просто текст{% endif %}" href="/x">x</a>',
+    ]) {
+      expect(templateErrors(template), template).toEqual([])
+    }
+    // Что подставят данные поля, при сохранении не известно: это чистит сайт при рендере
+    expect(sanitizeHtml(output('<a href="{{ title }}">x</a>'))).toBe('<a href="t">x</a>')
+    expect(sanitizeHtml('<a href="javascript:alert(1)">x</a>')).toBe('<a>x</a>')
+  })
+
+  // Ошибки про ссылку в определении целиком (с пробным рендером и вычислением констант)
+  const linkErrors = (template: string, input: Partial<CustomBlockDraftInput> = {}) =>
+    errors({ template, ...input })
+      .map((one) => one.message)
+      .filter((message) => /Ссылка|запрещена/.test(message))
+
+  it('текст после необязательного блока тоже может начинать значение адреса', () => {
+    const bad = [
+      '<a href="{% if a %}/{% endif %}javascript:alert(1)">x</a>',
+      '<a href="{% if a %}{% else %}/{% endif %}javascript:alert(1)">x</a>',
+      '<a href="{% unless a %}/{% endunless %}javascript:alert(1)">x</a>',
+      '<a href="{% case a %}{% when 1 %}/{% endcase %}javascript:alert(1)">x</a>',
+      '<a href="{% for i in (1..1) %}/{% endfor %}javascript:alert(1)">x</a>',
+      '<img src="{% if a %}/{% endif %}data:text/html,x" alt="">',
+      // Обе половинки схемы — в разных блоках и во вложенном
+      '<a href="{% if a %}java{% endif %}{% if b %}script:{% endif %}alert(1)">x</a>',
+      '<a href="{% if a %}ja{% if b %}va{% endif %}script:alert(1){% endif %}">x</a>',
+      // Схема через сущность и с пробелами и заглавными
+      '<a href="{% if a %}&#106;avascript:alert(1){% endif %}">x</a>',
+      '<a href="{% if a %}/{% endif %}  JavaScript:alert(1)">x</a>',
+      // Второй адрес srcset после необязательного куска
+      '<img srcset="/a.png 1x, {% if a %}/b.png 2x, {% endif %}javascript:alert(1) 3x" alt="">',
+      // Запятая без пробела начинает следующий адрес, пока предыдущий ещё не определил схему
+      '<img srcset="a.png,{{ title }}javascript:alert(1) 2x" alt="">',
+    ]
+    for (const template of bad) {
+      const found = templateErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.map((one) => one.message).join('|'), template).toMatch(/запрещена/)
+    }
+    expect(
+      templateErrors('<p>a</p>\n<a href="{% if a %}/{% endif %}javascript:x">x</a>')[0]?.line,
+    ).toBe(2)
+    // Законные значения: схема определена безопасная или её нет
+    for (const template of [
+      '<a href="{% if a %}/{% endif %}page">x</a>',
+      '<a href="{% if a %}https://{% endif %}example.com">x</a>',
+      '<a href="{% if a %}/{% endif %}{{ title }}">x</a>',
+      '<a href="/search?q={% if a %}site:x{% endif %}">x</a>',
+      '<a href="{% if a %}#{% endif %}x">x</a>',
+      '<a href="{% if a %}mailto:{% endif %}{{ title }}">x</a>',
+      '<a href="{% unless a %}tel:+70000000000{% endunless %}">x</a>',
+      '<img srcset="{% for i in (1..2) %}/a{{ i }}.png {{ i }}x, {% endfor %}" alt="">',
+      '<img srcset="/a.png 1x, {% if a %}/b.png 2x, {% endif %}/c.png 3x" alt="">',
+    ]) {
+      expect(templateErrors(template), template).toEqual([])
+    }
+  })
+
+  it('строка в теге подставляется в известный текст адреса, а не проверяется отдельно', () => {
+    const bad = [
+      '<a href="{{ \'javascript\' }}:alert(1)">x</a>',
+      '<a href="{{ title | default: \'javascript\' }}:alert(1)">x</a>',
+      "<a href=\"{{ 'javas' | append: 'cript' | append: ':alert(1)' }}\">x</a>",
+      "<a href=\"{{ 'cript:alert(1)' | prepend: 'javas' }}\">x</a>",
+      '<a href="{% echo \'java\' %}script:alert(1)">x</a>',
+      '<a href="{% if title %}{{ \'javascript\' }}{% endif %}:alert(1)">x</a>',
+    ]
+    for (const template of bad) expect(linkErrors(template).length, template).toBeGreaterThan(0)
+    // Константы до элемента: assign и capture, в том числе в ветке, мимо которой идёт пример
+    const constants = [
+      '{% assign u = \'javascript:alert(1)\' %}<a href="{{ u }}">x</a>',
+      '{% capture u %}javascript:alert(1){% endcapture %}<a href="{{ u }}">x</a>',
+      "{% assign u = 'javas' | append: 'cript:alert(1)' %}<a href=\"{{ u }}\">x</a>",
+      '{% assign s = \'javascript\' %}<a href="{{ s }}:alert(1)">x</a>',
+      "{% if title == 'нет' %}{% assign u = 'javascript:alert(1)' %}{% endif %}<a href=\"{% if title == 'нет' %}{{ u }}{% endif %}\">x</a>",
+      '{% liquid\n  assign u = \'javascript:alert(1)\' %}<a href="{{ u }}">x</a>',
+      "{% if title == 'нет' %}{% capture u %}javascript:alert(1){% endcapture %}{% endif %}<a href=\"{% if title == 'нет' %}{{ u }}{% endif %}\">x</a>",
+    ]
+    for (const template of constants) {
+      expect(linkErrors(template).length, template).toBeGreaterThan(0)
+    }
+    // Законные константы и вычисления: безопасная схема, replace, который убирает опасную
+    for (const template of [
+      '{% assign u = \'/a\' %}<a href="{{ u }}">x</a>',
+      '<a href="{{ title | default: \'/x\' }}">x</a>',
+      '<a href="{{ title | prepend: \'tel:\' }}">x</a>',
+      "<a href=\"{{ title | replace: 'javascript:', '' }}\">x</a>",
+      '<a href="{{ \'https\' }}://a.ru">x</a>',
+      '<a href="{{ title | append: \': \' }}">x</a>',
+    ]) {
+      expect(linkErrors(template), template).toEqual([])
+    }
+  })
+
+  it('пробный рендер: опасный адрес в примере — ошибка при сохранении', () => {
+    const loop = '{% for plan in plans %}<a href="{{ plan.url }}">{{ plan.name }}</a>{% endfor %}'
+    // Адрес — из данных примера: так он выглядит на сайте до очистки
+    const found = linkErrors(loop, {
+      example: { title: 'Тарифы', plans: [{ name: 'Про', url: 'javascript:alert(1)' }] },
+    })
+    expect(found.join('|')).toMatch(/javascript:alert\(1\)/)
+    expect(found.join('|')).toMatch(/на сайте это будет убрано/)
+    // Тот же шаблон с безопасным примером — без ошибок
+    expect(
+      linkErrors(loop, { example: { title: 'Тарифы', plans: [{ name: 'Про', url: '/pro' }] } }),
+    ).toEqual([])
+    // Пример идёт мимо ветки, а при пустых полях она выполняется: адрес из списка констант;
+    // статическая проверка видит его по переменным assign и for, а пробный рендер ту же ссылку
+    // не повторяет
+    const hidden =
+      "{% unless title %}{% assign urls = 'javascript:alert(1)' | split: ',' %}" +
+      '{% for u in urls %}<a href="{{ u }}">x</a>{% endfor %}{% endunless %}'
+    expect(linkErrors(hidden)).toHaveLength(1)
+    expect(linkErrors(hidden).join('|')).toMatch(/javascript:/)
+    // Ошибка про ссылку одна: статическая проверка уже нашла, пробный рендер её не повторяет
+    expect(linkErrors('<a href="javascript:alert(1)">x</a>')).toHaveLength(1)
+  })
+
+  it('атрибут, который браузер отбросит как повтор, проверяется отдельно', () => {
+    const bad = [
+      '<a {% if a %}href="/x"{% else %}href="javascript:alert(1)"{% endif %}>x</a>',
+      '<a href="/x" href="javascript:alert(1)">x</a>',
+      '<a href="/x" href="{% if t %}javascript:alert(1){% endif %}">x</a>',
+      '<a href="/x"\n  href=\'javascript:alert(1)\'>x</a>',
+      '<a href="/x" href=javascript:alert(1)>x</a>',
+      '<a href="/x" href="&#106;avascript:alert(1)">x</a>',
+      '<img src="/a.png" alt="" src="data:text/html,x">',
+      '<a {% if a %}onclick="x"{% else %}onclick="y"{% endif %} href="/x">x</a>',
+    ]
+    for (const template of bad) {
+      expect(templateErrors(template).length, template).toBeGreaterThan(0)
+    }
+    expect(templateErrors('<a href="/x" href="javascript:alert(1)">x</a>')[0]?.message).toMatch(
+      /запрещена/,
+    )
+    expect(
+      templateErrors('<p>a</p>\n<a href="/x"\n  href="javascript:alert(1)">x</a>')[0]?.line,
+    ).toBe(3)
+    // Допущение: парсер и правда читает первый href, а второй отбрасывает
+    expect(sanitizeHtml('<a href="/x" href="javascript:alert(1)">x</a>')).toBe('<a href="/x">x</a>')
+    // Повтор безобидного атрибута и безопасные варианты в ветках — не ошибка
+    for (const template of [
+      '<a {% if a %}class="x"{% else %}class="y"{% endif %} href="/x">x</a>',
+      '<a href="/x" class="a" class="b">x</a>',
+      '<a {% if a %}href="/x"{% else %}href="#y"{% endif %}>x</a>',
+    ]) {
+      expect(templateErrors(template), template).toEqual([])
+    }
+  })
+
+  it('символ вывода в проверке записан escape-последовательностью, а не невидимым знаком', () => {
+    const file = './html.ts'
+    const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+    expect(source).toContain("OUTPUT_MARK = '\\uE000'")
+    expect(source).not.toContain('\uE000')
+    // Такой же знак в самом шаблоне не принимается за место вывода
+    expect(templateErrors('<a href="java\uE000script:x">x</a>')).toEqual([])
+    expect(templateErrors('<a href="{% if a %}x\uE000{% endif %}/page">x</a>')).toEqual([])
+  })
+
+  it('адрес без кавычек, собранный из кусков, — ошибка про ссылку, а не про склейку имени', () => {
+    const found = templateErrors('<a href=java{% comment %}x{% endcomment %}script:alert(1)>x</a>')
+    expect(found.length).toBeGreaterThan(0)
+    expect(found[0]?.message).toMatch(/Ссылка/)
+    expect(found.map((one) => one.message).join('|')).not.toMatch(/вплотную к имени/)
+    // Безопасный адрес без кавычек и комментарий в нём — не ошибка
+    expect(templateErrors('<a href=/a{% comment %}x{% endcomment %}b>x</a>')).toEqual([])
+  })
+
+  // Поля с «ветвящимся» условием: пример (a = «q») и пустые поля идут мимо ветки a == 'zz'
+  const branchFields: CustomBlockDraftInput['fields'] = [
+    { type: 'text', name: 'title', label: 'Заголовок', required: true },
+    { type: 'text', name: 'a', label: 'A' },
+  ]
+  const branchLinkErrors = (template: string) =>
+    linkErrors(template, { fields: branchFields, example: { title: 't', a: 'q' } })
+
+  it('javascript: из констант в ветках, мимо которых идут пример и пустые поля, виден при сохранении', () => {
+    const bad = [
+      // Побеждает не последний assign: любое значение из любой ветки могло оказаться в переменной
+      "{% if a == 'zz' %}{% assign u = 'javascript:alert(1)' %}{% else %}{% assign u = '/' %}{% endif %}<a href=\"{{ u }}\">x</a>",
+      "{% if a == 'zz' %}{% assign u = 'javascript:alert(1)' %}{% endif %}{% if a != 'zz' %}{% assign u = '/' %}{% endif %}<a href=\"{{ u }}\">x</a>",
+      // capture с ветками: текст каждой ветки — вариант значения
+      '{% capture u %}{% if a == \'zz\' %}javascript:alert(1){% else %}/{% endif %}{% endcapture %}<a href="{{ u }}">x</a>',
+      '{% capture u %}{% if a == \'zz\' %}/{% else %}javascript:alert(1){% endif %}{% endcapture %}<a href="{{ u }}">x</a>',
+      // liquid и echo: строки в кавычках берутся всегда, а не только когда вычисление упало
+      "<a href=\"{% liquid\nif a == 'zz'\necho 'javascript:alert(1)'\nendif %}\">x</a>",
+      "{% liquid\nif a == 'zz'\nassign u = 'javascript:alert(1)'\nendif %}<a href=\"{{ u }}\">x</a>",
+      "{% liquid\nif a == 'zz'\ncapture u\necho 'javascript:alert(1)'\nendcapture\nendif %}<a href=\"{{ u }}\">x</a>",
+      // Переменная цикла берёт значения из коллекции, собранной в ветке
+      "{% if a == 'zz' %}{% assign us = 'javascript:alert(1)' | split: ',' %}{% for u in us %}<a href=\"{{ u }}\">x</a>{% endfor %}{% endif %}",
+      // Сущность разорвана ветками: схему читают по склеенному значению
+      '<a href="&#{% if a == \'zz\' %}106{% else %}47{% endif %};avascript:alert(1)">x</a>',
+      '<a href="java&#115;cript&colon;alert(1)">x</a>',
+      '<a href="{% if a %}&#106;{% endif %}avascript&Tab;:alert(1)">x</a>',
+      // Через переменную в переменной и через фильтры над константой в ветке
+      "{% if a == 'zz' %}{% assign u = 'javascript:alert(1)' %}{% endif %}{% assign v = u %}<a href=\"{{ v }}\">x</a>",
+      "{% if a == 'zz' %}{% assign u = 'java' | append: 'script:alert(1)' %}{% endif %}<a href=\"{{ u }}\">x</a>",
+      "{% if a == 'zz' %}{% assign u = 'java|script:alert(1)' | remove: '|' %}{% endif %}<a href=\"{{ u }}\">x</a>",
+      '{% if a == \'zz\' %}{% assign u = \'data:text/html,x\' %}{% endif %}<img src="{{ u }}" alt="">',
+    ]
+    for (const template of bad) {
+      const found = branchLinkErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.join('|'), template).toMatch(/запрещена/)
+    }
+    // Строка ошибки — строка атрибута
+    const lined = errors({
+      template:
+        "<p>a</p>\n{% if a == 'zz' %}{% assign u = 'javascript:alert(1)' %}{% endif %}\n<a href=\"{{ u }}\">x</a>",
+      fields: branchFields,
+      example: { title: 't', a: 'q' },
+    }).find((one) => /запрещена/.test(one.message))
+    expect(lined?.line).toBe(3)
+    // Законные: безопасные константы во всех ветках, опасная схема только как текст или как то,
+    // что убирает replace, самоссылка capture, «&» в запросе адреса
+    for (const template of [
+      "{% if a == 'zz' %}{% assign u = '/a' %}{% else %}{% assign u = '#b' %}{% endif %}<a href=\"{{ u }}\">x</a>",
+      '{% capture u %}{% if a == \'zz\' %}/a{% else %}tel:+70000000000{% endif %}{% endcapture %}<a href="{{ u }}">x</a>',
+      "{% assign u = title | replace: 'javascript:', '' %}<a href=\"{{ u }}\">x</a>",
+      '{% assign label = \'javascript: the good parts\' %}<p>{{ label }}</p><a href="/x">x</a>',
+      "<a href=\"{% liquid\nif a == 'javascript:'\necho '/'\nendif %}\">x</a>",
+      '{% capture u %}{{ u }}x{% endcapture %}<a href="{{ u }}">x</a>',
+      '{% for u in (1..2) %}<a href="/p{{ u }}">x</a>{% endfor %}',
+      '<a href="/s?x=1&{% if a %}y=2{% endif %}&amp;z=3">x</a>',
+    ]) {
+      expect(branchLinkErrors(template), template).toEqual([])
+    }
+  })
+
+  it('проверка не рендерит шаблон на каждый вывод: один рендер и ограниченное число вычислений', () => {
+    // Вывод в адресе — вычисление один раз на весь шаблон (с метками вокруг выводов) и не
+    // больше двухсот отдельных выражений
+    const calls: string[] = []
+    const evaluate = (source: string) => {
+      calls.push(source)
+      return undefined
+    }
+    const many = Array.from({ length: 300 }, (_, i) => `<a href="{{ title | default: 'x${i}' }}">`)
+    checkTemplateHtml(many.join(''), { evaluate })
+    expect(calls.length).toBeLessThanOrEqual(201)
+    expect(calls[0]).toContain('')
+    // Без вывода в адресе вычислений нет
+    calls.length = 0
+    checkTemplateHtml('<p>{{ title }}</p><a href="/x">x</a>', { evaluate })
+    expect(calls).toEqual([])
+    // Значения выводов приходят из одного рендера: переменная из assign до вывода
+    expect(
+      linkErrors('{% assign u = \'javascript:alert(1)\' %}<a href="{{ u }}">x</a>').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('тяжёлая преамбула и сотни выводов в адресе не вешают проверку', () => {
+    const heavy =
+      '{% capture c %}{% for i in (1..3000) %}{% for j in (1..3000) %}{% endfor %}{% endfor %}{% endcapture %}'
+    const template = `${heavy}<a href="${'{{ title }}'.repeat(300)}">x</a>`
+    const started = Date.now()
+    const found = errors({ template })
+    // Каждый рендер упирается в лимит (200 мс); раньше вывод стоил рендера, и выходили минуты
+    expect(Date.now() - started).toBeLessThan(3000)
+    expect(found.map((one) => one.message).join('|')).toMatch(/слишком долго/)
+    // Лимит исчерпан один раз — больше шаблон не рендерится: ни вычислений, ни рендера на пустых
+    // полях. Пример не рендерится (его нет): то же самое после первого вычисления
+    const spy = vi.spyOn(liquid, 'renderSync')
+    try {
+      customBlockProblems(define({ template }))
+      expect(spy).toHaveBeenCalledTimes(1)
+      spy.mockClear()
+      const noExample = Date.now()
+      customBlockProblems({ ...define({ template }), example: {} })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(Date.now() - noExample).toBeLessThan(3000)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('javascript: из константы, над которой в выводе стоит фильтр, виден при сохранении', () => {
+    const bad = [
+      // Константа задана в ветке, мимо которой идёт пример; фильтр в выводе собирает схему
+      "{% if title == 'zz' %}{% assign u = 'javascriptxalert(1)' %}{% endif %}<a href=\"{{ u | replace: 'x', ':' }}\">x</a>",
+      "{% if title == 'zz' %}{% assign u = 'javascript%3Aalert(1)' %}{% endif %}<a href=\"{{ u | url_decode }}\">x</a>",
+      "{% if title == 'zz' %}{% assign u = 'amF2YXNjcmlwdDphbGVydCgxKQ==' %}{% endif %}<a href=\"{{ u | base64_decode }}\">x</a>",
+      // Массив из split: берётся элемент
+      "{% if title == 'zz' %}{% assign u = '/,javascript:alert(1)' | split: ',' %}{% endif %}<a href=\"{{ u | last }}\">x</a>",
+      "{% if title == 'zz' %}{% assign u = '/,javascript:alert(1)' | split: ',' %}{% endif %}<a href=\"{{ u[1] }}\">x</a>",
+      // capture с веткой и тот же фильтр
+      '{% capture u %}{% if title == \'zz\' %}javascript%3Aalert(1){% endif %}{% endcapture %}<a href="{{ u | url_decode }}">x</a>',
+      // То же внутри {% liquid %}
+      "{% liquid\nif title == 'zz'\nassign u = 'javascriptxalert(1)'\nendif %}<a href=\"{{ u | replace: 'x', ':' }}\">x</a>",
+      "{% liquid\nif title == 'zz'\ncapture u\necho 'javascript%3Aalert(1)'\nendcapture\nendif %}<a href=\"{{ u | url_decode }}\">x</a>",
+      // Переменная цикла
+      "{% if title == 'zz' %}{% assign us = '/,javascript:alert(1)' | split: ',' %}{% endif %}{% for u in us %}<a href=\"{{ u | upcase }}\">x</a>{% endfor %}",
+    ]
+    for (const template of bad) {
+      const found = branchLinkErrors(template)
+      expect(found.length, template).toBeGreaterThan(0)
+      expect(found.join('|'), template).toMatch(/запрещена/)
+    }
+    // Законные: те же фильтры над безопасными значениями
+    for (const template of [
+      "{% if title == 'zz' %}{% assign u = 'x/a' %}{% endif %}<a href=\"{{ u | replace: 'x', '/' }}\">x</a>",
+      '{% assign u = \'%2Fa\' %}<a href="{{ u | url_decode }}">x</a>',
+      "{% assign u = '/a,/b' | split: ',' %}<a href=\"{{ u | last }}\">x</a>",
+    ]) {
+      expect(branchLinkErrors(template), template).toEqual([])
+    }
+  })
+
+  it('javascript: из фильтра в промежуточном assign виден, даже если вывод голый', () => {
+    const bad = [
+      "{% if title == 'zz' %}{% assign p = 'javascriptxalert(1)' %}{% endif %}{% assign u = p | replace: 'x', ':' %}<a href=\"{{ u }}\">x</a>",
+      "{% if title == 'zz' %}{% assign p = 'javascript%3Aalert(1)' %}{% endif %}{% assign u = p | url_decode %}<a href=\"{{ u }}\">x</a>",
+      "{% if title == 'zz' %}{% assign p = 'javascript' %}{% endif %}{% assign u = p | append: ':alert(1)' %}<a href=\"{{ u }}\">x</a>",
+      "{% if title == 'zz' %}{% assign p = 'alert(1)' %}{% endif %}{% assign u = p | prepend: 'javascript:' %}<a href=\"{{ u }}\">x</a>",
+      // Через ещё одну переменную без фильтра
+      "{% if title == 'zz' %}{% assign p = 'javascriptxalert(1)' %}{% endif %}{% assign u = p | replace: 'x', ':' %}{% assign v = u %}<a href=\"{{ v }}\">x</a>",
+    ]
+    for (const template of bad) {
+      const found = branchLinkErrors(template)
+      expect(found.join('|'), template).toMatch(/запрещена/)
+    }
+    for (const template of [
+      "{% if title == 'zz' %}{% assign p = 'x/a' %}{% endif %}{% assign u = p | replace: 'x', '/' %}<a href=\"{{ u }}\">x</a>",
+      "{% if title == 'zz' %}{% assign p = '%2Fa' %}{% endif %}{% assign u = p | url_decode %}<a href=\"{{ u }}\">x</a>",
+    ]) {
+      expect(branchLinkErrors(template), template).toEqual([])
+    }
+  })
+
+  it('javascript: доходит до адреса через алиас, цепочку фильтров, capture и цикл в ветке', () => {
+    const branch = (inside: string) => `{% if title == 'zz' %}${inside}{% endif %}`
+    const bad = [
+      // (1) алиас перед фильтром
+      `${branch("{% assign p = 'javascriptxalert(1)' %}")}{% assign q = p %}{% assign u = q | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // (2) два шага с фильтрами
+      `${branch("{% assign p = ' javascriptxalert(1)' %}")}{% assign q = p | strip %}{% assign u = q | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // Длинная цепочка из шагов без фильтра между ними
+      `${branch("{% assign p = 'javascriptxalert(1)' %}")}{% assign a1 = p %}{% assign a2 = a1 %}{% assign a3 = a2 %}{% assign u = a3 | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // (3) база — capture в ветке
+      `${branch('{% capture p %}javascriptxalert(1){% endcapture %}')}{% assign u = p | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // capture, собранный из переменной, а не из текста
+      `${branch("{% assign p = 'javascriptxalert(1)' %}")}{% capture q %}{{ p }}{% endcapture %}{% assign u = q | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // (4) переменная цикла
+      `${branch("{% assign ps = 'javascriptxalert(1),b' | split: ',' %}")}{% for p in ps %}{% assign u = p | replace: 'x', ':' %}<a href="{{ u }}">x</a>{% endfor %}`,
+      `${branch("{% assign ps = 'javascriptxalert(1),b' | split: ',' %}")}{% for p in ps %}<a href="{{ p | replace: 'x', ':' }}">x</a>{% endfor %}`,
+      // Цикл по переменной, заданной через алиас
+      `${branch("{% assign ps0 = 'javascriptxalert(1),b' | split: ',' %}")}{% assign ps = ps0 %}{% for p in ps %}{% assign u = p | replace: 'x', ':' %}<a href="{{ u }}">x</a>{% endfor %}`,
+      // Переменная в {% liquid %}
+      `${branch("{% assign p = 'javascriptxalert(1)' %}")}{% liquid
+assign q = p
+assign u = q | replace: 'x', ':'
+%}<a href="{{ u }}">x</a>`,
+    ]
+    for (const template of bad) {
+      const found = branchLinkErrors(template)
+      expect(found.join('|'), template).toMatch(/запрещена/)
+    }
+    // Законные: те же цепочки над безопасными значениями, цикл и алиасы без опасной схемы
+    for (const template of [
+      `${branch("{% assign p = 'x/a' %}")}{% assign q = p %}{% assign u = q | replace: 'x', '/' %}<a href="{{ u }}">x</a>`,
+      `${branch('{% capture p %}x/a{% endcapture %}')}{% assign u = p | replace: 'x', '/' %}<a href="{{ u }}">x</a>`,
+      `${branch("{% assign ps = 'x/a,b' | split: ',' %}")}{% for p in ps %}<a href="{{ p | replace: 'x', '/' }}">x</a>{% endfor %}`,
+      '{% assign p = \'/a\' %}{% assign q = p %}{% assign u = q | strip %}<a href="{{ u }}">x</a>',
+    ]) {
+      expect(branchLinkErrors(template), template).toEqual([])
+    }
+  })
+
+  it('итог, оборванный временем или лимитом движка, помечен: его нельзя запоминать', () => {
+    const template = "{% assign u = '/a' %}<a href=\"{{ u | append: 'b' }}\">x</a>"
+    // Бюджет вычислений по времени истёк посреди проверки (пауза сборщика мусора, соседний запрос)
+    const real = Date.now.bind(Date)
+    let calls = 0
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => real() + calls++ * 1000)
+    const late = { hit: false }
+    try {
+      customBlockProblems(define({ template }), { timeLimit: late })
+    } finally {
+      spy.mockRestore()
+    }
+    expect(late.hit).toBe(true)
+    // Без задержки флаг не ставится: итог зависит только от шаблона
+    const quiet = { hit: false }
+    customBlockProblems(define({ template }), { timeLimit: quiet })
+    expect(quiet.hit).toBe(false)
+    // Предел рендера движка (200 мс по часам) — тоже время: пробный рендер и вычисления
+    const heavy =
+      '{% capture c %}{% for i in (1..3000) %}{% for j in (1..3000) %}{% endfor %}{% endfor %}{% endcapture %}<a href="{{ title }}">x</a>'
+    const slow = { hit: false }
+    expect(
+      customBlockProblems(define({ template: heavy }), { timeLimit: slow })
+        .map((problem) => problem.message)
+        .join('|'),
+    ).toMatch(/слишком долго/)
+    expect(slow.hit).toBe(true)
+    const noExample = { hit: false }
+    const withoutExample = customBlockProblems(
+      { ...define({ template: heavy }), example: {} },
+      { timeLimit: noExample },
+    )
+    expect(noExample.hit).toBe(true)
+    // Рендер на пустых полях упёрся в лимит, вычислять нечем — адрес из поля не проверен: честно
+    // об этом, а не тишина
+    expect(withoutExample.map((problem) => problem.message).join('|')).toMatch(/слишком хитро/)
+    // Лимит исчерпан, вычислять нечем, а адрес собран Liquid: «слишком хитро», а не тишина
+    const exhaustedLink = (exhausted: boolean) =>
+      checkTemplateHtml(template, { evaluate: () => '', exhausted: () => exhausted }).map(
+        (problem) => problem.message,
+      )
+    expect(exhaustedLink(true).join('|')).toMatch(/слишком хитро/)
+    expect(exhaustedLink(false)).toEqual([])
+  })
+
+  it('враждебные графы переменных считаются за доли секунды и не молчат', () => {
+    const quick = (template: string) => {
+      const started = Date.now()
+      const found = errors({ template, fields: branchFields, example: { title: 't', a: 'q' } })
+      return { ms: Date.now() - started, messages: found.map((one) => one.message).join('|') }
+    }
+    // Ромбы: каждая переменная — два определения над двумя предыдущими
+    const diamonds = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `{% if a == 'zz' %}{% assign v${i + 1} = v${i} | append: v${i} %}{% else %}{% assign v${i + 1} = v${i} | prepend: 'x' %}{% endif %}`,
+    ).join('')
+    const diamond = quick(`{% assign v0 = '/a' %}${diamonds}<a href="{{ v40 }}">x</a>`)
+    expect(diamond.ms).toBeLessThan(2000)
+    // Накопление в себя: неподвижной точки нет — честный отказ, а не тишина
+    const grow = quick(
+      "{% assign u = '/a' %}{% for i in (1..3) %}{% assign u = u | append: 'b' %}{% endfor %}<a href=\"{{ u }}\">x</a>",
+    )
+    expect(grow.ms).toBeLessThan(2000)
+    expect(grow.messages).toMatch(/слишком хитро/)
+    // А переменная, не связанная с растущей, не страдает
+    const apart = quick(
+      "{% assign u = '/a' %}{% assign w = 'x' %}{% for i in (1..3) %}{% assign w = w | append: 'b' %}{% endfor %}<a href=\"{{ u }}\">x</a><p class=\"{{ w }}\">x</p>",
+    )
+    expect(apart.messages).not.toMatch(/хитро/)
+    // Много переменных с вариантами в одном адресе: сочетаний больше предела
+    const wide = Array.from(
+      { length: 12 },
+      (_, i) =>
+        `{% if a == 'zz' %}{% assign w${i} = 'p${i}' %}{% else %}{% assign w${i} = 'q${i}' %}{% endif %}`,
+    ).join('')
+    const refs = Array.from({ length: 12 }, (_, i) => `{{ w${i} }}`).join('')
+    const many = quick(
+      `${wide}<a href="/x{{ '' | append: w0 | append: w1 | append: w2 | append: w3 | append: w4 | append: w5 }}${refs}">x</a>`,
+    )
+    expect(many.ms).toBeLessThan(2000)
+  })
+
+  it('не-адресные атрибуты со значением из ветки проверяются так же, как без Liquid', () => {
+    const all = (template: string) =>
+      errors({ template, fields: branchFields, example: { title: 't', a: 'q' } }).map(
+        (one) => one.message,
+      )
+    const found = (template: string) => all(template).join('|')
+    // fill с внешним файлом, tabindex > 0, id совпал с переменной скриптов, ссылка на чужой id
+    expect(
+      found('<svg><rect fill="{% if a == \'zz\' %}url(https://e.x/a){% endif %}"/></svg>'),
+    ).toMatch(/url()/)
+    expect(found('<p tabindex="{% if a == \'zz\' %}5{% endif %}">x</p>')).toMatch(/tabindex/)
+    expect(found('{% assign n = \'5\' %}<p tabindex="{{ n }}">x</p>')).toMatch(/tabindex/)
+    expect(found('<p id="{% if a == \'zz\' %}menu{% endif %}">x</p>')).toMatch(/id «menu»/)
+    expect(
+      found('<button popovertarget="{% if a == \'zz\' %}site-menu{% endif %}">x</button>'),
+    ).toMatch(/popovertarget="site-menu"/)
+    // Законные: то же значение допустимо, ссылка на id из шаблона, вывод с id из данных
+    for (const template of [
+      '<svg><rect fill="{% if a == \'zz\' %}url(#g){% endif %}"/></svg>',
+      '<p tabindex="{% if a == \'zz\' %}0{% else %}-1{% endif %}">x</p>',
+      '<p id="{% if a == \'zz\' %}site-box{% endif %}">x</p>',
+      '<button popovertarget="{% if a == \'zz\' %}menu-box{% endif %}">x</button><div id="menu-box" popover></div>',
+      '<button popovertarget="{{ block.id }}-box">x</button><div id="{{ block.id }}-box" popover></div>',
+    ]) {
+      expect(all(template), template).toEqual([])
+    }
+  })
+
+  it('цепочка assign с двумя и тремя ссылками на предыдущий шаг считается за доли секунды', () => {
+    const chain = (count: number, links: number) => {
+      const refs = (i: number) => Array(links).fill(`v${i}`).join(' | default: ')
+      const steps = Array.from(
+        { length: count },
+        (_, i) => `{% assign v${i + 1} = ${refs(i)} %}`,
+      ).join('')
+      return `{% assign v0 = '/a' %}${steps}<a href="{{ v${count} }}">x</a>`
+    }
+    for (const links of [2, 3]) {
+      const template = chain(40, links)
+      const started = Date.now()
+      const found = errors({ template, fields: branchFields, example: { title: 't', a: 'q' } })
+      expect(Date.now() - started, `ссылок ${links}`).toBeLessThan(1500)
+      // Честный отказ или чистый ответ, но не зависание
+      expect(found.length).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('сорок безобидных адресов не съедают вычисления: опасный адрес после них найден', () => {
+    const harmless = Array.from(
+      { length: 70 },
+      (_, i) => `<a href="{{ '/p' | append: '${i}' | upcase }}">x</a>`,
+    ).join('')
+    const danger =
+      "{% if title == 'zz' %}{% assign u = 'javascript%3Aalert(1)' | url_decode %}{% endif %}<a href=\"{{ u }}\">x</a>"
+    const found = branchLinkErrors(harmless + danger)
+    expect(found.join('|')).toMatch(/запрещена/)
+    expect(found.join('|')).not.toMatch(/хитро/)
+    expect(branchLinkErrors(harmless)).toEqual([])
+  })
+
+  it('когда вычислений не хватило, а значение адреса нужно, — «слишком хитро», а не тишина', () => {
+    // Вывод в ветке мимо пробного рендера: значение приходится вычислять каждому отдельно
+    const template = Array.from(
+      { length: 280 },
+      (_, i) => `{% if title=='zz' %}<a href="{{'/'|append:'${i}'}}">x</a>{% endif %}`,
+    ).join('')
+    const found = branchLinkErrors(template)
+    expect(found).toEqual([])
+    const problems = errors({ template, fields: branchFields, example: { title: 't', a: 'q' } })
+    const complex = problems.filter((one) => /слишком хитро/.test(one.message))
+    // Одна ошибка на шаблон, а не по ошибке на каждый из двухсот восьмидесяти адресов
+    expect(complex).toHaveLength(1)
+  })
+
+  // Все ошибки шаблона, в том числе «слишком хитро»: linkErrors их не показывает
+  const allErrors = (template: string) =>
+    errors({ template, fields: branchFields, example: { title: 't', a: 'q' } }).map(
+      (one) => one.message,
+    )
+
+  it('схема адреса уже определена префиксом: счётчики и накопление не дают «слишком хитро»', () => {
+    const counter =
+      '{% assign n = 0 %}{% for i in (1..3) %}{% assign n = n | plus: 1 %}<h3 id="q-{{ n }}">x</h3>{% endfor %}<a href="#q-{{ n }}">последний</a>'
+    const query =
+      "{% assign q = '' %}{% for i in (1..3) %}{% assign q = q | append: '&p=' | append: i %}{% endfor %}"
+    for (const template of [
+      counter,
+      `${query}<a href="/search?x=1{{ q }}">x</a>`,
+      `${query}<a href="https://example.com/?{{ q }}">x</a>`,
+      `${query}<a href="/p/{{ q }}">x</a>`,
+      `${query}<a href="#s{{ q }}">x</a>`,
+    ]) {
+      expect(allErrors(template)).toEqual([])
+    }
+    // Без префикса накопление по-прежнему «слишком хитро»: схему определяет сам вывод
+    expect(
+      allErrors(
+        "{% assign u = '/a' %}{% for i in (1..3) %}{% assign u = u | append: 'b' %}{% endfor %}<a href=\"{{ u }}\">x</a>",
+      ).join('|'),
+    ).toMatch(/хитро/)
+    // Сотни ссылок с постоянным началом не тратят бюджет вычислений на выводы
+    const many = Array.from(
+      { length: 240 },
+      (_, i) => `{% if a=='zz' %}<a href="/p/{{'x'|append:'${i}'}}">x</a>{% endif %}`,
+    ).join('')
+    expect(allErrors(many)).toEqual([])
+  })
+
+  it('javascript: из capture не прячется за обрезкой значения и за «%}» в тексте', () => {
+    const long = 'A'.repeat(390)
+    const bad = [
+      // Хвост длинного capture (раньше обрезался до 400 знаков, и переменная считалась полной)
+      `{% if a == 'zz' %}{% capture c %}${long}|javascriptxalert(1){% endcapture %}{% endif %}<a href="{{ c | split: '|' | last | replace: 'x', ':' }}">x</a>`,
+      `{% if a == 'zz' %}{% capture p %}${long}javascriptxalert(1){% endcapture %}{% endif %}<a href="{{ p | slice: 390, 100 | replace: 'x', ':' }}">x</a>`,
+      `{% if a == 'zz' %}{% capture p %}${long}javascriptxalert(1){% endcapture %}{% endif %}{% assign u = p | slice: 390, 100 | replace: 'x', ':' %}<a href="{{ u }}">x</a>`,
+      // «%}» в тексте нельзя подставить в строку assign: токенизатор оборвёт её раньше кавычки
+      "{% if a == 'zz' %}{% capture p %}javascriptx{% raw %}%}{% endraw %}{% endcapture %}{% endif %}<a href=\"{{ p | replace: 'x', ':' }}\">x</a>",
+      "{% if a == 'zz' %}{% capture p %}javascriptxalert(1)//%}{% endcapture %}{% endif %}{% assign u = p | replace: 'x', ':' %}<a href=\"{{ u }}\">x</a>",
+      "{% if a == 'zz' %}{% capture p %}javascriptxalert(1)//%}{% endcapture %}{% endif %}{% assign parts = p | split: '/' %}{% for part in parts %}<a href=\"{{ part | replace: 'x', ':' }}\">x</a>{% endfor %}",
+    ]
+    for (const template of bad) {
+      const found = allErrors(template).join('|')
+      // Либо сама ссылка названа, либо честное «слишком хитро»: тишины быть не должно
+      expect(found, template.slice(0, 120)).toMatch(/запрещена|хитро/)
+    }
+    // Вариантов тела больше предела (десять независимых if): не тишина
+    const ifs = Array.from({ length: 10 }, (_, i) => `{% if a == '${i}' %}${i}{% endif %}`).join('')
+    expect(
+      allErrors(
+        `{% capture p %}${ifs}{% if a == 'zz' %}|javascriptxalert(1){% endif %}{% endcapture %}<a href="{{ p | split: '|' | last | replace: 'x', ':' }}">x</a>`,
+      ).join('|'),
+    ).toMatch(/запрещена|хитро/)
+    // Короткий и обычный capture по-прежнему проверяется точно, а безопасный — без ошибок
+    expect(
+      allErrors(
+        '{% capture p %}/a{% endcapture %}{% assign u = p | append: \'/b\' %}<a href="{{ u }}">x</a>',
+      ),
+    ).toEqual([])
+  })
+
+  it('вычисление не состоялось (ошибка движка): переменная неполная, а не тишина', () => {
+    const template =
+      "{% if a == 'zz' %}{% assign p = 'javascriptx' %}{% endif %}{% assign u = p | replace: 'x', ':' %}<a href=\"{{ u }}\">x</a>"
+    const messages = (evaluate: (source: string) => string | undefined) =>
+      checkTemplateHtml(template, { evaluate }).map((problem) => problem.message)
+    // Движок отвечает на assign ошибкой: что в переменной, неизвестно
+    expect(messages((source) => (source.includes('{% assign') ? undefined : '')).join('|')).toMatch(
+      /хитро/,
+    )
+    // Отвечает пустотой — это значение, а не отказ
+    expect(messages(() => '')).toEqual([])
+  })
+
+  it('сущность в capture на странице экранируется: «javascript&#58;» не ошибка', () => {
+    const template =
+      '{% if a == \'zz\' %}{% capture p %}javascript&#58;alert(1){% endcapture %}{% endif %}<a href="{{ p }}">x</a>'
+    expect(allErrors(template)).toEqual([])
+    // А тот же адрес в тексте шаблона браузер раскодирует: это ошибка
+    expect(allErrors('<a href="javascript&#58;alert(1)">x</a>').join('|')).toMatch(/запрещена/)
+  })
+
+  it('обход значений ограничен общим пределом работы: тяжёлые шаблоны проверяются быстро', () => {
+    const quick = (template: string) => {
+      const started = Date.now()
+      const found = errors({ template, fields: branchFields, example: { title: 't', a: 'q' } })
+      return { ms: Date.now() - started, messages: found.map((one) => one.message).join('|') }
+    }
+    // Шаблон рецензента: 200 присваиваний с пробелами и значение из 1650 выводов (раньше 171 с)
+    const spaces = ' '.repeat(40)
+    const assigns = Array.from({ length: 200 }, () => `{%assign u="ab${spaces}"%}`).join('')
+    const padded = `${assigns}<a href="${'{{u}}'.repeat(1650)}">x</a>`
+    expect(padded.length).toBeLessThan(20_000)
+    expect(quick(padded).ms).toBeLessThan(1500)
+    // Разные варианты: сжатием не обойтись, работает предел
+    const distinct = `${Array.from({ length: 200 }, (_, i) => `{%assign u="a${i}b"%}`).join('')}<a href="${'{{u}}'.repeat(1600)}">x</a>`
+    const heavy = quick(distinct)
+    expect(heavy.ms).toBeLessThan(1500)
+    expect(heavy.messages).toMatch(/слишком хитро/)
+    // Много адресов, у каждого свои варианты: ошибка одна, время ограничено
+    const many = `${Array.from({ length: 100 }, (_, i) => `{%assign u="a${i}b"%}`).join('')}${Array.from(
+      { length: 350 },
+      () => '<a href="{{u}}{{u}}">x</a>',
+    ).join('')}`
+    const several = quick(many)
+    expect(several.ms).toBeLessThan(1500)
+    expect(several.messages.match(/слишком хитро/g)?.length ?? 0).toBeLessThanOrEqual(1)
+  })
+
+  it('разовые вычисления проверки не вытесняют шаблоны сайта из кеша разбора', () => {
+    const state = { media: {}, priority: false }
+    const site = '<p>{{ title }}</p> site-template'
+    renderTemplate(site, { title: 'a' }, state)
+    const spy = vi.spyOn(liquid, 'parse')
+    try {
+      renderTemplate(site, { title: 'a' }, state)
+      expect(spy).not.toHaveBeenCalled()
+      for (let i = 0; i < 100; i++) renderTemplate(`{{ ${i} }}`, {}, state, { cache: false })
+      renderTemplate(site, { title: 'a' }, state)
+      // Только сто разовых разборов: шаблон сайта остался в кеше
+      expect(spy).toHaveBeenCalledTimes(100)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('вывод тегов без экранирования не ломает кавычки атрибута: tablerow выключен, raw-фильтры — ошибка', () => {
+    // tablerow писал <tr class="…"><td class="…"> с кавычками мимо экранирования
+    const tablerow = errors({
+      template:
+        '<p title="{% tablerow i in (1..1) %}<script>alert(1)</script>{% endtablerow %}">x</p>',
+    })
+    expect(tablerow.map((one) => one.message).join('|')).toMatch(/tablerow/)
+    // Фильтры с готовым HTML в значении атрибута: кавычки закрыли бы значение
+    const rawErrors = (template: string) =>
+      checkTemplateHtml(template).filter((problem) => problem.level === 'error')
+    for (const template of [
+      '<p title="{{ photo | image }}<script>alert(1)</script>">x</p>',
+      '<p title="{% echo photo | image %}<iframe src=https://evil.example></iframe>">x</p>',
+      '<p title="{% liquid\n  echo photo | image %}">x</p>',
+      '<img alt="{{ title | accent }}" src="/a.png">',
+      '<p title="{{ text | paragraphs }}">x</p>',
+      '<p title="{{ text | newline_to_br }}">x</p>',
+    ]) {
+      const found = rawErrors(template)
+      expect(found.map((one) => one.message).join('|'), template).toMatch(/выводит готовый HTML/)
+    }
+    expect(rawErrors('<p title="{{ photo | image }}">x</p>')[0]?.line).toBe(1)
+    // Законно: те же фильтры между элементами, image_url в адресе, обычный вывод в атрибуте
+    for (const template of [
+      '<div>{{ photo | image }}</div>',
+      '<p>{{ text | paragraphs }}</p><h2>{{ title | accent }}</h2>',
+      '<img src="{{ photo | image_url }}" alt="{{ photo.alt }}">',
+      '<p title="{{ title | upcase }}">x</p>',
+    ]) {
+      expect(rawErrors(template), template).toEqual([])
+    }
+    // Список «raw» в проверке совпадает с движком
+    const raw = Object.entries(liquid.filters)
+      .filter(([, filter]) => typeof filter === 'object' && filter.raw)
+      .map(([name]) => name)
+    expect([...raw].sort()).toEqual([...RAW_HTML_FILTERS].sort())
+  })
+
+  it('пробный рендер сверяется с очисткой сайта: запрещённое из данных примера — ошибка', () => {
+    const fields: CustomBlockDraftInput['fields'] = [
+      { type: 'text', name: 'title', label: 'Заголовок', required: true },
+      { type: 'text', name: 'pic', label: 'Адрес картинки' },
+    ]
+    const found = (template: string, example: Record<string, unknown>) =>
+      errors({ template, fields, example }).map((one) => one.message)
+    // Чужой адрес картинки из примера очистка убрала бы
+    expect(
+      found('<img src="{{ pic }}" alt="">', { title: 't', pic: 'https://evil.example/a.png' }).join(
+        '|',
+      ),
+    ).toMatch(/Чужой адрес/)
+    expect(found('<img src="{{ pic }}" alt="">', { title: 't', pic: '/media/a.png' })).toEqual([])
+    // Ошибка про одну ссылку не подавляет остальные: два разных адреса — две ошибки
+    const two = found('<a href="javascript:alert(1)">x</a><a href="{{ pic }}">y</a>', {
+      title: 't',
+      pic: 'vbscript:msgbox(1)',
+    })
+    expect(two.length).toBe(2)
+    expect(two.join('|')).toMatch(/javascript:alert\(1\)/)
+    expect(two.join('|')).toMatch(/vbscript:msgbox\(1\)/)
+    // Одна и та же ссылка, найденная и статической проверкой, и пробным рендером, — одна ошибка
+    expect(
+      linkErrors('{% assign u = \'javascript:alert(1)\' %}<a href="{{ u }}">x</a>'),
+    ).toHaveLength(1)
   })
 
   it('popover с display: block не выходит из-под защитного слоя base.css', () => {

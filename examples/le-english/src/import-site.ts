@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { ApiFailure, type Client } from './api-client.ts'
 import {
@@ -41,6 +42,13 @@ export type ImportOptions = {
    * заменяется только блок с фразой шаблона «нет форм заявок», остальной текст не трогается
    */
   rebuildDocuments?: boolean
+  /**
+   * Папка, куда перед заменой черновика документа кладётся его прежний текст (файл на документ и
+   * запуск). Черновики не попадают в историю версий: без файла правки юриста, затёртые шаблоном
+   * при обрыве связи, не вернуть. По умолчанию — `~/.averra/le-english-backup`: вне репозитория,
+   * куда скрипт обычно запускают из его папки, чтобы тексты юриста не попали в коммит
+   */
+  backupDir?: string
   log?: (line: string) => void
 }
 
@@ -82,6 +90,36 @@ const claimsNoForms = (document: string, value: unknown) =>
 const FORM_WORD = /(^|[^а-яё])форм(а|е|у|ой|ы|ам|ами|ах)?([^а-яё]|$)/i
 const mentionsForm = (value: unknown) => FORM_WORD.test(JSON.stringify(value ?? null))
 
+/**
+ * Прежний черновик документа — в файл, до замены шаблоном. Файл в том виде, как его принимает
+ * `PUT /pages/<документ>` (`title` и `content`): вернуть можно тем же запросом. Не получилось
+ * записать — ошибка до первого изменения, а не замена без страховки
+ */
+function backupDraft(dir: string, document: string, page: PageRecord) {
+  const stamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
+  // Файл не перезаписывается: два запуска в одну миллисекунду получат разные имена
+  let file = join(dir, `${document}-draft-${stamp}.json`)
+  for (let n = 2; existsSync(file); n++) file = join(dir, `${document}-draft-${stamp}-${n}.json`)
+  try {
+    mkdirSync(dir, { recursive: true })
+    const body = JSON.stringify({ title: page.title, content: page.draft }, null, 2)
+    writeFileSync(file, `${body}\n`)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `Не удалось сохранить прежний черновик /${document} в ${file}: ${reason}. Ничего не заменено`,
+    )
+  }
+  return file
+}
+
+/**
+ * Папка страховочных файлов по умолчанию. Не в текущей папке: скрипт запускают из
+ * examples/le-english, и тексты юриста лежали бы в рабочем дереве репозитория рядом с кодом.
+ * Имя не `averra-backup`: так называются бэкапы самой установки на сервере
+ */
+export const defaultBackupDir = () => join(homedir(), '.averra', 'le-english-backup')
+
 type DocBlock = { id?: unknown }
 type DocContent = { blocks?: DocBlock[] } & Json
 
@@ -91,15 +129,22 @@ const DATA_BLOCK_ID = 'data'
 /**
  * Черновик человека, в котором блок с ложной фразой заменён свежим блоком данных из шаблона.
  * Остальные блоки остаются как есть. Нет ложного блока или в шаблоне нет блока данных —
- * undefined: ничего не меняем
+ * undefined: ничего не меняем. Если в черновике уже есть свой блок данных без ложной фразы
+ * (юрист продублировал блок), второй с тем же id API отверг бы («Id блоков на странице должны
+ * быть уникальными»), и каждый запуск падал бы заново: ложные блоки тогда убираются, а не
+ * заменяются
  */
-function repairStaleBlocks(draft: DocContent, fresh: DocContent): DocContent | undefined {
+function repairStaleBlocks(
+  draft: DocContent,
+  fresh: DocContent,
+): { content: DocContent; removedOnly: boolean } | undefined {
   const replacement = fresh.blocks?.find((block) => block.id === DATA_BLOCK_ID)
   const blocks = draft.blocks
   if (!replacement || !blocks) return undefined
   const stale = (block: DocBlock) => JSON.stringify(block).includes(NO_FORMS_PHRASE)
   if (!blocks.some(stale)) return undefined
-  let put = false
+  const hasOwnData = blocks.some((block) => block.id === DATA_BLOCK_ID && !stale(block))
+  let put = hasOwnData
   const next: DocBlock[] = []
   for (const block of blocks) {
     if (!stale(block)) next.push(block)
@@ -108,7 +153,7 @@ function repairStaleBlocks(draft: DocContent, fresh: DocContent): DocContent | u
       put = true
     }
   }
-  return { ...draft, blocks: next }
+  return { content: { ...draft, blocks: next }, removedOnly: hasOwnData }
 }
 
 const MIME: Record<string, string> = {
@@ -281,6 +326,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   // Опубликованные ложные документы, чей черновик исправлен в этом же запуске
   const fixedDrafts = new Set<string>()
   const staleDocuments: string[] = []
+  const backupDir = options.backupDir ?? defaultBackupDir()
   const existing = await client.get<{ slug: string; publishedAt: string | null }[]>(`${base}/pages`)
   for (const document of DOCUMENTS) {
     const found = existing.find((page) => page.slug === document)
@@ -303,6 +349,9 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     // правки человека остаются: черновики не попадают в историю версий, затёртое не вернуть
     let draftReplaced = false
     if (options.rebuildDocuments) {
+      log(
+        `Документ /${document}: прежний черновик сохранён в ${backupDraft(backupDir, document, page)}`,
+      )
       const fresh = await client.post<PageRecord>(`${base}/settings/legal-pages`, {
         document,
         replaceDraft: true,
@@ -317,28 +366,35 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
       )
     } else if (draftStale) {
       // Свежий шаблон приходит только в ответе на замену черновика: заменяем, берём из ответа блок
-      // данных, а прежний текст человека кладём обратно с этим одним блоком вместо ложного
+      // данных, а прежний текст человека кладём обратно с этим одним блоком вместо ложного.
+      // Между заменой и возвратом текст человека есть только у скрипта: пропадёт связь или
+      // перезапустится API — шаблон остался бы поверх правок, поэтому сначала файл
+      log(
+        `Документ /${document}: прежний черновик сохранён в ${backupDraft(backupDir, document, page)}`,
+      )
       const fresh = await client.post<PageRecord & { title: string }>(
         `${base}/settings/legal-pages`,
         { document, replaceDraft: true },
       )
-      const merged = repairStaleBlocks(page.draft as DocContent, fresh.draft as DocContent)
+      const repaired = repairStaleBlocks(page.draft as DocContent, fresh.draft as DocContent)
       try {
         await client.put(`${base}/pages/${document}`, {
           title: page.title,
-          content: merged ?? page.draft,
+          content: repaired?.content ?? page.draft,
         })
       } catch (error) {
         // Не вышло вернуть текст — положить его назад как был, а не оставить шаблон поверх правок
         await client.put(`${base}/pages/${document}`, { title: page.title, content: page.draft })
         throw error
       }
-      if (merged) {
-        draftNow = merged
+      if (repaired) {
+        draftNow = repaired.content
         repairedDocuments.push(document)
         draftReplaced = true
         log(
-          `Документ /${document}: блок «нет форм заявок» заменён свежим из шаблона, остальной текст на месте. Проверьте и опубликуйте документ`,
+          repaired.removedOnly
+            ? `Документ /${document}: блок «нет форм заявок» убран (свой блок данных в черновике уже есть), остальной текст на месте. Проверьте и опубликуйте документ`
+            : `Документ /${document}: блок «нет форм заявок» заменён свежим из шаблона, остальной текст на месте. Проверьте и опубликуйте документ`,
         )
       } else {
         log(`Документ /${document}: в шаблоне нет блока данных, черновик оставлен как был`)

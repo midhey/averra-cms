@@ -34,6 +34,37 @@ export const sameDefinition = (a: CustomBlockDraft, b: CustomBlockDraft) =>
   JSON.stringify(canonical(a)) === JSON.stringify(canonical(b))
 
 /**
+ * Недавние проверки шаблонов: ответ с замечаниями собирается при каждом открытии блока, а сама
+ * проверка (разбор Liquid и HTML, пробные рендеры) — самая тяжёлая часть, и считается она в одном
+ * потоке со всем API. Ключ — определение и то, что известно о его картинках: тот же вход даёт
+ * тот же результат
+ */
+const PROBLEMS_CACHE_SIZE = 32
+const problemsCache = new Map<string, CustomBlockProblem[]>()
+
+function cachedProblems(draft: CustomBlockDraft, types: ReadonlyMap<string, string | undefined>) {
+  const key = JSON.stringify([draft, [...types.entries()].toSorted()])
+  const known = problemsCache.get(key)
+  if (known) {
+    // Свежие — в конец: вытесняется самая давняя проверка
+    problemsCache.delete(key)
+    problemsCache.set(key, known)
+    return known
+  }
+  const timeLimit = { hit: false }
+  const fresh = customBlockProblems(draft, { mediaIds: new Set(types.keys()), timeLimit })
+  // Итог, который оборвало время, зависит от нагрузки на сервер (пауза сборщика мусора, соседний
+  // запрос): запомненный, он закрепил бы ошибку «слишком хитро» за шаблоном, который её не стоит
+  if (timeLimit.hit) return fresh
+  problemsCache.set(key, fresh)
+  if (problemsCache.size > PROBLEMS_CACHE_SIZE) {
+    const oldest = problemsCache.keys().next().value
+    if (oldest !== undefined) problemsCache.delete(oldest)
+  }
+  return fresh
+}
+
+/**
  * Замечания к определению: шаблон, CSS, пример (движок своих блоков) и картинки — из медиатеки
  * этого сайта, в примере не SVG. Публикуется определение только без ошибок
  */
@@ -47,7 +78,8 @@ export async function definitionProblems(
     ...cssMediaIds(draft.css),
     ...exampleRefs.map((ref) => ref.mediaId),
   ])
-  const problems = customBlockProblems(draft, { mediaIds: new Set(types.keys()) })
+  // Копия: дальше к списку добавляются замечания по картинкам примера
+  const problems = [...cachedProblems(draft, types)]
   for (const ref of exampleRefs) {
     const type = types.get(ref.mediaId)
     const message =

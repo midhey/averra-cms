@@ -1,6 +1,14 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createTestApi, TEST_PASSWORD, testOrigins } from '@averra/api/testing'
 import { customBlockProblems, renderCustomBlockHtml } from '@averra/blocks/custom-engine'
 import { customBlockProps, form, PageContent, parsedExample } from '@averra/schema'
@@ -9,7 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { BLOCK_ORDER, BLOCKS_FILE, buildFile } from '../build-blocks.ts'
 import { createClient } from '../src/api-client.ts'
 import { homeBlocks, menuItems, photosOf, signupFormProps } from '../src/content.ts'
-import { importSite } from '../src/import-site.ts'
+import { defaultBackupDir, importSite } from '../src/import-site.ts'
 
 // Пример переноса: файл выгрузки блоков свежий и без ошибок, контент превращается в страницу, а
 // скрипт ставит всё на настоящий API (в памяти) так же, как владелец в админке
@@ -141,6 +149,26 @@ describe('файл выгрузки блоков', () => {
     )
   })
 
+  it('старые страницы со «↗» в тексте поля: на сайте стрелка одна, а не две', () => {
+    // Установка, перенесённая прежней версией скрипта: стрелка осталась в тексте поля, а
+    // определения блоков обновили без повторного импорта страниц. Шаблон не дописывает вторую
+    const arrow = '<span aria-hidden="true">↗</span>'
+    const count = (text: string) => text.split('↗').length - 1
+    const cases = [
+      html('le-hero', { note: 'знакомимся ↗' }),
+      html('le-hero', { note: 'знакомимся↗ ' }),
+      html('le-faq', { aside: { label: 'отвечу ↗', href: '/zapis/' } }),
+      html('le-signup', { telegram: { label: 'Пиши ↗', href: 'https://t.me/x' } }),
+    ]
+    for (const rendered of cases) expect(count(rendered), rendered).toBe(1)
+    expect(cases[0]).toContain(`знакомимся ${arrow}`)
+    expect(cases[1]).toContain(`знакомимся ${arrow}`)
+    expect(cases[2]).toContain(`отвечу ${arrow}`)
+    expect(cases[3]).toContain(`Пиши ${arrow}`)
+    // Стрелка не в конце — часть текста, её не трогаем
+    expect(html('le-hero', { note: 'раз ↗ два' })).toContain('раз ↗ два ')
+  })
+
   it('кнопки «Записаться» ведут на /zapis/ со слэшем: без лишнего редиректа', () => {
     const blocks = homeBlocks(content, () => undefined)
     const hrefOf = (id: string, field: string) => {
@@ -253,6 +281,14 @@ afterAll(api.close)
 
 describe('скрипт переноса на настоящем API', () => {
   const dir = mkdtempSync(join(tmpdir(), 'le-english-'))
+  it('страховочные файлы по умолчанию — вне репозитория и не под именем бэкапов установки', () => {
+    // Скрипт запускают из examples/le-english: файл с текстом юриста в рабочем дереве легко
+    // закоммитить, а «averra-backup» — имя бэкапов самой установки на сервере
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+    const where = relative(repo, defaultBackupDir())
+    expect(where.startsWith('..') || isAbsolute(where)).toBe(true)
+    expect(defaultBackupDir()).not.toMatch(/averra-backup/)
+  })
   it('черновики, публикация после документов, повторный запуск без дублей и потерь', async () => {
     mkdirSync(join(dir, 'public', 'assets', 'images'), { recursive: true })
     const png = await sharp({
@@ -384,10 +420,16 @@ describe('скрипт переноса на настоящем API', () => {
         publicDir: join(dir, 'public'),
         blocksFile: BLOCKS_FILE,
         publish: false,
+        backupDir,
         log: (line) => logs.push(line),
         ...extra,
       })
     }
+    const backupDir = join(dir, 'backup')
+    const backups = (document: string) =>
+      (existsSync(backupDir) ? readdirSync(backupDir) : []).filter((name) =>
+        name.startsWith(`${document}-draft-`),
+      )
     type Block = { id: string; type: string; props: Record<string, unknown> }
     type Doc = { draft: { blocks: Block[] }; published: unknown }
     const doc = (slug: string) => client.get<Doc>(`${base}/pages/${slug}`)
@@ -403,6 +445,8 @@ describe('скрипт переноса на настоящем API', () => {
     const clean = await run()
     expect(clean.rebuiltDocuments).toEqual([])
     expect(clean.repairedDocuments).toEqual([])
+    // Ничего не заменялось — страховочных файлов нет
+    expect(backups('privacy')).toEqual([])
 
     // Правка, пометка шаблона ещё на месте (её убирают последней): повторный запуск не стирает
     const fresh = await doc('privacy')
@@ -421,6 +465,7 @@ describe('скрипт переноса на настоящем API', () => {
     // Черновик не тронут: сообщение нейтральное, не «правили вручную»
     expect(logs.join('\n')).not.toContain('правили вручную')
     expect(logs).toContain('Документ /privacy: черновик есть, не трогаю')
+    expect(backups('privacy')).toEqual([])
 
     // Юрист переписал раздел про форму своими словами (фразы шаблона нет вовсе): это не ложь,
     // повторный запуск без флага черновик не трогает
@@ -474,6 +519,18 @@ describe('скрипт переноса на настоящем API', () => {
     expect(repaired).toContain('Храним три года.')
     // Блок встал на место ложного: порядок прежний («данные», затем «хранение»)
     expect(repaired.indexOf('"id":"data"')).toBeLessThan(repaired.indexOf('"id":"lawyer"'))
+    // Прежний черновик (с ложной фразой и правкой юриста) лежит в файле, а лог говорит где
+    const [repairBackup] = backups('privacy')
+    expect(backups('privacy')).toHaveLength(1)
+    const saved = readFileSync(join(backupDir, repairBackup ?? ''), 'utf8')
+    expect(saved).toContain('нет форм заявок')
+    expect(saved).toContain('Храним три года.')
+    expect(
+      logs.some(
+        (line) =>
+          line.includes('прежний черновик сохранён в') && line.includes(repairBackup ?? '?'),
+      ),
+    ).toBe(true)
 
     // Флаг заменяет и правленый черновик целиком: правка без ложной фразы пропадает, пометка
     // шаблона и текст про форму возвращаются
@@ -485,11 +542,48 @@ describe('скрипт переноса на настоящем API', () => {
     expect(text((await doc('privacy')).draft)).toContain('Моя правка')
     const fourth = await run({ rebuildDocuments: true })
     expect(fourth.rebuiltDocuments).toEqual(['privacy', 'consent'])
+    // Затёртая правка осталась в файле: флаг заменяет черновик без возврата, файл — страховка
+    const rebuildBackups = backups('privacy').filter((name) => name !== repairBackup)
+    expect(rebuildBackups).toHaveLength(1)
+    expect(readFileSync(join(backupDir, rebuildBackups[0] ?? ''), 'utf8')).toContain('Моя правка')
+    expect(backups('consent')).toHaveLength(1)
     const rebuilt = text((await doc('privacy')).draft)
     expect(rebuilt).not.toContain('Моя правка')
     expect(rebuilt).not.toContain('Храним три года.')
     expect(rebuilt).toContain('template-note')
     expect(rebuilt).toContain('форме заявки')
+
+    // Юрист продублировал блок данных: свой «data» без ложной фразы уже есть, а ложный блок — под
+    // другим id. Второй «data» API отверг бы («Id блоков … уникальными»), и каждый запуск падал бы
+    // заново и плодил файлы: ложный блок убирается, а не заменяется
+    const withOwn = await doc('privacy')
+    const ownData = withOwn.draft.blocks.find((block) => block.id === 'data')
+    if (!ownData) throw new Error('В свежей политике нет блока data')
+    await client.put(`${base}/pages/privacy`, {
+      title: 'Политика',
+      content: {
+        blocks: [
+          ...withOwn.draft.blocks,
+          {
+            id: 'data-copy',
+            type: 'text',
+            props: { title: 'Данные', body: staleText.blocks[0]?.props.body },
+          },
+        ],
+      },
+    })
+    const duplicated = await run()
+    expect(duplicated.repairedDocuments).toEqual(['privacy'])
+    const afterDuplicate = (await doc('privacy')).draft.blocks
+    expect(afterDuplicate.filter((block) => block.id === 'data')).toEqual([ownData])
+    expect(afterDuplicate.some((block) => block.id === 'data-copy')).toBe(false)
+    expect(text(afterDuplicate)).not.toContain('нет форм заявок')
+    expect(afterDuplicate.length).toBe(withOwn.draft.blocks.length)
+    expect(logs.join('\n')).toContain('свой блок данных в черновике уже есть')
+    // Следующий запуск ничего не чинит и не плодит файлы
+    const filesBefore = backups('privacy').length
+    expect((await run()).repairedDocuments).toEqual([])
+    expect(backups('privacy')).toHaveLength(filesBefore)
 
     // Опубликованный текст юриста без фразы шаблона: не трогаем и не блокируем публикацию сайта
     const published = await doc('privacy')
@@ -526,14 +620,96 @@ describe('скрипт переноса на настоящем API', () => {
     expect(done.published).toBe(true)
   }, 30_000)
 
-  it('кривой --site-url отвергается до первых изменений', async () => {
+  it('связь оборвалась между заменой черновика шаблоном и возвратом текста: текст юриста — в файле', async () => {
     const owner = await api.createUser('owner')
+    // Записи черновика документа не доходят: так выглядит пропавшая сеть или перезапуск API
+    // сразу после замены — и обратный возврат текста тоже не пройдёт
+    let offline = false
+    const send = (input: string, init?: RequestInit) => api.app.request(input, init)
     const client = createClient({
       baseUrl: testOrigins.api,
       origin: testOrigins.admin,
-      fetch: async (input, init) => api.app.request(input, init),
+      fetch: async (input, init) => {
+        if (offline && init?.method === 'PUT' && input.endsWith('/pages/privacy')) {
+          throw new TypeError('fetch failed')
+        }
+        return send(input, init)
+      },
     })
     await client.signIn(owner.email, TEST_PASSWORD)
+    const base = `/api/sites/${api.demoSiteId}`
+    const backupDir = join(dir, 'backup-offline')
+    const lawyerText = 'Храним три года, а заявки — один месяц.'
+    await client.put(`${base}/pages/privacy`, {
+      title: 'Политика',
+      content: {
+        blocks: [
+          { id: 'old', type: 'text', props: { title: 'Данные', body: 'На нём нет форм заявок.' } },
+          { id: 'lawyer', type: 'text', props: { title: 'Хранение', body: lawyerText } },
+        ],
+      },
+    })
+    offline = true
+    await expect(
+      importSite({
+        client,
+        contentFile: join(dir, 'content.json'),
+        publicDir: join(dir, 'public'),
+        blocksFile: BLOCKS_FILE,
+        publish: false,
+        backupDir,
+      }),
+    ).rejects.toThrow('fetch failed')
+    // Шаблон стоит поверх правок, но прежний текст не потерян
+    const draft = JSON.stringify(
+      (await client.get<{ draft: unknown }>(`${base}/pages/privacy`)).draft,
+    )
+    expect(draft).not.toContain(lawyerText)
+    const files = readdirSync(backupDir).filter((name) => name.startsWith('privacy-draft-'))
+    expect(files).toHaveLength(1)
+    const saved = JSON.parse(readFileSync(join(backupDir, files[0] ?? ''), 'utf8')) as {
+      title: string
+      content: { blocks: { id: string }[] }
+    }
+    expect(saved.title).toBe('Политика')
+    expect(saved.content.blocks.map((block) => block.id)).toEqual(['old', 'lawyer'])
+    expect(JSON.stringify(saved)).toContain(lawyerText)
+    // Файл годится для PUT как есть: так текст возвращают
+    offline = false
+    await client.put(`${base}/pages/privacy`, saved)
+    expect(
+      JSON.stringify((await client.get<{ draft: unknown }>(`${base}/pages/privacy`)).draft),
+    ).toContain(lawyerText)
+
+    // Страховочный файл записать нельзя (вместо папки — обычный файл): замена не начинается, текст
+    // юриста остаётся в черновике
+    await client.put(`${base}/pages/privacy`, saved)
+    const notDirectory = join(dir, 'not-a-directory')
+    writeFileSync(notDirectory, 'x')
+    await expect(
+      importSite({
+        client,
+        contentFile: join(dir, 'content.json'),
+        publicDir: join(dir, 'public'),
+        blocksFile: BLOCKS_FILE,
+        publish: false,
+        backupDir: join(notDirectory, 'backup'),
+      }),
+    ).rejects.toThrow(/Не удалось сохранить прежний черновик \/privacy.*Ничего не заменено/)
+    expect(
+      JSON.stringify((await client.get<{ draft: unknown }>(`${base}/pages/privacy`)).draft),
+    ).toContain(lawyerText)
+  }, 30_000)
+
+  it('кривой --site-url отвергается до первых изменений', async () => {
+    // Проверка — до первого запроса к API: входить не нужно (и лимит попыток входа не тратится)
+    const client = createClient({
+      baseUrl: testOrigins.api,
+      origin: testOrigins.admin,
+      fetch: async () => {
+        throw new Error('Запрос к API до проверки адреса')
+      },
+    })
     await expect(
       importSite({
         client,

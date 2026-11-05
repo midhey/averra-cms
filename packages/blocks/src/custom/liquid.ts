@@ -9,7 +9,7 @@ import {
   type TopLevelToken,
 } from 'liquidjs'
 import { fallbackFormat, largestVariant, srcSetOf, vectorVariant } from '../ui/media-file'
-import { liquidCode } from './html'
+import { LIQUID_GREEDY, liquidCode } from './html'
 import { CustomBlockRenderError } from './problems'
 
 /** Пределы рендера шаблона: время одного рендера и «память» LiquidJS (созданные строки и массивы) */
@@ -112,6 +112,8 @@ const DISABLED_TAGS: Record<string, string> = {
   block: 'шаблон своего блока — один файл',
   // cycle выводит значение мимо автоэкранирования; чередование — {% assign odd = forloop.index | modulo: 2 %}
   cycle: 'чередуйте через {% assign odd = forloop.index | modulo: 2 %}',
+  // tablerow пишет <tr> и <td> с кавычками мимо экранирования: в значении атрибута он закрыл бы его
+  tablerow: 'строки и ячейки таблицы — циклом {% for %} с <tr> и <td> в самом шаблоне',
 }
 
 class DisabledTag extends Tag {
@@ -157,7 +159,8 @@ function createEngine() {
     parseLimit: 100_000,
     renderLimit: LIQUID_LIMITS.renderMs,
     memoryLimit: LIQUID_LIMITS.memory,
-    greedy: false,
+    // Срез пробелов {%- и -%}: проверка HTML читает его тем же значением
+    greedy: LIQUID_GREEDY,
   })
   for (const name of Object.keys(DISABLED_TAGS)) engine.registerTag(name, DisabledTag)
   engine.registerTag('echo', SafeEchoTag)
@@ -207,10 +210,12 @@ const parsed = new Map<string, Template[]>()
 const PARSED_MAX = 64
 
 /** Разобранный шаблон: разбор — самое дорогое, а шаблон один на все блоки этого типа */
-export function parseTemplate(template: string) {
+export function parseTemplate(template: string, { cache = true } = {}) {
   const cached = parsed.get(template)
   if (cached) return cached
   const templates = liquid.parse(template)
+  // Разовые шаблоны (вычисления проверки) не вытесняют из кеша шаблоны сайта
+  if (!cache) return templates
   if (parsed.size >= PARSED_MAX) parsed.delete(parsed.keys().next().value ?? '')
   parsed.set(template, templates)
   return templates
@@ -297,11 +302,12 @@ export function renderTemplate(
   template: string,
   scope: Record<string, unknown>,
   state: RenderState,
+  options: { cache?: boolean } = {},
 ): string {
   const previous = current
   current = state
   try {
-    const html: unknown = liquid.renderSync(parseTemplate(template), scope)
+    const html: unknown = liquid.renderSync(parseTemplate(template, options), scope)
     const output = typeof html === 'string' ? html : String(html)
     if (output.length > LIQUID_LIMITS.output) {
       throw new CustomBlockRenderError('Блок выводит слишком много HTML: упростите шаблон')

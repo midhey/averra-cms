@@ -387,6 +387,23 @@ describe('токен с правом на черновики (MCP)', () => {
     expect(wrongData.problems.length).toBeGreaterThan(0)
   })
 
+  it('проверка: цепочка assign с повторными ссылками не держит поток API (честный ответ за секунду)', async () => {
+    // Раньше каждый шаг удваивал время: с 21 шага — секунды, с 30 — десятки минут
+    const steps = Array.from(
+      { length: 40 },
+      (_, i) => `{% assign v${i + 1} = v${i} | default: v${i} | default: v${i} %}`,
+    ).join('')
+    const template = `{% assign v0 = '/a' %}${steps}<a href="{{ v40 }}">x</a>`
+    const started = Date.now()
+    const res = await ok<{ problems: { level: string }[] }>(
+      await send('POST', '/check', { definition: tariffs({ template }) }, withGrant),
+    )
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(res.problems.filter((problem) => problem.level === 'error').length).toBeLessThanOrEqual(
+      1,
+    )
+  })
+
   it('проверка не сохраняет определение', async () => {
     await send('POST', '/check', { definition: tariffs({ key: 'not-saved' }) }, withGrant)
     expect((await send('GET', '/not-saved')).status).toBe(404)

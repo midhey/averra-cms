@@ -7,7 +7,7 @@ import {
 } from '@averra/schema'
 import { fullSizeUrl } from '../ui/media-file'
 import { compileCustomCss } from './css'
-import { checkTemplateHtml, sanitizeHtml } from './html'
+import { checkTemplateHtml, renderedProblems, sanitizeHtml } from './html'
 import {
   CUSTOM_FILTERS,
   liquid,
@@ -111,7 +111,12 @@ const ALLOWED_GLOBALS = new Set(['block'])
  */
 export function customBlockProblems(
   definition: CustomBlockDraft,
-  options: { media?: MediaMap; mediaIds?: ReadonlySet<string> } = {},
+  options: {
+    media?: MediaMap
+    mediaIds?: ReadonlySet<string>
+    /** Станет true, если проверка остановилась по времени: итог зависит от нагрузки, не от шаблона */
+    timeLimit?: { hit: boolean }
+  } = {},
 ): CustomBlockProblem[] {
   const problems: CustomBlockProblem[] = []
 
@@ -126,7 +131,7 @@ export function customBlockProblems(
       message: 'Шаблон пустой: блоку нечего показать',
     })
   } else {
-    problems.push(...templateProblems(definition))
+    problems.push(...templateProblems(definition, options.timeLimit))
   }
 
   const known = options.mediaIds
@@ -137,7 +142,10 @@ export function customBlockProblems(
   return problems
 }
 
-function templateProblems(definition: CustomBlockDraft): CustomBlockProblem[] {
+function templateProblems(
+  definition: CustomBlockDraft,
+  timeLimit?: { hit: boolean },
+): CustomBlockProblem[] {
   const problems: CustomBlockProblem[] = []
   const add = (level: CustomBlockProblem['level'], message: string, line?: number) =>
     problems.push({ part: 'template', level, message, line })
@@ -166,35 +174,94 @@ function templateProblems(definition: CustomBlockDraft): CustomBlockProblem[] {
     add('error', message, line)
     return problems
   }
-  problems.push(...checkTemplateHtml(definition.template))
-  // Пробный рендер на примере: ошибки, которые видно только при выполнении (лимиты, аргументы)
+  const block = { id: 'example', key: definition.key }
+  const state = { media: {}, priority: false }
+  // Пробный рендер на примере: ошибки, которые видно только при выполнении (лимиты, аргументы).
+  // Он первый: если шаблон упёрся в лимит, вычислять дальше нечем — каждое вычисление было бы
+  // таким же долгим, а проверка идёт в обработчике API и в редакторе на каждую правку
+  const rendered: string[] = []
   const example = parsedExample(definition)
+  let exhausted = false
   if (example) {
     try {
-      renderTemplate(
-        definition.template,
-        { ...example, block: { id: 'example', key: definition.key } },
-        { media: {}, priority: false },
-      )
+      rendered.push(renderTemplate(definition.template, { ...example, block }, state))
     } catch (error) {
-      if (error instanceof CustomBlockRenderError) add('error', error.message, error.line)
+      if (error instanceof CustomBlockRenderError) {
+        add('error', error.message, error.line)
+        exhausted = LIMIT_MESSAGE.test(error.message)
+        // Предел рендера считается по часам: на нагрузке тот же шаблон его не достиг бы
+        if (timeLimit && TIME_MESSAGE.test(error.message)) timeLimit.hit = true
+      }
     }
+  }
+  // Пустые поля: что выведут константы шаблона и его assign, когда данных нет. Без кеша разбора:
+  // разовые шаблоны проверки не вытесняют из него шаблоны сайта. Лимит исчерпан один раз — дальше
+  // не вычисляем
+  const evaluate = (source: string) => {
+    if (exhausted) return undefined
+    try {
+      return renderTemplate(source, { block }, state, { cache: false })
+    } catch (error) {
+      if (error instanceof CustomBlockRenderError && LIMIT_MESSAGE.test(error.message)) {
+        exhausted = true
+        if (timeLimit && TIME_MESSAGE.test(error.message)) timeLimit.hit = true
+      }
+      return undefined
+    }
+  }
+  const html = checkTemplateHtml(definition.template, {
+    evaluate,
+    timeLimit,
+    exhausted: () => exhausted,
+  })
+  problems.push(...html)
+  // Второй рендер без данных: другая сторона условий. Его ошибки не показываем — они зависят
+  // от пустых полей, а не от шаблона
+  const empty = evaluate(definition.template)
+  if (empty !== undefined) rendered.push(empty)
+  // Константы шаблона (assign, строки в фильтрах) и данные примера попадают в разметку только
+  // при выполнении: готовый HTML сверяется с очисткой сайта. Что статическая проверка уже назвала,
+  // не повторяем — по тексту, а не «все ошибки про ссылки разом»: остальное автор увидел бы только
+  // после следующего сохранения
+  const known = html.filter((one) => one.level === 'error').map((one) => one.message)
+  // Статическая проверка адреса, собранного Liquid, называет его начало («javascript:»), пробный
+  // рендер — весь адрес («javascript:alert(1)»): это одна и та же ссылка
+  const knownLinks = known.flatMap((message) =>
+    linkOf(message) ? [linkOf(message) as string] : [],
+  )
+  for (const message of new Set(rendered.flatMap(renderedProblems))) {
+    const link = linkOf(message)
+    if (known.includes(message) || (link && knownLinks.some((one) => link.startsWith(one))))
+      continue
+    add(
+      'error',
+      `${message}. Так выглядит блок при подстановке примера или пустых полей: на сайте это будет убрано`,
+    )
   }
   return problems
 }
+
+/** Адрес из сообщения «Ссылка «…» запрещена»: без пробелов, в нижнем регистре, как у браузера */
+const linkOf = (message: string) =>
+  /^Ссылка «(.*?)» запрещена/s.exec(message)?.[1]?.replace(/\s/g, '').toLowerCase()
+
+/** Лимит движка исчерпан (время, память, объём): шаблон слишком тяжёлый, повторять его незачем */
+const LIMIT_MESSAGE = /слишком/
+
+/** Из них — предел времени рендера: он зависит от нагрузки на сервер, а не только от шаблона */
+const TIME_MESSAGE = /рендерится слишком долго/
 
 type Field = RenderableCustomBlock['fields'][number]
 type Segment = string | number | object
 
 /**
  * Переменные циклов: {% for plan in plans %} → plan — элемент plans. Разбор LiquidJS связи
- * переменной цикла с коллекцией не отдаёт, поэтому — по тексту тегов for и tablerow (и строк
+ * переменной цикла с коллекцией не отдаёт, поэтому — по тексту тегов for (и строк
  * {% liquid %}). Имя, которое привязано к разным коллекциям или задано assign, не проверяем
  */
 function loopAliases(template: string, locals: ReadonlySet<string>) {
   const aliases = new Map<string, string[] | undefined>()
-  const loop =
-    /\b(?:for|tablerow)\s+([A-Za-z_][\w-]*)\s+in\s+([A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)*)/g
+  const loop = /\bfor\s+([A-Za-z_][\w-]*)\s+in\s+([A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)*)/g
   for (const [, alias, collection] of template.matchAll(loop)) {
     if (!alias || !collection || locals.has(alias)) continue
     const path = collection.split('.')
