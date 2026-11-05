@@ -336,7 +336,13 @@ function TemplatePreview({ template }: { template: TemplateInfo }) {
         className={styles.templateBox}
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
-        <summary className={styles.templateSummary}>Показать письмо</summary>
+        {/* Восемь одинаковых «Показать письмо» диктору ни о чём не говорят: название письма —
+            в имени раскрывашки, скрытым текстом. В раскрытом виде подпись зовёт свернуть:
+            «Показать» у уже показанного письма вводила бы в заблуждение */}
+        <summary className={styles.templateSummary}>
+          {open ? 'Скрыть письмо' : 'Показать письмо'}
+          <span className="visually-hidden"> «{template.title}»</span>
+        </summary>
         {!open ? null : preview.isPending ? (
           <p className={styles.loading} role="status">
             <Spinner />

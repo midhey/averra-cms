@@ -37,6 +37,7 @@ import { SocialCard } from '../seo/SocialCard'
 import type { RedirectRow } from '../seo/seo-format'
 import { SiteHeader } from '../shell/SiteHeader'
 import { ColorRow, ContrastBadge, ThemeSwatch } from '../theme/ThemeParts'
+import { escapeBlockedText, issuedDoneLabel } from '../tokens/token-format'
 import {
   AppShell,
   NavLinkContent,
@@ -216,6 +217,9 @@ export function UiShowcase() {
   const confirm = useConfirm()
   const [confirmAnswer, setConfirmAnswer] = useState<string>()
   const [largeOpen, setLargeOpen] = useState(false)
+  // Окно, которое Esc не закрывает (токен MCP: показывается один раз), и его подсказка
+  const [lockedOpen, setLockedOpen] = useState(false)
+  const [lockedHint, setLockedHint] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [picked, setPicked] = useState('')
   const [imageSide, setImageSide] = useState<'left' | 'right'>('left')
@@ -985,6 +989,14 @@ export function UiShowcase() {
               Подтверждение…
             </Button>
             <Button onClick={() => setLargeOpen(true)}>Большое окно…</Button>
+            <Button
+              onClick={() => {
+                setLockedHint(false)
+                setLockedOpen(true)
+              }}
+            >
+              Окно без закрытия по Esc…
+            </Button>
             <Button icon="plus" onClick={() => setCatalogOpen(true)}>
               Каталог блоков…
             </Button>
@@ -1005,6 +1017,23 @@ export function UiShowcase() {
             after={null}
             entries={SHOWCASE_CATALOG}
           />
+          <Dialog
+            open={lockedOpen}
+            onClose={() => setLockedOpen(false)}
+            escapeCloses={false}
+            onEscapeBlocked={() => setLockedHint(true)}
+            title="Токен «Для нейронки» выпущен"
+            description="Показывается один раз: нажатие Esc окно не закрывает, чтобы токен не потерялся."
+            footer={
+              <Button variant="primary" onClick={() => setLockedOpen(false)}>
+                {issuedDoneLabel}
+              </Button>
+            }
+          >
+            <p className={styles.muted} aria-live="polite">
+              {lockedHint ? escapeBlockedText : 'Нажмите Esc: окно останется, появится подсказка.'}
+            </p>
+          </Dialog>
           <Dialog
             open={largeOpen}
             onClose={() => setLargeOpen(false)}

@@ -49,10 +49,36 @@ test('выпустить токен, скопировать фрагмент .mc
   expect(token).toMatch(/^cms_[0-9a-f-]{36}_[0-9a-f]{64}$/)
 
   // Первый фокус — не на «×»: лишний Enter копирует токен, а не закрывает окно. Пока ничего не
-  // скопировано, Esc окно не закрывает: токен показывается один раз
+  // скопировано, Esc окно не закрывает: токен показывается один раз. Chrome после пары Esc подряд
+  // перестаёт давать отменить закрытие (close watcher), и окно закрывалось на третьем нажатии,
+  // поэтому нажимаем с запасом: окно на месте, токен на месте, а подсказка говорит, что делать
   await expect(dialog.getByRole('button', { name: 'Скопировать токен' })).toBeFocused()
+  // Окно не закрывается ни на миг: событие close не приходит (раньше Chrome закрывал окно и
+  // возвращал его: читалка объявляла его заново, фокус на мгновение уходил на кнопку под ним)
+  await dialog.evaluate((element) => {
+    element.addEventListener('close', () => {
+      element.dataset.closes = String(Number(element.dataset.closes ?? 0) + 1)
+    })
+  })
+  for (let press = 0; press < 6; press++) await page.keyboard.press('Escape')
+  await expect(dialog).not.toHaveAttribute('data-closes', /./)
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Токен', { exact: true })).toHaveValue(token)
+  await expect(dialog.getByRole('status')).toContainText('Esc не закрывает окно')
+  await expect(dialog.getByRole('button', { name: 'Скопировать токен' })).toBeFocused()
+
+  // Копирование не удалось (браузер не дал доступа к буферу): токен не скопирован, поэтому Esc по
+  // прежнему не закрывает окно — и подсказка про Esc не теряется за сообщением о копировании
+  await page.evaluate(
+    "navigator.clipboard.writeText = () => Promise.reject(new Error('нет доступа'))",
+  )
+  await dialog.getByRole('button', { name: 'Скопировать токен' }).click()
+  await expect(dialog.getByRole('status')).toContainText('Браузер не дал скопировать')
   await page.keyboard.press('Escape')
   await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('status')).toContainText('Браузер не дал скопировать')
+  await expect(dialog.getByRole('status')).toContainText('Esc не закрывает окно')
+  await page.evaluate('delete navigator.clipboard.writeText')
 
   await dialog.getByRole('button', { name: 'Скопировать фрагмент .mcp.json' }).click()
   await expect(dialog.getByRole('status')).toHaveText('Фрагмент .mcp.json скопирован')
@@ -121,8 +147,60 @@ test('выпустить токен, скопировать фрагмент .mc
   expect((await request.get(pageUrl, { headers })).status()).toBe(401)
 })
 
+test('телефон: окно токена не закрылось — подсказка видна, а не под краем экрана', async ({
+  page,
+}) => {
+  const name = `Телефон e2e ${Date.now()}`
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/tokens')
+  const form = page.getByRole('form', { name: 'Выпустить токен' })
+  await form.getByLabel('Имя').fill(name)
+  await form.getByRole('button', { name: 'Выпустить токен' }).click()
+  const dialog = page.getByRole('dialog', { name: `Токен «${name}» выпущен` })
+  await expect(dialog).toBeVisible()
+  // Подсказка — внизу окна, под фрагментом .mcp.json: без прокрутки её не было бы видно. Esc
+  // с фокусом в окне окно гасит ещё на keydown — до события cancel
+  const hint = dialog.getByText('Esc не закрывает окно')
+  const token = await dialog.getByLabel('Токен', { exact: true }).inputValue()
+  const toTop = () =>
+    dialog.evaluate((element) => {
+      for (const node of [element, ...element.querySelectorAll('*')]) node.scrollTop = 0
+    })
+  await page.keyboard.press('Escape')
+  await expect(hint).toBeInViewport({ ratio: 1 })
+  // «Назад» на телефоне идёт другим путём: браузер сам просит окно закрыться (cancel, а без
+  // него — close). requestClose() — тот же запрос. Человек прокрутил окно обратно к токену и
+  // жмёт «Назад» дважды: окно на месте, токен тот же, подсказка каждый раз на виду
+  for (let press = 0; press < 2; press++) {
+    await toTop()
+    await expect(dialog.getByLabel('Токен', { exact: true })).toBeInViewport()
+    await expect(hint).not.toBeInViewport()
+    await dialog.evaluate((element) =>
+      (element as unknown as { requestClose(): void }).requestClose(),
+    )
+    await expect(hint).toBeInViewport({ ratio: 1 })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel('Токен', { exact: true })).toHaveValue(token)
+  }
+  expect(await overflow(page)).toBeLessThanOrEqual(0)
+
+  // Убираем за собой: закрыть кнопкой и отозвать
+  await dialog.getByRole('button', { name: 'Готово, я сохранил токен' }).click()
+  await expect(dialog).toBeHidden()
+  await page.getByRole('button', { name: `Отозвать токен «${name}»` }).click()
+  await page
+    .getByRole('dialog', { name: `Отозвать токен «${name}»?` })
+    .getByRole('button', { name: 'Отозвать' })
+    .click()
+  await expect(
+    page.getByRole('table', { name: 'Токены' }).getByRole('row').filter({ hasText: name }),
+  ).toContainText('Отозван')
+})
+
 test('права токена меняются в окне и действуют сразу', async ({ page, demoSite }) => {
   const name = `Права e2e ${Date.now()}`
+  // Часы подменяем до загрузки страницы: их ход видят и таймеры списка токенов
+  await page.clock.install()
   await page.goto('/tokens')
   const form = page.getByRole('form', { name: 'Выпустить токен' })
   await form.getByLabel('Имя').fill(name)
@@ -149,12 +227,12 @@ test('права токена меняются в окне и действуют
     { headers },
   )
   expect(publish.status()).toBe(200)
-  // Токеном пользовались вне админки: при возврате на вкладку список сам перечитывается, без
-  // перезагрузки страницы — «не пользовались» сменяется на «только что»
-  await expect(async () => {
-    await page.evaluate("document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))")
-    await expect(row).not.toContainText('не пользовались', { timeout: 1000 })
-  }).toPass()
+  // Токеном пользовались вне админки: человек остаётся на вкладке, ничего не нажимая, а список
+  // сам перечитывается раз в 30 с, без перезагрузки — «не пользовались» сменяется на «только что».
+  // Часы подменены (clock): ни возврата на вкладку, ни события фокуса, только ход времени
+  await expect(row).toContainText('не пользовались')
+  await page.clock.fastForward(31_000)
+  await expect(row).not.toContainText('не пользовались')
   // Убираем за собой: токен с правом публикации не должен пережить тест
   await page.getByRole('button', { name: `Отозвать токен «${name}»` }).click()
   await page

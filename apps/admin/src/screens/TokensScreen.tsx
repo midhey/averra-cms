@@ -10,7 +10,9 @@ import { formatDateTime } from '../pages-format'
 import { queryKeys, tokensQuery } from '../queries'
 import {
   DRAFTS_ONLY,
+  escapeBlockedText,
   isDraftsOnly,
+  issuedDoneLabel,
   mcpConfigFragment,
   rightsSummary,
   type TokenState,
@@ -390,8 +392,18 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
   const copyTokenRef = useRef<HTMLButtonElement>(null)
   const [copied, setCopied] = useState<{ target: CopyTarget; ok: boolean }>()
   // Хоть что-то скопировано: тогда Esc закрывает окно. Пока нет — токен можно потерять одним
-  // нажатием, поэтому Esc ничего не делает, а закрывают кнопки окна
+  // нажатием, поэтому Esc окно не закрывает, а закрывают кнопки окна. Esc отменяется в Dialog на
+  // keydown; запрос на закрытие не от клавиши (кнопка «Назад») Dialog тоже отклоняет, а если
+  // браузер всё же закрыл окно, открывает его снова. Подсказка — во всех этих случаях
   const [copiedAny, setCopiedAny] = useState(false)
+  // Сколько раз окно не дало себя закрыть: каждый раз подсказка прокручивается в видимую область.
+  // На телефоне Esc нет, а «Назад» молча не срабатывает — подсказка внизу окна, под фрагментом
+  // .mcp.json, иначе осталась бы за краем экрана
+  const [escapeAttempts, setEscapeAttempts] = useState(0)
+  const statusRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (escapeAttempts > 0) statusRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [escapeAttempts])
 
   async function copy(target: CopyTarget) {
     const text = target === 'token' ? token.token : fragment
@@ -399,6 +411,7 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
       await navigator.clipboard.writeText(text)
       setCopied({ target, ok: true })
       setCopiedAny(true)
+      setEscapeAttempts(0)
     } catch {
       const field = target === 'token' ? tokenRef.current : fragmentRef.current
       field?.focus()
@@ -425,11 +438,12 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
       // копирует токен, а не закрывает окно
       initialFocus={copyTokenRef}
       escapeCloses={copiedAny}
+      onEscapeBlocked={() => setEscapeAttempts((count) => count + 1)}
       title={`Токен «${token.name}» выпущен`}
       description="Токен показывается один раз: после закрытия окна его не увидит никто, даже вы. Потеряете — выпустите новый, а этот отзовите."
       footer={
         <Button variant="primary" onClick={onClose}>
-          Готово, я сохранил токен
+          {issuedDoneLabel}
         </Button>
       }
     >
@@ -473,11 +487,15 @@ function IssuedDialog({ token, onClose }: { token: Issued; onClose: () => void }
         <FormActions>
           <Button onClick={() => void copy('fragment')}>Скопировать фрагмент .mcp.json</Button>
         </FormActions>
-        <div role="status" className={styles.copyStatus}>
+        <div ref={statusRef} role="status" className={styles.copyStatus}>
           {copiedText && (
             <InlineAlert tone={copiedText.ok ? 'success' : 'warning'}>
               {copiedText.text}
             </InlineAlert>
+          )}
+          {/* После неудачного копирования Esc тоже не закрывает окно: подсказка рядом со статусом */}
+          {escapeAttempts > 0 && !copiedAny && (
+            <InlineAlert tone="warning">{escapeBlockedText}</InlineAlert>
           )}
         </div>
       </div>

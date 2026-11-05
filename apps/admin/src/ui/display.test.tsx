@@ -284,4 +284,79 @@ describe('Dialog: фокус и Esc', () => {
     await user.click(screen.getByRole('button', { name: 'Открыть' }))
     expect(cancel()).toBe(false)
   })
+
+  it('escapeCloses={false}: Esc отменяется на keydown, окно не закрывается и на миг', async () => {
+    const user = userEvent.setup()
+    const onEscapeBlocked = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <Dialog
+        open
+        onClose={onClose}
+        title="Токен"
+        escapeCloses={false}
+        onEscapeBlocked={onEscapeBlocked}
+      />,
+    )
+    const dialog = document.querySelector('dialog') as HTMLDialogElement
+    const closed = vi.fn()
+    dialog.addEventListener('close', closed)
+    // Фокус внутри окна, как после showModal() в браузере
+    screen.getByRole('button', { name: 'Закрыть' }).focus()
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Escape}')
+    expect(onEscapeBlocked).toHaveBeenCalledTimes(2)
+    // Само нажатие отменено: именно это в браузере не даёт окну закрыться (happy-dom окно по Esc
+    // не закрывает, поэтому без проверки defaultPrevented убранный preventDefault остался бы тихим)
+    const blocked = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    dialog.dispatchEvent(blocked)
+    expect(blocked.defaultPrevented).toBe(true)
+    onEscapeBlocked.mockClear()
+    expect(closed).not.toHaveBeenCalled()
+    expect(dialog.open).toBe(true)
+    // Другие клавиши не трогаем, а при escapeCloses по умолчанию Esc не перехватывается
+    onEscapeBlocked.mockClear()
+    await user.keyboard('a')
+    expect(onEscapeBlocked).not.toHaveBeenCalled()
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    render(<Dialog open onClose={onClose} title="Обычное" />)
+    document.querySelectorAll('dialog')[1]?.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('escapeCloses={false}: браузер закрыл окно, не спросив (Chrome), — окно открывается снова', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const onEscapeBlocked = vi.fn()
+    function Guarded() {
+      const [shown, setShown] = useState(true)
+      return (
+        shown && (
+          <Dialog
+            open
+            onClose={() => {
+              onClose()
+              setShown(false)
+            }}
+            title="Токен"
+            escapeCloses={false}
+            onEscapeBlocked={onEscapeBlocked}
+            footer={<Button onClick={() => setShown(false)}>Готово</Button>}
+          />
+        )
+      )
+    }
+    render(<Guarded />)
+    const dialog = document.querySelector('dialog') as HTMLDialogElement
+    // Chrome без действия человека даёт закрыть окно: cancel уже не отменить, приходит close
+    for (let press = 0; press < 4; press++) {
+      dialog.close()
+      await vi.waitFor(() => expect(dialog.open).toBe(true))
+    }
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onEscapeBlocked).toHaveBeenCalledTimes(4)
+    // Кнопки окна закрывают его по-прежнему
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(document.querySelector('dialog')).toBeNull()
+  })
 })

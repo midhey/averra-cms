@@ -25,10 +25,15 @@ type DialogProps = {
    */
   initialFocus?: RefObject<HTMLElement | null>
   /**
-   * Esc закрывает окно (по умолчанию да). false — Esc ничего не делает: окно с тем, что нельзя
-   * потерять случайно (токен, который показывается один раз). Закрывают кнопки окна
+   * Esc закрывает окно (по умолчанию да). false — Esc окно не закрывает: окно с тем, что нельзя
+   * потерять случайно (токен, который показывается один раз). Закрывают кнопки окна. Нажатие Esc
+   * отменяется на keydown. Закрытие не от клавиши Chrome после пары запросов подряд без действий
+   * человека перестаёт давать отменить (защита от «ловушек» close watcher): тогда окно закрывается
+   * само, и мы тут же открываем его снова
    */
   escapeCloses?: boolean
+  /** Esc нажали, а окно не закрылось (escapeCloses={false}): экран может подсказать, что делать */
+  onEscapeBlocked?: () => void
 }
 
 /**
@@ -47,6 +52,7 @@ export function Dialog({
   role,
   initialFocus,
   escapeCloses = true,
+  onEscapeBlocked,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -91,12 +97,30 @@ export function Dialog({
       role={role}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      // Esc при escapeCloses={false} не закрывает окно
-      onCancel={(event) => {
-        if (!escapeCloses) event.preventDefault()
+      // Esc при escapeCloses={false}: отменяем нажатие, до запроса на закрытие дело не доходит.
+      // Тогда окно не закрывается ни на миг (иначе после пары Esc Chrome закрыл бы его и открыл бы
+      // снова: читалка объявляла бы окно заново, а Enter попал бы в форму под окном)
+      onKeyDown={(event) => {
+        if (escapeCloses || event.key !== 'Escape') return
+        event.preventDefault()
+        onEscapeBlocked?.()
       }}
-      // Событие close приходит и после Esc: экран узнаёт, что окна больше нет
-      onClose={() => {
+      // Запрос на закрытие не от клавиши (кнопка «Назад» на телефоне): не закрываем и так
+      onCancel={(event) => {
+        if (escapeCloses) return
+        event.preventDefault()
+        onEscapeBlocked?.()
+      }}
+      // Событие close приходит и после Esc: экран узнаёт, что окна больше нет. Экран окно не
+      // закрывал (open всё ещё true), а Esc закрывать запретил — значит, браузер закрыл его, не
+      // спросив (см. escapeCloses): возвращаем окно, закрывают его только кнопки
+      onClose={(event) => {
+        if (open && !escapeCloses) {
+          event.currentTarget.showModal()
+          initialFocus?.current?.focus()
+          onEscapeBlocked?.()
+          return
+        }
         opener.current = null
         if (open) onClose()
       }}

@@ -60,6 +60,7 @@ const sections: { prefix: string; title: string; who?: string }[] = [
   { prefix: '/settings', title: 'Настройки' },
   { prefix: '/mail', title: 'Почта' },
   { prefix: '/status', title: 'Состояние' },
+  { prefix: '/tokens', title: 'Доступ для ИИ' },
   // Список блоков виден всем ролям, закрыт экран одного блока: человек его только открыл, а не
   // менял, и ответ API («черновики меняет владелец») говорил бы про другое
   {

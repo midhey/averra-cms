@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isDraftsOnly, mcpConfigFragment, rightsSummary, tokenState } from './token-format'
+import {
+  escapeBlockedText,
+  isDraftsOnly,
+  issuedDoneLabel,
+  mcpConfigFragment,
+  rightsSummary,
+  tokenState,
+} from './token-format'
 
 describe('фрагмент .mcp.json', () => {
   it('сервер averra с адресом установки и токеном в env — разбирается как JSON', () => {
@@ -29,6 +36,13 @@ describe('права словами', () => {
   it('«только черновики» — без публикации и удаления', () => {
     expect(isDraftsOnly({ blocksDraft: true, publish: false, delete: false })).toBe(true)
     expect(isDraftsOnly({ blocksDraft: true, publish: true, delete: false })).toBe(false)
+  })
+})
+
+describe('подсказка про Esc в окне с токеном', () => {
+  it('называет кнопку окна по её настоящей подписи: экран и витрина берут текст отсюда', () => {
+    expect(escapeBlockedText).toContain(`«${issuedDoneLabel}»`)
+    expect(escapeBlockedText).toMatch(/показывается один раз/)
   })
 })
 

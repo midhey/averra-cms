@@ -67,7 +67,12 @@ test('владелец открывает «Почту» из панели: со
     await expect(article.locator('iframe')).toHaveCount(0)
     // Название — заголовок над раскрывашкой (h3 вне summary: читалки не теряют его уровень)
     await expect(article.getByRole('heading', { level: 3, name: title })).toBeVisible()
-    await article.getByText('Показать письмо').click()
+    // Раскрывашка называет письмо: в списке кнопок диктор не слышит восемь одинаковых имён
+    const summary = article.locator('summary').first()
+    await expect(summary).toHaveAccessibleName(`Показать письмо «${title}»`)
+    await summary.click()
+    // Раскрытая — зовёт свернуть, с тем же названием письма
+    await expect(summary).toHaveAccessibleName(`Скрыть письмо «${title}»`)
     // Письмо в iframe без скриптов: его содержимое — HTML шаблона на примерных данных
     const frame = article.frameLocator(`iframe[title="Предпросмотр письма «${title}»"]`)
     await expect(frame.locator('body')).toContainText(text)
