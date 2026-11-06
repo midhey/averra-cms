@@ -84,6 +84,7 @@ async function resetDemoSite() {
   await resetTheme(site.id)
   await resetHeader(site.id)
   await resetFooter(site.id)
+  await resetSiteScript(site.id)
   const param = { siteId: site.id, slug: MAIN_PAGE_SLUG }
   const page = sites[':siteId'].pages[':slug']
   const saved = await page.$put({ param, json: { title: demoPageTitle, content: demoPage } })
@@ -161,6 +162,25 @@ async function resetFooter(siteId: string) {
   }
   if (!sameFooter(view.draft, defaultFooter)) {
     expect((await footer.$put({ param: { siteId }, json: defaultFooter })).status).toBe(200)
+  }
+}
+
+/** Скрипта сайта нет ни на сайте, ни в черновике (tests/custom-js.spec.ts его публикует) */
+async function resetSiteScript(siteId: string) {
+  const script = sites[':siteId'].script
+  const res = await script.$get({ param: { siteId } })
+  expect(res.status, 'скрипт сайта').toBe(200)
+  const view = (await res.json()) as {
+    published: { script: string; origins: string[] }
+    unpublished: boolean
+  }
+  const empty = { script: '', origins: [] }
+  if (view.published.script !== '' || view.published.origins.length > 0) {
+    expect((await script.$put({ param: { siteId }, json: empty })).status).toBe(200)
+    const published = await script.publish.$post({ param: { siteId }, json: { draft: empty } })
+    expect(published.status, 'убрать скрипт сайта').toBe(200)
+  } else if (view.unpublished) {
+    expect((await script.$delete({ param: { siteId } })).status).toBe(200)
   }
 }
 

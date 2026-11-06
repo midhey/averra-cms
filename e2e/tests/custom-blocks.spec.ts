@@ -82,7 +82,9 @@ test('свой блок: поля с повторителем и картинк�
   await template.fill('<h2>{{ title }}</h2>\n<script>alert(1)</script>')
   await expect(page.getByRole('tab', { name: 'Шаблон · 1' })).toBeVisible()
   const problems = page.getByRole('list', { name: 'Замечания' })
-  await expect(problems).toContainText('<script> запрещён: свой блок работает без JavaScript')
+  await expect(problems).toContainText(
+    '<script> запрещён: шаблон работает без JavaScript, а скрипт блока — на вкладке «Скрипт»',
+  )
   await problems.getByRole('button', { name: 'Строка 2' }).click()
   await expect(template).toBeFocused()
   await template.fill(TEMPLATE)

@@ -3,9 +3,11 @@ import { readFile, stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { extname, join, normalize } from 'node:path'
+import { SITE_CSP_FILE } from '@averra/schema'
 
 // Собранный сайт из папки релиза (PUBLISH_DIR) — как его отдал бы Caddy: тесты сайта смотрят
-// ровно то, что ушло бы посетителю
+// ровно то, что ушло бы посетителю. CSP — из _averra/csp.txt релиза на каждый ответ, как
+// плейсхолдер {file.…} в deploy/Caddyfile: скрипты сайта проверяются под той же политикой
 
 const types: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -44,8 +46,12 @@ export async function serveRelease(root: string) {
       const file = await fileFor(path)
       const status = file ? 200 : 404
       const body = await readFile(file ?? join(root, '404.html'))
+      const cspFile = join(root, SITE_CSP_FILE)
+      // Caddy срезает перевод строки в конце файла — здесь так же
+      const csp = existsSync(cspFile) ? (await readFile(cspFile, 'utf8')).trim() : ''
       res.writeHead(status, {
         'content-type': types[extname(file ?? '.html')] ?? 'application/octet-stream',
+        ...(csp && { 'content-security-policy': csp }),
       })
       res.end(body)
     })().catch(() => {

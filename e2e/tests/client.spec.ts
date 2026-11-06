@@ -53,6 +53,7 @@ test('администратор сайта ведёт контент сам: «
   await expect(sidebar(page).section('SEO')).toBeVisible()
   await expect(sidebar(page).section('Тема')).toHaveCount(0)
   await expect(sidebar(page).section('Свои блоки')).toHaveCount(0)
+  await expect(sidebar(page).section('Скрипт сайта')).toHaveCount(0)
   await expect(sidebar(page).installation).toHaveCount(0)
   await expect(page.getByText('Администратор сайта', { exact: true })).toBeVisible()
 
@@ -70,7 +71,15 @@ test('редактору — страницы и медиатека: ни зая
   await page.goto('/')
   await expect(sidebar(page).section('Страницы')).toBeVisible()
   await expect(sidebar(page).section('Медиатека')).toBeVisible()
-  for (const name of ['Заявки', 'Уведомления', 'Шапка и подвал', 'SEO', 'Тема', 'Свои блоки']) {
+  for (const name of [
+    'Заявки',
+    'Уведомления',
+    'Шапка и подвал',
+    'SEO',
+    'Тема',
+    'Свои блоки',
+    'Скрипт сайта',
+  ]) {
     await expect(sidebar(page).section(name), name).toHaveCount(0)
   }
   await expect(page.getByText('Редактор', { exact: true })).toBeVisible()

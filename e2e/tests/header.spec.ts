@@ -270,8 +270,9 @@ test('настроить шапку и меню, опубликовать — н
     .toContain('data-site-header')
   const html = await servedHtml(demoSite.id)
   expect(html).toContain('data-condense')
-  // Скрипт шапки — свой модуль сборки (Astro встраивает маленький прямо в страницу), без загрузок
-  expect(html).toMatch(/<script type="module"[^>]*>[^<]*data-header-sentinel/)
+  // Скрипт шапки — свой модуль сборки файлом /_astro/…: inline-скриптов CSP сайта не пускает
+  expect(html).toMatch(/<script type="module" src="\/_astro\/[^"]+\.js"><\/script>/)
+  expect(html).not.toMatch(/<script(?![^>]*src=)(?![^>]*application\/ld\+json)[^>]*>/)
   expect(await servedHtml(demoSite.id, 'promo')).not.toContain('data-site-header')
 
   const site = await serveRelease(release(demoSite.id))

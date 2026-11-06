@@ -10,7 +10,17 @@ const overflowOf = (page: Page) =>
 
 test('на 375 px ни один экран не прокручивается вбок', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  const screens = ['/', '/', '/pages', '/media', '/leads', '/settings', '/mail', '/status']
+  const screens = [
+    '/',
+    '/',
+    '/pages',
+    '/media',
+    '/leads',
+    '/settings',
+    '/mail',
+    '/status',
+    '/script',
+  ]
   for (const path of screens) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -228,7 +238,7 @@ test('вкладки на 375 px: выбранная вкладка не пря�
   expect(created.status).toBe(201)
   await page.goto(`/blocks/${key}`)
   const tabs = page.getByRole('tablist').first()
-  await expect(tabs.getByRole('tab')).toHaveCount(6)
+  await expect(tabs.getByRole('tab')).toHaveCount(7)
   const last = tabs.getByRole('tab').last()
   await last.click()
   await expect(last).toBeInViewport({ ratio: 1 })
