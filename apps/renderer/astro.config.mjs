@@ -32,6 +32,14 @@ const sitePages = {
         entrypoint: './src/routes/fonts.ts',
         prerender,
       })
+      // Свои скрипты сайта и блоков — файлы с хешем в имени (src/lib/scripts.ts), без inline
+      injectRoute({
+        pattern: '/_scripts/[file].js',
+        entrypoint: './src/routes/scripts.ts',
+        prerender,
+      })
+      // CSP сайта файлом релиза: её ставит заголовком Caddy домена сайта (deploy/Caddyfile)
+      injectRoute({ pattern: '/_averra/csp.txt', entrypoint: './src/routes/csp.ts', prerender })
       const manifest = './src/routes/manifest.ts'
       const favicon = './src/routes/favicon.ts'
       const icons = './src/routes/icons.ts'
@@ -57,8 +65,18 @@ export default defineConfig({
   integrations: [react(), sitePages],
   // Пути к файлам шрифтов из пакетов @fontsource (virtual:averra/font-files): маршрут /_fonts/
   // читает с диска только файлы темы сайта, остальные в сборку не попадают
-  vite: { plugins: [fontFilesPlugin({ as: 'path' })] },
+  vite: {
+    plugins: [fontFilesPlugin({ as: 'path' })],
+    build: {
+      // Скрипты сайта (шапка, cookie, видео) — только файлами /_astro/…: маленький Astro встроил бы
+      // в страницу, а CSP сайта inline-скрипты запрещает. Остальное — по умолчанию Vite
+      assetsInlineLimit: (file) => (file.endsWith('.js') ? false : undefined),
+    },
+  },
   server: { port: 4321 },
+  // Панель разработчика Astro встраивает в страницу inline-скрипт: dev-сервер отдаёт ту же CSP, что
+  // сайт на сервере, и страница в dev должна быть такой же, как в релизе, — без inline
+  devToolbar: { enabled: false },
   env: {
     schema: {
       CMS_API_URL: envField.string({

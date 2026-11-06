@@ -896,4 +896,25 @@ describe('Caddyfile: кеш', () => {
     // Наружу из API на домене сайта открыт только приём форм: fallback — через ошибку 404
     expect(handles(site).map((branch) => branch.matcher)).toEqual(['/api/forms/*', ''])
   })
+
+  it('сайт: свои скрипты /_scripts/<имя>.<хеш>.js — immutable', () => {
+    const site = siteBlock('{$SITE_DOMAIN}')
+    const re = new RegExp(/@immutable path_regexp (\S+)/.exec(site)?.[1] ?? '^$')
+    expect(re.test('/_scripts/block-tabs.0123456789.js')).toBe(true)
+    expect(re.test('/_scripts/site.0123456789.js')).toBe(true)
+  })
+
+  it('сайт: CSP — из файла текущей версии сайта, на каждом ответе, и на странице 404 тоже', () => {
+    const snippet = /^\(site_csp\) \{\n([\s\S]*?)^\}/m.exec(caddyfile)?.[1] ?? ''
+    // Файл пишет сборка (SITE_CSP_FILE в @averra/schema); плейсхолдер file читается на запрос
+    expect(snippet).toMatch(
+      /^\theader Content-Security-Policy "\{file\.\/srv\/sites\/main\/current\/_averra\/csp\.txt\}"$/m,
+    )
+    const site = siteBlock('{$SITE_DOMAIN}')
+    expect(site).toMatch(/^\timport site_csp$/m)
+    const errors = /^\thandle_errors 404 \{\n([\s\S]*?)^\t\}/m.exec(site)?.[1] ?? ''
+    expect(errors).toMatch(/^\t\timport site_csp$/m)
+    // Админке — нет: у неё своя модель (предпросмотр, Vite), CSP сайта ей не подходит
+    expect(siteBlock('{$ADMIN_DOMAIN}')).not.toContain('site_csp')
+  })
 })

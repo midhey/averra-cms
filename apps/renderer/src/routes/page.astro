@@ -29,8 +29,9 @@ import CookieConsent from '../components/CookieConsent.astro'
 import SiteHeaderScript from '../components/SiteHeaderScript.astro'
 import VideoPlayer from '../components/VideoPlayer.astro'
 import { siteFontCss, siteFontFiles } from '../lib/fonts'
-import { analyticsHead, faqJsonLd, headTags, organizationJsonLd } from '../lib/seo'
-import { formActionFor, loadSnapshot, notFoundPage } from '../lib/snapshot'
+import { pageScriptFiles, siteCspOf } from '../lib/scripts'
+import { faqJsonLd, headTags, organizationJsonLd } from '../lib/seo'
+import { apiOrigin, formActionFor, loadSnapshot, notFoundPage } from '../lib/snapshot'
 
 // Маршрут подключается в astro.config.mjs: при сборке он статический, в dev — по запросу.
 // Поэтому в dev Astro пишет в лог «getStaticPaths() ignored in dynamic page…» и советует
@@ -70,11 +71,9 @@ if (!page) {
 }
 const seoSite = { name: site.name, url: site.url, theme: site.theme, settings: site.settings }
 const head = headTags({ site: seoSite, page, media })
-const scripts = [
-  ...analyticsHead(site.settings),
-  organizationJsonLd(seoSite, page, media) ?? '',
-  faqJsonLd(seoSite, page) ?? '',
-]
+// Разметка для поисковиков — данные (application/ld+json), а не скрипт: CSP её не касается.
+// Счётчики аналитики вставляет модуль cookie-уведомления, inline-скриптов на сайте нет
+const jsonLd = [organizationJsonLd(seoSite, page, media) ?? '', faqJsonLd(seoSite, page) ?? '']
 // Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы
 const themeCss = siteFontCss(await siteFontFiles(site.theme)) + themeToCss(site.theme)
 // Cookie-уведомление и ссылки на документы: ссылка на политику — только на опубликованную страницу
@@ -122,6 +121,25 @@ const customBlockError = (blockId: string, message: string) =>
   console.warn(`Страница ${page.slug}, свой блок #${blockId} не выведен: ${message}`)
 // Скрипт плеера — только на страницах с блоком «Видео»
 const hasVideo = page.content.blocks.some((block) => block.type === 'video')
+// Свой JS: скрипт сайта и скрипты своих блоков этой страницы — файлами /_scripts/, каждый один раз
+// (lib/scripts.ts). Без них страница работает: контент, ссылки и формы — обычный HTML
+const ownScripts = pageScriptFiles({
+  siteScript: site.script,
+  blockKeys: customBlockKeysOf(page.content),
+  customBlocks,
+})
+// CSP: на сервере её ставит Caddy из _averra/csp.txt релиза (маршрут csp.ts), в dev — эта страница
+// той же функцией. При сборке заголовки страницы не пишутся никуда
+if (import.meta.env.DEV) {
+  Astro.response.headers.set(
+    'content-security-policy',
+    siteCspOf({
+      analytics: site.settings.analytics,
+      siteScript: site.script,
+      apiOrigin: apiOrigin(),
+    }),
+  )
+}
 ---
 
 <html
@@ -136,7 +154,7 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
     <Fragment set:html={head.join('\n')} />
     <style is:inline set:html={themeCss}></style>
     {customCss && <style is:inline set:html={customCss} />}
-    <Fragment set:html={scripts.join('\n')} />
+    <Fragment set:html={jsonLd.join('\n')} />
   </head>
   <body>
     {header && <SiteHeader view={header} media={media} />}
@@ -151,5 +169,6 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}
+    {ownScripts.map((file) => <script is:inline type="module" src={file.src} />)}
   </body>
 </html>

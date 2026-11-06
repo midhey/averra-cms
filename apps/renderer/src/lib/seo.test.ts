@@ -4,12 +4,10 @@ import {
   ogCardVersion,
   PageContent,
   readSiteSettings,
-  type StoredSiteSettings,
 } from '@averra/schema'
 import { defaultTheme } from '@averra/tokens'
 import { describe, expect, it } from 'vitest'
 import {
-  analyticsHead,
   canonicalPath,
   documentTitle,
   faqJsonLd,
@@ -226,42 +224,6 @@ describe('<head> страницы', () => {
     // Без иконки браузер не просит /favicon.ico: его нет в релизе, запрос ушёл бы в API
     expect(plain).toContain('<link rel="icon" href="data:,">')
     expect(html).not.toContain('data:,')
-  })
-})
-
-describe('аналитика', () => {
-  const counters = { metrika: '98765432', ga4: 'G-ABC123DEF4' }
-  const notice = { mode: 'notice', look: 'bar', text: '', policyPage: '' } as const
-
-  it('без счётчиков на сайте нет ни одного скрипта', () => {
-    const s = site().settings
-    expect(analyticsHead(s)).toEqual([])
-    expect(head(site(), page('index'))).not.toContain('<script')
-  })
-
-  it('режим согласия (по умолчанию): в HTML нет скриптов счётчиков — их грузит уведомление', () => {
-    const s = site({ analytics: counters }).settings
-    expect(s.cookies.mode).toBe('consent')
-    expect(analyticsHead(s)).toEqual([])
-  })
-
-  it('режим уведомления: Метрика и GA4 — только с проверенными номерами', () => {
-    const s = site({ analytics: counters, cookies: notice }).settings
-    const scripts = analyticsHead(s).join('\n')
-    expect(scripts).toContain('ym(98765432,"init"')
-    expect(scripts).toContain('https://mc.yandex.ru/metrika/tag.js')
-    expect(scripts).not.toContain('webvisor')
-    expect(scripts).toContain('https://www.googletagmanager.com/gtag/js?id=G-ABC123DEF4')
-    expect(scripts).toContain('gtag("config","G-ABC123DEF4")')
-    expect(scripts).not.toContain('noscript')
-  })
-
-  it('подложенный в обход схемы номер не попадает в скрипт', () => {
-    const forged = {
-      ...site().settings,
-      analytics: { metrika: '1);alert(1);(', ga4: '' },
-    } satisfies StoredSiteSettings
-    expect(() => analyticsHead(forged)).toThrow()
   })
 })
 

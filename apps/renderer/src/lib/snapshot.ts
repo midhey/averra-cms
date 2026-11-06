@@ -89,6 +89,13 @@ export const formActionFor =
     return links === 'relative' ? path : new URL(path, CMS_API_URL).href
   }
 
+/**
+ * Источник API, если картинки и формы сайта ведут на него (режим api): его разрешает CSP сайта.
+ * В режиме relative всё от корня сайта — null
+ */
+export const apiOrigin = (links: 'api' | 'relative' = CMS_LINKS) =>
+  links === 'api' ? new URL(CMS_API_URL).origin : null
+
 async function request<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call()
