@@ -421,7 +421,27 @@ describe('свои блоки: черновики через MCP', () => {
     // Список опубликованного доступен и без права, как list_blocks
     const list = await tools.listCustomBlocks()
     expect(list.blocks.every((block) => block.published)).toBe(true)
-    expect(list.rules.join('\n')).toContain('Без JavaScript')
+    expect(list.rules.join('\n')).toContain('правильно с выключенным JavaScript')
+    expect(list.rules.join('\n')).toContain('Скрипт блока (поле script')
+    // Скрипт сайта — то же право
+    await expect(tools.getSiteScript()).rejects.toThrow(/pnpm token:grant/)
+    await expect(
+      tools.saveSiteScriptDraft({ script: { script: 'x()', origins: [] } }),
+    ).rejects.toThrow(/pnpm token:grant/)
+  })
+
+  it('скрипт сайта: черновик с правом сохраняется, на сайт не попадает', async () => {
+    const saved = await drafts.saveSiteScriptDraft({
+      script: { script: 'document.body.dataset.js = ""', origins: ['https://widget.example.ru'] },
+    })
+    expect(saved).toMatchObject({ hasUnpublishedChanges: true, problems: [] })
+    expect(saved.who).toContain('только человек')
+    const state = await drafts.getSiteScript()
+    expect(state.draft).toEqual({
+      script: 'document.body.dataset.js = ""',
+      origins: ['https://widget.example.ru'],
+    })
+    expect(state.published).toEqual({ script: '', origins: [] })
   })
 
   it('сохраняет черновик (создаёт блок), проверяет, показывает HTML; публикует только человек', async () => {

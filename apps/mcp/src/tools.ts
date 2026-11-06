@@ -23,6 +23,7 @@ import {
   readTheme,
   SEO_DESCRIPTION_RANGE,
   SEO_TITLE_RANGE,
+  SiteScript,
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,
@@ -216,7 +217,7 @@ const CustomBlockDetail = z.object({
 const CheckResult = z.object({
   problems: z.array(
     z.object({
-      part: z.enum(['template', 'css', 'example', 'fields']),
+      part: z.enum(['template', 'css', 'example', 'fields', 'script']),
       level: z.enum(['error', 'warning']),
       message: z.string(),
       line: z.number().optional(),
@@ -226,6 +227,21 @@ const CheckResult = z.object({
   html: z.string().nullable(),
   css: z.string(),
 })
+
+/** Скрипт сайта, как его сохраняет нейронка: код и домены для CSP — та же схема, что у API */
+export const SaveSiteScriptInput = z.object({ script: SiteScript })
+export type SaveSiteScriptInput = z.output<typeof SaveSiteScriptInput>
+
+/** Скрипт сайта из ответа API: незнакомое поле не ломает разбор */
+const SiteScriptState = z.object({
+  draft: z.unknown(),
+  published: z.unknown(),
+  unpublished: z.boolean().catch(false),
+  problems: z.array(z.unknown()).catch([]),
+})
+
+const WHO_PUBLISHES_SCRIPT =
+  'Публикует скрипт сайта только человек: в админке «Скрипт сайта» → «Опубликовать». Токен публиковать не может.'
 
 /** Ответ сохранения существующего блока: чем это грозит правкам человека */
 const DRAFT_REPLACED_NOTE =
@@ -307,6 +323,8 @@ export function cmsTools(client: Api | undefined) {
       getCustomBlock: fail,
       saveCustomBlockDraft: fail,
       checkCustomBlock: fail,
+      getSiteScript: fail,
+      saveSiteScriptDraft: fail,
     }
   }
   const sites = client.api.sites
@@ -572,6 +590,35 @@ export function cmsTools(client: Api | undefined) {
       }
     },
 
+    /** Скрипт сайта: черновик, что на сайте, замечания к черновику */
+    getSiteScript: async () => {
+      const param = { siteId: await siteOf(undefined) }
+      const state = SiteScriptState.parse(
+        await unwrap(() => sites[':siteId'].script.$get({ param })),
+      )
+      return {
+        draft: state.draft,
+        published: state.published,
+        hasUnpublishedChanges: state.unpublished,
+        problems: state.problems,
+        who: WHO_PUBLISHES_SCRIPT,
+      }
+    },
+
+    /** Черновик скрипта сайта целиком: код и домены. На сайт не попадает до публикации человеком */
+    saveSiteScriptDraft: async ({ script }: SaveSiteScriptInput) => {
+      const param = { siteId: await siteOf(undefined) }
+      const state = SiteScriptState.parse(
+        await unwrap(() => sites[':siteId'].script.$put({ param, json: script })),
+      )
+      return {
+        note: DRAFT_REPLACED_NOTE.replace('(list_custom_blocks)', '(get_site_script)'),
+        problems: state.problems,
+        hasUnpublishedChanges: state.unpublished,
+        who: WHO_PUBLISHES_SCRIPT,
+      }
+    },
+
     publishPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
       return unwrap(() => page.publish.$post({ param }))
@@ -668,7 +715,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Свои блоки: определения',
       description:
-        'Свои блоки этого сайта с определениями (поля, шаблон Liquid, CSS, пример) и инструкция rules — как писать свой блок: без JavaScript, на переменных темы, доступно, на телефоне 375 px. Черновики видны, если владелец включил токену право на черновики блоков (в админке: Установка → Доступ для ИИ); иначе — только опубликованное. Вызови перед save_custom_block_draft.',
+        'Свои блоки этого сайта с определениями (поля, шаблон Liquid, CSS, пример) и инструкция rules — как писать свой блок: работает без JavaScript (скрипт — только улучшение), на переменных темы, доступно, на телефоне 375 px. Черновики видны, если владелец включил токену право на черновики блоков (в админке: Установка → Доступ для ИИ); иначе — только опубликованное. Вызови перед save_custom_block_draft.',
       annotations: { readOnlyHint: true },
     },
     async () => asText(await tools.listCustomBlocks()),
@@ -691,7 +738,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Сохранить черновик своего блока',
       description:
-        'Сохраняет ЧЕРНОВИК определения своего блока целиком (создаёт блок, если ключа ещё нет): ключ, название, описание, поля, шаблон Liquid, CSS и пример данных. Черновик заменяется ЦЕЛИКОМ, истории черновиков нет: если человек правил его в админке, его правки пропадут. Поэтому перед сохранением существующего блока прочитай актуальный черновик (list_custom_blocks) и вноси правку в него. Опубликованное не меняется и на сайт не попадает: публикует блок только человек в админке. Ошибки шаблона и CSS сохранению не мешают, они вернутся в problems — исправь и сохрани снова, затем check_custom_block. Правила — list_custom_blocks.rules. Нужно право токена на черновики блоков.',
+        'Сохраняет ЧЕРНОВИК определения своего блока целиком (создаёт блок, если ключа ещё нет): ключ, название, описание, поля, шаблон Liquid, CSS, скрипт (необязательно) и пример данных. Черновик заменяется ЦЕЛИКОМ, истории черновиков нет: если человек правил его в админке, его правки пропадут. Поэтому перед сохранением существующего блока прочитай актуальный черновик (list_custom_blocks) и вноси правку в него. Опубликованное не меняется и на сайт не попадает: публикует блок только человек в админке. Ошибки шаблона и CSS сохранению не мешают, они вернутся в problems — исправь и сохрани снова, затем check_custom_block. Правила — list_custom_blocks.rules. Нужно право токена на черновики блоков.',
       inputSchema: SaveCustomBlockInput,
       annotations: { idempotentHint: true },
     },
@@ -719,11 +766,34 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Проверить свой блок',
       description:
-        'Проверяет шаблон, CSS и пример своего блока и показывает HTML и CSS, как их увидит сайт: на примере блока или на своих данных (data). Либо key — сохранённый черновик, либо definition — определение целиком, без сохранения. Возвращает problems: часть (template, css, example, fields), уровень (error блокирует публикацию, warning — совет), строка и понятный текст — исправляй по ним сам. Ничего не сохраняет и не публикует. Нужно право токена на черновики блоков.',
+        'Проверяет шаблон, CSS и пример своего блока и показывает HTML и CSS, как их увидит сайт: на примере блока или на своих данных (data). Либо key — сохранённый черновик, либо definition — определение целиком, без сохранения. Возвращает problems: часть (template, css, example, fields, script), уровень (error блокирует публикацию, warning — совет), строка и понятный текст — исправляй по ним сам. Ничего не сохраняет и не публикует. Нужно право токена на черновики блоков.',
       inputSchema: CheckCustomBlockInput,
       annotations: { readOnlyHint: true },
     },
     async (args) => asText(await tools.checkCustomBlock(args)),
+  )
+
+  server.registerTool(
+    'get_site_script',
+    {
+      title: 'Скрипт сайта',
+      description:
+        'Свой JS на всех страницах сайта и домены, которые ему разрешены в CSP: черновик, опубликованная версия и замечания. Нужно право токена на черновики своих блоков.',
+      annotations: { readOnlyHint: true },
+    },
+    async () => asText(await tools.getSiteScript()),
+  )
+
+  server.registerTool(
+    'save_site_script_draft',
+    {
+      title: 'Сохранить черновик скрипта сайта',
+      description:
+        'Сохраняет ЧЕРНОВИК скрипта сайта целиком: script — тело async-функции (выполняется на каждой странице после загрузки, без import), origins — домены https://…, с которых скрипт грузит код, стили, картинки, фреймы и запросы (попадут в CSP сайта). Черновик заменяется целиком — сначала прочитай его (get_site_script). На сайт не попадает: публикует человек в админке. Скрипт — улучшение поверх рабочего HTML: контент, ссылки и формы обязаны работать без него. Правила — list_custom_blocks.rules (раздел про скрипт). Нужно право токена на черновики своих блоков.',
+      inputSchema: SaveSiteScriptInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => asText(await tools.saveSiteScriptDraft(args)),
   )
 
   server.registerTool(
