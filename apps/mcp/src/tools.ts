@@ -8,12 +8,17 @@ import {
   customBlockType,
   customH1Types,
   describeApiError,
+  footerLayoutTitles,
+  footerToneTitles,
   headerLayoutTitles,
+  headerLinkHref,
   isCustomBlockType,
+  opensNewTab,
   PageContent,
   PageSlug,
   PageTitle,
   pageSeoChecks,
+  readFooter,
   readHeader,
   readTheme,
   SEO_DESCRIPTION_RANGE,
@@ -21,7 +26,6 @@ import {
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
   seoAdvice,
-  siteLinkHref,
   themeFontTitles,
   Uuid,
 } from '@averra/schema'
@@ -72,6 +76,13 @@ const SavedDraft = z.object({
  */
 const SiteThemeView = z.object({
   published: z.unknown().transform((theme) => readTheme(theme)),
+  unpublished: z.boolean().catch(false),
+})
+
+/** Подвал из GET /api/sites/:siteId/footer — так же через readFooter */
+const SiteFooterView = z.object({
+  published: z.unknown().transform((footer) => (footer ? readFooter(footer) : null)),
+  draft: z.unknown().transform((footer) => readFooter(footer)),
   unpublished: z.boolean().catch(false),
 })
 
@@ -132,7 +143,7 @@ const rules = [
   'Страница с адресом 404 — служебная: её показывают на адресах, где страницы нет. Делай её из блоков, как обычную, с кнопкой на главную.',
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
   'Свои блоки установки (custom: true, тип custom:<ключ>) ставятся на страницу так же: { id, type: "custom:tariffs", props } по их схеме props. Их сделал разработчик студии под этот сайт — бери их, если они подходят по смыслу. Новый блок можно предложить черновиком определения (list_custom_blocks, save_custom_block_draft, check_custom_block) — если владелец включил токену это право; публикует определение только человек в админке, и до этого блока на страницах нет.',
-  'Шапка, меню и подвал — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. Подвал тоже меняют только в админке. Сохраняя черновик, передавай hideHeader и hideFooter, если они уже были: без них поле пропадёт.',
+  'Шапка, меню и подвал — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. Пункт или кнопка с url ведут на другой сайт, телефон или почту (href в get_header). hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. shortHeader: true — короткая шапка (логотип и «← На главную» вместо меню и кнопки) для служебной страницы: «Спасибо», документа, страницы 404 — ставь, если человек просил или делаешь такую страницу. Подвал тоже меняют только в админке. Сохраняя черновик, передавай hideHeader, shortHeader и hideFooter, если они уже были: без них поле пропадёт.',
 ]
 
 /**
@@ -405,17 +416,31 @@ export function cmsTools(client: Api | undefined) {
       }
     },
     /**
-     * Шапка и меню на сайте: раскладка, пункты меню с адресами и черновик — чтобы не ломать
-     * ссылки меню правкой страниц. Только чтение: шапку меняют в админке
+     * Шапка, меню и подвал на сайте: раскладка, пункты меню с адресами (страница, блок или
+     * внешняя ссылка), логотип, вид, подвал и черновики — чтобы не ломать ссылки меню правкой
+     * страниц. Только чтение: шапку и подвал меняют в админке
      */
     getHeader: async ({ siteId }: SiteRef) => {
       const param = { siteId: await siteOf(siteId) }
       const view = SiteHeaderView.parse(await unwrap(() => sites[':siteId'].header.$get({ param })))
+      const footer = SiteFooterView.parse(
+        await unwrap(() => sites[':siteId'].footer.$get({ param })),
+      )
+      const link = <T extends Parameters<typeof headerLinkHref>[0]>(item: T) => ({
+        ...item,
+        href: headerLinkHref(item),
+        newTab: opensNewTab(item),
+      })
       const describe = (header: NonNullable<typeof view.published>) => ({
         ...header,
         layoutTitle: headerLayoutTitles[header.layout],
-        menu: header.menu.map((item) => ({ ...item, href: siteLinkHref(item) })),
-        button: header.button && { ...header.button, href: siteLinkHref(header.button) },
+        menu: header.menu.map(link),
+        button: header.button && link(header.button),
+      })
+      const describeFooter = (shown: NonNullable<typeof footer.published>) => ({
+        ...shown,
+        layoutTitle: footerLayoutTitles[shown.layout],
+        toneTitle: footerToneTitles[shown.tone],
       })
       return {
         header: view.published && describe(view.published),
@@ -424,6 +449,9 @@ export function cmsTools(client: Api | undefined) {
           : 'Шапку ещё не публиковали: на сайте её нет. Её настраивают в админке, «Шапка и подвал»',
         draft: describe(view.draft),
         unpublishedDraft: view.unpublished,
+        footer: footer.published && describeFooter(footer.published),
+        footerDraft: describeFooter(footer.draft),
+        unpublishedFooterDraft: footer.unpublished,
       }
     },
     /**
@@ -628,7 +656,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Шапка и меню сайта',
       description:
-        'Шапка сайта и меню, как они на сайте сейчас: раскладка, пункты меню (страница и блок, на которые они ведут), кнопка, черновик. Чтобы не ломать ссылки меню правкой страниц. Менять шапку через MCP нельзя — это делают в админке, «Шапка и подвал».',
+        'Шапка сайта, меню и подвал, как они на сайте сейчас: раскладка, пункты меню (страница и блок или внешняя ссылка, href, новая вкладка), кнопка, логотип, вид, подвал (вид, фон, свой текст, ссылка на согласие) и черновики. Чтобы не ломать ссылки меню правкой страниц. Менять шапку и подвал через MCP нельзя — это делают в админке, «Шапка и подвал».',
       inputSchema: SiteRef,
       annotations: { readOnlyHint: true },
     },

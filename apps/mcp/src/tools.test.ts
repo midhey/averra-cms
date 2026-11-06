@@ -354,8 +354,31 @@ describe('шапка сайта', () => {
       (await api.app.request(`${url}/publish`, { method: 'POST', headers: owner.headers })).status,
     ).toBe(200)
     const result = await tools.getHeader({})
-    expect(result.header?.menu).toEqual([{ ...menu[0], href: '/#contact' }])
+    expect(result.header?.menu).toEqual([
+      { ...menu[0], mobileLabel: '', href: '/#contact', newTab: false },
+    ])
     expect(result.unpublishedDraft).toBe(false)
+    // Подвал — тоже: что на сайте (его ещё не публиковали) и черновик
+    expect(result.footer).toBeNull()
+    expect(result.footerDraft).toMatchObject({ layout: 'simple', consent: false, text: '' })
+  })
+
+  it('get_header: внешний пункт — адрес как есть и «новая вкладка» по умолчанию', async () => {
+    const owner = await api.loginAs('owner')
+    const headers = { ...owner.headers, 'content-type': 'application/json' }
+    const body = JSON.stringify({ menu: [{ label: 'Telegram', url: 'https://t.me/remont' }] })
+    const url = `/api/sites/${site.id}/header`
+    expect((await api.app.request(url, { method: 'PUT', headers, body })).status).toBe(200)
+    const result = await tools.getHeader({})
+    expect(result.draft.menu).toEqual([
+      {
+        label: 'Telegram',
+        mobileLabel: '',
+        url: 'https://t.me/remont',
+        href: 'https://t.me/remont',
+        newTab: true,
+      },
+    ])
   })
 })
 
