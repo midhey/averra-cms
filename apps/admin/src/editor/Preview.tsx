@@ -88,6 +88,8 @@ type PreviewProps = {
   scrollToEnd?: string | undefined
   /** Опубликованные свои блоки сайта (в редакторе своего блока — его черновик) */
   customBlocks?: CustomBlockMap | undefined
+  /** Ключи своих блоков вне страницы — свои шапка и подвал в before и extra: их CSS тоже нужен */
+  placeKeys?: readonly string[] | undefined
 }
 
 /** Роли темы админки для подсветки: их значения читаем из её документа */
@@ -117,9 +119,17 @@ export function Preview(props: PreviewProps) {
   // содержимым, а не с темой
   const customStyle = useMemo(() => frameDocument?.createElement('style'), [frameDocument])
   const customBlocks = props.customBlocks
+  const placeKeys = props.placeKeys?.join(' ') ?? ''
   const customCss = useMemo(
-    () => (customBlocks ? customBlocksCss(customBlockKeysOf(content), customBlocks, media) : ''),
-    [content, customBlocks, media],
+    () =>
+      customBlocks
+        ? customBlocksCss(
+            [...new Set([...placeKeys.split(' ').filter(Boolean), ...customBlockKeysOf(content)])],
+            customBlocks,
+            media,
+          )
+        : '',
+    [content, customBlocks, media, placeKeys],
   )
   useEffect(() => {
     if (customStyle) customStyle.textContent = customCss

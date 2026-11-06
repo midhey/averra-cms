@@ -1,5 +1,5 @@
-import { SiteFooter, SiteHeader, siteFooterView, siteHeaderView } from '@averra/blocks'
 import {
+  CustomBlockDraft,
   demoPage,
   emptyFooterContacts,
   type Footer,
@@ -38,12 +38,15 @@ import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
+import { SandboxPreview } from '../editor/SandboxPreview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { FooterFields } from '../footer/FooterFields'
 import { footerHiddenOnText, footerStatus } from '../footer/footer-format'
 import { useFooterEditor } from '../footer/use-footer-editor'
 import { type FieldErrors, issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
+import type { FieldProps, Widgets } from '../forms/SchemaForm'
 import { useFormErrors } from '../forms/use-form-errors'
+import { CustomPlaceFields } from '../header/CustomPlaceFields'
 import { HeaderLayoutSketch, LinkTarget, MenuEditor } from '../header/HeaderParts'
 import {
   headerStatus,
@@ -52,11 +55,21 @@ import {
   overlayHint,
   withTarget,
 } from '../header/header-format'
+import { siteChrome } from '../header/site-chrome'
+import { ImageField } from '../media/ImageField'
 import { MediaPickField } from '../media/MediaPickField'
 import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
-import { canEditHeader, canEditHeaderLook, canEditSeo } from '../permissions'
-import { footerQuery, headerQuery, mediaQuery, pageQuery, queryKeys, siteQuery } from '../queries'
+import { canDefineBlocks, canEditHeader, canEditHeaderLook, canEditSeo } from '../permissions'
+import {
+  customBlocksQuery,
+  footerQuery,
+  headerQuery,
+  mediaQuery,
+  pageQuery,
+  queryKeys,
+  siteQuery,
+} from '../queries'
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { useConfirm } from '../ui/Confirm'
@@ -117,6 +130,7 @@ export function HeaderScreen() {
           readOnly={!canEditHeader(site.access)}
           lookReadOnly={!canEditHeaderLook(site.access)}
           seoLinks={canEditSeo(site.access)}
+          canDefine={canDefineBlocks(site.access)}
           footer={footer}
         />
       </UnsavedChangesGuard>
@@ -147,6 +161,8 @@ type EditorProps = {
   lookReadOnly: boolean
   /** Экраны «SEO» («Организация», «Cookie и согласие») — владельцу: ссылки на них только ему */
   seoLinks: boolean
+  /** Владелец: делает свои блоки, в том числе свои виды шапки и подвала */
+  canDefine: boolean
   /** Подвал с сервера: черновик, что на сайте, политика, «Настройки cookie», контакты */
   footer: {
     draft: Footer
@@ -172,6 +188,14 @@ function HeaderEditor(props: EditorProps) {
   const [form, setForm] = useState<Header>(draft)
   const [tab, setTab] = useState<Tab>('header')
   const [notice, setNotice] = useState<Notice>()
+  // Свои виды шапки и подвала — свои блоки с местом. Владелец видит и черновики (выбрать можно до
+  // публикации определения, опубликовать шапку — нет), остальные — опубликованные
+  const custom = useQuery(customBlocksQuery(siteId))
+  const places = useMemo(() => placeDefinitions(custom.data?.blocks ?? []), [custom.data])
+  const widgets = useMemo<Widgets>(
+    () => ({ image: (field: FieldProps) => <ImageField {...field} siteId={siteId} /> }),
+    [siteId],
+  )
   const footer = useFooterEditor({
     siteId,
     draft: props.footer.draft,
@@ -385,30 +409,43 @@ function HeaderEditor(props: EditorProps) {
         >
           {tab === 'header' && (
             <div className={styles.panel}>
-              <Section title="Раскладка" card>
-                <SegmentedControl
-                  legend="Раскладка"
-                  hideLegend
-                  appearance="cards"
-                  columns={2}
-                  name="layout"
-                  disabled={lookReadOnly}
-                  options={HeaderLayout.options.map((layout) => ({
-                    value: layout,
-                    label: headerLayoutTitles[layout],
-                    thumbnail: <HeaderLayoutSketch layout={layout} />,
-                  }))}
-                  value={form.layout}
-                  onChange={(layout) => change({ ...form, layout })}
-                />
-                <p className={styles.note}>{headerLayoutHints[form.layout]}.</p>
-                {lookReadOnly && !readOnly && (
-                  <InlineAlert tone="info">
-                    Раскладку, поведение и вид шапки и подвала меняет владелец установки: это
-                    фирменный стиль сайта. Тексты, ссылки, кнопку, логотип и меню вы меняете сами.
-                  </InlineAlert>
-                )}
-              </Section>
+              <CustomPlaceFields
+                place="header"
+                value={form.custom}
+                definitions={places.header}
+                errors={errors.errors}
+                widgets={widgets}
+                readOnly={readOnly}
+                lookReadOnly={lookReadOnly}
+                canDefine={props.canDefine}
+                onChange={(next) => change({ ...form, custom: next }, 'custom.key')}
+              />
+              {!form.custom && (
+                <Section title="Раскладка" card>
+                  <SegmentedControl
+                    legend="Раскладка"
+                    hideLegend
+                    appearance="cards"
+                    columns={2}
+                    name="layout"
+                    disabled={lookReadOnly}
+                    options={HeaderLayout.options.map((layout) => ({
+                      value: layout,
+                      label: headerLayoutTitles[layout],
+                      thumbnail: <HeaderLayoutSketch layout={layout} />,
+                    }))}
+                    value={form.layout}
+                    onChange={(layout) => change({ ...form, layout })}
+                  />
+                  <p className={styles.note}>{headerLayoutHints[form.layout]}.</p>
+                  {lookReadOnly && !readOnly && (
+                    <InlineAlert tone="info">
+                      Раскладку, поведение и вид шапки и подвала меняет владелец установки: это
+                      фирменный стиль сайта. Тексты, ссылки, кнопку, логотип и меню вы меняете сами.
+                    </InlineAlert>
+                  )}
+                </Section>
+              )}
 
               <Section title="Поведение" card>
                 <div className={styles.toggles}>
@@ -441,26 +478,30 @@ function HeaderEditor(props: EditorProps) {
                       change({ ...form, condense: event.target.checked }, 'condense')
                     }
                   />
-                  <Checkbox
-                    label="Прозрачная на первом экране"
-                    hint={overlayHint(pages)}
-                    checked={form.overlay}
-                    disabled={lookReadOnly}
-                    onChange={(event) => change({ ...form, overlay: event.target.checked })}
-                  />
-                  <Checkbox
-                    label="Телефон в шапке"
-                    hint={
-                      contacts === null
-                        ? 'Телефон из «SEO → Организация» появится в шапке, когда главная страница будет опубликована'
-                        : contacts.phone
-                          ? `${contacts.phone} — из «SEO → Организация», ссылкой для звонка`
-                          : 'В «SEO → Организация» телефона нет — в шапке его не будет, пока его не впишут там'
-                    }
-                    checked={form.phone}
-                    disabled={readOnly}
-                    onChange={(event) => change({ ...form, phone: event.target.checked })}
-                  />
+                  {!form.custom && (
+                    <Checkbox
+                      label="Прозрачная на первом экране"
+                      hint={overlayHint(pages)}
+                      checked={form.overlay}
+                      disabled={lookReadOnly}
+                      onChange={(event) => change({ ...form, overlay: event.target.checked })}
+                    />
+                  )}
+                  {!form.custom && (
+                    <Checkbox
+                      label="Телефон в шапке"
+                      hint={
+                        contacts === null
+                          ? 'Телефон из «SEO → Организация» появится в шапке, когда главная страница будет опубликована'
+                          : contacts.phone
+                            ? `${contacts.phone} — из «SEO → Организация», ссылкой для звонка`
+                            : 'В «SEO → Организация» телефона нет — в шапке его не будет, пока его не впишут там'
+                      }
+                      checked={form.phone}
+                      disabled={readOnly}
+                      onChange={(event) => change({ ...form, phone: event.target.checked })}
+                    />
+                  )}
                 </div>
               </Section>
 
@@ -603,97 +644,105 @@ function HeaderEditor(props: EditorProps) {
                 )}
               </Section>
 
-              <Section title="Вид" description="Только роли темы: контраст уже проверен темой" card>
-                <div className={styles.toggles}>
-                  <Checkbox
-                    label="Линия под шапкой"
-                    hint="Без линии шапка сливается с фоном страницы"
-                    checked={form.look.divider}
-                    disabled={lookReadOnly}
-                    onChange={(event) => setLook({ divider: event.target.checked })}
-                  />
-                  <SegmentedControl
-                    legend="Форма кнопки"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderButtonShape.options.map((value) => ({
-                      value,
-                      label: headerButtonShapeTitles[value],
-                    }))}
-                    value={form.look.buttonShape}
-                    onChange={(buttonShape) => setLook({ buttonShape })}
-                  />
-                  <SegmentedControl
-                    legend="Кнопка при наведении"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderButtonHover.options.map((value) => ({
-                      value,
-                      label: headerButtonHoverTitles[value],
-                    }))}
-                    value={form.look.buttonHover}
-                    onChange={(buttonHover) => setLook({ buttonHover })}
-                  />
-                  <SegmentedControl
-                    legend="Пункты меню при наведении"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderLinkHover.options.map((value) => ({
-                      value,
-                      label: headerLinkHoverTitles[value],
-                    }))}
-                    value={form.look.linkHover}
-                    onChange={(linkHover) => setLook({ linkHover })}
-                  />
-                </div>
-              </Section>
+              {!form.custom && (
+                <Section
+                  title="Вид"
+                  description="Только роли темы: контраст уже проверен темой"
+                  card
+                >
+                  <div className={styles.toggles}>
+                    <Checkbox
+                      label="Линия под шапкой"
+                      hint="Без линии шапка сливается с фоном страницы"
+                      checked={form.look.divider}
+                      disabled={lookReadOnly}
+                      onChange={(event) => setLook({ divider: event.target.checked })}
+                    />
+                    <SegmentedControl
+                      legend="Форма кнопки"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderButtonShape.options.map((value) => ({
+                        value,
+                        label: headerButtonShapeTitles[value],
+                      }))}
+                      value={form.look.buttonShape}
+                      onChange={(buttonShape) => setLook({ buttonShape })}
+                    />
+                    <SegmentedControl
+                      legend="Кнопка при наведении"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderButtonHover.options.map((value) => ({
+                        value,
+                        label: headerButtonHoverTitles[value],
+                      }))}
+                      value={form.look.buttonHover}
+                      onChange={(buttonHover) => setLook({ buttonHover })}
+                    />
+                    <SegmentedControl
+                      legend="Пункты меню при наведении"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderLinkHover.options.map((value) => ({
+                        value,
+                        label: headerLinkHoverTitles[value],
+                      }))}
+                      value={form.look.linkHover}
+                      onChange={(linkHover) => setLook({ linkHover })}
+                    />
+                  </div>
+                </Section>
+              )}
 
-              <Section
-                title="На телефоне"
-                description="Меню на телефоне открывается и без JavaScript"
-                card
-              >
-                <div className={styles.toggles}>
-                  <SegmentedControl
-                    legend="Кнопка на телефоне"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderMobileButton.options.map((value) => ({
-                      value,
-                      label: headerMobileButtonTitles[value],
-                    }))}
-                    value={form.look.mobileButton}
-                    onChange={(mobileButton) => setLook({ mobileButton })}
-                  />
-                  <p className={styles.note}>
-                    {form.look.mobileButton === 'row'
-                      ? 'Кнопка видна рядом с «Меню», не раскрывая его. Короткий «Текст на телефоне» держит строку на узком экране.'
-                      : 'Кнопка — внизу раскрытого меню. Без меню она всегда в строке.'}
-                  </p>
-                  <SegmentedControl
-                    legend="Меню на телефоне"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderMobileMenu.options.map((value) => ({
-                      value,
-                      label: headerMobileMenuTitles[value],
-                    }))}
-                    value={form.look.mobileMenu}
-                    onChange={(mobileMenu) => setLook({ mobileMenu })}
-                  />
-                  <SegmentedControl
-                    legend="Пункты меню на телефоне"
-                    wrap
-                    disabled={lookReadOnly}
-                    options={HeaderMobileAlign.options.map((value) => ({
-                      value,
-                      label: headerMobileAlignTitles[value],
-                    }))}
-                    value={form.look.mobileAlign}
-                    onChange={(mobileAlign) => setLook({ mobileAlign })}
-                  />
-                </div>
-              </Section>
+              {!form.custom && (
+                <Section
+                  title="На телефоне"
+                  description="Меню на телефоне открывается и без JavaScript"
+                  card
+                >
+                  <div className={styles.toggles}>
+                    <SegmentedControl
+                      legend="Кнопка на телефоне"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderMobileButton.options.map((value) => ({
+                        value,
+                        label: headerMobileButtonTitles[value],
+                      }))}
+                      value={form.look.mobileButton}
+                      onChange={(mobileButton) => setLook({ mobileButton })}
+                    />
+                    <p className={styles.note}>
+                      {form.look.mobileButton === 'row'
+                        ? 'Кнопка видна рядом с «Меню», не раскрывая его. Короткий «Текст на телефоне» держит строку на узком экране.'
+                        : 'Кнопка — внизу раскрытого меню. Без меню она всегда в строке.'}
+                    </p>
+                    <SegmentedControl
+                      legend="Меню на телефоне"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderMobileMenu.options.map((value) => ({
+                        value,
+                        label: headerMobileMenuTitles[value],
+                      }))}
+                      value={form.look.mobileMenu}
+                      onChange={(mobileMenu) => setLook({ mobileMenu })}
+                    />
+                    <SegmentedControl
+                      legend="Пункты меню на телефоне"
+                      wrap
+                      disabled={lookReadOnly}
+                      options={HeaderMobileAlign.options.map((value) => ({
+                        value,
+                        label: headerMobileAlignTitles[value],
+                      }))}
+                      value={form.look.mobileAlign}
+                      onChange={(mobileAlign) => setLook({ mobileAlign })}
+                    />
+                  </div>
+                </Section>
+              )}
 
               <InlineAlert tone="info">
                 {hidden ? `${hidden}. ` : ''}Скрыть шапку на отдельной странице (например, промо)
@@ -749,6 +798,9 @@ function HeaderEditor(props: EditorProps) {
               seoLinks={props.seoLinks}
               readOnly={readOnly}
               lookReadOnly={lookReadOnly}
+              placeDefinitions={places.footer}
+              widgets={widgets}
+              canDefine={props.canDefine}
             />
           )}
         </Tabs>
@@ -848,11 +900,11 @@ function HeaderEditor(props: EditorProps) {
         siteName={props.siteName}
         theme={props.theme}
         header={shown.current}
+        footer={footer.shown}
         pages={pages}
         contacts={contacts ?? { phone: '', address: '' }}
-        footer={{
-          footer: footer.shown,
-          contacts: props.footer.contacts ?? emptyFooterContacts,
+        organization={props.footer.contacts ?? emptyFooterContacts}
+        legal={{
           // Политика — ссылкой, только если опубликована: как на сайте
           policyHref: props.footer.policy.published ? pagePath(props.footer.policy.slug) : null,
           consentHref: props.footer.consent.published
@@ -860,6 +912,7 @@ function HeaderEditor(props: EditorProps) {
             : null,
           cookieSettings: props.footer.cookieSettings,
         }}
+        places={[...places.header, ...places.footer]}
         focus={tab === 'footer' ? 'footer' : 'header'}
       />
     </div>
@@ -871,32 +924,36 @@ type PreviewProps = {
   siteName: string
   theme: EditorProps['theme']
   header: Header
+  footer: Footer
   pages: readonly HeaderTargetPage[]
   contacts: { phone: string; address: string }
-  footer: {
-    footer: Footer
-    contacts: FooterContacts
-    policyHref: string | null
-    consentHref: string | null
-    cookieSettings: boolean
-  }
+  organization: FooterContacts
+  legal: { policyHref: string | null; consentHref: string | null; cookieSettings: boolean }
+  /** Свои виды шапки и подвала (у владельца — и черновики): их можно выбрать до публикации */
+  places: readonly CustomBlockDraft[]
   /** Что сейчас настраивают: на вкладке «Подвал» предпросмотр прокручен к низу страницы */
   focus: 'header' | 'footer'
 }
 
 /**
- * Предпросмотр шапки и подвала на главной — с темой сайта и теми же компонентами, что на сайте.
- * Пустая главная — пример лендинга. Ссылки меню ведут и на неопубликованное: так видно черновик
- * целиком. Подвал — черновик вкладки «Подвал», разделы в нём — пункты меню из черновика шапки
+ * Предпросмотр шапки и подвала на главной — с темой сайта и теми же компонентами, что на сайте
+ * (стандартные или свой вид). Пустая главная — пример лендинга. Ссылки меню ведут и на
+ * неопубликованное: так видно черновик целиком. Свой вид со скриптом — по флажку в изолированной
+ * рамке, как на экране своего блока
  */
 function HeaderPreview(props: PreviewProps) {
-  const { siteId, siteName, theme, header, pages, contacts, focus } = props
+  const { siteId, siteName, theme, header, pages, focus } = props
   const [device, setDevice] = useState<Device>(initialDevice)
+  const [runScripts, setRunScripts] = useState(false)
   const main = useQuery(pageQuery(siteId, MAIN_PAGE_SLUG))
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
   // Главная со своими блоками (le-english): без их определений на их месте было бы «блока нет»
-  const customBlocks = useCustomBlockMap(siteId)
+  const published = useCustomBlockMap(siteId)
+  const customBlocks = useMemo(
+    () => ({ ...published, ...Object.fromEntries(props.places.map((one) => [one.key, one])) }),
+    [published, props.places],
+  )
   const draft = main.data?.draft
   const empty = draft === undefined || draft.blocks.length === 0
   const content = useMemo(
@@ -908,32 +965,26 @@ function HeaderPreview(props: PreviewProps) {
     }),
     [draft, empty],
   )
-  const linkable = pages.map((page) => ({
-    slug: page.slug,
-    blockIds: page.blocks.map((block) => block.id),
-  }))
-  const page = { slug: MAIN_PAGE_SLUG, content }
-  const view = siteHeaderView({ header, siteName, page, pages: linkable, contacts })
-  const footerView = siteFooterView({
-    footer: props.footer.footer,
-    siteName,
-    page,
+  const chrome = siteChrome({
     header,
-    pages: linkable,
-    contacts: props.footer.contacts,
-    legal: { policyHref: props.footer.policyHref, cookieSettings: props.footer.cookieSettings },
-    consentHref: props.footer.consentHref,
-    year: new Date().getFullYear(),
+    footer: props.footer,
+    siteName,
+    page: { slug: MAIN_PAGE_SLUG, content },
+    pages,
+    contacts: props.contacts,
+    organization: props.organization,
+    legal: props.legal,
+    customBlocks,
+    media,
   })
   const subject = focus === 'footer' ? 'подвал' : 'шапка'
   // На вкладке «Подвал» предпросмотр прокручивается вниз при смене подвала или устройства,
   // а не на каждую перерисовку
-  const scrollKey = focus === 'footer' ? JSON.stringify([device, footerView]) : undefined
+  const scrollKey = focus === 'footer' ? JSON.stringify([device, props.footer]) : undefined
+  const title = focus === 'footer' ? 'Предпросмотр подвала' : 'Предпросмотр шапки'
+  const scripted = runScripts && chrome.scripts.length > 0
   return (
-    <section
-      aria-label={focus === 'footer' ? 'Предпросмотр подвала' : 'Предпросмотр шапки'}
-      className={styles.preview}
-    >
+    <section aria-label={title} className={styles.preview}>
       <div className={styles.previewBar}>
         <p className={styles.note}>
           {empty
@@ -943,20 +994,59 @@ function HeaderPreview(props: PreviewProps) {
         </p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
-      <div className={styles.frame}>
-        <Preview
-          title={focus === 'footer' ? 'Предпросмотр подвала' : 'Предпросмотр шапки'}
-          content={content}
-          theme={theme}
-          media={media}
-          device={device}
-          selectedId={null}
-          customBlocks={customBlocks}
-          before={view && <SiteHeader view={view} media={media} />}
-          extra={footerView && <SiteFooter view={footerView} media={media} preview />}
-          scrollToEnd={scrollKey}
+      {chrome.scripts.length > 0 && (
+        <Checkbox
+          label="Выполнять скрипты своих шапки и подвала"
+          hint="В изолированной рамке: скриптам недоступны вход в админку, её данные и запросы"
+          checked={runScripts}
+          onChange={(event) => setRunScripts(event.currentTarget.checked)}
         />
+      )}
+      <div className={styles.frame}>
+        {scripted ? (
+          <SandboxPreview
+            title={`${title} со скриптами`}
+            content={content}
+            theme={theme}
+            media={media}
+            device={device}
+            customBlocks={customBlocks}
+            scripts={chrome.scripts}
+            before={chrome.before}
+            extra={chrome.extra}
+            placeKeys={chrome.placeKeys}
+          />
+        ) : (
+          <Preview
+            title={title}
+            content={content}
+            theme={theme}
+            media={media}
+            device={device}
+            selectedId={null}
+            customBlocks={customBlocks}
+            before={chrome.before}
+            extra={chrome.extra}
+            placeKeys={chrome.placeKeys}
+            scrollToEnd={scrollKey}
+          />
+        )}
       </div>
     </section>
   )
+}
+
+/**
+ * Свои блоки с местом «шапка» и «подвал»: опубликованное определение, нет его — черновик (его
+ * видит только владелец). По месту — для выбора в своей вкладке
+ */
+function placeDefinitions(blocks: readonly { draft: unknown; published: unknown }[]) {
+  const definitions = blocks.flatMap((block) => {
+    const parsed = CustomBlockDraft.safeParse(block.published ?? block.draft)
+    return parsed.success ? [parsed.data] : []
+  })
+  return {
+    header: definitions.filter((one) => one.placement === 'header'),
+    footer: definitions.filter((one) => one.placement === 'footer'),
+  }
 }

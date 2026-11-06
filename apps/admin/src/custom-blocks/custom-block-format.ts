@@ -234,3 +234,42 @@ export const resolutionsOf = (choices: Readonly<Record<string, ConflictChoice>>)
       choice.action === 'rename' ? { rename: choice.rename } : choice.action,
     ]),
   )
+
+type PublishedPlace = { place: 'header' | 'footer'; field?: string; message: string }
+
+const placeTitles = { header: 'Шапка сайта', footer: 'Подвал сайта' } as const
+
+/**
+ * Сообщение после публикации определения. Страницы и шапка/подвал, чьи данные больше не подходят,
+ * называются явно: иначе блок молча пропал бы со страницы, а шапка стала бы стандартной
+ */
+export function publishNotice(
+  placement: 'block' | 'header' | 'footer',
+  result: {
+    affected: readonly { title: string; message: string }[]
+    places?: readonly PublishedPlace[]
+  },
+): { tone: 'success' | 'warning'; text: string } {
+  const problems: string[] = []
+  if (result.affected.length > 0) {
+    problems.push(
+      `Данные блока не подходят на страницах: ${result.affected
+        .map((page) => `«${page.title}» — ${page.message}`)
+        .join('; ')}. Там блок не покажется на сайте, пока страницу не поправят и не опубликуют`,
+    )
+  }
+  for (const place of result.places ?? []) {
+    const field = place.field ? ` (поле «${place.field}»)` : ''
+    problems.push(
+      `${placeTitles[place.place]}: поля своего вида не подходят${field} — ${place.message}. На сайте стандартный вид, пока поля не поправят в «Шапка и подвал» и не опубликуют`,
+    )
+  }
+  if (problems.length > 0) return { tone: 'warning', text: `Опубликовано. ${problems.join('. ')}` }
+  return {
+    tone: 'success',
+    text:
+      placement === 'block'
+        ? 'Опубликовано: блок есть в каталоге редактора, сайт пересобирается'
+        : 'Опубликовано: вид можно выбрать в «Шапка и подвал», сайт пересобирается',
+  }
+}

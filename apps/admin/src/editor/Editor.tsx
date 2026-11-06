@@ -15,6 +15,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { apiErrorText, apiRequestError, messageOf } from '../errors'
 import type { FieldProps, Widgets } from '../forms/SchemaForm'
+import { useDraftChrome } from '../header/use-draft-chrome'
 import { ImageField } from '../media/ImageField'
 import { mediaMapOf } from '../media/media-format'
 import { pagePath } from '../pages-format'
@@ -314,6 +315,30 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
     () => (shown.data && shownRevision ? revisionPreview(shown.data.content) : undefined),
     [shown.data, shownRevision],
   )
+  // Шапка и подвал — черновики с экрана «Шапка и подвал», с подписью, если они не на сайте (B12).
+  // Страница — та, что в предпросмотре: скрытая или короткая шапка видна сразу
+  const chromeContent = shownPreview?.content ?? {
+    ...previewContent,
+    hideHeader: chrome.header === 'hidden',
+    shortHeader: chrome.header === 'short',
+    hideFooter: chrome.hideFooter,
+  }
+  const siteFrame = useDraftChrome({
+    siteId: site.id,
+    siteName: site.name,
+    slug: page.slug,
+    content: chromeContent,
+    media,
+    customBlocks: definitions,
+  })
+  const previewNotes =
+    themeNote || siteFrame.note ? (
+      <>
+        {themeNote}
+        {themeNote && siteFrame.note ? ' ' : null}
+        {siteFrame.note}
+      </>
+    ) : undefined
 
   const publishDraft = useMutation({
     mutationFn: async () => {
@@ -688,11 +713,14 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
             theme={site.theme}
             media={media}
             device={device}
-            note={previewNote(shownRevision, shown, shownPreview?.error) ?? themeNote}
+            note={previewNote(shownRevision, shown, shownPreview?.error) ?? previewNotes}
             selectedId={showingRevision ? null : selectedId}
             onSelectBlock={showingRevision ? undefined : previewSelect}
             toolbar={narrow ? deviceSwitch : undefined}
             customBlocks={definitions}
+            before={siteFrame.before}
+            extra={siteFrame.extra}
+            placeKeys={siteFrame.placeKeys}
           />
         </section>
 

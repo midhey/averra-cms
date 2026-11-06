@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CustomPlace, customPlaceKey, customPlaceMediaIds, readCustomPlace } from './custom-place'
 import { BlockId } from './define-block'
 import { MediaId } from './media'
 import { ExistingPageSlug, MAIN_PAGE_SLUG } from './page'
@@ -245,6 +246,11 @@ const headerFields = {
   logoText: LogoText.default('').meta({ title: 'Подпись логотипа' }),
   menu: z.array(MenuItem).max(HEADER_MENU_MAX).default([]).meta({ title: 'Меню' }),
   look: HeaderLook.prefault({}).meta({ title: 'Вид шапки' }),
+  /**
+   * Свой вид шапки — свой блок с местом «шапка» и тексты его полей; null — стандартная шапка.
+   * Меню, кнопку, логотип и телефон свой вид получает данными из полей выше
+   */
+  custom: CustomPlace.nullable().default(null).meta({ title: 'Свой вид шапки' }),
 }
 
 /**
@@ -305,6 +311,14 @@ function readLook(stored: unknown, onInvalid?: (field: string) => void): HeaderL
   return look
 }
 
+/** Свой вид из базы: непонятный — стандартная шапка (о нём — onInvalid), а не упавшая сборка */
+function readCustom(stored: unknown, onInvalid?: (field: string) => void) {
+  const custom = readCustomPlace(stored)
+  if (custom !== undefined) return custom
+  onInvalid?.('custom')
+  return null
+}
+
 /**
  * Шапка из базы — с запасом на откат версии: более новая версия могла записать поле или значение,
  * которых эта не знает. Незнакомые ключи отбрасываются — и у шапки, и у пунктов меню и кнопки;
@@ -343,6 +357,7 @@ export function readHeader(stored: unknown, onInvalid?: (field: string) => void)
     logoText: read('logoText'),
     menu: readMenu(),
     look: readLook(source.look, onInvalid),
+    custom: readCustom(source.custom, onInvalid),
   }
   // Сборка без липкости — правило схемы, а не повод ронять сайт
   if (header.condense && !header.sticky) header.condense = false
@@ -360,8 +375,9 @@ export const headerLinkHref = (link: HeaderLink) =>
   link.url ?? siteLinkHref({ page: link.page ?? MAIN_PAGE_SLUG, block: link.block })
 
 /**
- * Вид шапки — то, что меняет только владелец (header.look): раскладка, поведение и группа look.
- * Тексты, ссылки, логотип и телефон — администратор сайта (header.edit)
+ * Вид шапки — то, что меняет только владелец (header.look): раскладка, поведение, группа look и
+ * выбор своего вида. Тексты, ссылки, логотип, телефон и поля своего вида — администратор сайта
+ * (header.edit)
  */
 export const headerLookOf = (header: Header) => ({
   layout: header.layout,
@@ -369,6 +385,7 @@ export const headerLookOf = (header: Header) => ({
   condense: header.condense,
   overlay: header.overlay,
   look: header.look,
+  custom: customPlaceKey(header.custom),
 })
 
 /** Вид двух шапок одинаковый — по смыслу, а не по порядку ключей */
@@ -439,8 +456,10 @@ export const headerWithVisibleLogo = <T extends Pick<Header, 'brand' | 'logo'>>(
   header.brand === 'text' && header.logo !== null ? { ...header, logo: null } : header
 
 /** Картинки медиатеки, на которые ссылается шапка: их нельзя удалить, и они нужны сборке */
-export const headerMediaIds = (header: Header | null | undefined) =>
-  header?.logo ? [header.logo] : []
+export const headerMediaIds = (header: Header | null | undefined) => [
+  ...(header?.logo ? [header.logo] : []),
+  ...customPlaceMediaIds(header?.custom),
+]
 
 /** Блок страницы, на который может вести пункт меню: его id — якорь */
 export type HeaderTargetBlock = {

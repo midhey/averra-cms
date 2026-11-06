@@ -72,22 +72,30 @@ describe('каталог блоков', () => {
     const headers = { ...owner.headers, 'content-type': 'application/json' }
     const base = `/api/sites/${api.demoSiteId}/custom-blocks`
     const drafts: Record<string, unknown> = {}
-    for (const key of ['tariffs', 'draft-only']) {
+    const created = [
+      { key: 'tariffs', placement: 'block' },
+      { key: 'draft-only', placement: 'block' },
+      // Свой вид шапки опубликован, но на страницу не ставится — в каталоге блоков его нет
+      { key: 'own-header', placement: 'header' },
+    ]
+    for (const { key, placement } of created) {
       const res = await api.app.request(base, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ key, title: 'Тарифы' }),
+        body: JSON.stringify({ key, title: 'Тарифы', placement }),
       })
       expect(res.status).toBe(201)
       drafts[key] = ((await res.json()) as { draft: unknown }).draft
     }
     // Публикуется черновик, который видел человек
-    const published = await api.app.request(`${base}/tariffs/publish`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ draft: drafts.tariffs }),
-    })
-    expect(published.status).toBe(200)
+    for (const key of ['tariffs', 'own-header']) {
+      const published = await api.app.request(`${base}/${key}/publish`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ draft: drafts[key] }),
+      })
+      expect(published.status).toBe(200)
+    }
     const catalog = await tools.listBlocks()
     const own = catalog.blocks.filter((block) => block.custom)
     expect(own.map((block) => block.type)).toEqual(['custom:tariffs'])
@@ -590,5 +598,45 @@ describe('свои блоки: черновики через MCP', () => {
 
   it('без токена инструменты объясняют, как его получить', async () => {
     await expect(cmsTools(undefined).listCustomBlocks()).rejects.toThrow(missingTokenMessage)
+  })
+})
+
+describe('свои шапка и подвал через MCP', () => {
+  const base = `/api/sites/${api.demoSiteId}`
+
+  it('get_header показывает выбранный свой вид', async () => {
+    // own-header создан и опубликован в «каталоге блоков» выше
+    const saved = await api.app.request(`${base}/header`, {
+      method: 'PUT',
+      headers: ownerHeaders,
+      body: JSON.stringify({ custom: { key: 'own-header', props: { tagline: 'Подпись' } } }),
+    })
+    expect(saved.status, await saved.clone().text()).toBe(200)
+    const result = await tools.getHeader({})
+    expect(result.draft.custom).toEqual({ key: 'own-header', props: { tagline: 'Подпись' } })
+    // Выбрать вид токен не может — даже с правом на черновики блоков
+    const res = await clientWith(granted.token).api.sites[':siteId'].header.$put({
+      param: { siteId: api.demoSiteId },
+      json: { custom: null },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('check_custom_block рисует шапку и подвал на образце данных сайта', async () => {
+    const header = await drafts.checkCustomBlock({ key: 'own-header' })
+    expect(header.html).toContain('href="/about"')
+    expect(header.html).toContain('aria-current="page"')
+    expect(header.html).toContain('<details class="menu">')
+
+    const created = await api.app.request(`${base}/custom-blocks`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({ key: 'own-footer', title: 'Подвал', placement: 'footer' }),
+    })
+    expect(created.status).toBe(201)
+    const footer = await drafts.checkCustomBlock({ key: 'own-footer' })
+    expect(footer.html).toContain('Название сайта')
+    // Строка документов Averra — как на сайте: в шаблоне заготовки политики нет
+    expect(footer.html).toMatch(/<div data-legal-footer="">.*Политика конфиденциальности/s)
   })
 })

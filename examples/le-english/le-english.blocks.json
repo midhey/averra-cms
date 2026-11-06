@@ -7,6 +7,7 @@
       "title": "Vallex: первый экран",
       "description": "Заголовок с маркером, кнопка записи, преимущества и фото на полароиде со стикерами",
       "category": "start",
+      "placement": "block",
       "sketch": "hero",
       "fields": [
         {
@@ -124,6 +125,7 @@
       "title": "Vallex: выбери свою цель",
       "description": "Четыре карточки-цели с фото: по нажатию переворачиваются и показывают, что будет на занятиях",
       "category": "about",
+      "placement": "block",
       "sketch": "features",
       "fields": [
         {
@@ -243,6 +245,7 @@
       "title": "Vallex: обо мне",
       "description": "Фото на полароиде со стикером, рассказ о себе и пункты с галочками",
       "category": "about",
+      "placement": "block",
       "sketch": "text-image",
       "fields": [
         {
@@ -315,6 +318,7 @@
       "title": "Vallex: как проходят занятия",
       "description": "Пронумерованные бумажные карточки шагов от пробного урока до результата",
       "category": "sales",
+      "placement": "block",
       "sketch": "steps",
       "fields": [
         {
@@ -388,6 +392,7 @@
       "title": "Vallex: отзывы",
       "description": "Сообщения учеников в виде переписки на тёмной полосе с рваными краями и кнопкой записи",
       "category": "trust",
+      "placement": "block",
       "sketch": "reviews",
       "fields": [
         {
@@ -506,6 +511,7 @@
       "title": "Vallex: цены",
       "description": "Бумажные карточки тарифов на клейкой ленте с необязательной наклейкой на углу",
       "category": "sales",
+      "placement": "block",
       "sketch": "pricing",
       "fields": [
         {
@@ -604,6 +610,7 @@
       "title": "Vallex: вопросы и ответы",
       "description": "Раскрывающиеся вопросы с рукописной ссылкой «напиши мне» у заголовка",
       "category": "trust",
+      "placement": "block",
       "sketch": "faq",
       "fields": [
         {
@@ -672,6 +679,7 @@
       "title": "Vallex: запись внизу",
       "description": "Розовый лист на клейкой ленте с призывом записаться, кнопкой и ссылкой в Telegram",
       "category": "contact",
+      "placement": "block",
       "sketch": "cta",
       "fields": [
         {

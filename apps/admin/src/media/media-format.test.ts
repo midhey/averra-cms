@@ -139,7 +139,7 @@ describe('где стоит картинка', () => {
     expect(mediaUseText({ kind: 'page', slug: 'a', title: 'А', state: 'published' })).toBe(
       'Страница «А» — на сайте',
     )
-    expect(mediaUseText({ kind: 'header' })).toBe('Логотип шапки')
+    expect(mediaUseText({ kind: 'header' })).toBe('Шапка и подвал')
     expect(mediaUseText({ kind: 'seo', roles: ['иконка сайта', 'картинка для соцсетей'] })).toBe(
       'SEO: иконка сайта, картинка для соцсетей',
     )
@@ -155,7 +155,7 @@ describe('где стоит картинка', () => {
   it('удалять можно только то, что нигде не стоит', () => {
     expect(deleteBlockedText([])).toBeUndefined()
     expect(deleteBlockedText([{ kind: 'header' }])).toBe(
-      'Удалить нельзя: сначала уберите картинку из шапки',
+      'Удалить нельзя: сначала уберите картинку из «Шапки и подвала»',
     )
   })
 
@@ -172,7 +172,7 @@ describe('где стоит картинка', () => {
     expect(
       deleteBlockedText([page('both'), { kind: 'seo', roles: ['карточка'] }, { kind: 'header' }]),
     ).toBe(
-      'Удалить нельзя: сначала уберите картинку со страниц (и опубликуйте их), из шапки и из настроек SEO',
+      'Удалить нельзя: сначала уберите картинку со страниц (и опубликуйте их), из «Шапки и подвала» и из настроек SEO',
     )
   })
 })

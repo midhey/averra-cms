@@ -56,6 +56,7 @@ describe('Header', () => {
         mobileMenu: 'panel',
         mobileAlign: 'start',
       },
+      custom: null,
     })
   })
 
@@ -330,6 +331,7 @@ describe('внешние ссылки, подписи для телефона, �
       'condense',
       'overlay',
       'look',
+      'custom',
     ])
   })
 })

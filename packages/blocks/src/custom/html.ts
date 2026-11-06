@@ -384,6 +384,51 @@ function walkElements(parent: ParentNode, visit: (node: Element) => void) {
   }
 }
 
+/** Элемент скрыт разметкой: hidden, aria-hidden="true", inert или style с display:none */
+function hiddenByMarkup(node: Element) {
+  return node.attrs.some(
+    (attr) =>
+      attr.name === 'hidden' ||
+      attr.name === 'inert' ||
+      (attr.name === 'aria-hidden' && attr.value.trim().toLowerCase() === 'true') ||
+      (attr.name === 'style' && /(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(attr.value)),
+  )
+}
+
+/** Текст элемента без разметки: у ссылки без текста нет имени, читать её нечего */
+function textOf(parent: ParentNode): string {
+  return parent.childNodes
+    .map((node) => {
+      if (node.nodeName === '#text') return (node as DefaultTreeAdapterTypes.TextNode).value
+      if (!isElement(node)) return ''
+      if (node.tagName === 'img') return node.attrs.find((attr) => attr.name === 'alt')?.value ?? ''
+      return textOf(node)
+    })
+    .join('')
+}
+
+/**
+ * Адреса ссылок, которые человек видит в HTML: настоящий <a href> по дереву разбора (не текст
+ * «href=…» в абзаце), с текстом или aria-label, не скрытый разметкой (hidden, aria-hidden, inert,
+ * display:none в style — у него или у предка). Скрытие классом CSS отсюда не видно: о нём
+ * предупреждает проверка CSS подвала
+ */
+export function visibleLinkHrefs(html: string) {
+  const hrefs = new Set<string>()
+  const visit = (parent: ParentNode) => {
+    for (const node of parent.childNodes) {
+      if (!isElement(node) || hiddenByMarkup(node)) continue
+      if (node.tagName === 'template') continue
+      const href = node.tagName === 'a' && node.attrs.find((attr) => attr.name === 'href')?.value
+      const label = node.attrs.find((attr) => attr.name === 'aria-label')?.value ?? ''
+      if (href && (textOf(node).trim() !== '' || label.trim() !== '')) hrefs.add(href)
+      visit(node)
+    }
+  }
+  visit(parseFragment(BLOCK_CONTEXT, html, {}))
+  return hrefs
+}
+
 function clean(
   parent: ParentNode,
   parentNamespace: string | undefined,

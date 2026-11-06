@@ -14,6 +14,7 @@ export { sentAnchor } from './form/Form'
 export { SiteHeader } from './header/SiteHeader'
 export {
   CONTENT_ID,
+  type CustomPlaceView,
   headerMenuRow,
   headerRowButton,
   headerScriptNeeded,
@@ -24,4 +25,11 @@ export {
   siteHeaderView,
 } from './header/view'
 export { Page } from './Page'
+export {
+  CustomSiteFooter,
+  CustomSiteHeader,
+  FooterSlot,
+  HeaderSlot,
+  settlePlace,
+} from './place/CustomPlace'
 export type { BlockComponentProps, BlockData } from './types'

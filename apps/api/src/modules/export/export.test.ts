@@ -274,6 +274,32 @@ describe('все данные сайта', () => {
     expect(decode(files['README.txt'])).toContain('headerDraft')
   })
 
+  it('свои шапка и подвал: выбор в шапке и место в определении', async () => {
+    const { headers } = await api.loginAs('owner')
+    const json = { ...headers, 'content-type': 'application/json' }
+    const base = `/api/sites/${api.demoSiteId}`
+    const created = await api.app.request(`${base}/custom-blocks`, {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ key: 'export-header', title: 'Шапка', placement: 'header' }),
+    })
+    expect(created.status).toBe(201)
+    const saved = await api.app.request(`${base}/header`, {
+      method: 'PUT',
+      headers: json,
+      body: JSON.stringify({ custom: { key: 'export-header', props: { tagline: 'Да' } } }),
+    })
+    expect(saved.status).toBe(200)
+    const files = await unzip(await api.app.request(url('data'), { headers }))
+    const data = JSON.parse(decode(files['site.json']))
+    expect(data.site.headerDraft.custom).toEqual({
+      key: 'export-header',
+      props: { tagline: 'Да' },
+    })
+    const block = data.customBlocks.find((one: { key: string }) => one.key === 'export-header')
+    expect(block.draft.placement).toBe('header')
+  })
+
   it('site.json потоком: заявки порциями с курсором — все, по одному разу; пустой сайт — валидный JSON', async () => {
     // API сайтов не создаёт (одна установка — один сайт): сайт кладётся в базу напрямую
     const siteId = await api.createSite('Выгрузка порциями')

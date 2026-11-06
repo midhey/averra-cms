@@ -1,5 +1,6 @@
 import {
   collectMediaRefs,
+  footerMediaIds,
   headerMediaIds,
   legacyTheme,
   MAIN_PAGE_SLUG,
@@ -16,6 +17,7 @@ import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
 import { customBlocksRepo } from '../custom-blocks/repo'
 import { cssMediaIds } from '../custom-blocks/service'
+import { publishedFooter } from '../footer/read'
 import { publishedHeader } from '../header/read'
 import { readStoredSettings } from '../settings/read'
 
@@ -272,7 +274,11 @@ export function sitesRepo(db: Db) {
         .from(pages)
         .where(and(eq(pages.siteId, siteId), isNotNull(pages.published)))
       const [site] = await db
-        .select({ settings: sites.settings, headerPublished: sites.headerPublished })
+        .select({
+          settings: sites.settings,
+          headerPublished: sites.headerPublished,
+          footerPublished: sites.footerPublished,
+        })
         .from(sites)
         .where(eq(sites.id, siteId))
       return new Set([
@@ -281,6 +287,7 @@ export function sitesRepo(db: Db) {
         ),
         ...(site ? settingsMediaIds(readStoredSettings(site.settings)) : []),
         ...(site ? headerMediaIds(publishedHeader(site)) : []),
+        ...(site ? footerMediaIds(publishedFooter(site)) : []),
         // Картинки из CSS опубликованных своих блоков (url(media:…))
         ...(await customBlocksRepo(db).published(siteId)).flatMap((block) =>
           cssMediaIds(block.css),

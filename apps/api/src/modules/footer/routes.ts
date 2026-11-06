@@ -1,5 +1,6 @@
 import {
   cookieNoticeShown,
+  customPlaceIssues,
   Footer,
   footerContacts,
   legalPages,
@@ -18,6 +19,8 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
+import { placeMediaIssues } from '../custom-blocks/place-media'
+import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
 import { sitesRepo } from '../sites/repo'
 import { footerRepo, policyOf } from './repo'
@@ -100,6 +103,18 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
             if (current && !sameFooterLook(current.draft, footer)) {
               return c.json(forbidden(forbiddenMessages['header.look']), 403)
             }
+          }
+          // Свой вид: определение подвала есть (опубликованное или черновик) и поля ему подходят
+          const issues = [
+            ...customPlaceIssues(
+              footer.custom,
+              'footer',
+              await placeDefinitions(db, siteId, 'any'),
+            ),
+            ...(await placeMediaIssues(db, siteId, footer.custom)),
+          ]
+          if (issues.length > 0) {
+            return c.json(conflict('Подвал не сохранить: причина — у каждого поля', issues), 409)
           }
           const state = await repo.saveDraft(siteId, footer)
           if (!state) return c.json(notFound('Сайт не найден'), 404)

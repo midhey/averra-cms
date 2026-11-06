@@ -7,6 +7,7 @@ import {
   type CustomBlockDraft,
   customBlockProps,
   customBlockType,
+  isPageBlockDefinition,
 } from '@averra/schema'
 import { z } from 'zod'
 import type { JsonSchema } from '../forms/json-schema'
@@ -59,10 +60,11 @@ export const catalog: readonly CatalogEntry[] = blocks.map((block) => ({
 
 /**
  * Свои блоки сайта в каталоге — по опубликованным определениям. Схема полей строится той же
- * функцией, что в API (customBlockProps): форма в редакторе проверяет то же, что сохранение
+ * функцией, что в API (customBlockProps): форма в редакторе проверяет то же, что сохранение.
+ * Свои виды шапки и подвала на страницу не ставятся — их в каталоге нет
  */
 export const customCatalog = (definitions: readonly CustomBlockDraft[]): CatalogEntry[] =>
-  definitions.map((definition) => ({
+  definitions.filter(isPageBlockDefinition).map((definition) => ({
     type: customBlockType(definition.key),
     title: definition.title,
     description: definition.description,

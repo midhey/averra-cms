@@ -5,12 +5,14 @@
 // где ему есть что делать (headerScriptNeeded)
 
 /**
- * Первый элемент вне своих блоков: шаблон блока не подменит шапку и её метки копией. Своя копия
- * проверки, а не импорт: Astro встраивает маленький модуль прямо в страницу
+ * Первый элемент вне шаблонов своих блоков: шаблон не подменит шапку и её метки копией. Граница —
+ * обёртка HTML шаблона [data-custom-block-root], а не сам свой блок: корень своей шапки —
+ * разметка Averra (data-site-header), шаблон — внутри него. Своя копия проверки, а не импорт:
+ * модуль маленький и без зависимостей
  */
 function querySite<T extends Element>(doc: Document, selector: string): T | null {
   for (const element of Array.from(doc.querySelectorAll<T>(selector))) {
-    if (!element.closest('[data-custom-block]')) return element
+    if (!element.closest('[data-custom-block-root]')) return element
   }
   return null
 }
@@ -70,19 +72,25 @@ export function startSiteHeader(
     observer.observe(top)
   }
 
-  const menu = header.querySelector<HTMLElement>('details[data-header-menu]')
-  if (!menu) return
-  const close = () => menu.removeAttribute('open')
-  // Esc закрывает меню и возвращает фокус на «Меню»: иначе он остался бы в скрытой панели
+  // Меню — <details> шапки: у стандартной одно ([data-header-menu]), у своей — какие написал
+  // шаблон. Esc и выбор пункта закрывают любое из них: так меню своей шапки ведёт себя так же
+  const menus = Array.from(header.querySelectorAll<HTMLElement>('details'))
+  if (menus.length === 0) return
+  // Esc закрывает меню и возвращает фокус на его summary: иначе он остался бы в скрытой панели
   doc.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || !menu.hasAttribute('open')) return
-    close()
-    menu.querySelector<HTMLElement>('summary')?.focus()
+    if (event.key !== 'Escape') return
+    const open = menus.filter((menu) => menu.hasAttribute('open'))
+    for (const menu of open) menu.removeAttribute('open')
+    open[0]?.querySelector<HTMLElement>('summary')?.focus()
   })
   // Пункт меню — часто якорь на этой же странице: страница прокрутится, а открытое меню
   // закрывало бы раздел, к которому пришли
-  menu.addEventListener('click', (event) => {
-    const target = event.target as { closest?: (selector: string) => Element | null } | null
-    if (typeof target?.closest === 'function' && target.closest('a')) close()
-  })
+  for (const menu of menus) {
+    menu.addEventListener('click', (event) => {
+      const target = event.target as { closest?: (selector: string) => Element | null } | null
+      if (typeof target?.closest === 'function' && target.closest('a')) {
+        menu.removeAttribute('open')
+      }
+    })
+  }
 }

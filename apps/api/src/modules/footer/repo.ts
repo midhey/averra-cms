@@ -1,9 +1,11 @@
-import { type Footer, footerPublishIssues, sameFooter } from '@averra/schema'
+import { customPlaceIssues, type Footer, footerPublishIssues, sameFooter } from '@averra/schema'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { pages, sites } from '../../db/schema'
 import type { Issue } from '../../errors'
 import type { Tx } from '../../mail/outbox'
+import { placeMediaIssues } from '../custom-blocks/place-media'
+import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
 import { draftFooter, publishedFooter } from './read'
 
@@ -68,7 +70,16 @@ export function footerRepo(db: Db) {
         if (!row) return undefined
         const draft = draftFooter(row)
         const policy = await policyOf(tx, siteId)
-        const problem: Issue[] = footerPublishIssues(draft, policy?.published === true)
+        const problem: Issue[] = [
+          ...footerPublishIssues(draft, policy?.published === true),
+          // Свой вид — только опубликованное определение подвала, и его поля должны подойти
+          ...customPlaceIssues(
+            draft.custom,
+            'footer',
+            await placeDefinitions(tx, siteId, 'published'),
+          ),
+          ...(await placeMediaIssues(tx, siteId, draft.custom)),
+        ]
         if (problem.length > 0) return { problem, state: undefined }
         const [saved] = await tx
           .update(sites)

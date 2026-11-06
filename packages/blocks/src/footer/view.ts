@@ -10,12 +10,15 @@ import {
   type Header,
   type LinkablePage,
   legalPages,
+  MAIN_PAGE_SLUG,
   type SocialLink,
   socialLinks,
   telHref,
 } from '@averra/schema'
 import type { LegalFooterProps } from '../cookie/CookieNotice'
+import { placeData } from '../custom/place-data'
 import {
+  type CustomPlaceView,
   type SiteBrandView,
   type SiteHeaderLink,
   siteBrandView,
@@ -63,6 +66,11 @@ export type SiteFooterView = {
   /** Обязательные ссылки — в любом виде подвала */
   legal: LegalFooterProps
   callback: FooterCallbackView | null
+  /**
+   * Свой вид подвала: определение по ключу, поля и данные сайта; null — стандартный. Ссылки на
+   * документы (custom.legal), которых нет в шаблоне, Averra дописывает после него
+   */
+  custom: CustomPlaceView | null
 }
 
 type ViewInput = {
@@ -70,13 +78,17 @@ type ViewInput = {
   footer: Footer | null
   siteName: string
   /** Открытая страница: адрес (текущий пункт разделов) и не скрыт ли на ней подвал */
-  page: { slug: string; content: { hideFooter?: boolean | undefined } }
+  page: {
+    slug: string
+    content: { hideFooter?: boolean | undefined; shortHeader?: boolean | undefined }
+  }
   /**
    * Шапка сайта: её меню — разделы подвала, её логотип — логотип подвала. null — шапки нет,
    * разделов тоже, а логотип — название сайта
    */
   header:
-    | (Pick<Header, 'menu'> & Partial<Pick<Header, 'brand' | 'logo' | 'logoMark' | 'logoText'>>)
+    | (Pick<Header, 'menu'> &
+        Partial<Pick<Header, 'brand' | 'logo' | 'logoMark' | 'logoText' | 'button'>>)
     | null
   /** Опубликованные страницы с блоками: куда ссылки разделов ведут на собранном сайте */
   pages: readonly LinkablePage[]
@@ -130,6 +142,7 @@ export function siteFooterView(input: ViewInput): SiteFooterView | null {
       )
     : null
   const organization = contacts.name.trim()
+  const consentHref = footer.consent ? (input.consentHref ?? null) : null
   return {
     layout: footer.layout,
     tone: footer.tone,
@@ -140,7 +153,7 @@ export function siteFooterView(input: ViewInput): SiteFooterView | null {
     text: footer.text,
     textFont: footer.textFont,
     brand,
-    consentHref: footer.consent ? (input.consentHref ?? null) : null,
+    consentHref,
     // Название организации, совпадающее с названием сайта, второй раз не пишем
     requisites: footerRequisites({
       ...contacts,
@@ -162,5 +175,59 @@ export function siteFooterView(input: ViewInput): SiteFooterView | null {
             action: input.formAction,
           }
         : null,
+    custom: footer.custom ? customFooterView(input, footer.custom, consentHref) : null,
+  }
+}
+
+/**
+ * Данные своего вида подвала: меню и кнопка шапки, её логотип, «Организация», документы. Свой вид
+ * получает всё, а что показать — решает шаблон; настройки стандартного подвала (колонки, разделы)
+ * на него не действуют, кроме ссылки на согласие — её Averra выводит, если она включена
+ */
+function customFooterView(
+  input: ViewInput,
+  custom: NonNullable<Footer['custom']>,
+  consentHref: string | null,
+): CustomPlaceView {
+  const { header, page } = input
+  const button = header?.button
+    ? siteHeaderLinks([header.button], input.pages, page.slug)[0]
+    : undefined
+  const brand = siteBrandView(
+    {
+      brand: header?.brand ?? 'image',
+      logo: header?.logo ?? null,
+      logoMark: header?.logoMark ?? '',
+      logoText: header?.logoText ?? '',
+    },
+    input.siteName,
+  )
+  const data = placeData({
+    siteName: input.siteName,
+    page: {
+      slug: page.slug,
+      short: page.content.shortHeader === true && page.slug !== MAIN_PAGE_SLUG,
+      home: page.slug === MAIN_PAGE_SLUG,
+    },
+    menu: header ? siteHeaderLinks(header.menu, input.pages, page.slug) : [],
+    button: button ?? null,
+    brand,
+    contacts: input.contacts,
+    legal: {
+      policyHref: input.legal.policyHref,
+      consentHref: input.consentHref ?? null,
+      cookieSettings: input.legal.cookieSettings,
+    },
+    year: input.year,
+  })
+  return {
+    key: custom.key,
+    props: custom.props,
+    data,
+    legal: {
+      policyHref: input.legal.policyHref,
+      consentHref,
+      cookieSettings: input.legal.cookieSettings,
+    },
   }
 }

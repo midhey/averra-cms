@@ -36,6 +36,7 @@ const RESERVED_DATA = [
   'animate',
   'video',
   'custom-block',
+  'custom-place',
   'tone',
   'density',
   'backdrop',

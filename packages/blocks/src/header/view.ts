@@ -1,4 +1,7 @@
 import {
+  type CustomPlace,
+  emptyFooterContacts,
+  type FooterContacts,
   type Header,
   type HeaderContacts,
   type HeaderLayout,
@@ -12,6 +15,7 @@ import {
   resolveSiteLink,
   telHref,
 } from '@averra/schema'
+import { type PlaceData, placeData } from '../custom/place-data'
 
 /** Куда ведёт «К содержимому» в шапке: id у main страницы (Page) */
 export const CONTENT_ID = 'content'
@@ -58,7 +62,33 @@ export type SiteHeaderView = {
    * адреса
    */
   address: string
+  /**
+   * Свой вид шапки: ключ определения, его поля и данные места; null — стандартная шапка. Не
+   * вывелся (определения нет, поля не подходят) — на сайте стандартная по остальным полям
+   */
+  custom: CustomPlaceView | null
 }
+
+/** Свой вид шапки или подвала, готовый к рендеру: определение по ключу, поля и данные сайта */
+export type CustomPlaceView = {
+  key: string
+  props: Record<string, unknown>
+  data: PlaceData
+  /**
+   * Обязательные ссылки на документы: Averra выводит их сама после шаблона подвала (те, что шаблон
+   * не вывел). У шапки — пусто
+   */
+  legal: { policyHref: string | null; consentHref: string | null; cookieSettings: boolean }
+}
+
+/** Документы сайта для данных своего вида: политика, согласие, «Настройки cookie» */
+export type PlaceLegal = {
+  policyHref: string | null
+  consentHref: string | null
+  cookieSettings: boolean
+}
+
+const noLegal: PlaceLegal = { policyHref: null, consentHref: null, cookieSettings: false }
 
 type ViewInput = {
   /** Опубликованная шапка; null — её не публиковали, шапки на сайте нет */
@@ -77,6 +107,13 @@ type ViewInput = {
   pages: readonly LinkablePage[]
   /** Телефон и адрес из «SEO → Организация» */
   contacts: HeaderContacts
+  /**
+   * Для своего вида шапки: реквизиты, контакты и соцсети из «SEO → Организация», документы и год.
+   * Нет — пусто (стандартной шапке они не нужны)
+   */
+  organization?: FooterContacts | undefined
+  legal?: PlaceLegal | undefined
+  year?: number | undefined
 }
 
 /**
@@ -132,7 +169,41 @@ export const siteHeaderLinks = (
  * скрыла. Пункт на страницу, которой нет на сайте, не выводится; на пропавший блок — ведёт на
  * страницу (resolveSiteLink). Одна функция для сайта и предпросмотра в админке
  */
-export function siteHeaderView({
+export function siteHeaderView(input: ViewInput): SiteHeaderView | null {
+  const view = standardHeaderView(input)
+  if (!view || !input.header?.custom) return view
+  return { ...view, custom: customHeaderView(view, input.header.custom, input) }
+}
+
+/** Данные своего вида шапки: меню, кнопка и логотип — те же, что у стандартной на этой странице */
+function customHeaderView(
+  view: SiteHeaderView,
+  custom: CustomPlace,
+  input: ViewInput,
+): CustomPlaceView {
+  const data = placeData({
+    siteName: view.siteName,
+    page: {
+      slug: input.page.slug,
+      short: view.short,
+      home: input.page.slug === MAIN_PAGE_SLUG,
+    },
+    // Раскладка «Минимум» без меню — у стандартной шапки; своя выводит меню всегда, кроме
+    // короткой шапки служебной страницы
+    menu:
+      view.short || !input.header
+        ? []
+        : siteHeaderLinks(input.header.menu, input.pages, input.page.slug),
+    button: view.button,
+    brand: view.brand,
+    contacts: input.organization ?? emptyFooterContacts,
+    legal: input.legal ?? noLegal,
+    year: input.year ?? new Date().getFullYear(),
+  })
+  return { key: custom.key, props: custom.props, data, legal: noLegal }
+}
+
+function standardHeaderView({
   header,
   siteName,
   page,
@@ -158,6 +229,7 @@ export function siteHeaderView({
       button: null,
       phone: null,
       address: '',
+      custom: null,
     }
   }
   // В раскладке «Минимум» меню нет — она для промо-страницы: логотип и одна кнопка
@@ -185,6 +257,7 @@ export function siteHeaderView({
       : null,
     phone: phone ? { text: phone, href: telHref(phone) } : null,
     address: header.layout === 'double' || header.phone ? contacts.address : '',
+    custom: null,
   }
 }
 
@@ -194,7 +267,12 @@ export function siteHeaderView({
  * страница остаётся без скрипта
  */
 export const headerScriptNeeded = (view: SiteHeaderView | null) =>
-  view !== null && (view.condense || (view.overlay && view.sticky) || view.menu.length > 0)
+  view !== null &&
+  (view.condense ||
+    (view.overlay && view.sticky) ||
+    view.menu.length > 0 ||
+    // Своя шапка: меню шаблона — <details>, его скрипт закрывает по Esc
+    (view.custom?.data.site.menu.length ?? 0) > 0)
 
 /** Метка прокрутки нужна сборке и прозрачной липкой шапке: по ней скрипт знает, что ушли вниз */
 export const headerWatchesScroll = (view: SiteHeaderView) =>

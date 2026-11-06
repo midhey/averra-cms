@@ -2,7 +2,7 @@ import { type CustomBlockMap, customBlocksCss, Page } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
 import { customBlockKeysOf, type MediaMap, type PageContent, type Theme } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { previewStyleNodes } from '../styles/global-style'
 import { previewFontCss } from '../theme/preview-fonts'
@@ -19,6 +19,11 @@ type SandboxPreviewProps = {
   /** Файлы скриптов, как на сайте: скрипт сайта и скрипты своих блоков */
   scripts: readonly SandboxScript[]
   title?: string
+  /** Перед страницей и после неё: шапка и подвал сайта, как в обычном предпросмотре */
+  before?: ReactNode
+  extra?: ReactNode
+  /** Ключи своих шапки и подвала: их CSS тоже нужен */
+  placeKeys?: readonly string[] | undefined
 }
 
 const styleTag = (css: string) => `<style>${css.replaceAll('</style', '<\\/style')}</style>`
@@ -30,7 +35,8 @@ const styleTag = (css: string) => `<style>${css.replaceAll('</style', '<\\/style
  * подсветки нет — это обычный предпросмотр (Preview), без скриптов
  */
 export function SandboxPreview(props: SandboxPreviewProps) {
-  const { content, theme, media, device, customBlocks, scripts } = props
+  const { content, theme, media, device, customBlocks, scripts, before, extra } = props
+  const placeKeys = props.placeKeys?.join(' ') ?? ''
   const stageRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const width = DEVICE_WIDTHS[device]
@@ -58,13 +64,18 @@ export function SandboxPreview(props: SandboxPreviewProps) {
     const copied = previewStyleNodes(document)
       .map((node) => node.outerHTML)
       .join('')
-    const customCss = customBlocks
-      ? customBlocksCss(customBlockKeysOf(content), customBlocks, media)
-      : ''
+    const keys = [
+      ...new Set([...placeKeys.split(' ').filter(Boolean), ...customBlockKeysOf(content)]),
+    ]
+    const customCss = customBlocks ? customBlocksCss(keys, customBlocks, media) : ''
     let body: string
     try {
       body = renderToStaticMarkup(
-        <Page content={content} media={media} customBlocks={customBlocks} preview />,
+        <>
+          {before}
+          <Page content={content} media={media} customBlocks={customBlocks} preview />
+          {extra}
+        </>,
       )
     } catch {
       body = '<p style="padding:24px;font:16px system-ui">Предпросмотр не получилось нарисовать</p>'
@@ -80,7 +91,7 @@ export function SandboxPreview(props: SandboxPreviewProps) {
       body,
       scripts,
     })
-  }, [content, theme, media, customBlocks, scripts])
+  }, [content, theme, media, customBlocks, scripts, before, extra, placeKeys])
 
   return (
     <div className={styles.preview}>

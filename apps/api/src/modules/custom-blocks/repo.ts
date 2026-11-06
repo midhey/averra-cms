@@ -1,6 +1,7 @@
 import {
   type CustomBlockDraft,
   CustomBlockDraft as CustomBlockDraftSchema,
+  type CustomBlockFieldsSource,
   customBlockType,
   type ImportResolution,
 } from '@averra/schema'
@@ -8,6 +9,7 @@ import { and, asc, desc, eq, isNotNull, max, or, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { customBlockRevisions, customBlocks, pages, users } from '../../db/schema'
+import type { Tx } from '../../mail/outbox'
 
 /**
  * Определение из базы. Схема могла стать строже после обновления Averra — тогда null: такое
@@ -40,8 +42,36 @@ export const publishedOf = (row: Pick<Row, 'published' | 'scriptPublished'>) =>
  * теряет его целиком
  */
 export function storedParts(draft: CustomBlockDraft) {
-  const { script, ...definition } = draft
+  const { script, placement, ...rest } = draft
+  // Место «блок» не пишется: прежняя версия после отката читает такое определение как раньше.
+  // Шапку и подвал (место есть) она не прочитает — она их и не знает, у неё стандартные
+  const definition = placement === 'block' ? rest : { ...rest, placement }
   return { definition, script }
+}
+
+/**
+ * Определения своих видов шапки и подвала (и блоков — их отсеет проверка места): published — только
+ * опубликованные (публикация шапки), any — опубликованное, а нет его — черновик (сохранение шапки:
+ * свой вид выбирают и до публикации определения). В транзакции — через tx
+ */
+export async function placeDefinitions(
+  db: Db | Tx,
+  siteId: string,
+  which: 'published' | 'any',
+): Promise<CustomBlockFieldsSource[]> {
+  const rows = await db
+    .select({
+      draft: customBlocks.draft,
+      published: customBlocks.published,
+    })
+    .from(customBlocks)
+    .where(eq(customBlocks.siteId, siteId))
+  return rows.flatMap((row) => {
+    const definition =
+      (row.published ? readDefinition(row.published) : null) ??
+      (which === 'any' ? readDefinition(row.draft) : null)
+    return definition ? [definition] : []
+  })
 }
 
 /** Версия в историю: скрипт — в JSON версии и только если он есть */
@@ -302,14 +332,22 @@ export function customBlocksRepo(db: Db) {
       resolutions: Readonly<Record<string, ImportResolution>>,
     ) {
       return db.transaction(async (tx) => {
-        const existing = new Set(
-          (
-            await tx
-              .select({ key: customBlocks.key })
-              .from(customBlocks)
-              .where(eq(customBlocks.siteId, siteId))
-              .for('update')
-          ).map((row) => row.key),
+        const rows = await tx
+          .select({ key: customBlocks.key, draft: customBlocks.draft })
+          .from(customBlocks)
+          .where(eq(customBlocks.siteId, siteId))
+          .for('update')
+        const existing = new Set(rows.map((row) => row.key))
+        // Место занятого ключа: заменить блок страницы шапкой (и наоборот) нельзя
+        const placements = new Map(
+          rows.map((row) => [row.key, readDefinition(row.draft)?.placement ?? 'block']),
+        )
+        const mismatched = blocks.flatMap((block) =>
+          resolutions[block.key] === 'replace' &&
+          placements.has(block.key) &&
+          placements.get(block.key) !== block.placement
+            ? [block.key]
+            : [],
         )
         // Сначала весь план, потом запись: конфликт посреди списка не оставит половину загрузки
         const taken = new Set(existing)
@@ -326,12 +364,19 @@ export function customBlocksRepo(db: Db) {
           taken.add(key)
           return { action: 'create' as const, key, block }
         })
-        if (unresolved.length > 0) {
-          return { unresolved: [...new Set(unresolved)], created: [], replaced: [], skipped: [] }
+        if (unresolved.length > 0 || mismatched.length > 0) {
+          return {
+            unresolved: [...new Set(unresolved)],
+            mismatched,
+            created: [],
+            replaced: [],
+            skipped: [],
+          }
         }
 
         const result = {
-          unresolved: [],
+          unresolved: [] as string[],
+          mismatched: [] as string[],
           created: [] as string[],
           replaced: [] as string[],
           skipped: [] as string[],

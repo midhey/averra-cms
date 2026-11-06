@@ -1,0 +1,53 @@
+/* Корни своих шапки и подвала — разметка Averra, внутри — HTML шаблона. Вид задаёт CSS
+   определения (:scope — сам корень); здесь только поведение, которое настраивает «Шапка и подвал»,
+   и строка документов. Цвета — только наследуемые: фон и текст даёт CSS шаблона */
+
+.header {
+  position: relative;
+  z-index: 100;
+}
+
+.header[data-sticky] {
+  position: sticky;
+  top: 0;
+}
+
+/* Строка документов после шаблона подвала: цвет и шрифт — подвала, стиль — его CSS через
+   [data-legal-footer]. Без JS «Настройки cookie» скрыты (их показывает скрипт уведомления) */
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  color: inherit;
+  font-size: var(--text-sm);
+}
+
+.link {
+  color: inherit;
+}
+
+.button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link:focus-visible,
+.button:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 2px;
+}
+
+.problem {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 2px dashed currentcolor;
+  font-size: var(--text-sm);
+}

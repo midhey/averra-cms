@@ -11,8 +11,10 @@ import {
   CustomBlockDraft,
   type CustomBlockDraftInput,
   type CustomFieldInput,
+  customBlockPlacementTitles,
   customBlockProps,
   customBlockType,
+  demoPage,
   exampleIssues,
   PageContent,
 } from '@averra/schema'
@@ -22,7 +24,7 @@ import type { InferResponseType } from 'hono/client'
 import { type RefObject, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { api } from '../api'
-import { blockStatus } from '../custom-blocks/custom-block-format'
+import { blockStatus, publishNotice } from '../custom-blocks/custom-block-format'
 import { FieldsBuilder } from '../custom-blocks/FieldsBuilder'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { SandboxPreview } from '../editor/SandboxPreview'
@@ -30,6 +32,7 @@ import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { zodFieldErrors } from '../forms/field-errors'
 import type { JsonSchema } from '../forms/json-schema'
 import { type FieldProps, SchemaForm, type Widgets } from '../forms/SchemaForm'
+import { sampleChrome } from '../header/site-chrome'
 import { ImageField } from '../media/ImageField'
 import { mediaMapOf } from '../media/media-format'
 import { formatDateTime } from '../pages-format'
@@ -209,21 +212,7 @@ function CustomBlockEditor({
       const result = await publish.mutateAsync(seen)
       accept(result)
       await refresh()
-      setNotice(
-        result.affected.length > 0
-          ? {
-              tone: 'warning',
-              text: `Опубликовано. Данные блока не подходят на страницах: ${result.affected
-                .map((page) => `«${page.title}» — ${page.message}`)
-                .join(
-                  '; ',
-                )}. Там блок не покажется на сайте, пока страницу не поправят и не опубликуют`,
-            }
-          : {
-              tone: 'success',
-              text: 'Опубликовано: блок есть в каталоге редактора, сайт пересобирается',
-            },
-      )
+      setNotice(publishNotice(seen.placement, result))
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
         await reload()
@@ -272,6 +261,8 @@ function CustomBlockEditor({
     Object.keys(structureErrors).filter((path) => path.startsWith(prefix)).length || undefined
 
   const status = blockStatus({ published, unpublished, unsaved })
+  // Шапку и подвал на страницу не ставят: вместо типа на странице — место
+  const placement = (view.draft ?? view.published)?.placement ?? 'block'
   const pending = save.isPending || publish.isPending
 
   return (
@@ -291,7 +282,11 @@ function CustomBlockEditor({
         }
         meta={
           <>
-            <span className={monoClassName}>{customBlockType(view.key)}</span>{' '}
+            {placement === 'block' ? (
+              <span className={monoClassName}>{customBlockType(view.key)}</span>
+            ) : (
+              <span>{customBlockPlacementTitles[placement]}</span>
+            )}{' '}
             <StatusPill tone={status.tone} appearance="dot">
               {status.text}
             </StatusPill>
@@ -334,13 +329,17 @@ function CustomBlockEditor({
             {part === 'fields' && (
               <div className={styles.panel}>
                 <p className={styles.note}>
-                  Поля видит редактор страницы. Ключ поля — имя переменной в шаблоне.
+                  {placement === 'block'
+                    ? 'Поля видит редактор страницы.'
+                    : 'Поля — тексты своего вида в «Шапка и подвал»; меню, кнопка, логотип и «Организация» приходят данными site.'}{' '}
+                  Ключ поля — имя переменной в шаблоне.
                 </p>
                 <FieldsBuilder
                   fields={(form.fields ?? []) as CustomFieldInput[]}
                   onChange={(fields) => change({ fields })}
                   errors={structureErrors}
                   path="fields"
+                  place={placement !== 'block'}
                 />
               </div>
             )}
@@ -359,7 +358,7 @@ function CustomBlockEditor({
                   problems={byPart('template')}
                   onJump={(line) => jump(templateRef, form.template ?? '', line)}
                 />
-                <Cheatsheet fields={draft?.fields ?? []} />
+                <Cheatsheet fields={draft?.fields ?? []} place={placement !== 'block'} />
               </div>
             )}
             {part === 'css' && (
@@ -629,7 +628,14 @@ function ExamplePanel({
 }
 
 /** Шпаргалка: переменные блока и свои фильтры */
-function Cheatsheet({ fields }: { fields: readonly CustomFieldInput[] }) {
+function Cheatsheet({
+  fields,
+  place,
+}: {
+  fields: readonly CustomFieldInput[]
+  /** Своя шапка или подвал: в шаблоне ещё данные сайта site и page */
+  place: boolean
+}) {
   const lines = fields.map((field) =>
     field.type === 'repeater'
       ? `{% for item in ${field.name} %} {{ item.${'fields' in field ? (field.fields[0]?.name ?? 'поле') : 'поле'} }} {% endfor %}`
@@ -651,6 +657,12 @@ function Cheatsheet({ fields }: { fields: readonly CustomFieldInput[] }) {
           </li>
         ))}
         <li className={monoClassName}>{'{{ block.id }}'} — id блока на странице (якорь)</li>
+        {place &&
+          PLACE_LINES.map((line) => (
+            <li key={line} className={monoClassName}>
+              {line}
+            </li>
+          ))}
       </ul>
       <p className={styles.note}>
         Свои фильтры: {CUSTOM_FILTERS.join(', ')}. image — адаптивная картинка с alt из поля, link —
@@ -660,6 +672,17 @@ function Cheatsheet({ fields }: { fields: readonly CustomFieldInput[] }) {
     </details>
   )
 }
+
+/** Данные сайта в шаблоне шапки и подвала: ссылки готовые, пустое — nil */
+const PLACE_LINES = [
+  '{% for item in site.menu %} {{ item.href }} {{ item.label }} {{ item.current }} {{ item.new_tab }} {% endfor %}',
+  '{{ site.button.href }} {{ site.button.label }}',
+  "{{ site.logo.image | image: '160px' }} {{ site.logo.mark }} {{ site.logo.text }}",
+  '{{ site.name }} {{ site.home }} {{ site.copyright }}',
+  '{{ site.organization.phone }} {{ site.organization.phone_href }} {{ site.organization.email }} {{ site.organization.address }}',
+  '{{ site.legal.policy_href }} {{ site.legal.consent_href }}',
+  '{% if page.short %} — служебная страница: меню и кнопки нет',
+]
 
 /** История публикаций: вернуть версию в черновик */
 function HistoryPanel({
@@ -740,16 +763,27 @@ function BlockPreview({
   const [device, setDevice] = useState<Device>(initialDevice)
   const library = useQuery(mediaQuery(siteId))
   const media = useMemo(() => mediaMapOf(library.data?.items ?? []), [library.data])
+  const siteName = useSuspenseQuery(siteQuery(siteId)).data.name
+  // Шапка и подвал рисуются на странице-примере, с образцом данных сайта; блок — один, с примером
+  const place = draft !== null && draft.placement !== 'block'
   const content = useMemo(
     () =>
-      PageContent.parse({
-        blocks: draft
-          ? [{ id: 'preview', type: customBlockType(draft.key), props: draft.example }]
-          : [],
-      }),
-    [draft],
+      PageContent.parse(
+        place
+          ? demoPage
+          : {
+              blocks: draft
+                ? [{ id: 'preview', type: customBlockType(draft.key), props: draft.example }]
+                : [],
+            },
+      ),
+    [draft, place],
   )
   const definitions = useMemo(() => (draft ? { [draft.key]: draft } : {}), [draft])
+  const chrome = useMemo(
+    () => (draft && place ? sampleChrome(draft, content, media, siteName) : null),
+    [draft, place, content, media, siteName],
+  )
   // Свой скрипт выполняется только по просьбе и только в изолированной рамке (SandboxPreview)
   const [runScript, setRunScript] = useState(false)
   const scripts = useMemo(
@@ -762,7 +796,11 @@ function BlockPreview({
   return (
     <section aria-label="Предпросмотр блока" className={styles.preview}>
       <div className={styles.previewBar}>
-        <p className={styles.note}>Пример данных в теме сайта — правки видны сразу</p>
+        <p className={styles.note}>
+          {place
+            ? 'Образец сайта: меню, кнопка, «Организация» и документы — в теме сайта, правки видны сразу'
+            : 'Пример данных в теме сайта — правки видны сразу'}
+        </p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
       <Checkbox
@@ -781,6 +819,9 @@ function BlockPreview({
             device={device}
             customBlocks={definitions}
             scripts={scripts}
+            before={chrome?.before}
+            extra={chrome?.extra}
+            placeKeys={chrome?.placeKeys}
           />
         ) : (
           <Preview
@@ -791,6 +832,10 @@ function BlockPreview({
             device={device}
             selectedId={null}
             customBlocks={definitions}
+            before={chrome?.before}
+            extra={chrome?.extra}
+            placeKeys={chrome?.placeKeys}
+            scrollToEnd={draft?.placement === 'footer' ? JSON.stringify(draft) : undefined}
           />
         )}
       </div>

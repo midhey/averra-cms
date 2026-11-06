@@ -35,12 +35,13 @@ site.json — все данные сайта (формат averra-site-export, �
               телефон phone, кнопка button и пункты меню menu — подпись label, подпись на
               телефоне mobileLabel, страница page и блок на ней block или внешняя ссылка url,
               новая вкладка newTab; логотип: вид brand — image, text, imageText, картинка logo —
-              id картинки, знак logoMark, подпись logoText; вид шапки look; null — шапку не
+              id картинки, знак logoMark, подпись logoText; вид шапки look; свой вид custom —
+              ключ своего блока с местом header и его поля, null — стандартная; null — шапку не
               публиковали) и её черновик (headerDraft; null — такой же, как на сайте); подвал
               (footer: вид layout — simple, columns, big, фон tone — background, surface или
               accent, линия divider, строка о компании about, разделы из меню sections, свой
               текст text и его шрифт textFont, «© и год» copyright, ссылка на согласие consent,
-              логотип шапки brand, тексты формы «Перезвоните мне» callback; null — подвал не
+              логотип шапки brand, тексты формы «Перезвоните мне» callback, свой вид custom; null — подвал не
               публиковали) и его черновик (footerDraft); скрипт сайта (script: свой JS на каждой
               странице script и домены для CSP origins) и его черновик (scriptDraft; null —
               такой же, как на сайте); настройки заявок (leadSettings:
@@ -52,7 +53,8 @@ site.json — все данные сайта (формат averra-site-export, �
   customBlocks — свои блоки сайта: ключ (key; на странице блок с типом custom:<ключ>),
               черновик (draft) и опубликованное определение (published; null — не
               публиковали): название, описание, поля (fields), шаблон Liquid (template), CSS (css)
-              и пример данных (example); скрипт блока — scriptDraft и scriptPublished ('' — нет). Файл для загрузки на другую установку — «Свои блоки →
+              и пример данных (example), место placement (header, footer — свои шапка и подвал;
+              нет — блок страницы); скрипт блока — scriptDraft и scriptPublished ('' — нет). Файл для загрузки на другую установку — «Свои блоки →
               Выгрузить» в админке;
   pages     — страницы: адрес (slug), черновик (draft) и опубликованная версия (published)
               с заголовками; блоки страницы — JSON по схемам блоков Averra;

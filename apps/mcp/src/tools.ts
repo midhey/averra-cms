@@ -13,6 +13,7 @@ import {
   headerLayoutTitles,
   headerLinkHref,
   isCustomBlockType,
+  isPageBlockDefinition,
   opensNewTab,
   PageContent,
   PageSlug,
@@ -398,7 +399,8 @@ export function cmsTools(client: Api | undefined) {
       try {
         const param = { siteId: await siteOf(undefined) }
         const body = await unwrap(() => sites[':siteId']['custom-blocks'].$get({ param }))
-        return blockCatalog(publishedCustomBlocks(body))
+        // Свои виды шапки и подвала на страницу не ставятся: в каталоге блоков их нет
+        return blockCatalog(publishedCustomBlocks(body).filter(isPageBlockDefinition))
       } catch {
         return blockCatalog()
       }
@@ -539,7 +541,11 @@ export function cmsTools(client: Api | undefined) {
         await unwrap(() =>
           customBlocksApi.$post({
             param: { siteId },
-            json: { key: definition.key, title: definition.title },
+            json: {
+              key: definition.key,
+              title: definition.title,
+              placement: definition.placement,
+            },
           }),
         )
         created = true
@@ -703,7 +709,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Шапка и меню сайта',
       description:
-        'Шапка сайта, меню и подвал, как они на сайте сейчас: раскладка, пункты меню (страница и блок или внешняя ссылка, href, новая вкладка), кнопка, логотип, вид, подвал (вид, фон, свой текст, ссылка на согласие) и черновики. Чтобы не ломать ссылки меню правкой страниц. Менять шапку и подвал через MCP нельзя — это делают в админке, «Шапка и подвал».',
+        'Шапка сайта, меню и подвал, как они на сайте сейчас: раскладка, пункты меню (страница и блок или внешняя ссылка, href, новая вкладка), кнопка, логотип, вид, свой вид (custom: ключ своего блока с местом header или footer и его поля; null — стандартный), подвал (вид, фон, свой текст, ссылка на согласие) и черновики. Чтобы не ломать ссылки меню правкой страниц. Менять шапку и подвал через MCP нельзя — это делают в админке, «Шапка и подвал».',
       inputSchema: SiteRef,
       annotations: { readOnlyHint: true },
     },

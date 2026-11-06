@@ -1,5 +1,6 @@
 import {
   blocks as blockCatalog,
+  customPlaceIssues,
   type Header,
   type HeaderTargetBlock,
   type HeaderTargetPage,
@@ -13,6 +14,8 @@ import type { Db } from '../../db/client'
 import { media, pages, sites } from '../../db/schema'
 import type { Issue } from '../../errors'
 import type { Tx } from '../../mail/outbox'
+import { placeMediaIssues } from '../custom-blocks/place-media'
+import { placeDefinitions } from '../custom-blocks/repo'
 import { draftHeader, publishedHeader } from './read'
 
 const columns = { headerPublished: sites.headerPublished, headerDraft: sites.headerDraft }
@@ -141,9 +144,16 @@ export function headerRepo(db: Db) {
         const [row] = await tx.select(columns).from(sites).where(eq(sites.id, siteId)).for('update')
         if (!row) return undefined
         const draft = draftHeader(row)
+        // Свой вид — только опубликованное определение шапки, и его поля должны подойти
         const problem = [
           ...(await logoIssuesOf(tx, siteId, draft)),
           ...check(draft, await targetsOf(tx, siteId)),
+          ...customPlaceIssues(
+            draft.custom,
+            'header',
+            await placeDefinitions(tx, siteId, 'published'),
+          ),
+          ...(await placeMediaIssues(tx, siteId, draft.custom)),
         ]
         if (problem.length > 0) return { problem, state: undefined }
         const [saved] = await tx

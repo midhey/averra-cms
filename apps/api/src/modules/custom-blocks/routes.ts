@@ -2,7 +2,10 @@ import {
   type CustomBlockProblem,
   CustomBlockRenderError,
   customBlockCss,
+  legalFooterHtml,
   renderCustomBlockHtml,
+  renderCustomPlaceHtml,
+  samplePlaceData,
 } from '@averra/blocks/custom-engine'
 import {
   applyCustomBlocks,
@@ -13,21 +16,26 @@ import {
   CustomBlocksImport,
   collectMediaRefs,
   customBlockType,
+  customPlaceIssues,
   MAIN_PAGE_SLUG,
   NewCustomBlock,
   PageContent,
   starterCustomBlock,
   Uuid,
 } from '@averra/schema'
+import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { can } from '../../auth/access'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { sites } from '../../db/schema'
 import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { draftFooter, publishedFooter } from '../footer/read'
+import { draftHeader, publishedHeader } from '../header/read'
 import { mediaRepo } from '../media/repo'
 import { customBlocksRepo, draftOf, publishedOf, readDefinition, viewOf } from './repo'
 import { cssMediaIds, definitionProblems, problemIssues, sameDefinition } from './service'
@@ -56,6 +64,34 @@ const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
 
 const usageWhere = ({ draft, published }: { draft: boolean; published: boolean }) =>
   draft && published ? 'черновик и сайт' : draft ? 'черновик' : 'сайт'
+
+const placeNames = { header: 'шапка сайта', footer: 'подвал сайта' } as const
+
+/** Шапка и подвал сайта: черновик и опубликованное — где выбран свой вид */
+async function sitePlaces(db: Db, siteId: string) {
+  const [row] = await db
+    .select({
+      headerDraft: sites.headerDraft,
+      headerPublished: sites.headerPublished,
+      footerDraft: sites.footerDraft,
+      footerPublished: sites.footerPublished,
+    })
+    .from(sites)
+    .where(eq(sites.id, siteId))
+  if (!row) return []
+  return [
+    {
+      place: 'header' as const,
+      draft: draftHeader(row).custom,
+      published: publishedHeader(row)?.custom ?? null,
+    },
+    {
+      place: 'footer' as const,
+      draft: draftFooter(row).custom,
+      published: publishedFooter(row)?.custom ?? null,
+    },
+  ]
+}
 
 /**
  * Свои блоки сайта: монтируется на /sites/:siteId/custom-blocks. Читать опубликованные может
@@ -112,8 +148,8 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
         validate('json', NewCustomBlock),
         async (c) => {
           const { siteId } = c.req.valid('param')
-          const { key, title } = c.req.valid('json')
-          const row = await repo.create(siteId, starterCustomBlock(key, title))
+          const { key, title, placement } = c.req.valid('json')
+          const row = await repo.create(siteId, starterCustomBlock(key, title, placement))
           if (!row) {
             const issues = [{ path: 'key', message: 'Такой ключ уже есть' }]
             return c.json(conflict(`Свой блок с ключом «${key}» уже есть`, issues), 409)
@@ -151,6 +187,20 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           const { siteId } = c.req.valid('param')
           const { blocks, resolutions } = c.req.valid('json')
           const result = await repo.importBlocks(siteId, blocks, resolutions)
+          if (result.mismatched.length > 0) {
+            const issues = result.mismatched.map((key) => ({
+              path: `resolutions.${key}`,
+              message: 'Место блока в файле другое, чем на сайте: переименуйте или пропустите',
+            }))
+            const keys = result.mismatched.map((key) => `«${key}»`).join(', ')
+            return c.json(
+              conflict(
+                `Не заменить: у ${keys} в файле другое место (блок, шапка или подвал)`,
+                issues,
+              ),
+              409,
+            )
+          }
           if (result.unresolved.length > 0) {
             const issues = result.unresolved.map((key) => ({
               path: `resolutions.${key}`,
@@ -183,11 +233,24 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           const media = await mediaRepo(db).files(siteId, ids)
           let html: string | null = null
           try {
-            html = renderCustomBlockHtml(definition, props, {
-              id: 'preview',
-              media,
-              priority: false,
-            })
+            const context = { id: 'preview', media, priority: false }
+            if (definition.placement === 'block') {
+              html = renderCustomBlockHtml(definition, props, context)
+            } else {
+              // Шапка и подвал — на образце данных сайта (меню, кнопка, логотип, «Организация»),
+              // подвал — со строкой документов Averra: нейронка видит то, что соберёт сайт
+              const place = samplePlaceData()
+              const rendered = renderCustomPlaceHtml(definition, props, place, context)
+              html =
+                definition.placement === 'footer'
+                  ? rendered +
+                    legalFooterHtml(rendered, {
+                      policyHref: place.site.legal.policy_href,
+                      consentHref: place.site.legal.consent_href,
+                      cookieSettings: place.site.legal.cookie_settings,
+                    })
+                  : rendered
+            }
           } catch (error) {
             if (!(error instanceof CustomBlockRenderError)) throw error
             // Пример проверен выше (поля и пробный рендер): повторять его ошибки незачем. Свои данные —
@@ -226,6 +289,21 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           if (draft.key !== key) {
             return c.json(
               validationError([{ path: 'key', message: 'Ключ блока не меняется после создания' }]),
+              400,
+            )
+          }
+          const current = await repo.find(siteId, key)
+          if (!current) return c.json(notFound('Своего блока нет'), 404)
+          // Место задают при создании: блок со страниц не становится шапкой, а шапка — блоком
+          const placement = (draftOf(current) ?? publishedOf(current))?.placement ?? draft.placement
+          if (placement !== draft.placement) {
+            return c.json(
+              validationError([
+                {
+                  path: 'placement',
+                  message: 'Место блока не меняется после создания: создайте новый блок',
+                },
+              ]),
               400,
             )
           }
@@ -275,8 +353,26 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
                   : []
               })
             : []
+          // Шапка или подвал на сайте со своим видом этого ключа: поля могли перестать подходить —
+          // тогда на сайте стандартные, пока поля не поправят в «Шапка и подвал»
+          const places = definition
+            ? (await sitePlaces(db, siteId)).flatMap(({ place, published }) => {
+                if (published?.key !== key) return []
+                const issue = customPlaceIssues(published, place, [definition])[0]
+                if (!issue) return []
+                // Путь поля без «custom.props.»: человек правит поле по его ключу
+                const field = issue.path.replace(/^custom\.props\.?/, '')
+                return [
+                  {
+                    place,
+                    ...(field && field !== issue.path && { field }),
+                    message: issue.message,
+                  },
+                ]
+              })
+            : []
           await rebuild(siteId)
-          return c.json({ ...(await detailed(siteId, result.row)), affected }, 200)
+          return c.json({ ...(await detailed(siteId, result.row)), affected, places }, 200)
         },
       )
 
@@ -320,6 +416,18 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           }))
           const message = `Блок стоит на страницах: ${list}. Уберите его оттуда и опубликуйте страницы, тогда блок можно будет удалить`
           return c.json(conflict(message, issues), 409)
+        }
+        // Свой вид, выбранный в шапке или подвале, удалить нельзя: на сайте пропал бы вид
+        const chosen = (await sitePlaces(db, siteId)).flatMap(({ place, draft, published }) => {
+          const where = usageWhere({ draft: draft?.key === key, published: published?.key === key })
+          return draft?.key === key || published?.key === key
+            ? [{ path: `places.${place}`, message: `${placeNames[place]} — ${where}` }]
+            : []
+        })
+        if (chosen.length > 0) {
+          const list = chosen.map((issue) => issue.message).join('; ')
+          const message = `Этот вид выбран: ${list}. Выберите другой вид в «Шапка и подвал» и опубликуйте, тогда блок можно будет удалить`
+          return c.json(conflict(message, chosen), 409)
         }
         const deleted = await repo.delete(siteId, key)
         if (!deleted) return c.json(notFound('Своего блока нет'), 404)
