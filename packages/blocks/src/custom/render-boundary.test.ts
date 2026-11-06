@@ -398,7 +398,10 @@ function siteRender(template: string, props: Record<string, unknown>, id: string
 }
 
 describe('граница защиты своего блока — очистка при рендере', () => {
-  it('шаблоны проверяющего на разных данных и при id блока разной длины не дают опасного HTML', () => {
+  // Сотни рендеров с повторным разбором: под нагрузкой полного прогона дольше 5 с по умолчанию
+  it('шаблоны проверяющего на разных данных и при id блока разной длины не дают опасного HTML', {
+    timeout: 30_000,
+  }, () => {
     const leaks: string[] = []
     const harmless: string[] = []
     for (const { group, template } of all) {

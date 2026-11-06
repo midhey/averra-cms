@@ -189,7 +189,9 @@ export type ConsentPorts = {
 
 /**
  * Контроллер уведомления. В режиме согласия счётчики грузятся только после выбора «аналитика»
- * — сейчас или сохранённого раньше; в режиме уведомления их вставляет сама страница
+ * — сейчас или сохранённого раньше; в режиме уведомления — сразу, при любом выборе: уведомление
+ * только сообщает о них. Вставляет их этот же модуль, а не скрипт в <head>: на сайте нет inline-
+ * скриптов, CSP их запрещает
  */
 export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
   const ids = analyticsIds(config)
@@ -200,8 +202,12 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
   let traces = config.mode === 'consent' && hadAnalytics(ports.readCookies())
   let loaded = false
 
+  /** Счётчики работают при этом выборе: в режиме уведомления — всегда */
+  const counting = (current: ConsentChoice | undefined) =>
+    config.mode === 'notice' || current === 'analytics'
+
   function load() {
-    if (loaded || config.mode !== 'consent' || (ids.metrika === '' && ids.ga4 === '')) return
+    if (loaded || (ids.metrika === '' && ids.ga4 === '')) return
     loaded = true
     ports.loadAnalytics(ids)
   }
@@ -211,7 +217,7 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
     ports.writeCookie(choiceCookie(next, config.secure, services))
     ports.closeSettings()
     ports.hideNotice()
-    if (next === 'analytics') {
+    if (counting(next)) {
       load()
     } else if (loaded) {
       loaded = false
@@ -234,7 +240,7 @@ export function createConsent(config: ConsentConfig, ports: ConsentPorts) {
     },
     /** Страница открылась: счётчики по сохранённому согласию и уведомление, если выбора нет */
     start() {
-      if (choice === 'analytics') load()
+      if (counting(choice)) load()
       if (needsNotice(config.mode, choice)) ports.showNotice()
     },
     /** «Принять все» */

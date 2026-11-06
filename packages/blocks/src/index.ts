@@ -2,6 +2,7 @@ export { CookieNotice, type CookieNoticeProps, LegalFooter } from './cookie/Cook
 export { cookieNoticeView, policyHref } from './cookie/view'
 export type { CustomBlockMap, RenderableCustomBlock } from './custom/render'
 export { customBlocksCss } from './custom/render'
+export { customBlockScriptFile, scriptSyntaxError, siteScriptFile } from './custom/script'
 export { SiteFooter } from './footer/SiteFooter'
 export {
   consentPageHref,

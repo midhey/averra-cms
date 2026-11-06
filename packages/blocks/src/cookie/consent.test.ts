@@ -253,38 +253,41 @@ describe('режим согласия', () => {
 describe('режим уведомления', () => {
   const notice: ConsentConfig = { ...config, mode: 'notice' }
 
-  it('счётчики вставляет страница, скрипт только показывает уведомление', () => {
+  it('счётчики вставляет скрипт уведомления сразу, «Понятно» их не выгружает', () => {
     const page = fakePage()
     const consent = createConsent(notice, page.ports)
     consent.start()
+    expect(page.loaded).toHaveLength(1)
+    expect(consent.loaded).toBe(true)
     consent.acknowledge()
-    expect(page.loaded).toEqual([])
+    expect(page.loaded).toHaveLength(1)
+    expect(page.calls).not.toContain('forget')
     expect(consent.choice).toBe('notice')
     const again = fakePage(page.cookies())
     createConsent(notice, again.ports).start()
-    expect(again.calls).toEqual([])
+    expect(again.calls).toEqual(['load'])
   })
 
   it('согласие из режима согласия засчитывается: человек уже ответил «да»', () => {
     const page = fakePage('averra_consent=analytics.ym')
     createConsent(notice, page.ports).start()
-    expect(page.calls).toEqual([])
+    expect(page.calls).toEqual(['load'])
     // «Понятно» тоже помнит, о каких сервисах сказали: добавили GA4 — уведомление снова
     const told = fakePage('averra_consent=notice.ym')
     createConsent({ ...notice, ga4: 'G-ABC123' }, told.ports).start()
-    expect(told.calls).toEqual(['show'])
+    expect(told.calls).toEqual(['load', 'show'])
   })
 
   it('отказ из режима согласия — уведомление снова: счётчики теперь работают без спроса', () => {
     const page = fakePage('averra_consent=necessary')
     const consent = createConsent(notice, page.ports)
     consent.start()
-    expect(page.calls).toEqual(['show'])
+    expect(page.calls).toEqual(['load', 'show'])
     consent.acknowledge()
     expect(consent.choice).toBe('notice')
     const again = fakePage(page.cookies())
     createConsent(notice, again.ports).start()
-    expect(again.calls).toEqual([])
+    expect(again.calls).toEqual(['load'])
   })
 })
 

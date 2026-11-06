@@ -17,12 +17,16 @@ import {
   renderTemplate,
 } from './liquid'
 import { type CustomBlockProblem, CustomBlockRenderError } from './problems'
+import { scriptProblems } from './script'
 
-/** Определение, которое нужно рендеру: ключ, поля, шаблон и CSS */
+/**
+ * Определение, которое нужно рендеру: ключ, поля, шаблон и CSS. Скрипт — для рендерера сайта и
+ * изолированного предпросмотра: Page его не выводит, разметка блока работает без него
+ */
 export type RenderableCustomBlock = Pick<
   CustomBlockDraft,
   'key' | 'title' | 'fields' | 'template' | 'css'
->
+> & { script?: string | undefined }
 
 /** Опубликованные определения по ключу: так их получают Page и рендерер */
 export type CustomBlockMap = Readonly<Record<string, RenderableCustomBlock>>
@@ -139,6 +143,7 @@ export function customBlockProblems(
     mediaUrl: known ? (id) => (known.has(id) ? `/media/${id}` : undefined) : undefined,
   })
   problems.push(...css.problems)
+  problems.push(...scriptProblems(definition.script))
   return problems
 }
 

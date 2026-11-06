@@ -1938,7 +1938,7 @@ function checkIdReferences(
 
 function forbiddenElementMessage(tag: string) {
   if (tag === 'script' || tag === 'noscript') {
-    return `<${tag}> запрещён: свой блок работает без JavaScript`
+    return `<${tag}> запрещён: шаблон работает без JavaScript, а скрипт блока — на вкладке «Скрипт»`
   }
   if (tag === 'style') return '<style> не нужен: стили блока — во вкладке CSS'
   if (['plaintext', 'xmp', 'listing', 'noembed', 'noframes'].includes(tag)) {

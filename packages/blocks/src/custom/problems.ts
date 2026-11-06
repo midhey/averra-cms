@@ -3,7 +3,7 @@
  * определение, warning — совет (конкретный цвет вместо роли темы, h1 в шаблоне)
  */
 export type CustomBlockProblem = {
-  part: 'template' | 'css' | 'example' | 'fields'
+  part: 'template' | 'css' | 'example' | 'fields' | 'script'
   level: 'error' | 'warning'
   message: string
   /** Строка в шаблоне или CSS, с 1 */

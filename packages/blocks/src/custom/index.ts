@@ -20,3 +20,9 @@ export {
   type RenderableCustomBlock,
   renderCustomBlockHtml,
 } from './render'
+export {
+  customBlockScriptFile,
+  scriptProblems,
+  scriptSyntaxError,
+  siteScriptFile,
+} from './script'

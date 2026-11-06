@@ -344,15 +344,18 @@ describe('современный браузер', () => {
     expect(document.cookie).not.toContain('averra_consent')
   })
 
-  it('режим уведомления: «Понятно», без «Настроек cookie» и без счётчиков от скрипта', () => {
+  it('режим уведомления: «Понятно», без «Настроек cookie», счётчик — файлом от скрипта сразу', () => {
     const { notice } = mount('card', 'notice')
     expect(notice.hidden).toBe(false)
+    // Счётчик уже вставлен, до ответа: уведомление только сообщает о нём. Inline-скриптов нет
+    expect(counters()).toEqual(['https://mc.yandex.ru/metrika/tag.js'])
+    expect(document.querySelector('script:not([src])')).toBeNull()
     expect(document.querySelector('[data-consent-settings]')).toBeNull()
     expect(document.querySelector('[data-consent-open]')).toBeNull()
     button(notice, 'ok').click()
     expect(notice.hidden).toBe(true)
     expect(document.cookie).toContain('averra_consent=notice.ym')
-    expect(counters()).toEqual([])
+    expect(counters()).toEqual(['https://mc.yandex.ru/metrika/tag.js'])
   })
 
   it('режим уведомления: «Понятно» помнит Метрику, добавили GA4 — уведомление снова', () => {
@@ -363,7 +366,8 @@ describe('современный браузер', () => {
     expect(withGa4.notice.hidden).toBe(false)
     button(withGa4.notice, 'ok').click()
     expect(document.cookie).toContain('averra_consent=notice.ym.ga')
-    expect(counters()).toEqual([])
+    // По скрипту на каждый запуск уведомления в тесте: страница одна, mount — три раза
+    expect(counters()).toContain('https://www.googletagmanager.com/gtag/js?id=G-ABCD1234')
   })
 })
 
