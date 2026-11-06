@@ -47,6 +47,7 @@ describe('Footer', () => {
       copyright: true,
       consent: false,
       brand: false,
+      custom: null,
     })
   })
 
@@ -75,7 +76,13 @@ describe('Footer', () => {
 
   it('вид подвала — раскладка, фон, линия и шрифт; тексты и ссылки — не вид', () => {
     const base = Footer.parse({})
-    expect(Object.keys(footerLookOf(base))).toEqual(['layout', 'tone', 'divider', 'textFont'])
+    expect(Object.keys(footerLookOf(base))).toEqual([
+      'layout',
+      'tone',
+      'divider',
+      'textFont',
+      'custom',
+    ])
     expect(sameFooterLook(base, Footer.parse({ text: 'Привет', consent: true, brand: true }))).toBe(
       true,
     )

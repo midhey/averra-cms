@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { contrastRatio, formatContrast } from './contrast'
+import { CustomPlace, customPlaceKey, customPlaceMediaIds, readCustomPlace } from './custom-place'
 import type { FormField } from './forms'
 import { contrastPairs, type ThemeColorRole, type ThemeColors } from './theme'
 import { HTTPS_URL } from './url'
@@ -81,6 +82,11 @@ const footerFields = {
   copyright: z.boolean().default(true).meta({ title: '© и год' }),
   consent: z.boolean().default(false).meta({ title: 'Ссылка на согласие на обработку данных' }),
   brand: z.boolean().default(false).meta({ title: 'Логотип шапки в подвале' }),
+  /**
+   * Свой вид подвала — свой блок с местом «подвал» и тексты его полей; null — стандартный. Ссылки
+   * на документы Averra дописывает после шаблона сама (те, что шаблон не вывел)
+   */
+  custom: CustomPlace.nullable().default(null).meta({ title: 'Свой вид подвала' }),
 }
 
 /**
@@ -102,13 +108,14 @@ export function sameFooter(a: Footer, b: Footer) {
 
 /**
  * Вид подвала — то, что меняет только владелец (header.look, как вид шапки): раскладка, фон,
- * линия и шрифт своего текста. Тексты, ссылки и что показать — администратор сайта
+ * линия, шрифт своего текста и выбор своего вида. Тексты, ссылки и что показать — администратор сайта
  */
 export const footerLookOf = (footer: Footer) => ({
   layout: footer.layout,
   tone: footer.tone,
   divider: footer.divider,
   textFont: footer.textFont,
+  custom: customPlaceKey(footer.custom),
 })
 
 /** Вид двух подвалов одинаковый — по смыслу */
@@ -117,6 +124,18 @@ export const sameFooterLook = (a: Footer, b: Footer) =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** Свой вид из базы: непонятный — стандартный подвал (о нём — onInvalid), а не упавшая сборка */
+function readCustom(stored: unknown, onInvalid?: (field: string) => void) {
+  const custom = readCustomPlace(stored)
+  if (custom !== undefined) return custom
+  onInvalid?.('custom')
+  return null
+}
+
+/** Картинки в полях своего вида подвала: их нельзя удалить из медиатеки, и они нужны сборке */
+export const footerMediaIds = (footer: Footer | null | undefined) =>
+  customPlaceMediaIds(footer?.custom)
 
 /**
  * Подвал из базы — с запасом на откат версии: незнакомые ключи отбрасываются (и у текстов
@@ -149,6 +168,7 @@ export function readFooter(stored: unknown, onInvalid?: (field: string) => void)
     copyright: read('copyright'),
     consent: read('consent'),
     brand: read('brand'),
+    custom: readCustom(source.custom, onInvalid),
     callback: {
       title: readCallback('title'),
       text: readCallback('text'),

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BlockInstance, type BlockType, blocks } from './blocks'
 import { Button } from './common'
+import { placeStarter } from './custom-place-starter'
 import { BLOCK_CATEGORIES, type BlockCategory, BlockId } from './define-block'
 import { Image } from './media'
 
@@ -39,6 +40,26 @@ export const CUSTOM_BLOCK_LIMITS = {
 } as const
 
 const KEY_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+
+/**
+ * Место своего блока: блок страницы, вид шапки или вид подвала сайта. Место задают при создании и
+ * не меняют: блок со страниц не становится шапкой. Свой вид шапки и подвала выбирают в «Шапка и
+ * подвал», на страницу его не ставят
+ */
+export const CustomBlockPlacement = z.enum(['block', 'header', 'footer'])
+export type CustomBlockPlacement = z.infer<typeof CustomBlockPlacement>
+
+export const customBlockPlacementTitles: Record<CustomBlockPlacement, string> = {
+  block: 'Блок страницы',
+  header: 'Шапка сайта',
+  footer: 'Подвал сайта',
+}
+
+/**
+ * Переменные шаблона шапки и подвала: данные сайта (меню, кнопка, логотип, «Организация», документы)
+ * и открытой страницы. В определении места ключ поля с таким именем был бы недоступен
+ */
+export const PLACE_VARIABLES = ['site', 'page'] as const
 
 /** Ключи, занятые адресами API (…/custom-blocks/export и …/import) */
 const RESERVED_KEYS: ReadonlySet<string> = new Set(['export', 'import'])
@@ -283,6 +304,11 @@ export const CustomBlockDraft = z
     description: z.string().trim().min(1).max(160),
     /** Раздел каталога: его видит нейронка в list_blocks, по нему же фильтр «Добавить блок» */
     category: z.enum(categories).default('about'),
+    /**
+     * Место: блок страницы (по умолчанию), шапка или подвал сайта. В базе пишется, только если оно
+     * не «блок»: прежняя версия после отката читает обычные блоки как раньше
+     */
+    placement: CustomBlockPlacement.default('block'),
     /** Набросок в каталоге — как у встроенного блока. Нет — общий набросок своего блока */
     sketch: z.enum(builtinTypes).optional(),
     fields: z.array(CustomFieldDef).min(1).max(CUSTOM_BLOCK_LIMITS.fieldsPerLevel),
@@ -336,6 +362,17 @@ export const CustomBlockDraft = z
       })
     }
     walk(draft.fields, ['fields'], 1)
+    if (draft.placement !== 'block') {
+      draft.fields.forEach((field, index) => {
+        if ((PLACE_VARIABLES as readonly string[]).includes(field.name)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['fields', index, 'name'],
+            message: `Ключ «${field.name}» в шаблоне шапки и подвала занят данными сайта: выберите другой`,
+          })
+        }
+      })
+    }
     if (total > CUSTOM_BLOCK_LIMITS.fields) {
       ctx.addIssue({
         code: 'custom',
@@ -521,7 +558,15 @@ function routedByType<
 }
 
 /** Опубликованное определение — то, что нужно странице: поля для проверки, ключ, название */
-export type CustomBlockFieldsSource = Pick<CustomBlockDraft, 'key' | 'title' | 'fields'>
+export type CustomBlockFieldsSource = Pick<CustomBlockDraft, 'key' | 'title' | 'fields'> & {
+  /** Место: свой вид шапки или подвала на страницу не ставится. Нет — блок страницы */
+  placement?: CustomBlockPlacement | undefined
+}
+
+/** Определение — блок страницы, а не вид шапки или подвала */
+export const isPageBlockDefinition = (definition: {
+  placement?: CustomBlockPlacement | undefined
+}) => (definition.placement ?? 'block') === 'block'
 
 type IssuePath = (string | number)[]
 
@@ -544,6 +589,14 @@ export function applyCustomBlocks<Content extends { blocks: readonly PageBlock[]
       issues.push({
         path: ['blocks', index, 'type'],
         message: `Своего блока «${key}» нет на сайте: его не опубликовали или удалили. Уберите блок со страницы`,
+      })
+      return block
+    }
+    if (!isPageBlockDefinition(definition)) {
+      const place = definition.placement === 'header' ? 'шапки' : 'подвала'
+      issues.push({
+        path: ['blocks', index, 'type'],
+        message: `«${definition.title}» — свой вид ${place} сайта, а не блок страницы: его выбирают в «Шапка и подвал». Уберите блок со страницы`,
       })
       return block
     }
@@ -617,7 +670,9 @@ export type CustomBlocksImport = z.infer<typeof CustomBlocksImport>
 export const NewCustomBlock = z.strictObject({
   key: CustomBlockKey,
   title: z.string().trim().min(1).max(60),
+  placement: CustomBlockPlacement.default('block'),
 })
+export type NewCustomBlock = z.input<typeof NewCustomBlock>
 
 /**
  * Публикация своего блока: черновик, который человек видел. Черновик пишет и токен MCP — если он
@@ -627,7 +682,12 @@ export const CustomBlockPublish = z.strictObject({ draft: CustomBlockDraft })
 export type CustomBlockPublish = z.infer<typeof CustomBlockPublish>
 
 /** Заготовка нового блока: заголовок и текст, шаблон и CSS на переменных темы */
-export function starterCustomBlock(key: string, title: string): CustomBlockDraft {
+export function starterCustomBlock(
+  key: string,
+  title: string,
+  placement: CustomBlockPlacement = 'block',
+): CustomBlockDraft {
+  if (placement !== 'block') return CustomBlockDraft.parse(placeStarter(key, title, placement))
   return CustomBlockDraft.parse({
     key,
     title,
