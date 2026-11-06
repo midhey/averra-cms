@@ -31,6 +31,7 @@ sidebar:
 - [Шапка сайта и меню](/averra-cms/decisions/site-header/)
 - [Подвал сайта](/averra-cms/decisions/site-footer/)
 - [Свои блоки: Liquid в базе, без JavaScript](/averra-cms/decisions/custom-blocks/)
+- [Свой JS на сайте: файлами, под CSP, предпросмотр в изоляции](/averra-cms/decisions/custom-js/)
 
 ## Стек
 

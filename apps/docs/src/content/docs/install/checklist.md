@@ -214,3 +214,15 @@ Object Storage и два релиза подряд (например, `0.2.0` и
     клику плеер встаёт и запускает ролик (на iPhone может понадобиться второе нажатие), под ним —
     ссылка «Ролик не запускается?». В консоли нет ошибок песочницы (`sandbox`, `Blocked`).
     Плеер, которому не хватило прав, — расширить `PLAYER_SANDBOX` (`player-dom.ts`) точечно.
+
+## Свой JS и CSP
+
+65. `curl -I https://сайт/` и `curl -I https://сайт/nope` — заголовок `content-security-policy`,
+    в `script-src` нет `unsafe-inline` и `unsafe-eval`. Строка совпадает с
+    `https://сайт/_averra/csp.txt`. После публикации скрипта сайта с доменом
+    `https://widget.example.ru` домен в заголовке — без перезапуска Caddy.
+66. С Метрикой (оба режима cookie), шапкой, видео и формой — в консоли браузера нет ошибок
+    «Content Security Policy», счётчик шлёт запросы, меню телефона открывается, плеер встаёт, форма
+    отправляется. Скрипт своего блока — `/_scripts/block-…js` с `cache-control: … immutable`.
+67. «Выполнять скрипт» в предпросмотре своего блока: скрипт с `document.cookie`, `localStorage` и
+    `fetch('/api/auth/get-session')` получает SecurityError и отказ, админка остаётся на месте.

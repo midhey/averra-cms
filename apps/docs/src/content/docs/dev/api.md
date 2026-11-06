@@ -136,10 +136,15 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `DELETE /api/sites/:siteId/custom-blocks/:key` | удалить, 204. Блок на страницах (черновик или сайт) — 409 со списком |
 | `GET /api/sites/:siteId/custom-blocks/export` | файл `averra.custom-blocks` версии 1 с черновиками всех блоков (`content-disposition: attachment`) |
 | `POST /api/sites/:siteId/custom-blocks/import` | `{ blocks, resolutions }`: блоки из файла — черновиками. Занятый ключ без решения — 409 (`resolutions.<ключ>`), ничего не записано; решение — `replace`, `skip` или `{ rename }` |
+| `GET /api/sites/:siteId/script` | скрипт сайта: `{ draft, published, unpublished, problems }`, `draft` и `published` — `{ script, origins }`. Права — `blocks.draft` (владелец, токен с правом на черновики) |
+| `PUT /api/sites/:siteId/script` | сохранить черновик (`SiteScript`). Домен с путём, пробелом, кавычкой или `;` — 400 у `origins.N`; ошибка разбора кода — в `problems`, сохранению не мешает. `blocks.draft` |
+| `DELETE /api/sites/:siteId/script` | отменить черновик — снова как на сайте. `blocks.draft` |
+| `POST /api/sites/:siteId/script/publish` | тело `{ draft }` — черновик, который видел человек: поменялся — 409; ошибка разбора — 400 (`path: script`); иначе на сайт и сборка в очередь. Только владелец (`blocks.define`), токену — никогда |
 
 Сохранение черновика страницы проверяет поля своих блоков по опубликованным определениям (400 с
 путём `content.blocks.N.props.…`), публикация страницы — ещё раз (409, если определение с тех пор
-поменялось). Снимок для сборки отдаёт `customBlocks` — опубликованные определения по ключу.
+поменялось). Снимок для сборки отдаёт `customBlocks` — опубликованные определения по ключу (со
+скриптом блока `script`) — и `site.script`: опубликованный скрипт сайта и домены для CSP.
 Подробно — [Свои блоки](/averra-cms/dev/custom-blocks/).
 
 ## Подвал сайта

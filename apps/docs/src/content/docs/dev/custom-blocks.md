@@ -340,6 +340,40 @@ Liquid» выше).
   ругается «нет h1», а «Первый экран» после него получает h2. Два h1 на странице — совет «несколько
   h1». `<h1` внутри `{% if %}` считается присутствующим.
 
+## Скрипт блока и скрипт сайта
+
+Свой JS — улучшение поверх рабочего HTML ([решение](/averra-cms/decisions/custom-js/)). Код — в
+`packages/blocks/src/custom/script.ts`, выдача — `apps/renderer/src/lib/scripts.ts`.
+
+- **Хранение.** `CustomBlockDraft.script` (до 20 000 знаков, `''` — нет). В базе — колонки
+  `custom_blocks.script_draft` и `script_published`, а не ключ JSON определения: определение строгое,
+  и прежняя версия после отката не прочитала бы его со `script` — блок пропал бы со страниц. В версии
+  истории скрипт — ключ `script` JSON (только непустой). Репозиторий собирает определение функциями
+  `draftOf`, `publishedOf`, раскладывает — `storedParts`. Скрипт сайта — `sites.script_draft` и
+  `script_published` (jsonb, схема `SiteScript`: `script` и `origins`), модуль
+  `apps/api/src/modules/site-script`.
+- **Проверка** (`scriptProblems`): разбор как тела async-функции в строгом режиме
+  (`new AsyncFunction` только компилирует, код не выполняется) — ошибка не даёт опубликовать; тело
+  разбирается само по себе, поэтому код не закроет обёртку и не продолжится за ней. `eval`,
+  `new Function`, строка в `setTimeout`/`setInterval`, `document.write` — совет со строкой: их
+  запретит CSP или они сотрут страницу. Рендерер ещё раз проверяет разбор и скрипт с ошибкой не
+  выводит (определение могли записать в обход публикации).
+- **Обёртка** (`customBlockScriptFile`, `siteScriptFile`): код автора как есть, без отступа
+  (отступ поменял бы многострочные строки-шаблоны), внутри `(async (blocks) => { … })(blocks)`;
+  `blocks` — `document.querySelectorAll('[data-custom-block="<ключ>"]')` массивом. Ошибка, в том
+  числе асинхронная, — `console.error` с названием блока.
+- **Выдача** (`pageScriptFiles`): скрипт сайта, потом скрипты своих блоков страницы в порядке первого
+  блока, каждый один раз. Файл `/_scripts/site.<хеш>.js` или `/_scripts/block-<ключ>.<хеш>.js` (хеш —
+  10 знаков sha256 содержимого), маршрут `src/routes/scripts.ts`, подключение —
+  `<script type="module" src>` в конце `<body>`. Модуль выполняется после разбора HTML, у него своя
+  область видимости.
+- **Предпросмотр со скриптами** — `apps/admin/src/editor/SandboxPreview.tsx` и `sandbox-document.ts`:
+  страница — `renderToStaticMarkup(<Page …/>)` со стилями предпросмотра, в
+  `<iframe sandbox="allow-scripts">` без `allow-same-origin`, с CSP документа
+  (`connect-src 'none'`, `form-action 'none'`, скрипты — только `data:`). Скрипты — модулями из
+  `data:` URL: код не вставляется в HTML, экранировать в нём нечего. Первым идёт свой модуль, который
+  не даёт ссылкам увести рамку.
+
 ## API
 
 Маршруты — [API → Свои блоки](/averra-cms/dev/api/#свои-блоки). Права: `blocks.define` — только
@@ -349,6 +383,10 @@ Liquid» выше).
 токена включено, меняет владелец в «Доступ для ИИ» или `pnpm token:grant`). Публикация, удаление,
 версии и файл переноса токену закрыты всегда.
 Инструменты MCP — [Свои блоки через MCP](/averra-cms/mcp/tools/#свои-блоки-четыре-инструмента).
+
+Скрипт сайта — `/api/sites/:siteId/script`: `GET`, `PUT` (черновик) и `DELETE` (отменить
+черновик) — `blocks.draft`; `POST …/publish` с черновиком, который видел человек, — `blocks.define`
+(409, если черновик поменяли; 400 при ошибке разбора). Публикация пересобирает сайт.
 
 ## Тесты
 
@@ -368,3 +406,9 @@ Liquid» выше).
   числа, поле кода, конструктор полей, перенос.
 - `e2e/tests/custom-blocks.spec.ts` — блок с повторителем и картинкой → страница → сайт без
   JavaScript на 1440 и 375 px.
+- Свой JS: `packages/blocks/src/custom/script.test.ts` (разбор, советы, обёртка выполняется и ловит
+  ошибку), `packages/schema/src/site-script.test.ts` и `csp.test.ts` (домены, CSP),
+  `apps/renderer/src/lib/scripts.test.ts` (один раз, только с блоком, хеш в имени),
+  `apps/api/src/modules/site-script/site-script.test.ts` (права всех ролей и токена, хранение скрипта
+  блока отдельно, снимок), `apps/admin/src/editor/sandbox-document.test.ts` и
+  `e2e/tests/custom-js.spec.ts` (CSP, ни одного inline, без JS, изолированный предпросмотр).
