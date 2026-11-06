@@ -261,8 +261,9 @@ Liquid» выше).
    `{{ block.id }}-имя` остаётся. Ссылки по id (`popovertarget`, `aria-…`) на элементы вне блока —
    тоже убираются.
 3. **Скрипты сайта** (уведомление о cookie, шапка, плеер видео) ищут свою разметку только вне
-   своих блоков (`closest('[data-custom-block]')`): даже подделка, прошедшая мимо
-   проверки, не будет принята за настоящую.
+   шаблонов своих блоков (`closest('[data-custom-block-root]')` — обёртка HTML шаблона): даже
+   подделка, прошедшая мимо проверки, не будет принята за настоящую. Корень своих шапки и подвала и
+   строка документов под подвалом — разметка Averra вне этой обёртки.
 
 ## CSS внутри блока
 
@@ -374,6 +375,132 @@ Liquid» выше).
   `data:` URL: код не вставляется в HTML, экранировать в нём нечего. Первым идёт свой модуль, который
   не даёт ссылкам увести рамку.
 
+## Шапка и подвал
+
+Своя шапка и свой подвал — свои блоки с местом `placement: 'header'` или `'footer'` (у блока страницы
+— `'block'`, по умолчанию). Код — `packages/schema/src/custom-place.ts`,
+`packages/blocks/src/custom/place-data.ts` и `packages/blocks/src/place/CustomPlace.tsx`
+([почему так](/averra-cms/decisions/site-header/#свой-вид-шапки-и-подвала)).
+
+- **Место** задают при создании (`POST …/custom-blocks` с `placement`) и не меняют: `PUT` с другим
+  местом — 400. В базе место пишется в JSON определения, только если оно не «блок» (`storedParts`):
+  прежняя версия после отката читает обычные блоки как раньше, а шапку и подвал (строгая схема) не
+  читает — она их и не знает, у неё стандартные. Миграции нет. На страницу вид места не ставится
+  (`applyCustomBlocks` — ошибка), в каталоге редактора и `list_blocks` его нет. Ключи полей `site`
+  и `page` у определения места заняты.
+- **Выбор** — поле `custom: { key, props } | null` в шапке и в подвале (`header_draft`,
+  `footer_draft` и опубликованные — jsonb, `readHeader`/`readFooter` отбрасывают незнакомое). Ключ —
+  вид (`headerLookOf`, право `header.look`, владелец), `props` — тексты полей вида
+  (`header.edit`, и администратор сайта). Сохранение проверяет, что определение есть (опубликованное
+  или черновик) и место то, публикация — что оно опубликовано и `props` подходят
+  (`customPlaceIssues`). Картинки полей вида должны быть в медиатеке сайта — и при сохранении, и
+  при публикации (`placeMediaIssues`), их нельзя удалить из медиатеки. Выбранный вид не удалить —
+  409. Ответ публикации определения называет в `places` шапку и подвал на сайте, чьи поля больше не
+  подходят (`{ place, field, message }`): там стандартный вид, пока поля не поправят; админка
+  показывает это предупреждением.
+- **Данные шаблона** — две переменные (`placeData`), ссылки уже разрешены, как у стандартной шапки:
+
+  | Переменная | Что в ней |
+  |---|---|
+  | `site.name`, `site.home` | название сайта и `/` |
+  | `site.menu` | пункты `{ label, mobile_label, href, current, new_tab }` — только на опубликованное |
+  | `site.button` | `{ label, mobile_label, href, new_tab }` или nil |
+  | `site.logo` | `{ image, mark, text }`: `image` — для фильтра `image`, знак и подпись — строками |
+  | `site.organization` | `name`, `phone`, `phone_href`, `email`, `email_href`, `address`, `inn`, `ogrn`, `requisites[]`, `socials[]` |
+  | `site.legal` | `policy_href`, `consent_href` (только опубликованные), `cookie_settings` |
+  | `site.year`, `site.copyright` | год сборки и «© 2026 Название» |
+  | `page.slug`, `page.short`, `page.home` | открытая страница; `short` — служебная с короткой шапкой: меню и кнопки нет |
+
+  Пустое — nil: в Liquid пустая строка — истина. Опечатка на любом уровне — `site.manu`,
+  `site.organization.phon`, `item.hreff` в цикле по `site.menu` — ошибка при сохранении (форма
+  данных — `PLACE_SHAPE`),
+  пробный рендер — на образце (`samplePlaceData`: меню из трёх пунктов, кнопка, «Организация»,
+  документы). Шаблон шапки с `site.menu` без `<details>` — совет: без JS меню телефона иначе не
+  открыть.
+- **Корень — разметка Averra.** `<header data-site-header data-custom-block="<ключ>"
+  data-custom-place="header">` (у липкой — `data-sticky`, со сборкой — `data-condense`, на служебной —
+  `data-short`), внутри `div[data-custom-block-root]` с HTML шаблона. Перед шапкой — «К содержимому»
+  и метки прокрутки. CSS определения изолирован тем же `[data-custom-block="ключ"]`: `:scope` — сама
+  шапка. Скрипт определения — тот же механизм: файл на каждой странице, где шапка есть,
+  `blocks` — `[корень]`.
+- **Скрипт шапки Averra** (`header-dom.ts`) работает и со своей: ставит `data-condensed` на корень
+  при прокрутке (CSS шаблона — `:scope[data-condensed] .x`), Esc закрывает любой открытый `<details>`
+  шапки и возвращает фокус на его `summary`, выбор ссылки в нём закрывает его. Скрипты сайта
+  (`header-dom`, `consent-dom`, `player-dom`) не трогают разметку внутри `[data-custom-block-root]`
+  — шаблонов; корень своей шапки и строка документов подвала — разметка Averra, вне этой границы.
+- **Документы.** После шаблона подвала Averra выводит строку `[data-legal-footer]`: политика,
+  согласие (если включено «Ссылка на согласие»), «Настройки cookie» (`data-consent-open` шаблону
+  недоступен). Ссылку, которую шаблон уже вывел видимой, второй раз не пишет (`legalFooterLinks`:
+  настоящий `<a>` с тем же `href` по дереву разбора, с текстом, не скрытый `hidden`, `aria-hidden`,
+  `inert` или `display:none` в `style`; текст «href=…» в абзаце не считается); строка из одной
+  кнопки cookie без JS скрыта. Цвет и шрифт — подвала (`inherit`). Стилизовать строку можно, прятать
+  нельзя: правило CSS подвала по `[data-legal-footer]` с `display: none`, `visibility: hidden`,
+  `opacity: 0` и т.п. — ошибка (`legalFooterCssProblems`). Ссылку шаблона, скрытую классом на части
+  экранов, и скрытие строки общим селектором (`:scope > :last-child`) проверка не видит — за это
+  отвечает автор (см. «Чем платим» в решении).
+- **Откат.** Вид, который не вывести (определение сняли или удалили, поля не подходят, шаблон упал), —
+  на сайте стандартная шапка или подвал по тем же данным, причина — в журнале сборки, в
+  предпросмотре — над ней. Рендерер решает это до вёрстки `<html>` (`settlePlace`): метка липкой
+  шапки, CSS и скрипт своего вида выводятся, только когда он на странице.
+- **Проверка** (`POST …/custom-blocks/check`, MCP `check_custom_block`) рисует шапку и подвал на
+  образце данных сайта, подвал — со строкой документов: в `html` то, что соберёт сайт.
+
+Пример шаблона шапки — заготовка `placeStarter` (`packages/schema/src/custom-place-starter.ts`), с
+ней создаётся новый вид. Меню на широком экране — строкой, на телефоне — в `<details>`; кнопка и
+«Меню» на телефоне — одной строкой, цели касания от 44px, раскрытое меню не длиннее экрана. Липкую
+шапку держите не выше 7rem — это общий отступ якорей сайта, иначе заголовок раздела после перехода
+по пункту уйдёт под шапку:
+
+```liquid
+<div class="bar">
+  <a class="brand" href="{{ site.home }}">
+    {% if site.logo.image %}{{ site.logo.image | image: '160px', 'logo' }}{% endif %}
+    {% if site.logo.mark %}<span class="mark">{{ site.logo.mark }}</span>{% endif %}
+    {% if site.logo.text %}<span class="name">{{ site.logo.text }}</span>{% endif %}
+  </a>
+  {% if page.short %}<a class="back" href="{{ site.home }}">← На главную</a>{% endif %}
+  {% if site.menu.size > 0 %}
+  <nav class="nav" aria-label="Меню сайта">
+    <ul class="list">
+      {% for item in site.menu %}
+      <li><a class="link" href="{{ item.href }}"
+        aria-current="{% if item.current %}page{% else %}false{% endif %}"
+        target="{% if item.new_tab %}_blank{% else %}_self{% endif %}" rel="noopener">{{ item.label }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+  <div class="actions">
+    {% if site.button %}
+    <a class="button" href="{{ site.button.href }}"
+      target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}" rel="noopener">{{ site.button.label }}</a>
+    {% endif %}
+    {% if site.menu.size > 0 %}
+    <details class="menu">
+      <summary class="toggle">Меню</summary>
+      <!-- те же пункты в .panel, подпись — item.mobile_label, если она есть -->
+    </details>
+    {% endif %}
+  </div>
+</div>
+```
+
+```css
+:scope { background: var(--color-background); border-bottom: 1px solid var(--color-border); }
+:scope[data-condensed] .tagline { display: none; }
+.nav { display: none; }
+.link, .panel-link, .button, .toggle { display: inline-flex; align-items: center; min-height: 44px; }
+.bar { position: relative; }
+.panel {
+  position: absolute; inset-inline: 0; top: 100%;
+  max-height: calc(100vh - 8rem); max-height: calc(100dvh - 8rem); overflow: auto;
+}
+@media (min-width: 64rem) {
+  .nav { display: block; }
+  .menu { display: none; }
+}
+```
+
 ## API
 
 Маршруты — [API → Свои блоки](/averra-cms/dev/api/#свои-блоки). Права: `blocks.define` — только
@@ -412,3 +539,10 @@ Liquid» выше).
   `apps/api/src/modules/site-script/site-script.test.ts` (права всех ролей и токена, хранение скрипта
   блока отдельно, снимок), `apps/admin/src/editor/sandbox-document.test.ts` и
   `e2e/tests/custom-js.spec.ts` (CSP, ни одного inline, без JS, изолированный предпросмотр).
+- Шапка и подвал: `packages/schema/src/custom-place.test.ts` (место, выбор, чтение из базы,
+  проверка выбора), `packages/blocks/src/place/place.test.tsx` (данные места, проверка шаблона,
+  корень и откат, строка документов без дублей), `header-dom.test.tsx` (сборка и Esc у своей
+  шапки), `apps/api/src/modules/custom-blocks/places.test.ts` (место не меняется и не на странице,
+  выбор и публикация, права администратора и токена, удаление выбранного, перенос) и
+  `e2e/tests/custom-header.spec.ts` (сайт на 1440 и 375 с JS и без, документы, редактор с черновой
+  шапкой, откат на стандартную).
