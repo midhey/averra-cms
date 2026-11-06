@@ -1,5 +1,6 @@
 import {
   collectMediaRefs,
+  footerMediaIds,
   headerMediaIds,
   MAIN_PAGE_SLUG,
   Organization,
@@ -42,6 +43,7 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
   // Справочник картинок — только тех, что стоят на опубликованных страницах и в настройках:
   // рендереру нужны их варианты, а остальная медиатека снаружи не видна
   const header = publishedHeader(found)
+  const footer = publishedFooter(found)
   // Свои блоки — опубликованные определения: их шаблон и CSS рендерер собирает в страницы. Картинки
   // из их CSS (url(media:…)) — в справочник, как картинки блоков
   const customBlocks = await customBlocksRepo(db).published(siteId)
@@ -50,6 +52,8 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
     ...pages.flatMap((page) => collectMediaRefs(page.content).map((ref) => ref.mediaId)),
     ...settingsMediaIds(settings),
     ...headerMediaIds(header),
+    // Картинки в полях своего вида подвала (у шапки — в headerMediaIds)
+    ...footerMediaIds(footer),
   ]
   return {
     site: {
@@ -57,16 +61,16 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
       name: found.name,
       theme: publishedTheme(found),
       header,
-      footer: publishedFooter(found),
+      footer,
       script: publishedSiteScript(found),
       url: effectiveSiteUrl(settings, siteUrl),
       settings,
     },
     pages,
     customBlocks: Object.fromEntries(
-      customBlocks.map(({ key, title, fields, template, css, script }) => [
+      customBlocks.map(({ key, title, fields, template, css, script, placement }) => [
         key,
-        { key, title, fields, template, css, script },
+        { key, title, fields, template, css, script, placement },
       ]),
     ),
     media: await mediaRepo(db).files(siteId, mediaIds),

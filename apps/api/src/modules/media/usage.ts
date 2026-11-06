@@ -1,9 +1,10 @@
-import { MAIN_PAGE_SLUG, type SiteSettings } from '@averra/schema'
+import { footerMediaIds, headerMediaIds, MAIN_PAGE_SLUG, type SiteSettings } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { type Actor, can, type SiteRole } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pages } from '../../db/schema'
 import { customBlocksRepo } from '../custom-blocks/repo'
+import { footerRepo } from '../footer/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
 
@@ -92,11 +93,17 @@ export async function mediaUsage(
     }
   }
 
+  // Логотип шапки и картинки в полях своих видов шапки и подвала — экран «Шапка и подвал»
   const header = await headerRepo(db).read(siteId)
+  const footer = await footerRepo(db).read(siteId)
+  const chrome = new Set([
+    ...headerMediaIds(header?.draft),
+    ...headerMediaIds(header?.published),
+    ...footerMediaIds(footer?.draft),
+    ...footerMediaIds(footer?.published),
+  ])
   for (const id of ids) {
-    if ([header?.draft, header?.published].some((item) => item?.logo === id)) {
-      add(id, { kind: 'header' })
-    }
+    if (chrome.has(id)) add(id, { kind: 'header' })
   }
 
   const settings = await settingsRepo(db).read(siteId)

@@ -3,13 +3,14 @@ import {
   consentPageHref,
   cookieNoticeView,
   customBlocksCss,
+  FooterSlot,
+  HeaderSlot,
   headerMenuRow,
   headerRowButton,
   headerScriptNeeded,
   LegalFooter,
   Page,
-  SiteFooter,
-  SiteHeader,
+  settlePlace,
   siteFooterView,
   siteHeaderView,
 } from '@averra/blocks'
@@ -81,9 +82,11 @@ const cookies = cookieNoticeView(
   site.settings,
   pages.map((candidate) => candidate.slug),
 )
+const consentHref = consentPageHref(pages.map((candidate) => candidate.slug))
 // Шапка сайта: опубликованная, если страница её не скрыла. Ссылки меню — только на опубликованные
-// страницы и блоки, телефон и адрес — из «SEO → Организация»
-const header = siteHeaderView({
+// страницы и блоки, телефон и адрес — из «SEO → Организация». Своему виду шапки — ещё реквизиты,
+// документы и год: всё это шаблон получает данными
+const headerView = siteHeaderView({
   header: site.header,
   siteName: site.name,
   page,
@@ -92,12 +95,15 @@ const header = siteHeaderView({
     blockIds: candidate.content.blocks.map((block) => block.id),
   })),
   contacts: headerContacts(site.settings.organization),
+  organization: footerContacts(site.settings.organization),
+  legal: { ...cookies.footer, consentHref },
+  year: new Date().getFullYear(),
 })
 // Подвал: опубликованный, если страница его не скрыла (иначе — прежняя полоса с документами).
 // Разделы — пункты опубликованного меню шапки, логотип — её же, реквизиты и контакты — из «SEO →
 // Организация», согласие — ссылкой, если его включили и страница опубликована, форма «Перезвоните
 // мне» шлёт заявку в API с адресом этой страницы. Год — год сборки
-const footer = siteFooterView({
+const footerView = siteFooterView({
   footer: site.footer,
   siteName: site.name,
   page,
@@ -108,13 +114,31 @@ const footer = siteFooterView({
   })),
   contacts: footerContacts(site.settings.organization),
   legal: cookies.footer,
-  consentHref: consentPageHref(pages.map((candidate) => candidate.slug)),
+  consentHref,
   // Стандартной 404 нет в базе — API заявку с неё не примет, поэтому формы на ней нет (null)
   formAction: pages.includes(page) ? formActionFor(site.id, page.slug)(FOOTER_FORM_ID) : null,
   year: new Date().getFullYear(),
 })
+const pageIds = page.content.blocks.map((block) => block.id)
+// Свой вид шапки или подвала не вывелся — на сайте стандартный, причина — в журнале сборки
+const placeError = (message: string) => console.warn(`Страница ${page.slug}: ${message}`)
+// Выводится ли свой вид, решаем до вёрстки <html>: метки липкой шапки, CSS и скрипт своего вида —
+// только когда он на странице, у стандартной на его месте не остаётся чужого
+const headerPlace = headerView
+  ? settlePlace(headerView, 'header', customBlocks, media, pageIds, placeError)
+  : undefined
+const footerPlace = footerView
+  ? settlePlace(footerView, 'footer', customBlocks, media, pageIds, placeError)
+  : undefined
+const header = headerPlace?.view ?? null
+const footer = footerPlace?.view ?? null
+// Свои шапка и подвал — свои блоки с местом: их CSS и скрипт выводятся так же, как у блоков страницы
+const placeKeys = [header?.custom?.key, footer?.custom?.key].filter(
+  (key): key is string => key !== undefined,
+)
+const ownKeys = [...new Set([...placeKeys, ...customBlockKeysOf(page.content)])]
 // CSS своих блоков страницы — один раз на тип, после темы: роли темы в нём уже определены
-const customCss = customBlocksCss(customBlockKeysOf(page.content), customBlocks, media)
+const customCss = customBlocksCss(ownKeys, customBlocks, media)
 // Свой блок, чьи данные не подходят под опубликованное определение, на сайт не попадает: сборка
 // идёт дальше, а причина — в журнале сборки
 const customBlockError = (blockId: string, message: string) =>
@@ -125,7 +149,7 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
 // (lib/scripts.ts). Без них страница работает: контент, ссылки и формы — обычный HTML
 const ownScripts = pageScriptFiles({
   siteScript: site.script,
-  blockKeys: customBlockKeysOf(page.content),
+  blockKeys: ownKeys,
   customBlocks,
 })
 // CSP: на сервере её ставит Caddy из _averra/csp.txt релиза (маршрут csp.ts), в dev — эта страница
@@ -144,9 +168,9 @@ if (import.meta.env.DEV) {
 
 <html
   lang={site.settings.language}
-  data-sticky-header={header?.sticky ? header.layout : undefined}
-  data-sticky-header-row={header?.sticky && headerRowButton(header) ? '' : undefined}
-  data-sticky-header-menu-row={header?.sticky && headerMenuRow(header) ? '' : undefined}
+  data-sticky-header={header?.sticky ? (header.custom ? 'custom' : header.layout) : undefined}
+  data-sticky-header-row={header?.sticky && !header.custom && headerRowButton(header) ? '' : undefined}
+  data-sticky-header-menu-row={header?.sticky && !header.custom && headerMenuRow(header) ? '' : undefined}
 >
   <head>
     <meta charset="utf-8" />
@@ -157,7 +181,17 @@ if (import.meta.env.DEV) {
     <Fragment set:html={jsonLd.join('\n')} />
   </head>
   <body>
-    {header && <SiteHeader view={header} media={media} />}
+    {
+      header && (
+        <HeaderSlot
+          view={header}
+          media={media}
+          definitions={customBlocks}
+          pageIds={pageIds}
+          html={headerPlace?.html}
+        />
+      )
+    }
     <Page
       content={page.content}
       media={media}
@@ -165,7 +199,19 @@ if (import.meta.env.DEV) {
       customBlocks={customBlocks}
       onCustomBlockError={customBlockError}
     />
-    {footer ? <SiteFooter view={footer} media={media} /> : <LegalFooter {...cookies.footer} />}
+    {
+      footer ? (
+        <FooterSlot
+          view={footer}
+          media={media}
+          definitions={customBlocks}
+          pageIds={pageIds}
+          html={footerPlace?.html}
+        />
+      ) : (
+        <LegalFooter {...cookies.footer} />
+      )
+    }
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}

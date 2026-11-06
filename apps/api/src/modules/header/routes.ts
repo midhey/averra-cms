@@ -1,4 +1,5 @@
 import {
+  customPlaceIssues,
   Header,
   headerContacts,
   headerLinkIssues,
@@ -16,6 +17,8 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
+import { placeMediaIssues } from '../custom-blocks/place-media'
+import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
 import { sitesRepo } from '../sites/repo'
 import { headerRepo } from './repo'
@@ -89,9 +92,16 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
               return c.json(forbidden(forbiddenMessages['header.look']), 403)
             }
           }
+          // Свой вид: определение шапки есть (опубликованное или черновик) и поля ему подходят
           const issues = [
             ...(await repo.logoIssues(siteId, header)),
             ...headerLinkIssues(header, await repo.targets(siteId), 'draft'),
+            ...customPlaceIssues(
+              header.custom,
+              'header',
+              await placeDefinitions(db, siteId, 'any'),
+            ),
+            ...(await placeMediaIssues(db, siteId, header.custom)),
           ]
           if (issues.length > 0) {
             return c.json(conflict('Шапку не сохранить: причина — у каждого поля', issues), 409)

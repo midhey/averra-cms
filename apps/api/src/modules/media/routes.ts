@@ -1,6 +1,8 @@
 import {
   fileSizeLimitHint,
   fileTooLargeMessage,
+  footerMediaIds,
+  headerMediaIds,
   imageMimeTypes,
   MAIN_PAGE_SLUG,
   MAX_SVG_BYTES,
@@ -33,6 +35,7 @@ import {
 } from '../../media/svg'
 import { validate } from '../../validate'
 import { customBlocksRepo } from '../custom-blocks/repo'
+import { footerRepo } from '../footer/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
 import { type MediaUsage, mediaRepo } from './repo'
@@ -343,9 +346,22 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
             return c.json(conflict(message, issues), 409)
           }
 
-          // Логотип шапки — на каждой странице сайта (или в её черновике)
+          // Логотип шапки — на каждой странице сайта (или в её черновике). Картинка в полях своего
+          // вида шапки или подвала — там же
           const header = await headerRepo(db).read(siteId)
           const inHeader = [header?.draft, header?.published].some((item) => item?.logo === mediaId)
+          const footer = await footerRepo(db).read(siteId)
+          const inPlace = [
+            ...headerMediaIds(header?.draft),
+            ...headerMediaIds(header?.published),
+            ...footerMediaIds(footer?.draft),
+            ...footerMediaIds(footer?.published),
+          ].includes(mediaId)
+          if (inPlace && !inHeader) {
+            const message =
+              'Картинка — в полях своего вида шапки или подвала. Замените её в разделе «Шапка и подвал», тогда её можно будет удалить'
+            return c.json(conflict(message, [{ path: 'header', message: 'шапка или подвал' }]), 409)
+          }
           if (inHeader) {
             const message =
               'Картинка — логотип шапки сайта. Замените его в разделе «Шапка и подвал», тогда её можно будет удалить'
