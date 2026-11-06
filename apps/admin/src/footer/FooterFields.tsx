@@ -1,4 +1,5 @@
 import {
+  type CustomBlockDraft,
   FOOTER_ABOUT_MAX,
   FOOTER_TEXT_MAX,
   type FooterContacts,
@@ -11,6 +12,8 @@ import {
   footerToneTitles,
 } from '@averra/schema'
 import { Link } from '@tanstack/react-router'
+import type { Widgets } from '../forms/SchemaForm'
+import { CustomPlaceFields } from '../header/CustomPlaceFields'
 import { Checkbox, TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { Section } from '../ui/Screen'
@@ -40,6 +43,12 @@ type FooterFieldsProps = {
   readOnly: boolean
   /** Вид подвала (раскладка, фон, линия, шрифт текста) — только владелец (header.look) */
   lookReadOnly: boolean
+  /** Свои блоки с местом «подвал»: из них выбирают свой вид */
+  placeDefinitions: readonly CustomBlockDraft[]
+  /** Виджеты полей своего вида: картинка из медиатеки */
+  widgets: Widgets
+  /** Владелец: делает свои блоки */
+  canDefine: boolean
 }
 
 const toneHints: Record<FooterTone, string> = {
@@ -71,8 +80,48 @@ export function FooterFields(props: FooterFieldsProps) {
   const setCallback = (key: keyof typeof callback, value: string) =>
     editor.change({ ...form, callback: { ...callback, [key]: value } }, `callback.${key}`)
 
+  const custom = (
+    <CustomPlaceFields
+      place="footer"
+      value={form.custom}
+      definitions={props.placeDefinitions}
+      errors={errors}
+      widgets={props.widgets}
+      readOnly={readOnly}
+      lookReadOnly={lookReadOnly}
+      canDefine={props.canDefine}
+      onChange={(next) => editor.change({ ...form, custom: next }, 'custom.key')}
+    />
+  )
+  // Свой вид: настройки стандартного подвала на него не действуют, кроме ссылки на согласие —
+  // её Averra выводит строкой документов, если шаблон её не вывел
+  if (form.custom) {
+    return (
+      <div className={styles.panel}>
+        {custom}
+        <Section title="Документы" card>
+          <Checkbox
+            label="Ссылка на согласие на обработку данных"
+            hint={consentNote(props.consent, form.consent)}
+            checked={form.consent}
+            disabled={readOnly}
+            onChange={(event) => editor.change({ ...form, consent: event.target.checked })}
+          />
+          <p className={styles.note}>
+            Ссылки «Политика конфиденциальности» и «Настройки cookie» есть в любом виде.
+          </p>
+        </Section>
+        <InlineAlert tone="info">
+          {props.hiddenOn ? `${props.hiddenOn}. ` : ''}Скрыть подвал на отдельной странице — в
+          редакторе страницы: «SEO» → «Подвал сайта». Ссылки на документы там останутся.
+        </InlineAlert>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.panel}>
+      {custom}
       <Section title="Вид подвала" card>
         <SegmentedControl
           legend="Вид подвала"

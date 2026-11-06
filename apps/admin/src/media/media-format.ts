@@ -118,7 +118,7 @@ export function mediaUseText(use: MediaUse) {
       return `Страница «${use.title}» — ${state}`
     }
     case 'header':
-      return 'Логотип шапки'
+      return 'Шапка и подвал'
     case 'seo':
       return `SEO: ${use.roles.join(', ')}`
     case 'block':
@@ -140,7 +140,7 @@ export function deleteBlockedText(usage: readonly MediaUse[]) {
     const onSite = pages.some((use) => use.state !== 'draft')
     places.push(onSite ? 'со страниц (и опубликуйте их)' : 'со страниц')
   }
-  if (usage.some((use) => use.kind === 'header')) places.push('из шапки')
+  if (usage.some((use) => use.kind === 'header')) places.push('из «Шапки и подвала»')
   if (usage.some((use) => use.kind === 'seo')) places.push('из настроек SEO')
   if (usage.some((use) => use.kind === 'block')) places.push('из своего блока')
   const list =

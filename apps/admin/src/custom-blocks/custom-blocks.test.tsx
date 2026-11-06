@@ -19,6 +19,7 @@ import {
   importConflicts,
   newField,
   publishedDefinitions,
+  publishNotice,
   readBlocksFile,
   resolutionsOf,
   suggestKey,
@@ -53,6 +54,14 @@ describe('свои блоки в каталоге редактора', () => {
       'custom:tariffs',
     ])
     expect(filterCatalog(entries, 'sales', 'наклейк').map((entry) => entry.type)).toEqual([
+      'custom:tariffs',
+    ])
+  })
+
+  it('свои виды шапки и подвала в каталог не попадают: на страницу их не ставят', () => {
+    const header = starterCustomBlock('my-header', 'Моя шапка', 'header')
+    const footer = starterCustomBlock('my-footer', 'Мой подвал', 'footer')
+    expect(customCatalog([tariffs, header, footer]).map((entry) => entry.type)).toEqual([
       'custom:tariffs',
     ])
   })
@@ -256,6 +265,23 @@ describe('конструктор полей', () => {
 })
 
 describe('форматы своих блоков', () => {
+  it('после публикации: шапка с неподходящими полями — предупреждение, а не «успех»', () => {
+    expect(publishNotice('block', { affected: [] })).toEqual({
+      tone: 'success',
+      text: 'Опубликовано: блок есть в каталоге редактора, сайт пересобирается',
+    })
+    expect(publishNotice('header', { affected: [], places: [] }).text).toMatch(
+      /вид можно выбрать в «Шапка и подвал»/,
+    )
+    const notice = publishNotice('header', {
+      affected: [],
+      places: [{ place: 'header', field: 'tagline', message: 'ожидалось число' }],
+    })
+    expect(notice.tone).toBe('warning')
+    expect(notice.text).toContain('Шапка сайта: поля своего вида не подходят (поле «tagline»)')
+    expect(notice.text).toContain('На сайте стандартный вид')
+  })
+
   it('ключ из названия и свободный ключ', () => {
     expect(suggestKey('Тарифы с наклейкой')).toBe('tarify-s-nakleykoy')
     expect(suggestKey('123')).toBe('block')

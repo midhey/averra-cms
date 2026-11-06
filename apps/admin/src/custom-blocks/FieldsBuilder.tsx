@@ -5,7 +5,7 @@ import {
   type CustomFieldInput,
   type CustomFieldType,
 } from '@averra/schema'
-import { useRef, useState } from 'react'
+import { createContext, useContext, useRef, useState } from 'react'
 import type { FieldErrors } from '../forms/field-errors'
 import { Button, IconButton } from '../ui/Button'
 import { useConfirm } from '../ui/Confirm'
@@ -31,7 +31,15 @@ type BuilderProps = {
   /** Полей во всём блоке: на вложенных уровнях его считает корень */
   total?: number
   disabled?: boolean
+  /**
+   * Поля своего вида шапки или подвала: их заполняют в «Шапка и подвал», а не в редакторе
+   * страницы — так и подписываем. Задаётся у корня, вложенные уровни берут его из контекста
+   */
+  place?: boolean
 }
+
+/** Где человек видит подсказку поля: у блока страницы — в редакторе, у шапки — в своём разделе */
+const HintWhere = createContext('Под полем в редакторе страницы')
 
 /** Полей во всём блоке, с вложенными: предел общий, а не только на уровень */
 const countFields = (fields: readonly Field[]): number =>
@@ -76,6 +84,7 @@ export function FieldsBuilder({
   depth = 1,
   total,
   disabled,
+  place,
 }: BuilderProps) {
   const all = total ?? countFields(fields)
   const atLevel = fields.length >= CUSTOM_BLOCK_LIMITS.fieldsPerLevel
@@ -90,7 +99,7 @@ export function FieldsBuilder({
     keys.remove(index)
     onChange(fields.toSpliced(index, 1))
   }
-  return (
+  const builder = (
     <div className={styles.builder}>
       {errors[path] && <p className={styles.error}>{errors[path]}</p>}
       {fields.length > 0 && (
@@ -134,6 +143,14 @@ export function FieldsBuilder({
       )}
     </div>
   )
+  if (place === undefined) return builder
+  return (
+    <HintWhere.Provider
+      value={place ? 'Под полем в «Шапка и подвал»' : 'Под полем в редакторе страницы'}
+    >
+      {builder}
+    </HintWhere.Provider>
+  )
 }
 
 type CardProps = {
@@ -164,6 +181,7 @@ function FieldCard({
   onRemove,
 }: CardProps) {
   const confirm = useConfirm()
+  const hintWhere = useContext(HintWhere)
   const arrows = useMoveButtons(index, count, onMove)
   const record = field as FieldRecord
   const error = (key: string) => errors[`${path}.${key}`]
@@ -251,7 +269,7 @@ function FieldCard({
           />
           <TextInput
             label="Подсказка"
-            hint="Под полем в редакторе страницы"
+            hint={hintWhere}
             value={field.hint ?? ''}
             error={error('hint')}
             onChange={(event) => set('hint', event.target.value || undefined)}

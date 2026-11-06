@@ -1,6 +1,8 @@
 import {
   BLOCK_CATEGORIES,
   type CustomBlockDraftInput,
+  CustomBlockPlacement,
+  customBlockPlacementTitles,
   customBlockType,
   NewCustomBlock,
 } from '@averra/schema'
@@ -179,14 +181,22 @@ export function CustomBlocksScreen() {
                 key: 'type',
                 header: 'Тип на странице',
                 mono: true,
-                cell: (block) => customBlockType(block.key),
+                // Шапку и подвал на страницу не ставят: типа на странице у них нет
+                cell: (block) =>
+                  (block.draft ?? block.published)?.placement === 'block'
+                    ? customBlockType(block.key)
+                    : '—',
               },
               {
                 key: 'category',
                 header: 'Раздел',
                 cell: (block) => {
-                  const category = (block.draft ?? block.published)?.category
-                  return category ? BLOCK_CATEGORIES[category] : '—'
+                  const definition = block.draft ?? block.published
+                  // Шапка и подвал — не в каталоге: вместо раздела — место
+                  if (definition && definition.placement !== 'block') {
+                    return customBlockPlacementTitles[definition.placement]
+                  }
+                  return definition ? BLOCK_CATEGORIES[definition.category] : '—'
                 },
               },
               {
@@ -239,17 +249,18 @@ function CreateDialog({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
+  const [placement, setPlacement] = useState<CustomBlockPlacement>('block')
   const [key, setKey] = useState('')
   const [keyEdited, setKeyEdited] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string | undefined>>({})
   const [error, setError] = useState<string>()
   const shownKey = keyEdited ? key : suggestKey(title)
-  const parsed = NewCustomBlock.safeParse({ key: shownKey, title })
+  const parsed = NewCustomBlock.safeParse({ key: shownKey, title, placement })
   const errors = { ...(attempted ? zodFieldErrors(parsed.error) : {}), ...serverErrors }
 
   const create = useMutation({
-    mutationFn: async (body: { key: string; title: string }) => {
+    mutationFn: async (body: { key: string; title: string; placement: CustomBlockPlacement }) => {
       const res = await api.sites[':siteId']['custom-blocks'].$post({
         param: { siteId },
         json: body,
@@ -282,9 +293,21 @@ function CreateDialog({
       open={open}
       onClose={onClose}
       title="Новый свой блок"
-      description="Блок начнётся с заголовка и текста — поля, шаблон и CSS поменяете дальше."
+      description="Блок начнётся с заготовки — поля, шаблон и CSS поменяете дальше."
     >
       <form className={formClassName} onSubmit={onSubmit} noValidate>
+        <SegmentedControl
+          legend="Где блок"
+          name="placement"
+          wrap
+          options={CustomBlockPlacement.options.map((value) => ({
+            value,
+            label: customBlockPlacementTitles[value],
+          }))}
+          value={placement}
+          onChange={setPlacement}
+        />
+        <p className={styles.note}>{placementHints[placement]}</p>
         <TextInput
           label="Название"
           hint="Его видят администратор сайта и редактор в каталоге блоков"
@@ -319,6 +342,15 @@ function CreateDialog({
       </form>
     </Dialog>
   )
+}
+
+/** Что значит место — подсказка под выбором при создании */
+const placementHints: Record<CustomBlockPlacement, string> = {
+  block: 'Ставится на страницы в редакторе. Заготовка — заголовок и текст.',
+  header:
+    'Свой вид шапки на весь сайт: меню, кнопку, логотип и «Организацию» шаблон получает данными. Выбирают его в «Шапка и подвал». Место после создания не меняется.',
+  footer:
+    'Свой вид подвала на весь сайт. Ссылки на политику, согласие и «Настройки cookie» Averra допишет сама. Выбирают его в «Шапка и подвал». Место после создания не меняется.',
 }
 
 const CHOICES = [
