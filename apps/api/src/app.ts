@@ -29,6 +29,7 @@ import { revisionsRoutes } from './modules/revisions/routes'
 import { iconsRoutes } from './modules/settings/icons'
 import { settingsRoutes } from './modules/settings/routes'
 import { FALLBACK_PREFIX, siteRoutes } from './modules/site/routes'
+import { siteScriptRoutes } from './modules/site-script/routes'
 import { sitesRoutes } from './modules/sites/routes'
 import { statusRoutes } from './modules/status/routes'
 import { type HostStatus, noHostStatus } from './modules/status/service'
@@ -186,6 +187,8 @@ export function createApp(deps: AppDeps) {
       '/sites/:siteId/custom-blocks',
       customBlocksRoutes({ db, publisher: deps.publisher, log }),
     )
+    // Свой JS на весь сайт и домены для CSP: черновик и публикация (modules/site-script)
+    .route('/sites/:siteId/script', siteScriptRoutes({ db, publisher: deps.publisher, log }))
     .route('/sites/:siteId/icons', iconsRoutes({ db, storage: deps.storage, icons: deps.icons }))
     // Карточка из заголовка для соцсетей: открытая — сборке сайта, предпросмотр — админке
     .route('/sites/:siteId', ogRoutes({ db, siteUrl: deps.siteUrl, cards: deps.ogCards }))

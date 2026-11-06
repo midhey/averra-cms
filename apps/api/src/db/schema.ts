@@ -50,6 +50,11 @@ export const sites = pgTable(
     // NULL у опубликованного — на сайте прежняя полоса с политикой и «Настройками cookie»
     footerPublished: jsonb().$type<Record<string, unknown>>(),
     footerDraft: jsonb().$type<Record<string, unknown>>(),
+    // Скрипт сайта (схема SiteScript, читает readSiteScript): свой JS владельца на каждой странице и
+    // домены для CSP. Опубликованный — на сайте, черновик — на экране «Скрипт сайта». NULL у
+    // опубликованного — скрипта нет; у черновика — такой же, как опубликованный
+    scriptPublished: jsonb().$type<Record<string, unknown>>(),
+    scriptDraft: jsonb().$type<Record<string, unknown>>(),
     // Устарело: адреса уведомлений о заявках живут в notification_recipients (модуль уведомлений,
     // миграция 0016 перенесла их туда). Колонку пишет модуль, пока прежняя версия API может
     // читать её при откате; удаляется вторым шагом
@@ -90,6 +95,14 @@ export const sites = pgTable(
     check(
       'sites_footer_draft_object',
       sql`${table.footerDraft} IS NULL OR jsonb_typeof(${table.footerDraft}) = 'object'`,
+    ),
+    check(
+      'sites_script_published_object',
+      sql`${table.scriptPublished} IS NULL OR jsonb_typeof(${table.scriptPublished}) = 'object'`,
+    ),
+    check(
+      'sites_script_draft_object',
+      sql`${table.scriptDraft} IS NULL OR jsonb_typeof(${table.scriptDraft}) = 'object'`,
     ),
   ],
 )
@@ -769,6 +782,10 @@ export const customBlocks = pgTable(
     draft: jsonb().$type<Record<string, unknown>>().notNull(),
     // NULL — блок ещё не публиковали: на страницу его не поставить
     published: jsonb().$type<Record<string, unknown>>(),
+    // Скрипт блока — отдельно от определения (draft, published): прежняя версия после отката читает
+    // определение без него (оно строгое) и выводит блок без скрипта, а не теряет его. '' — нет
+    scriptDraft: text().notNull().default(''),
+    scriptPublished: text().notNull().default(''),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     publishedAt: timestamp({ withTimezone: true }),

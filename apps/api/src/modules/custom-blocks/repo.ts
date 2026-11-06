@@ -13,12 +13,40 @@ import { customBlockRevisions, customBlocks, pages, users } from '../../db/schem
  * Определение из базы. Схема могла стать строже после обновления Averra — тогда null: такое
  * определение не попадёт на страницы, пока владелец не поправит и не опубликует его снова
  */
-export function readDefinition(value: unknown): CustomBlockDraft | null {
-  const result = CustomBlockDraftSchema.safeParse(value)
+export function readDefinition(value: unknown, script?: string): CustomBlockDraft | null {
+  // script — из своей колонки (у черновика и опубликованного); у версии из истории скрипт лежит в
+  // самом JSON, тогда его не передают
+  const stored =
+    script === undefined || value === null || typeof value !== 'object'
+      ? value
+      : { ...value, script }
+  const result = CustomBlockDraftSchema.safeParse(stored)
   return result.success ? result.data : null
 }
 
 type Row = typeof customBlocks.$inferSelect
+
+/** Черновик блока: определение и скрипт из своей колонки */
+export const draftOf = (row: Pick<Row, 'draft' | 'scriptDraft'>) =>
+  readDefinition(row.draft, row.scriptDraft)
+
+/** Опубликованное определение со скриптом. null — блок не публиковали или схема не подходит */
+export const publishedOf = (row: Pick<Row, 'published' | 'scriptPublished'>) =>
+  row.published ? readDefinition(row.published, row.scriptPublished) : null
+
+/**
+ * Определение для записи: JSON без скрипта (его прочитает и прежняя версия после отката — оно
+ * строгое) и скрипт отдельно, в колонку script_draft. Так откат выводит блок без скрипта, а не
+ * теряет его целиком
+ */
+export function storedParts(draft: CustomBlockDraft) {
+  const { script, ...definition } = draft
+  return { definition, script }
+}
+
+/** Версия в историю: скрипт — в JSON версии и только если он есть */
+const revisionOf = (definition: Record<string, unknown>, script: string) =>
+  script === '' ? definition : { ...definition, script }
 
 /** Свой блок для админки: черновик, опубликованное, есть ли разница и время */
 export type CustomBlockView = {
@@ -32,14 +60,16 @@ export type CustomBlockView = {
 }
 
 export const viewOf = (row: Row): CustomBlockView => {
-  const draft = readDefinition(row.draft)
-  const published = row.published ? readDefinition(row.published) : null
+  const draft = draftOf(row)
+  const published = publishedOf(row)
   return {
     key: row.key,
     draft,
     published,
     unpublished:
-      row.published === null || JSON.stringify(row.draft) !== JSON.stringify(row.published),
+      row.published === null ||
+      JSON.stringify(row.draft) !== JSON.stringify(row.published) ||
+      row.scriptDraft !== row.scriptPublished,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     publishedAt: row.publishedAt?.toISOString() ?? null,
@@ -75,21 +105,25 @@ export function customBlocksRepo(db: Db) {
     /** Опубликованные определения — для проверки страниц, снимка рендерера и MCP */
     async published(siteId: string) {
       const rows = await db
-        .select({ published: customBlocks.published })
+        .select({
+          published: customBlocks.published,
+          scriptPublished: customBlocks.scriptPublished,
+        })
         .from(customBlocks)
         .where(and(eq(customBlocks.siteId, siteId), isNotNull(customBlocks.published)))
         .orderBy(asc(customBlocks.key))
       return rows.flatMap((row) => {
-        const definition = readDefinition(row.published)
+        const definition = publishedOf(row)
         return definition ? [definition] : []
       })
     },
 
     /** Новый блок — черновик. Ключ занят — undefined (уникальный индекс, без гонки) */
     async create(siteId: string, draft: CustomBlockDraft) {
+      const { definition, script } = storedParts(draft)
       const [row] = await db
         .insert(customBlocks)
-        .values({ siteId, key: draft.key, draft })
+        .values({ siteId, key: draft.key, draft: definition, scriptDraft: script })
         .onConflictDoNothing({ target: [customBlocks.siteId, customBlocks.key] })
         .returning()
       return row
@@ -97,9 +131,10 @@ export function customBlocksRepo(db: Db) {
 
     /** Черновик существующего блока. Опубликованное не меняется. Нет блока — undefined */
     async saveDraft(siteId: string, draft: CustomBlockDraft) {
+      const { definition, script } = storedParts(draft)
       const [row] = await db
         .update(customBlocks)
-        .set({ draft, updatedAt: new Date() })
+        .set({ draft: definition, scriptDraft: script, updatedAt: new Date() })
         .where(blockIs(siteId, draft.key))
         .returning()
       return row
@@ -119,13 +154,13 @@ export function customBlocksRepo(db: Db) {
           .where(blockIs(siteId, checked.key))
           .for('update')
         if (!row) return undefined
-        if (JSON.stringify(readDefinition(row.draft)) !== JSON.stringify(checked)) {
+        if (JSON.stringify(draftOf(row)) !== JSON.stringify(checked)) {
           return { changed: true as const, row: undefined }
         }
         const publishedAt = new Date()
         const [saved] = await tx
           .update(customBlocks)
-          .set({ published: row.draft, publishedAt })
+          .set({ published: row.draft, scriptPublished: row.scriptDraft, publishedAt })
           .where(eq(customBlocks.id, row.id))
           .returning()
         if (!saved) throw new Error('База не вернула свой блок после публикации')
@@ -137,7 +172,7 @@ export function customBlocksRepo(db: Db) {
           siteId,
           blockId: row.id,
           version: (last?.version ?? 0) + 1,
-          definition: row.draft,
+          definition: revisionOf(row.draft, row.scriptDraft),
           publishedBy: actor.kind === 'user' ? actor.user.id : null,
           publishedAt,
         })
@@ -305,13 +340,17 @@ export function customBlocksRepo(db: Db) {
           if (action === 'skip') {
             result.skipped.push(key)
           } else if (action === 'replace') {
+            const { definition, script } = storedParts(block)
             await tx
               .update(customBlocks)
-              .set({ draft: block, updatedAt: new Date() })
+              .set({ draft: definition, scriptDraft: script, updatedAt: new Date() })
               .where(blockIs(siteId, key))
             result.replaced.push(key)
           } else {
-            await tx.insert(customBlocks).values({ siteId, key, draft: { ...block, key } })
+            const { definition, script } = storedParts({ ...block, key })
+            await tx
+              .insert(customBlocks)
+              .values({ siteId, key, draft: definition, scriptDraft: script })
             result.created.push(key)
           }
         }

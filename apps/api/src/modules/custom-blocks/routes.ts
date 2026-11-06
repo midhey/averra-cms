@@ -29,7 +29,7 @@ import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
 import { mediaRepo } from '../media/repo'
-import { customBlocksRepo, readDefinition, viewOf } from './repo'
+import { customBlocksRepo, draftOf, publishedOf, readDefinition, viewOf } from './repo'
 import { cssMediaIds, definitionProblems, problemIssues, sameDefinition } from './service'
 
 const changedDraft =
@@ -126,7 +126,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
       .get('/export', validate('param', SiteParams), site('blocks.define'), async (c) => {
         const { siteId } = c.req.valid('param')
         const blocks = (await repo.list(siteId)).flatMap((row) => {
-          const draft = readDefinition(row.draft)
+          const draft = draftOf(row)
           return draft ? [draft] : []
         })
         const file = {
@@ -249,7 +249,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           const { draft: seen } = c.req.valid('json')
           const found = await repo.find(siteId, key)
           if (!found) return c.json(notFound('Своего блока нет'), 404)
-          const draft = readDefinition(found.draft)
+          const draft = draftOf(found)
           if (!draft || !sameDefinition(draft, seen)) {
             return c.json(conflict(changedDraft), 409)
           }
@@ -258,7 +258,7 @@ export function customBlocksRoutes({ db, publisher, log }: Deps) {
           const result = await repo.publish(siteId, draft, c.var.actor)
           if (!result) return c.json(notFound('Своего блока нет'), 404)
           if (!result.row) return c.json(conflict(changedDraft), 409)
-          const definition = readDefinition(result.row.published)
+          const definition = publishedOf(result.row)
           const affected = definition
             ? (await repo.publishedPagesWith(siteId, key)).flatMap((page) => {
                 const content = PageContent.safeParse(page.content)

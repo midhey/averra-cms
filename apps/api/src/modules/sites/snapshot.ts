@@ -13,6 +13,7 @@ import { publishedHeader } from '../header/read'
 import { mediaRepo } from '../media/repo'
 import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
+import { publishedSiteScript } from '../site-script/repo'
 import { publishedTheme } from '../theme/read'
 import { sitesRepo } from './repo'
 
@@ -24,8 +25,9 @@ import { sitesRepo } from './repo'
  * главной, поэтому до публикации главной в снимке её нет. Шапка — опубликованная (null — её не
  * публиковали, на сайте шапки нет); телефон и адрес в неё рендерер берёт из той же организации.
  * Подвал — опубликованный (null — на сайте прежняя полоса с документами); реквизиты, контакты и
- * соцсети в него — тоже из организации. Свои блоки — опубликованные определения (шаблон и CSS и так
- * на сайте в собранном виде).
+ * соцсети в него — тоже из организации. Свои блоки — опубликованные определения (шаблон, CSS и
+ * скрипт и так на сайте в собранном виде). Скрипт сайта — опубликованный: код и домены для CSP
+ * (их видно в заголовке ответа сайта).
  * siteUrl — адрес установки (SITE_URL),
  * если своего в настройках нет. undefined — сайта нет
  */
@@ -56,14 +58,15 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
       theme: publishedTheme(found),
       header,
       footer: publishedFooter(found),
+      script: publishedSiteScript(found),
       url: effectiveSiteUrl(settings, siteUrl),
       settings,
     },
     pages,
     customBlocks: Object.fromEntries(
-      customBlocks.map(({ key, title, fields, template, css }) => [
+      customBlocks.map(({ key, title, fields, template, css, script }) => [
         key,
-        { key, title, fields, template, css },
+        { key, title, fields, template, css, script },
       ]),
     ),
     media: await mediaRepo(db).files(siteId, mediaIds),

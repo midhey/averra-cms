@@ -1,3 +1,4 @@
+import { readSiteScript } from '@averra/schema'
 import { and, asc, eq } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { media, pageRevisions, pages, sites } from '../../db/schema'
@@ -8,6 +9,7 @@ import { draftFooter, publishedFooter } from '../footer/read'
 import { draftHeader, publishedHeader } from '../header/read'
 import { type ExportCursor, LEADS_EXPORT_BATCH, leadsRepo } from '../leads/repo'
 import { readStoredSettings } from '../settings/read'
+import { publishedSiteScript } from '../site-script/repo'
 import { draftTheme, publishedTheme } from '../theme/read'
 import type { ZipEntry } from './zip'
 
@@ -39,7 +41,9 @@ site.json — все данные сайта (формат averra-site-export, �
               accent, линия divider, строка о компании about, разделы из меню sections, свой
               текст text и его шрифт textFont, «© и год» copyright, ссылка на согласие consent,
               логотип шапки brand, тексты формы «Перезвоните мне» callback; null — подвал не
-              публиковали) и его черновик (footerDraft); настройки заявок (leadSettings:
+              публиковали) и его черновик (footerDraft); скрипт сайта (script: свой JS на каждой
+              странице script и домены для CSP origins) и его черновик (scriptDraft; null —
+              такой же, как на сайте); настройки заявок (leadSettings:
               recipients — адреса почты для заявок, notificationRecipients — все получатели
               уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
               и SEO (settings:
@@ -48,7 +52,7 @@ site.json — все данные сайта (формат averra-site-export, �
   customBlocks — свои блоки сайта: ключ (key; на странице блок с типом custom:<ключ>),
               черновик (draft) и опубликованное определение (published; null — не
               публиковали): название, описание, поля (fields), шаблон Liquid (template), CSS (css)
-              и пример данных (example). Файл для загрузки на другую установку — «Свои блоки →
+              и пример данных (example); скрипт блока — scriptDraft и scriptPublished ('' — нет). Файл для загрузки на другую установку — «Свои блоки →
               Выгрузить» в админке;
   pages     — страницы: адрес (slug), черновик (draft) и опубликованная версия (published)
               с заголовками; блоки страницы — JSON по схемам блоков Averra;
@@ -160,6 +164,9 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       // Подвал на сайте и его черновик
       footer: publishedFooter(site),
       footerDraft: site.footerDraft ? draftFooter(site) : null,
+      // Свой JS на всех страницах и домены для CSP: на сайте и черновик
+      script: publishedSiteScript(site),
+      scriptDraft: site.scriptDraft ? readSiteScript(site.scriptDraft) : null,
       createdAt: site.createdAt.toISOString(),
       leadSettings: {
         recipients: recipients
@@ -176,6 +183,8 @@ export async function* siteDataEntries(source: ExportSource): AsyncGenerator<Zip
       key: row.key,
       draft: row.draft,
       published: row.published,
+      scriptDraft: row.scriptDraft,
+      scriptPublished: row.scriptPublished,
       publishedAt: iso(row.publishedAt),
     })),
   }
