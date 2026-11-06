@@ -19,6 +19,7 @@ export type SiteSectionId =
   | 'theme'
   | 'header'
   | 'blocks'
+  | 'script'
   | 'media'
   | 'leads'
   | 'notifications'
@@ -36,7 +37,7 @@ export type SiteSection = {
 /**
  * Разделы сайта установки. «Заявки» — только тем, кому API отдаёт их число: владелец и
  * администратор сайта (у редактора и токена newLeads — null), «Уведомления», «Шапка и подвал» и
- * «SEO и аналитика» — им же. «Тема» и «Свои блоки» — только владельцу. Редактору — страницы,
+ * «SEO и аналитика» — им же. «Тема», «Свои блоки» и «Скрипт сайта» — только владельцу. Редактору — страницы,
  * медиатека и настройки сайта
  */
 export function siteSections(site: { access: SiteAccess; newLeads: number | null }): SiteSection[] {
@@ -50,6 +51,7 @@ export function siteSections(site: { access: SiteAccess; newLeads: number | null
   }
   if (canDefineBlocks(site.access)) {
     sections.push({ id: 'blocks', label: 'Свои блоки', icon: 'blocks' })
+    sections.push({ id: 'script', label: 'Скрипт сайта', icon: 'script' })
   }
   sections.push({ id: 'media', label: 'Медиатека', icon: 'media' })
   if (canSeeLeads(site.access) && site.newLeads !== null) {

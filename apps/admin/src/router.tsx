@@ -38,6 +38,7 @@ import {
   siteIdOf,
   siteNotificationsQuery,
   siteQuery,
+  siteScriptQuery,
   siteSettingsQuery,
   statusQuery,
   themeQuery,
@@ -62,6 +63,7 @@ import { PagesScreen } from './screens/PagesScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
 import { SeoScreen } from './screens/SeoScreen'
+import { SiteScriptScreen } from './screens/SiteScriptScreen'
 import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
 import { ThemeScreen } from './screens/ThemeScreen'
@@ -291,6 +293,24 @@ const customBlockRoute = createRoute({
   component: CustomBlockScreen,
 })
 
+// Скрипт сайта — владельцу (как свои блоки). Главная и свои блоки — для предпросмотра со скриптами
+const siteScriptRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/script',
+  loader: async ({ context: { queryClient } }) => {
+    const { siteId } = await loadSite(queryClient)
+    await Promise.all([
+      queryClient.fetchQuery(siteScriptQuery(siteId)),
+      Promise.allSettled([
+        queryClient.ensureQueryData(mediaQuery(siteId)),
+        queryClient.ensureQueryData(customBlocksQuery(siteId)),
+      ]),
+    ])
+  },
+  gcTime: 0,
+  component: SiteScriptScreen,
+})
+
 const mediaRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/media',
@@ -507,6 +527,7 @@ const routeTree = rootRoute.addChildren([
     themeRoute,
     headerRoute,
     customBlocksRoute,
+    siteScriptRoute,
     customBlockRoute,
     mediaRoute,
     leadsRoute.addChildren([leadsIndexRoute, leadRoute]),

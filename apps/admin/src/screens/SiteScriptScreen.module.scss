@@ -1,0 +1,95 @@
+@use "@averra/ui" as ui;
+
+// Две колонки, как у своего блока: код слева, предпросмотр справа; не хватает места — под кодом
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.settings {
+  display: flex;
+  flex: 1 1 ui.rem(480);
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: ui.rem(720);
+
+  @include ui.breakpoint-down(small) {
+    max-width: none;
+  }
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.ok {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-success-text);
+}
+
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.problem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--font-size-small);
+}
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--color-background);
+  border-top: ui.rem(1) solid var(--color-border);
+}
+
+.preview {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex: 999 1 ui.rem(420);
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+
+  @include ui.breakpoint-down(small) {
+    position: static;
+  }
+}
+
+.previewBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.frame {
+  height: min(ui.rem(640), calc(100vh - ui.rem(64)));
+  min-height: ui.rem(360);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+}

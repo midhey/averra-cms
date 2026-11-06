@@ -31,6 +31,7 @@ export const queryKeys = {
   header: (siteId: string) => ['sites', siteId, 'header'] as const,
   footer: (siteId: string) => ['sites', siteId, 'footer'] as const,
   customBlocks: (siteId: string) => ['sites', siteId, 'custom-blocks'] as const,
+  siteScript: (siteId: string) => ['sites', siteId, 'script'] as const,
   customBlock: (siteId: string, key: string) => ['sites', siteId, 'custom-blocks', key] as const,
   customBlockRevisions: (siteId: string, key: string) =>
     ['sites', siteId, 'custom-blocks', key, 'revisions'] as const,
@@ -89,6 +90,17 @@ export const customBlocksQuery = (siteId: string) =>
     queryKey: queryKeys.customBlocks(siteId),
     queryFn: async () => {
       const res = await api.sites[':siteId']['custom-blocks'].$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
+/** Скрипт сайта: черновик, что на сайте, замечания к черновику */
+export const siteScriptQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.siteScript(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].script.$get({ param: { siteId } })
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },

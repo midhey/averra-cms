@@ -10,7 +10,7 @@ export type CodeTokenKind =
   | 'property'
   | 'value'
 
-export type CodeLanguage = 'liquid' | 'css'
+export type CodeLanguage = 'liquid' | 'css' | 'js'
 
 // Подсветка — подсказка глазам, а не разбор: ошибки кода ищут проверки при сохранении. Поэтому
 // хватает одного регулярного выражения на язык, а редкие случаи (кавычки в тексте) красятся как
@@ -34,12 +34,28 @@ const CSS: [RegExp, CodeTokenKind][] = [
   [/var\(--[\w-]+\)|#[0-9a-fA-F]{3,8}\b|-?\d*\.?\d+(?:[a-z%]+)?/y, 'value'],
 ]
 
+// Скрипт своего блока и сайта: комментарии, строки, ключевые слова (как at-rule) и числа
+const JS: [RegExp, CodeTokenKind][] = [
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//y, 'comment'],
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\[\s\S])*`/y, 'string'],
+  [
+    /\b(?:const|let|var|function|return|if|else|for|of|in|while|async|await|new|class|try|catch|finally|throw|typeof|null|undefined|true|false|this)\b/y,
+    'atrule',
+  ],
+  [/\b\d+(?:\.\d+)?\b/y, 'value'],
+]
+const RULES: Record<CodeLanguage, [RegExp, CodeTokenKind][]> = {
+  liquid: LIQUID_HTML,
+  css: CSS,
+  js: JS,
+}
+
 /**
  * Код по кускам для подсветки: идём по строке, на каждом месте пробуем правила языка по порядку;
  * не подошло ни одно — символ остаётся простым текстом
  */
 export function highlightCode(code: string, language: CodeLanguage): CodeToken[] {
-  const rules = language === 'css' ? CSS : LIQUID_HTML
+  const rules = RULES[language]
   const tokens: CodeToken[] = []
   let plain = ''
   let index = 0

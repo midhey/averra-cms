@@ -35,6 +35,7 @@ const siteLinks = {
   theme: { to: '/theme', exact: false },
   header: { to: '/header', exact: false },
   blocks: { to: '/blocks', exact: false },
+  script: { to: '/script', exact: false },
   media: { to: '/media', exact: false },
   leads: { to: '/leads', exact: false },
   notifications: { to: '/notifications', exact: false },

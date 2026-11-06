@@ -226,6 +226,14 @@ export function UiShowcase() {
   const [catalogSection, setCatalogSection] = useState<CatalogSection>('all')
   const [template, setTemplate] = useState(SHOWCASE_TEMPLATE)
   const [css, setCss] = useState(SHOWCASE_CSS)
+  const [script, setScript] = useState(
+    [
+      'for (const block of blocks) {',
+      '  // Класс добавляет скрипт: без него всё и так видно',
+      "  block.classList.add('is-ready')",
+      '}',
+    ].join('\n'),
+  )
   const [fields, setFields] = useState<CustomFieldInput[]>(SHOWCASE_FIELDS)
   const [column, setColumn] = useState<'blocks' | 'preview' | 'fields'>('blocks')
   const columnsId = useId()
@@ -529,6 +537,14 @@ export function UiShowcase() {
               }
             />
             <CodeEditor label="CSS блока" language="css" value={css} onChange={setCss} rows={5} />
+            <CodeEditor
+              label="Скрипт блока"
+              hint="Подсветка JS: комментарии, строки, ключевые слова"
+              language="js"
+              value={script}
+              onChange={setScript}
+              rows={4}
+            />
             <FieldsBuilder
               fields={fields}
               onChange={setFields}

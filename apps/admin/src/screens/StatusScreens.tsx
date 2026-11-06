@@ -68,6 +68,11 @@ const sections: { prefix: string; title: string; who?: string }[] = [
     title: 'Свой блок',
     who: 'Экран своего блока открывает владелец установки: поля, шаблон и CSS блока пишет студия',
   },
+  {
+    prefix: '/script',
+    title: 'Скрипт сайта',
+    who: 'Скрипт сайта пишет и публикует владелец установки: это код на каждой странице',
+  },
   { prefix: '/theme', title: 'Тема' },
   { prefix: '/header', title: 'Шапка и подвал' },
   { prefix: '/leads', title: 'Заявки' },

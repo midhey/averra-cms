@@ -2,6 +2,7 @@ import {
   CUSTOM_FILTERS,
   type CustomBlockProblem,
   customBlockProblems,
+  customBlockScriptFile,
 } from '@averra/blocks/custom-engine'
 import {
   BLOCK_CATEGORIES,
@@ -24,6 +25,7 @@ import { api } from '../api'
 import { blockStatus } from '../custom-blocks/custom-block-format'
 import { FieldsBuilder } from '../custom-blocks/FieldsBuilder'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
+import { SandboxPreview } from '../editor/SandboxPreview'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { zodFieldErrors } from '../forms/field-errors'
 import type { JsonSchema } from '../forms/json-schema'
@@ -43,7 +45,7 @@ import { Button, iconButtonClassName } from '../ui/Button'
 import { CodeEditor, type LineMark } from '../ui/CodeEditor'
 import { useConfirm } from '../ui/Confirm'
 import { lineRange } from '../ui/code-highlight'
-import { Select, TextInput } from '../ui/Field'
+import { Checkbox, Select, TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -56,7 +58,7 @@ import styles from './CustomBlockScreen.module.scss'
 
 const route = getRouteApi('/_app/blocks/$key')
 
-type Part = 'basics' | 'fields' | 'template' | 'css' | 'example' | 'history'
+type Part = 'basics' | 'fields' | 'template' | 'css' | 'script' | 'example' | 'history'
 type Notice = { tone: 'success' | 'danger' | 'warning'; text: string }
 type BlockGet = (typeof api.sites)[':siteId']['custom-blocks'][':key']['$get']
 /** Свой блок, как его отдаёт API: черновик, опубликованное, замечания и где стоит */
@@ -102,6 +104,7 @@ function CustomBlockEditor({
   const [notice, setNotice] = useState<Notice>()
   const templateRef = useRef<HTMLTextAreaElement>(null)
   const cssRef = useRef<HTMLTextAreaElement>(null)
+  const scriptRef = useRef<HTMLTextAreaElement>(null)
 
   // Разбор — по значению формы, а не на каждую перерисовку: иначе draft новый каждый раз, и
   // замечания с предпросмотром пересчитывались бы без правок
@@ -322,6 +325,7 @@ function CustomBlockEditor({
               { id: 'fields', label: 'Поля', count: structureCount('fields') },
               { id: 'template', label: 'Шаблон', count: count('template') },
               { id: 'css', label: 'CSS', count: count('css') },
+              { id: 'script', label: 'Скрипт', count: count('script') },
               { id: 'example', label: 'Пример', count: count('example') },
               { id: 'history', label: 'История' },
             ]}
@@ -373,6 +377,28 @@ function CustomBlockEditor({
                   problems={byPart('css')}
                   onJump={(line) => jump(cssRef, form.css ?? '', line)}
                 />
+              </div>
+            )}
+            {part === 'script' && (
+              <div className={styles.panel}>
+                <CodeEditor
+                  label="Скрипт блока"
+                  hint="Необязательно. Улучшение поверх рабочего HTML: без скрипта блок обязан работать. blocks — корни этих блоков на странице; код выполняется один раз после загрузки страницы, без import"
+                  language="js"
+                  value={form.script ?? ''}
+                  onChange={(script) => change({ script })}
+                  marks={marksOf(byPart('script'))}
+                  textareaRef={scriptRef}
+                />
+                <ProblemList
+                  problems={byPart('script')}
+                  onJump={(line) => jump(scriptRef, form.script ?? '', line)}
+                />
+                <p className={styles.note}>
+                  Скрипт подключается файлом только на страницах с этим блоком. Проверить его можно
+                  в предпросмотре: «Выполнять скрипт» — страница в изолированной рамке, без доступа
+                  к админке.
+                </p>
               </div>
             )}
             {part === 'example' && (
@@ -724,22 +750,49 @@ function BlockPreview({
     [draft],
   )
   const definitions = useMemo(() => (draft ? { [draft.key]: draft } : {}), [draft])
+  // Свой скрипт выполняется только по просьбе и только в изолированной рамке (SandboxPreview)
+  const [runScript, setRunScript] = useState(false)
+  const scripts = useMemo(
+    () =>
+      draft && draft.script.trim() !== ''
+        ? [{ label: draft.key, file: customBlockScriptFile(draft.key, draft.script) }]
+        : [],
+    [draft],
+  )
   return (
     <section aria-label="Предпросмотр блока" className={styles.preview}>
       <div className={styles.previewBar}>
         <p className={styles.note}>Пример данных в теме сайта — правки видны сразу</p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
+      <Checkbox
+        label="Выполнять скрипт"
+        hint="Блок в изолированной рамке: скрипту недоступны вход в админку, её данные и запросы. Шрифты темы там могут замениться системными"
+        checked={runScript}
+        onChange={(event) => setRunScript(event.currentTarget.checked)}
+      />
       <div className={styles.frame}>
-        <Preview
-          title="Предпросмотр своего блока"
-          content={content}
-          theme={theme}
-          media={media}
-          device={device}
-          selectedId={null}
-          customBlocks={definitions}
-        />
+        {runScript ? (
+          <SandboxPreview
+            title="Предпросмотр своего блока со скриптом"
+            content={content}
+            theme={theme}
+            media={media}
+            device={device}
+            customBlocks={definitions}
+            scripts={scripts}
+          />
+        ) : (
+          <Preview
+            title="Предпросмотр своего блока"
+            content={content}
+            theme={theme}
+            media={media}
+            device={device}
+            selectedId={null}
+            customBlocks={definitions}
+          />
+        )}
       </div>
     </section>
   )

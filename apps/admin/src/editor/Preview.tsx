@@ -20,8 +20,9 @@ import { NARROW_SCREEN } from '../ui/use-media-query'
 import styles from './Preview.module.scss'
 import { blockIdAt, previewSelectionCss, type SelectionColors } from './preview-selection'
 
-const devices = { phone: 375, tablet: 768, desktop: 1280 } as const
-export type Device = keyof typeof devices
+/** Ширина рамки предпросмотра по устройству */
+export const DEVICE_WIDTHS = { phone: 375, tablet: 768, desktop: 1280 } as const
+export type Device = keyof typeof DEVICE_WIDTHS
 const deviceLabels: Record<Device, string> = {
   phone: 'Телефон',
   tablet: 'Планшет',
@@ -47,7 +48,7 @@ export function DeviceSwitch({
     <SegmentedControl
       legend="Ширина предпросмотра"
       hideLegend
-      options={(Object.keys(devices) as Device[]).map((name) => ({
+      options={(Object.keys(DEVICE_WIDTHS) as Device[]).map((name) => ({
         value: name,
         label: deviceLabels[name],
       }))}
@@ -110,7 +111,7 @@ export function Preview(props: PreviewProps) {
   const [frameDocument, setFrameDocument] = useState<Document | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
-  const width = devices[device]
+  const width = DEVICE_WIDTHS[device]
   const selectionStyle = useMemo(() => frameDocument?.createElement('style'), [frameDocument])
   // CSS своих блоков страницы — отдельным тегом после темы, как в <head> сайта: меняется вместе с
   // содержимым, а не с темой
