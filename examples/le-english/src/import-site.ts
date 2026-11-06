@@ -3,6 +3,8 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { ApiFailure, type Client } from './api-client.ts'
 import {
+  footerSign,
+  headerBrand,
   homeBlocks,
   legalOf,
   menuItems,
@@ -26,7 +28,7 @@ export type ImportOptions = {
   publicDir: string
   /** Файл выгрузки своих блоков (le-english.blocks.json) */
   blocksFile: string
-  /** Логотип для шапки (SVG или картинка); нет файла — в шапке название сайта */
+  /** Картинка логотипа — в медиатеку про запас (в шапке логотип текстом); нет файла — без неё */
   logoFile?: string
   /** Адрес сайта (https://домен): для canonical и карты сайта; не задан — остаётся как есть */
   siteUrl?: string
@@ -167,6 +169,14 @@ const MIME: Record<string, string> = {
 
 const SITE_NAME = 'Vallex English'
 const DOCUMENTS = ['privacy', 'consent'] as const
+/** Служебный адрес своей 404 в Averra (NOT_FOUND_PAGE_SLUG) */
+const NOT_FOUND_SLUG = '404'
+/** Тексты 404 исходного сайта (src/render/not-found.js) — первым экраном по центру */
+const notFoundHero = {
+  title: 'Такой страницы нет',
+  subtitle: 'Ой! Возможно, ссылка устарела. Всё самое важное — на главной.',
+  button: { label: 'На главную →', href: '/' },
+}
 // Как SiteUrl в настройках: только https и только адрес сайта, без пути
 const SITE_URL = /^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i
 
@@ -284,6 +294,8 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   }
   await client.patch(`${base}/settings`, {
     name: SITE_NAME,
+    // В заголовке вкладки документов и записи — название сайта, как у оригинала
+    titleTemplate: `%s — ${SITE_NAME}`,
     language: 'ru',
     description: seo.description,
     ...(shareImageId && { ogImage: shareImageId }),
@@ -311,11 +323,24 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     title: 'Запись на пробный урок',
     content: {
       blocks: [{ id: 'zapis-form', type: 'form', props: signupFormProps(content) }],
-      // Как у /zapis/ исходного сайта: страница для ссылок из биографий и сообщений
+      // Как у /zapis/ исходного сайта: страница для ссылок из биографий и сообщений, в шапке —
+      // логотип и «← На главную» вместо меню
       seo: { noindex: true },
+      shortHeader: true,
     },
   })
   log('Страница zapis: черновик сохранён')
+  // Своя 404, как у оригинала: «Ой! Такой страницы нет» и кнопка на главную, шапка короткая. Без
+  // неё на чужом адресе была бы стандартная «Страница не найдена» с полной шапкой
+  await client.put(`${base}/pages/${NOT_FOUND_SLUG}`, {
+    title: 'Страница не найдена',
+    content: {
+      blocks: [{ id: 'not-found', type: 'hero', props: notFoundHero }],
+      seo: { noindex: true },
+      shortHeader: true,
+    },
+  })
+  log('Страница 404: черновик сохранён')
 
   // ── Политика и согласие: черновики из шаблона Averra ────────────────────────────────────────
   // Только после страниц: шаблон собирается по фактам сайта в момент создания (есть ли форма,
@@ -328,12 +353,21 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   const staleDocuments: string[] = []
   const backupDir = options.backupDir ?? defaultBackupDir()
   const existing = await client.get<{ slug: string; publishedAt: string | null }[]>(`${base}/pages`)
+  // Документ — служебная страница: у оригинала в шапке только логотип и «← На главную». Ставим
+  // короткую шапку черновику из шаблона — только что созданному или пересобранному: в черновике,
+  // который вёл человек, вид шапки решает он
+  const shortenHeader = (document: string, page: { title: string; draft: unknown }) =>
+    client.put(`${base}/pages/${document}`, {
+      title: page.title,
+      content: { ...(page.draft as Json), shortHeader: true },
+    })
   for (const document of DOCUMENTS) {
     const found = existing.find((page) => page.slug === document)
     if (!found) {
-      await client.post(`${base}/settings/legal-pages`, { document })
+      const created = await client.post<PageRecord>(`${base}/settings/legal-pages`, { document })
+      await shortenHeader(document, created)
       legalDrafts.push(document)
-      log(`Документ /${document}: черновик создан`)
+      log(`Документ /${document}: черновик создан, шапка — короткая`)
       continue
     }
     legalDrafts.push(document)
@@ -356,6 +390,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
         document,
         replaceDraft: true,
       })
+      await shortenHeader(document, fresh)
       draftNow = fresh.draft
       rebuiltDocuments.push(document)
       draftReplaced = true
@@ -401,6 +436,12 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
       }
     } else {
       log(`Документ /${document}: ${published ? 'опубликован, ' : 'черновик есть, '}не трогаю`)
+      const draft = page.draft as { shortHeader?: unknown; hideHeader?: unknown } | null
+      if (draft?.shortHeader !== true && draft?.hideHeader !== true) {
+        log(
+          `Документ /${document}: в шапке меню, у оригинала — логотип и «← На главную». Короткая шапка — в редакторе страницы: «SEO» → «Шапка на этой странице» → «Короткая»`,
+        )
+      }
     }
     if (liveStale) {
       staleDocuments.push(document)
@@ -423,14 +464,16 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   })
 
   // ── Шапка и подвал ──────────────────────────────────────────────────────────────────────────
-  const logo =
-    options.logoFile && existsSync(options.logoFile) ? await uploadFile(options.logoFile) : null
+  // Логотип в шапке — текстом (headerBrand). Картинка логотипа — только в медиатеку, про запас: в
+  // виде «Текст» шапка картинку не хранит, а Лера может переключить на «Картинку» и выбрать её
+  if (options.logoFile && existsSync(options.logoFile)) await uploadFile(options.logoFile)
   await client.put(`${base}/header`, {
     ...headerBase,
-    logo,
+    ...headerBrand(content),
+    logo: null,
     menu: menuItems(content),
   })
-  await client.put(`${base}/footer`, footer)
+  await client.put(`${base}/footer`, { ...footer, text: footerSign(content) })
   log('Шапка и подвал: черновики сохранены')
 
   // ── Публикация ──────────────────────────────────────────────────────────────────────────────
@@ -451,6 +494,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   if (publish) {
     await client.post(`${base}/pages/index/publish`)
     await client.post(`${base}/pages/zapis/publish`)
+    await client.post(`${base}/pages/${NOT_FOUND_SLUG}/publish`)
     await client.post(`${base}/theme/publish`)
     await client.post(`${base}/header/publish`)
     await client.post(`${base}/footer/publish`)
@@ -461,7 +505,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     siteId: site.id,
     blocks: file.blocks.map((block) => block.key),
     warnings,
-    pages: ['index', 'zapis'],
+    pages: ['index', 'zapis', NOT_FOUND_SLUG],
     legalDrafts,
     rebuiltDocuments,
     repairedDocuments,

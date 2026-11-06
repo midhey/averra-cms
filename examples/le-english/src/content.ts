@@ -43,9 +43,9 @@ export const SIGNUP_HREF = '/zapis/'
 /** Секции главной по порядку страницы и их id: на них ссылается меню шапки */
 export const SECTIONS = [
   { id: 'top', block: 'le-hero', menu: null },
-  { id: 'goals', block: 'le-goals', menu: 'Цели' },
+  { id: 'goals', block: 'le-goals', menu: 'Цели', mobileMenu: 'Цели занятий' },
   { id: 'about', block: 'le-about', menu: 'Обо мне' },
-  { id: 'steps', block: 'le-steps', menu: 'Занятия' },
+  { id: 'steps', block: 'le-steps', menu: 'Занятия', mobileMenu: 'Как проходят занятия' },
   { id: 'reviews', block: 'le-reviews', menu: 'Отзывы' },
   { id: 'prices', block: 'le-prices', menu: 'Цены' },
   { id: 'faq', block: 'le-faq', menu: 'Вопросы' },
@@ -197,10 +197,31 @@ export function menuItems(content: Json) {
   const hidden = hiddenSections(content)
   return SECTIONS.flatMap((section) =>
     section.menu && !hidden.has(section.id)
-      ? [{ label: section.menu, page: 'index', block: section.id }]
+      ? [
+          {
+            label: section.menu,
+            // Подпись в меню телефона — как у исходного сайта (mobileLabel в его header.js)
+            mobileLabel: 'mobileMenu' in section ? section.mobileMenu : '',
+            page: 'index',
+            block: section.id,
+          },
+        ]
       : [],
   )
 }
+
+/**
+ * Логотип шапки — текстом, как у исходного сайта: знак «Ve» рукописным шрифтом и подпись «Vallex
+ * / English» в две строки (brand.mark и brand.tagline). Лера меняет их в админке без SVG
+ */
+export function headerBrand(content: Json) {
+  const brand = record(content.brand)
+  const tagline = text(brand.tagline).split('\n').slice(0, 2).join('\n').slice(0, 80)
+  return { brand: 'text', logoMark: text(brand.mark).slice(0, 4), logoText: tagline }
+}
+
+/** Свой текст подвала — рукописная подпись исходного сайта (footer.sign), до 300 знаков */
+export const footerSign = (content: Json) => text(record(content.footer).sign).slice(0, 300)
 
 /** Форма записи: поля и тексты страницы /zapis — как в форме исходного сайта */
 export function signupFormProps(content: Json) {

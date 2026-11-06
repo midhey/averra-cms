@@ -24,7 +24,11 @@ export const theme = {
 
 /**
  * Шапка: логотип, меню секций, кнопка «Пробный урок». Не липкая — как в оригинале, где шапка
- * уезжает вместе со страницей.
+ * уезжает вместе со страницей. Вид — как у оригинала: без линии снизу, кнопка-«таблетка», при
+ * наведении светлеет и приподнимается, на телефоне кнопка видна рядом с «Меню». Пункты меню при
+ * наведении — на подложке, как в меню телефона оригинала (--color-menu-hover): «Цвет акцента»
+ * здесь почти цвета текста (тёмно-зелёный рядом с чернилами), а терракоты оригинала в теме нет.
+ * Логотип — текстом (headerBrand), меню — с подписями для телефона.
  */
 export const headerBase = {
   layout: 'classic',
@@ -33,10 +37,31 @@ export const headerBase = {
   overlay: false,
   phone: false,
   button: { label: 'Пробный урок →', page: 'zapis' },
+  look: {
+    divider: false,
+    buttonShape: 'pill',
+    buttonHover: 'lift',
+    linkHover: 'background',
+    mobileButton: 'row',
+    mobileMenu: 'panel',
+    mobileAlign: 'start',
+  },
 }
 
-/** Подвал: одна строка с реквизитами и документами на поверхности темы */
-export const footer = { layout: 'simple', tone: 'surface', sections: false }
+/**
+ * Подвал: одна строка, фон как у страницы и без линии — как у оригинала. Логотип шапки, рукописная
+ * подпись (footerSign), ссылки на политику и согласие; «©» у оригинала нет.
+ */
+export const footer = {
+  layout: 'simple',
+  tone: 'background',
+  divider: false,
+  sections: false,
+  textFont: 'accent',
+  copyright: false,
+  consent: true,
+  brand: true,
+}
 
 /** Старые адреса документов исходного сайта → страницы документов Averra */
 export const redirects = [

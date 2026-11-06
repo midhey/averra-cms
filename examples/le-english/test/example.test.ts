@@ -343,6 +343,20 @@ describe('скрипт переноса на настоящем API', () => {
       JSON.stringify((await client.get<{ draft: unknown }>(`${base}/pages/${slug}`)).draft)
     expect(await draftOf('privacy')).not.toContain('нет форм заявок')
     expect(await draftOf('privacy')).toContain('форме заявки')
+    // Документы и своя 404 — служебные страницы: шапка короткая, как у оригинала
+    const pageDraft = async (slug: string) =>
+      (
+        await client.get<{ draft: { shortHeader?: boolean; blocks: { props: unknown }[] } }>(
+          `${base}/pages/${slug}`,
+        )
+      ).draft
+    for (const slug of ['privacy', 'consent', '404']) {
+      expect((await pageDraft(slug)).shortHeader, slug).toBe(true)
+    }
+    expect((await pageDraft('404')).blocks[0]?.props).toMatchObject({
+      title: 'Такой страницы нет',
+      button: { href: '/' },
+    })
     expect(draftRun.rebuiltDocuments).toEqual([])
     const { blocks } = await client.get<{ blocks: { key: string; unpublished: boolean }[] }>(
       `${base}/custom-blocks`,
@@ -381,9 +395,17 @@ describe('скрипт переноса на настоящем API', () => {
     const page = PageContent.parse(await publishedOf('pages/index'))
     expect(page.blocks.map((block) => block.type)).toContain('custom:le-hero')
     expect(await publishedOf('pages/zapis')).not.toBeNull()
-    const header = (await publishedOf('header')) as { menu: unknown[]; button: { page: string } }
+    expect(await publishedOf('pages/404')).toMatchObject({ shortHeader: true })
+    const header = (await publishedOf('header')) as {
+      menu: unknown[]
+      button: { page: string }
+      brand: string
+      logo: string | null
+    }
     expect(header.menu).toHaveLength(6)
     expect(header.button.page).toBe('zapis')
+    // Логотип текстом: картинка в шапке не хранится и не держит файл в медиатеке
+    expect(header).toMatchObject({ brand: 'text', logo: null })
     const theme = (await publishedOf('theme')) as { fonts: { accent?: string } }
     expect(theme.fonts.accent).toBe('caveat')
 
