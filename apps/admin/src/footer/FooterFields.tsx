@@ -1,10 +1,13 @@
 import {
   FOOTER_ABOUT_MAX,
+  FOOTER_TEXT_MAX,
   type FooterContacts,
   FooterLayout,
+  FooterTextFont,
   FooterTone,
   footerLayoutHints,
   footerLayoutTitles,
+  footerTextFontTitles,
   footerToneTitles,
 } from '@averra/schema'
 import { Link } from '@tanstack/react-router'
@@ -13,7 +16,7 @@ import { InlineAlert } from '../ui/InlineAlert'
 import { Section } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import styles from './FooterFields.module.scss'
-import { organizationNote, policyNote, sectionsNote } from './footer-format'
+import { consentNote, organizationNote, policyNote, sectionsNote } from './footer-format'
 import type { FooterEditor } from './use-footer-editor'
 
 type FooterFieldsProps = {
@@ -21,6 +24,8 @@ type FooterFieldsProps = {
   /** Контакты «Организации»; null — главная не опубликована, на сайте их ещё нет */
   contacts: FooterContacts | null
   policy: { slug: string; published: boolean }
+  /** Страница согласия на обработку данных: ссылка на неё — только на опубликованную */
+  consent: { slug: string; published: boolean }
   /**
    * Пунктов в меню опубликованной шапки (null — шапки на сайте нет): разделы на сайте — из неё,
    * а не из черновика меню
@@ -33,9 +38,12 @@ type FooterFieldsProps = {
   /** Экраны «SEO» — только владельцу: ссылки на них только ему */
   seoLinks: boolean
   readOnly: boolean
+  /** Вид подвала (раскладка, фон, линия, шрифт текста) — только владелец (header.look) */
+  lookReadOnly: boolean
 }
 
 const toneHints: Record<FooterTone, string> = {
+  background: 'Фон страницы: подвал продолжает её, отделяет его линия сверху (её можно убрать)',
   surface:
     'Цвет «Поверхность» темы, как у «Преимуществ»: в светлых темах светлый, в тёмных — тёмный',
   accent:
@@ -48,7 +56,7 @@ const toneHints: Record<FooterTone, string> = {
  * вводятся: они из «SEO → Организация», вкладка говорит, чего там не хватает
  */
 export function FooterFields(props: FooterFieldsProps) {
-  const { editor, readOnly } = props
+  const { editor, readOnly, lookReadOnly } = props
   const { form, errors } = editor
   const policy = policyNote(props.policy, form.layout)
   const seoLink = (hash: string, text: string) =>
@@ -71,7 +79,7 @@ export function FooterFields(props: FooterFieldsProps) {
           hideLegend
           appearance="list"
           name="layout"
-          disabled={readOnly}
+          disabled={lookReadOnly}
           options={FooterLayout.options.map((layout) => ({
             value: layout,
             label: footerLayoutTitles[layout],
@@ -93,6 +101,12 @@ export function FooterFields(props: FooterFieldsProps) {
         <p className={styles.note}>
           Ссылки «Политика конфиденциальности» и «Настройки cookie» есть в любом виде.
         </p>
+        {lookReadOnly && !readOnly && (
+          <InlineAlert tone="info">
+            Вид подвала, фон, линию и шрифт текста меняет владелец установки. Тексты и ссылки вы
+            меняете сами.
+          </InlineAlert>
+        )}
         {policy && (
           <InlineAlert tone="warning">
             {policy} {props.seoLinks && <Link to="/seo/cookies">Открыть «Cookie и согласие»</Link>}
@@ -105,7 +119,8 @@ export function FooterFields(props: FooterFieldsProps) {
           legend="Фон подвала"
           hideLegend
           name="tone"
-          disabled={readOnly}
+          wrap
+          disabled={lookReadOnly}
           options={FooterTone.options.map((tone) => ({
             value: tone,
             label: footerToneTitles[tone],
@@ -114,6 +129,60 @@ export function FooterFields(props: FooterFieldsProps) {
           onChange={(tone) => editor.change({ ...form, tone })}
         />
         <p className={styles.note}>{toneHints[form.tone]}.</p>
+        <Checkbox
+          label="Линия над подвалом"
+          checked={form.divider}
+          disabled={lookReadOnly}
+          onChange={(event) => editor.change({ ...form, divider: event.target.checked })}
+        />
+      </Section>
+
+      <Section title="Тексты и ссылки" card>
+        <div className={styles.fields}>
+          <TextArea
+            label="Свой текст"
+            name="text"
+            rows={2}
+            maxChars={FOOTER_TEXT_MAX}
+            hint="Подпись, часы работы — с переносами строк. Пусто — без текста"
+            value={form.text}
+            error={errors.text}
+            disabled={readOnly}
+            onChange={(event) => editor.change({ ...form, text: event.target.value }, 'text')}
+          />
+          <SegmentedControl
+            legend="Шрифт своего текста"
+            name="textFont"
+            disabled={lookReadOnly}
+            options={FooterTextFont.options.map((font) => ({
+              value: font,
+              label: footerTextFontTitles[font],
+            }))}
+            value={form.textFont}
+            onChange={(textFont) => editor.change({ ...form, textFont })}
+          />
+          <Checkbox
+            label="© и год"
+            hint="«© год название сайта» перед реквизитами; год — год сборки сайта"
+            checked={form.copyright}
+            disabled={readOnly}
+            onChange={(event) => editor.change({ ...form, copyright: event.target.checked })}
+          />
+          <Checkbox
+            label="Ссылка на согласие на обработку данных"
+            hint={consentNote(props.consent, form.consent)}
+            checked={form.consent}
+            disabled={readOnly}
+            onChange={(event) => editor.change({ ...form, consent: event.target.checked })}
+          />
+          <Checkbox
+            label="Логотип шапки в подвале"
+            hint="Тот же, что в шапке: картинка, знак и подпись"
+            checked={form.brand}
+            disabled={readOnly}
+            onChange={(event) => editor.change({ ...form, brand: event.target.checked })}
+          />
+        </div>
       </Section>
 
       {form.layout !== 'simple' && (

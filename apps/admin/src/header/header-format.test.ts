@@ -1,6 +1,7 @@
 import type { HeaderTargetPage } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
+  EXTERNAL_TARGET,
   headerStatus,
   hiddenOnText,
   linkOf,
@@ -9,6 +10,7 @@ import {
   overlayHint,
   targetGroups,
   targetValue,
+  withTarget,
 } from './header-format'
 
 const page = (overrides: Partial<HeaderTargetPage>): HeaderTargetPage => ({
@@ -40,6 +42,27 @@ describe('цель пункта меню', () => {
     expect(linkOf('akcii')).toEqual({ page: 'akcii' })
   })
 
+  it('внешняя ссылка — своё значение выбора; адрес и «новая вкладка» при смене цели', () => {
+    expect(targetValue({ url: 'https://t.me/lera' })).toBe(EXTERNAL_TARGET)
+    expect(targetValue({ url: '' })).toBe(EXTERNAL_TARGET)
+    expect(linkOf(EXTERNAL_TARGET)).toEqual({ url: '' })
+    expect(linkOf(EXTERNAL_TARGET, { url: 'https://t.me/lera' })).toEqual({
+      url: 'https://t.me/lera',
+    })
+    const item = {
+      label: 'Telegram',
+      mobileLabel: 'Написать',
+      url: 'https://t.me/lera',
+      newTab: false,
+    }
+    expect(withTarget(item, linkOf('index#hero'))).toEqual({
+      label: 'Telegram',
+      mobileLabel: 'Написать',
+      page: 'index',
+      block: 'hero',
+    })
+  })
+
   it('группы по страницам: вся страница и блоки; неопубликованная — с пометкой', () => {
     expect(targetGroups(pages)).toEqual([
       {
@@ -53,6 +76,10 @@ describe('цель пункта меню', () => {
       {
         label: 'Акции — не опубликована',
         options: [{ value: 'akcii', label: 'Акции — вся страница' }],
+      },
+      {
+        label: 'Другой сайт',
+        options: [{ value: EXTERNAL_TARGET, label: 'Внешняя ссылка: Telegram, телефон, почта…' }],
       },
     ])
   })
@@ -73,9 +100,9 @@ describe('цель пункта меню', () => {
       }),
     ]
     const values = targetGroups(mixed).flatMap((group) => group.options.map((o) => o.value))
-    expect(values).toEqual(['index', 'index#le-hero'])
+    expect(values).toEqual(['index', 'index#le-hero', EXTERNAL_TARGET])
     // Пункт уже ведёт на блок, которого нет в черновике, но он на сайте: остаётся с пометкой
-    expect(targetGroups(mixed, { page: 'index', block: 'hero' }).at(-1)).toEqual({
+    expect(targetGroups(mixed, { page: 'index', block: 'hero' }).at(-2)).toEqual({
       label: 'Убран из черновика, пока есть на сайте',
       options: [{ value: 'index#hero', label: '/#hero' }],
     })
@@ -83,11 +110,12 @@ describe('цель пункта меню', () => {
 
   it('пропавшая цель остаётся в списке отдельной группой, а не подменяется другой', () => {
     const groups = targetGroups(pages, { page: 'blog', block: 'top' })
-    expect(groups.at(-1)).toEqual({
+    expect(groups.at(-2)).toEqual({
       label: 'Больше нет на сайте',
       options: [{ value: 'blog#top', label: '/blog/#top' }],
     })
-    expect(targetGroups(pages, { page: 'index', block: 'hero' })).toHaveLength(2)
+    expect(targetGroups(pages, { page: 'index', block: 'hero' })).toHaveLength(3)
+    expect(targetGroups(pages, { url: 'https://t.me/lera' })).toHaveLength(3)
   })
 })
 
@@ -95,10 +123,15 @@ describe('подсказки экрана', () => {
   it('кнопка по умолчанию ведёт к форме главной, если она есть', () => {
     expect(newHeaderButton(pages)).toEqual({
       label: 'Оставить заявку',
+      mobileLabel: '',
       page: 'index',
       block: 'form-1',
     })
-    expect(newHeaderButton([page({})])).toEqual({ label: 'Оставить заявку', page: 'index' })
+    expect(newHeaderButton([page({})])).toEqual({
+      label: 'Оставить заявку',
+      mobileLabel: '',
+      page: 'index',
+    })
   })
 
   it('прозрачная — где сработает', () => {
@@ -129,7 +162,7 @@ describe('подсказки экрана', () => {
   })
 
   it('имя пункта: подпись или номер', () => {
-    expect(menuItemName({ label: ' Цены ', page: 'index' }, 0)).toBe('Цены')
-    expect(menuItemName({ label: '', page: 'index' }, 2)).toBe('Пункт 3')
+    expect(menuItemName({ label: ' Цены ', mobileLabel: '', page: 'index' }, 0)).toBe('Цены')
+    expect(menuItemName({ label: '', mobileLabel: '', page: 'index' }, 2)).toBe('Пункт 3')
   })
 })

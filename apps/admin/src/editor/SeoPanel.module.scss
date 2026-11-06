@@ -14,3 +14,9 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
 }
+
+// Пояснение под выбором: где настраивается сама шапка
+.note {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}

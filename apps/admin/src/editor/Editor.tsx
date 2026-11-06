@@ -48,7 +48,7 @@ import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
 import { type Device, DeviceSwitch, initialDevice, Preview } from './Preview'
-import { SeoPanel } from './SeoPanel'
+import { type HeaderMode, SeoPanel } from './SeoPanel'
 import { validateBlocks } from './validation'
 
 export type EditorSite = {
@@ -73,14 +73,18 @@ type Status = { kind: 'idle' | 'busy' | 'done' | 'error'; message?: string }
 /** Колонка редактора; на узком экране — вкладка */
 type Column = 'blocks' | 'preview' | 'fields' | 'seo'
 
-/** Скрыть шапку и подвал сайта на этой странице (флажки в панели «SEO») */
-type Chrome = { hideHeader: boolean; hideFooter: boolean }
+/**
+ * Шапка сайта на этой странице (полная, короткая или скрыта) и скрыт ли подвал — панель «SEO».
+ * Скрытая шапка главнее короткой, поэтому в содержимое страницы уходит одно из двух
+ */
+type Chrome = { header: HeaderMode; hideFooter: boolean }
 
 const chromeOf = (content: {
   hideHeader?: boolean | undefined
+  shortHeader?: boolean | undefined
   hideFooter?: boolean | undefined
-}) => ({
-  hideHeader: content.hideHeader === true,
+}): Chrome => ({
+  header: content.hideHeader === true ? 'hidden' : content.shortHeader === true ? 'short' : 'full',
   hideFooter: content.hideFooter === true,
 })
 
@@ -191,7 +195,8 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
     ? {
         ...validation.content,
         ...(seoResult.seo ? { seo: seoResult.seo } : {}),
-        ...(chrome.hideHeader ? { hideHeader: true } : {}),
+        ...(chrome.header === 'hidden' ? { hideHeader: true } : {}),
+        ...(chrome.header === 'short' ? { shortHeader: true } : {}),
         ...(chrome.hideFooter ? { hideFooter: true } : {}),
       }
     : null
@@ -715,8 +720,8 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
               checks={seoChecks}
               library={library.data?.items}
               onChange={setSeo}
-              hideHeader={chrome.hideHeader}
-              onHideHeaderChange={(hideHeader) => setChrome({ ...chrome, hideHeader })}
+              headerMode={chrome.header}
+              onHeaderModeChange={(header) => setChrome({ ...chrome, header })}
               hideFooter={chrome.hideFooter}
               onHideFooterChange={(hideFooter) => setChrome({ ...chrome, hideFooter })}
             />

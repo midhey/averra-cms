@@ -1,22 +1,31 @@
 import {
+  EXTERNAL_HREF_HINT,
   HEADER_LABEL_MAX,
   HEADER_MENU_MAX,
   type HeaderLayout,
+  type HeaderLink,
   type HeaderTargetPage,
   type MenuItem,
-  type SiteLink,
+  opensNewTab,
 } from '@averra/schema'
 import { useId, useMemo } from 'react'
 import type { FieldErrors } from '../forms/field-errors'
 import { useItemKeys } from '../forms/item-keys'
 import { Button, IconButton } from '../ui/Button'
 import { cx } from '../ui/cx'
-import { Select, TextInput } from '../ui/Field'
+import { Checkbox, Select, TextInput } from '../ui/Field'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import styles from './HeaderParts.module.scss'
-import { linkOf, menuItemName, newMenuItem, targetGroups, targetValue } from './header-format'
+import {
+  linkOf,
+  menuItemName,
+  newMenuItem,
+  targetGroups,
+  targetValue,
+  withTarget,
+} from './header-format'
 
 /**
  * Миниатюра раскладки шапки (концепт Main): полосы логотипа, меню и кнопки. Только рисунок —
@@ -35,49 +44,80 @@ export function HeaderLayoutSketch({ layout }: { layout: HeaderLayout }) {
   )
 }
 
-type LinkSelectProps = {
+type LinkTargetProps = {
   label: string
-  name: string
-  link: SiteLink
+  /** Путь в форме: button, menu.2 — поля называются button.target, button.url */
+  path: string
+  link: HeaderLink
   pages: readonly HeaderTargetPage[]
-  error?: string | undefined
+  /** Ошибки полей формы по путям: button.page, button.block, button.url */
+  errors: Record<string, string | undefined>
   hint?: string | undefined
-  disabled?: boolean
-  onChange: (link: SiteLink) => void
+  disabled?: boolean | undefined
+  onChange: (link: HeaderLink) => void
 }
 
-/** «Куда ведёт»: страница сайта целиком или блок на ней, по группам страниц */
-export function LinkSelect({
+/**
+ * «Куда ведёт»: страница сайта целиком, блок на ней или внешняя ссылка (https, tel:, mailto:) —
+ * тогда ниже поле адреса. «Открывать в новой вкладке» — у любой цели; у внешней https по
+ * умолчанию включено
+ */
+export function LinkTarget({
   label,
-  name,
+  path,
   link,
   pages,
-  error,
+  errors,
   hint,
   disabled,
   onChange,
-}: LinkSelectProps) {
+}: LinkTargetProps) {
   const groups = useMemo(() => targetGroups(pages, link), [pages, link])
+  const external = link.url !== undefined
   return (
-    <Select
-      label={label}
-      name={name}
-      value={targetValue(link)}
-      error={error}
-      hint={hint}
-      disabled={disabled}
-      onChange={(event) => onChange(linkOf(event.target.value))}
-    >
-      {groups.map((group) => (
-        <optgroup key={group.label} label={group.label}>
-          {group.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </Select>
+    <>
+      <Select
+        label={label}
+        name={`${path}.target`}
+        value={targetValue(link)}
+        error={errors[`${path}.page`] ?? errors[`${path}.block`]}
+        hint={hint}
+        disabled={disabled}
+        onChange={(event) => onChange(linkOf(event.target.value, link))}
+      >
+        {groups.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </Select>
+      {external && (
+        <TextInput
+          label="Ссылка"
+          name={`${path}.url`}
+          mono
+          inputMode="url"
+          value={link.url ?? ''}
+          placeholder="https://t.me/…"
+          error={errors[`${path}.url`]}
+          hint={EXTERNAL_HREF_HINT}
+          disabled={disabled}
+          onChange={(event) => onChange({ ...link, url: event.target.value })}
+        />
+      )}
+      <Checkbox
+        label="Открывать в новой вкладке"
+        name={`${path}.newTab`}
+        checked={opensNewTab({ ...link, url: link.url?.trim() })}
+        disabled={disabled}
+        hint={external ? 'У ссылок на другие сайты — по умолчанию' : undefined}
+        onChange={(event) => onChange({ ...link, newTab: event.target.checked })}
+      />
+    </>
   )
 }
 
@@ -222,11 +262,7 @@ function MenuRow({
       style={sortable.style}
       className={styles.item}
       data-dragging={sortable.dragging}
-      data-invalid={
-        errors[`${path}.label`] || errors[`${path}.page`] || errors[`${path}.block`]
-          ? ''
-          : undefined
-      }
+      data-invalid={Object.keys(errors).some((key) => key.startsWith(`${path}.`)) ? '' : undefined}
     >
       {!disabled && <DragHandle handle={sortable.handle} label={`Перетащить пункт «${name}»`} />}
       <div className={styles.fields}>
@@ -239,15 +275,26 @@ function MenuRow({
           disabled={disabled}
           onChange={(event) => onChange({ ...item, label: event.target.value })}
         />
-        <LinkSelect
+        <TextInput
+          label="Подпись на телефоне"
+          name={`${path}.mobileLabel`}
+          value={item.mobileLabel}
+          maxChars={HEADER_LABEL_MAX}
+          placeholder={item.label}
+          hint="В меню телефона. Пусто — как основная"
+          error={errors[`${path}.mobileLabel`]}
+          disabled={disabled}
+          onChange={(event) => onChange({ ...item, mobileLabel: event.target.value })}
+        />
+        <LinkTarget
           label="Куда ведёт"
-          name={`${path}.target`}
+          path={path}
           link={item}
           pages={pages}
-          error={errors[`${path}.page`] ?? errors[`${path}.block`]}
+          errors={errors}
           hint={warning}
           disabled={disabled}
-          onChange={(link) => onChange({ label: item.label, ...link })}
+          onChange={(link) => onChange(withTarget(item, link))}
         />
       </div>
       {!disabled && (

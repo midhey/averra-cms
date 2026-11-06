@@ -1,22 +1,44 @@
 import {
   type Header,
+  type HeaderLink,
   type HeaderTargetPage,
   MAIN_PAGE_SLUG,
   type MenuItem,
   pageLinkTitle,
-  type SiteLink,
   siteLinkHref,
 } from '@averra/schema'
 import type { StatusTone } from '../ui/StatusPill'
 
-/** Значение выбора «куда ведёт»: адрес страницы или адрес#блок */
-export const targetValue = (link: SiteLink) =>
-  link.block ? `${link.page}#${link.block}` : link.page
+/**
+ * Значение выбора «куда ведёт» для внешней ссылки. «~» не бывает ни в адресе страницы, ни в id
+ * блока — с ними значение не совпадёт
+ */
+export const EXTERNAL_TARGET = '~url'
 
-/** Обратно из значения выбора: страница и блок */
-export function linkOf(value: string): SiteLink {
+/** Значение выбора «куда ведёт»: адрес страницы, адрес#блок или внешняя ссылка */
+export const targetValue = (link: HeaderLink) => {
+  if (link.url !== undefined) return EXTERNAL_TARGET
+  const page = link.page ?? ''
+  return link.block ? `${page}#${link.block}` : page
+}
+
+/**
+ * Обратно из значения выбора: страница и блок — или внешняя ссылка (адрес вписывают отдельным
+ * полем, пока он пустой). «Новая вкладка» у цели своя: сменили цель — по умолчанию для неё
+ */
+export function linkOf(value: string, current?: HeaderLink): HeaderLink {
+  if (value === EXTERNAL_TARGET) return { url: current?.url ?? '' }
   const [page = '', block] = value.split('#')
   return block ? { page, block } : { page }
+}
+
+/** Пункт или кнопка с другой целью: подписи остаются, цель и «новая вкладка» — новые */
+export const withTarget = <T extends { label: string; mobileLabel: string }>(
+  item: T,
+  link: HeaderLink,
+): T & HeaderLink => {
+  const { page: _page, block: _block, url: _url, newTab: _newTab, ...rest } = item as T & HeaderLink
+  return { ...(rest as T), ...link }
 }
 
 export type TargetGroup = {
@@ -30,9 +52,9 @@ export type TargetGroup = {
  * прежней опубликованной версии (демо-главная до импорта) только путали бы выбор. Неопубликованная
  * страница — с пометкой: на сайт её пункт попадёт только после публикации. Цель, которой нет в
  * черновике (удалили страницу или блок), остаётся в списке отдельной группой — иначе выбор молча
- * показал бы другую
+ * показал бы другую. Последняя группа — внешняя ссылка: Telegram, телефон, почта
  */
-export function targetGroups(pages: readonly HeaderTargetPage[], current?: SiteLink) {
+export function targetGroups(pages: readonly HeaderTargetPage[], current?: HeaderLink) {
   const groups: TargetGroup[] = pages.map((page) => ({
     label: page.published ? pageLinkTitle(page) : `${pageLinkTitle(page)} — не опубликована`,
     options: [
@@ -45,7 +67,7 @@ export function targetGroups(pages: readonly HeaderTargetPage[], current?: SiteL
         })),
     ],
   }))
-  if (current) {
+  if (current && current.url === undefined) {
     const value = targetValue(current)
     const known = groups.some((group) => group.options.some((option) => option.value === value))
     if (!known) {
@@ -55,15 +77,21 @@ export function targetGroups(pages: readonly HeaderTargetPage[], current?: SiteL
         ?.blocks.find((block) => block.id === current.block && block.published)
       groups.push({
         label: onlyOnSite ? 'Убран из черновика, пока есть на сайте' : 'Больше нет на сайте',
-        options: [{ value, label: siteLinkHref(current) }],
+        options: [
+          { value, label: siteLinkHref({ page: current.page ?? '', block: current.block }) },
+        ],
       })
     }
   }
+  groups.push({
+    label: 'Другой сайт',
+    options: [{ value: EXTERNAL_TARGET, label: 'Внешняя ссылка: Telegram, телефон, почта…' }],
+  })
   return groups
 }
 
 /** Новый пункт меню: на главную, подпись пустая — её человек впишет сам */
-export const newMenuItem = (): MenuItem => ({ label: '', page: MAIN_PAGE_SLUG })
+export const newMenuItem = (): MenuItem => ({ label: '', mobileLabel: '', page: MAIN_PAGE_SLUG })
 
 /** Кнопка шапки, когда её включают: ведёт на главную, текст — частый «Оставить заявку» */
 export const newHeaderButton = (pages: readonly HeaderTargetPage[]): Header['button'] => {
@@ -71,6 +99,7 @@ export const newHeaderButton = (pages: readonly HeaderTargetPage[]): Header['but
   const form = main?.blocks.find((block) => block.type === 'form' || block.type === 'cta')
   return {
     label: 'Оставить заявку',
+    mobileLabel: '',
     page: MAIN_PAGE_SLUG,
     ...(form ? { block: form.id } : {}),
   }

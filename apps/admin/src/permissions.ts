@@ -21,6 +21,7 @@ export const siteRights = {
   'site.export': ownerAndAdmin,
   'site.settings': ownerAndAdmin,
   'header.edit': ownerAndAdmin,
+  'header.look': ownerOnly,
   'theme.edit': ownerOnly,
   'blocks.define': ownerOnly,
   'channels.manage': ownerOnly,
@@ -107,6 +108,11 @@ export const canEditTheme = allowed('theme.edit')
 
 /** Шапка, меню и подвал — владелец и администратор сайта: его контакты и навигация (header.edit) */
 export const canEditHeader = allowed('header.edit')
+/**
+ * Вид шапки и подвала (раскладка, поведение, линия, кнопка, меню на телефоне, фон подвала) —
+ * только владелец, как тема (header.look). Администратор сайта видит его только для чтения
+ */
+export const canEditHeaderLook = allowed('header.look')
 
 /** Выгрузить все данные сайта (в них заявки) — тем же, кто видит заявки */
 export const canExportData = allowed('site.export')

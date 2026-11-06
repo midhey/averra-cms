@@ -1,6 +1,7 @@
 import { emptyFooterContacts } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
+  consentNote,
   footerHiddenOnText,
   footerStatus,
   organizationNote,
@@ -89,5 +90,19 @@ describe('подписи вкладки «Подвал»', () => {
         { title: 'Акция', hidden: true },
       ]),
     ).toBe('Подвал скрыт на страницах: «Промо», «Акция»')
+  })
+})
+
+describe('ссылка на согласие', () => {
+  it('подсказка говорит, будет ли ссылка на сайте', () => {
+    expect(consentNote({ slug: 'consent', published: true }, true)).toBe(
+      'Рядом с политикой — ссылка на /consent/',
+    )
+    expect(consentNote({ slug: 'consent', published: false }, true)).toMatch(
+      /не опубликована — ссылки на сайте не будет/,
+    )
+    expect(consentNote({ slug: 'consent', published: false }, false)).toMatch(
+      /«SEO → Cookie и согласие»/,
+    )
   })
 })

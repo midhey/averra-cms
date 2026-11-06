@@ -1287,9 +1287,11 @@ const showcasePages: HeaderTargetPage[] = [
 function HeaderShowcase() {
   const [layout, setLayout] = useState<HeaderLayout>('classic')
   const [menu, setMenu] = useState<readonly MenuItem[]>([
-    { label: 'Цены', page: 'index', block: 'pricing-1' },
-    { label: 'Работы', page: 'raboty' },
-    { label: '', page: 'index', block: 'form-1' },
+    { label: 'Цены', mobileLabel: 'Цены и тарифы', page: 'index', block: 'pricing-1' },
+    { label: 'Работы', mobileLabel: '', page: 'raboty' },
+    { label: '', mobileLabel: '', page: 'index', block: 'form-1' },
+    // Внешняя ссылка: поле адреса и «Открывать в новой вкладке» включено по умолчанию
+    { label: 'Telegram', mobileLabel: '', url: 'https://t.me/remont' },
   ])
   return (
     <>

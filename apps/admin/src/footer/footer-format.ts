@@ -82,3 +82,15 @@ export function footerHiddenOnText(pages: readonly { title: string; hidden: bool
   if (hidden.length === 0) return undefined
   return `Подвал скрыт на страницах: ${hidden.map((page) => `«${page.title}»`).join(', ')}`
 }
+
+/**
+ * Подсказка к флажку «Ссылка на согласие»: что будет на сайте. Ссылка — только на опубликованную
+ * страницу согласия: на черновик посетитель попал бы на 404
+ */
+export function consentNote(consent: { slug: string; published: boolean }, on: boolean) {
+  const path = `/${consent.slug}/`
+  if (consent.published) return `Рядом с политикой — ссылка на ${path}`
+  return on
+    ? `Страница согласия ${path} не опубликована — ссылки на сайте не будет, пока её не опубликуют`
+    : `Страница согласия ${path} пока не опубликована: её создают в «SEO → Cookie и согласие»`
+}

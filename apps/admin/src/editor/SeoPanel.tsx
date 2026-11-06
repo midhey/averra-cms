@@ -40,13 +40,26 @@ type SeoPanelProps = {
   /** Медиатека сайта: превью картинки страницы и сайта */
   library: readonly MediaItem[] | undefined
   onChange: (seo: PageSeo) => void
-  /** Скрыть шапку сайта на этой странице — для промо-лендинга */
-  hideHeader: boolean
-  onHideHeaderChange: (hidden: boolean) => void
+  /** Шапка сайта на этой странице: полная, короткая (служебная страница) или скрыта (промо) */
+  headerMode: HeaderMode
+  onHeaderModeChange: (mode: HeaderMode) => void
   /** Скрыть подвал сайта на этой странице: останутся только ссылки на документы */
   hideFooter: boolean
   onHideFooterChange: (hidden: boolean) => void
 }
+
+/** Шапка на странице: полная, короткая (логотип и «← На главную») или скрыта */
+export type HeaderMode = 'full' | 'short' | 'hidden'
+
+const headerModes = [
+  { value: 'full', label: 'Полная', description: 'Меню, кнопка и телефон — как на всём сайте' },
+  {
+    value: 'short',
+    label: 'Короткая',
+    description: 'Логотип и «← На главную»: для «Спасибо», документов и своей 404',
+  },
+  { value: 'hidden', label: 'Скрыта', description: 'Для промо-страницы: без шапки и меню сайта' },
+] as const satisfies readonly { value: HeaderMode; label: string; description: string }[]
 
 const engines = [
   { value: 'yandex', label: 'Яндекс' },
@@ -73,8 +86,8 @@ export function SeoPanel({
   checks,
   library,
   onChange,
-  hideHeader,
-  onHideHeaderChange,
+  headerMode,
+  onHeaderModeChange,
   hideFooter,
   onHideFooterChange,
 }: SeoPanelProps) {
@@ -240,12 +253,14 @@ export function SeoPanel({
         <h3 id={`${ids}-header`} className={panel.heading}>
           Шапка сайта
         </h3>
-        <Checkbox
-          checked={hideHeader}
-          onChange={(event) => onHideHeaderChange(event.target.checked)}
-          label="Скрыть шапку на этой странице"
-          hint="Для промо-страницы: на ней не будет шапки и меню сайта. Сама шапка — в разделе «Шапка и подвал»"
+        <SegmentedControl
+          legend="Шапка на этой странице"
+          appearance="list"
+          options={headerModes}
+          value={headerMode}
+          onChange={onHeaderModeChange}
         />
+        <p className={panel.note}>Сама шапка — в разделе «Шапка и подвал».</p>
       </section>
 
       <section className={panel.group} aria-labelledby={`${ids}-footer`}>
