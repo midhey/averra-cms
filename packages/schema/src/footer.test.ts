@@ -4,18 +4,22 @@ import {
   defaultFooter,
   FOOTER_ABOUT_MAX,
   FOOTER_FORM_ID,
+  FOOTER_TEXT_MAX,
   Footer,
   FooterLayout,
   FooterTone,
   footerContrast,
   footerFormFields,
   footerLayoutTitles,
+  footerLookOf,
   footerPalette,
   footerPublishIssues,
   footerRequisites,
+  footerToneTitles,
   leadFormLabel,
   readFooter,
   sameFooter,
+  sameFooterLook,
   socialLinks,
   themeChecksPair,
 } from './footer'
@@ -37,12 +41,19 @@ describe('Footer', () => {
         button: 'Перезвоните мне',
         successText: 'Спасибо! Мы получили номер и скоро перезвоним.',
       },
+      divider: true,
+      text: '',
+      textFont: 'body',
+      copyright: true,
+      consent: false,
+      brand: false,
     })
   })
 
-  it('три вида и два фона, у каждого вида подпись', () => {
+  it('три вида и три фона, у каждого подпись', () => {
     expect(FooterLayout.options).toEqual(['simple', 'columns', 'big'])
-    expect(FooterTone.options).toEqual(['surface', 'accent'])
+    expect(FooterTone.options).toEqual(['background', 'surface', 'accent'])
+    expect(Object.keys(footerToneTitles)).toEqual(FooterTone.options)
     expect(Object.keys(footerLayoutTitles)).toEqual(FooterLayout.options)
   })
 
@@ -53,6 +64,23 @@ describe('Footer', () => {
     expect(Footer.safeParse({ callback: { title: '' } }).success).toBe(false)
     expect(Footer.safeParse({ layout: 'huge' }).success).toBe(false)
     expect(Footer.safeParse({ phone: '+7 900' }).success).toBe(false)
+  })
+
+  it('свой текст — до предела, с переносами; шрифт — основной или акцентный', () => {
+    const footer = Footer.parse({ text: ' See you in class ♡\nЛера ', textFont: 'accent' })
+    expect(footer).toMatchObject({ text: 'See you in class ♡\nЛера', textFont: 'accent' })
+    expect(Footer.safeParse({ text: 'а'.repeat(FOOTER_TEXT_MAX + 1) }).success).toBe(false)
+    expect(Footer.safeParse({ textFont: 'comic' }).success).toBe(false)
+  })
+
+  it('вид подвала — раскладка, фон, линия и шрифт; тексты и ссылки — не вид', () => {
+    const base = Footer.parse({})
+    expect(Object.keys(footerLookOf(base))).toEqual(['layout', 'tone', 'divider', 'textFont'])
+    expect(sameFooterLook(base, Footer.parse({ text: 'Привет', consent: true, brand: true }))).toBe(
+      true,
+    )
+    expect(sameFooterLook(base, Footer.parse({ tone: 'background' }))).toBe(false)
+    expect(sameFooterLook(base, Footer.parse({ divider: false }))).toBe(false)
   })
 
   it('sameFooter сравнивает по смыслу', () => {

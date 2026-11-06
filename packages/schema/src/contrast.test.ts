@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
+import {
+  accentLinkLine,
+  contrastRatio,
+  formatContrast,
+  HOVER_CONTRAST_MIN,
+  hoverBackground,
+  hoverColor,
+  LINK_TEXT_CONTRAST_MIN,
+  mixColors,
+  relativeLuminance,
+} from './contrast'
 import { contrastPairs, ThemeInput, themeContrast } from './theme'
 import { themePresets } from './theme-presets'
 
@@ -108,5 +118,82 @@ describe('готовые темы', () => {
       'Ночная',
       'Яркая',
     ])
+  })
+})
+
+describe('hoverColor — фон кнопки под курсором', () => {
+  const check = (base: string, text: string, where: string, textMin = 4.5) => {
+    const hover = hoverColor(base, text)
+    expect(contrastRatio(hover, base), `заметно: ${where}`).toBeGreaterThanOrEqual(
+      HOVER_CONTRAST_MIN,
+    )
+    expect(contrastRatio(hover, text), `текст читается: ${where}`).toBeGreaterThanOrEqual(textMin)
+  }
+
+  it('в каждой готовой теме кнопка и «обратная» кнопка заметно меняются, текст читается', () => {
+    for (const preset of themePresets) {
+      const { accent, onAccent } = preset.theme.colors
+      check(accent, onAccent, `${preset.id}: кнопка`)
+      // Белая кнопка формы на акценте: светлее некуда, текст на пределе — под курсором не хуже 3:1
+      check(onAccent, accent, `${preset.id}: кнопка на акценте`, 3)
+    }
+  })
+
+  it('крайние цвета: чёрный, белый, серый на пределе 4,5, светлая кнопка с тёмным текстом', () => {
+    check('#000000', '#ffffff', 'чёрная')
+    check('#ffffff', '#000000', 'белая')
+    check('#767676', '#ffffff', 'серая на пределе')
+    check('#ffffff', '#767676', 'белая с серым текстом', 3)
+    check('#ffd400', '#1a1a1a', 'жёлтая')
+  })
+
+  it('тёмная кнопка со светлым текстом светлеет — как у le-english', () => {
+    const hover = hoverColor('#213d32', '#fbf7f0')
+    expect(relativeLuminance(hover)).toBeGreaterThan(relativeLuminance('#213d32'))
+  })
+})
+
+describe('наведение на пункты меню', () => {
+  const leEnglish = {
+    background: '#f3ece0',
+    surface: '#fbf7f0',
+    text: '#1e2b25',
+    accent: '#213d32',
+  }
+
+  it('«Подложка» в каждой готовой теме и у le-english заметна, текст на ней читается', () => {
+    const themes = [
+      ...themePresets.map((preset) => [preset.id, preset.theme.colors] as const),
+      ['le-english', leEnglish] as const,
+    ]
+    for (const [id, colors] of themes) {
+      const hover = hoverBackground(colors)
+      expect(contrastRatio(hover, colors.background), `заметно: ${id}`).toBeGreaterThanOrEqual(
+        HOVER_CONTRAST_MIN,
+      )
+      expect(contrastRatio(hover, colors.text), `текст: ${id}`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('«Поверхность», которую видно, берётся как есть; почти цвета фона — сдвиг фона', () => {
+    const plain = { background: '#ffffff', surface: '#e0e0e0', text: '#111111' }
+    expect(hoverBackground(plain)).toBe('#e0e0e0')
+    // le-english: бумага на бумаге, 1,07:1 — под курсором темнее фона, а не «Поверхность»
+    const hover = hoverBackground(leEnglish)
+    expect(hover).not.toBe(leEnglish.surface)
+    expect(relativeLuminance(hover)).toBeLessThan(relativeLuminance(leEnglish.background))
+  })
+
+  it('«Цвет акцента»: акцент почти цвета текста — подчёркивание остаётся, иначе — нет', () => {
+    expect(accentLinkLine(leEnglish.accent, leEnglish.text)).toBe('underline')
+    expect(accentLinkLine('#c0503d', '#1e2b25')).toBe('none')
+    for (const preset of themePresets) {
+      const { accent, text } = preset.theme.colors
+      const line = accentLinkLine(accent, text)
+      // Без подчёркивания — только когда цвет сам заметен (WCAG 1.4.1)
+      if (line === 'none') {
+        expect(contrastRatio(accent, text)).toBeGreaterThanOrEqual(LINK_TEXT_CONTRAST_MIN)
+      }
+    }
   })
 })

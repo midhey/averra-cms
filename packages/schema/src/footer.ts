@@ -25,16 +25,30 @@ export const footerLayoutHints: Record<FooterLayout, string> = {
 }
 
 /**
- * Фон подвала — роль темы, а не свой цвет: «Поверхность» (светлая полоса в светлой теме) или
- * «Акцент» (в светлых темах — тёмный). Пары цветов на нём уже проверены темой (footerPalette)
+ * Фон подвала — роль темы, а не свой цвет: «Как у страницы» (фон темы), «Поверхность» (светлая
+ * полоса в светлой теме) или «Акцент» (в светлых темах — тёмный). Пары цветов на нём уже
+ * проверены темой (footerPalette)
  */
-export const FooterTone = z.enum(['surface', 'accent'])
+export const FooterTone = z.enum(['background', 'surface', 'accent'])
 export type FooterTone = z.infer<typeof FooterTone>
 
 export const footerToneTitles: Record<FooterTone, string> = {
+  background: 'Как у страницы',
   surface: 'Поверхность',
   accent: 'Акцент',
 }
+
+/** Шрифт своего текста подвала: основной или акцентный (рукописная подпись) */
+export const FooterTextFont = z.enum(['body', 'accent'])
+export type FooterTextFont = z.infer<typeof FooterTextFont>
+
+export const footerTextFontTitles: Record<FooterTextFont, string> = {
+  body: 'Основной',
+  accent: 'Акцентный',
+}
+
+/** Свой текст подвала: подпись, часы работы, реквизиты абзацем */
+export const FOOTER_TEXT_MAX = 300
 
 /** «О компании» — строка под названием в колонке: одно предложение */
 export const FOOTER_ABOUT_MAX = 200
@@ -61,6 +75,12 @@ const footerFields = {
   about: line(FOOTER_ABOUT_MAX).default('').meta({ title: 'О компании' }),
   sections: z.boolean().default(true).meta({ title: 'Разделы — пункты меню шапки' }),
   callback: FooterCallback.prefault({}).meta({ title: 'Форма «Перезвоните мне»' }),
+  divider: z.boolean().default(true).meta({ title: 'Линия над подвалом' }),
+  text: line(FOOTER_TEXT_MAX).default('').meta({ title: 'Свой текст' }),
+  textFont: FooterTextFont.default('body').meta({ title: 'Шрифт своего текста' }),
+  copyright: z.boolean().default(true).meta({ title: '© и год' }),
+  consent: z.boolean().default(false).meta({ title: 'Ссылка на согласие на обработку данных' }),
+  brand: z.boolean().default(false).meta({ title: 'Логотип шапки в подвале' }),
 }
 
 /**
@@ -79,6 +99,21 @@ export const defaultFooter: Footer = Footer.parse({})
 export function sameFooter(a: Footer, b: Footer) {
   return JSON.stringify(Footer.parse(a)) === JSON.stringify(Footer.parse(b))
 }
+
+/**
+ * Вид подвала — то, что меняет только владелец (header.look, как вид шапки): раскладка, фон,
+ * линия и шрифт своего текста. Тексты, ссылки и что показать — администратор сайта
+ */
+export const footerLookOf = (footer: Footer) => ({
+  layout: footer.layout,
+  tone: footer.tone,
+  divider: footer.divider,
+  textFont: footer.textFont,
+})
+
+/** Вид двух подвалов одинаковый — по смыслу */
+export const sameFooterLook = (a: Footer, b: Footer) =>
+  JSON.stringify(footerLookOf(Footer.parse(a))) === JSON.stringify(footerLookOf(Footer.parse(b)))
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -108,6 +143,12 @@ export function readFooter(stored: unknown, onInvalid?: (field: string) => void)
     tone: read('tone'),
     about: read('about'),
     sections: read('sections'),
+    divider: read('divider'),
+    text: read('text'),
+    textFont: read('textFont'),
+    copyright: read('copyright'),
+    consent: read('consent'),
+    brand: read('brand'),
     callback: {
       title: readCallback('title'),
       text: readCallback('text'),
@@ -264,6 +305,14 @@ export type FooterPalette = {
  * кнопка наоборот: так любая пара — та, что тема уже проверила на контраст
  */
 export const footerPalette: Record<FooterTone, FooterPalette> = {
+  background: {
+    background: 'background',
+    text: 'text',
+    muted: 'muted',
+    focus: 'accent',
+    buttonBackground: 'accent',
+    buttonText: 'onAccent',
+  },
   surface: {
     background: 'surface',
     text: 'text',

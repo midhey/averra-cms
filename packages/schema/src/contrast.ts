@@ -52,3 +52,71 @@ export function mixColors(a: string, b: string, share: number) {
     })
     .join('')}`
 }
+
+/** Контраст текста кнопки — тот же, что тема проверяет у пары «текст на акценте» */
+const BUTTON_TEXT_MIN = 4.5
+/**
+ * Насколько фон под курсором отличается от фона в покое. 1,15:1 — разницу видно на глаз на любом
+ * цвете, а не только на светлом, как у прежнего brightness(1.08)
+ */
+export const HOVER_CONTRAST_MIN = 1.15
+
+/**
+ * Фон кнопки под курсором: base — фон кнопки, text — её текст. Сначала сдвиг к цвету текста
+ * (тёмная кнопка со светлым текстом светлеет), пока текст читается не хуже 4,5:1; если так
+ * нельзя — в обратную сторону, к чёрному или белому: контраст текста там только растёт. Шаг
+ * подбирается, пока разница с покоем не станет заметной (HOVER_CONTRAST_MIN). Кнопка уже белая
+ * (или чёрная), а текст на ней на пределе 4,5:1 — сдвигаться некуда, кроме как к тексту: тогда
+ * текст под курсором не хуже 3:1. Это на миг наведения, а без заметной смены наведения не видно
+ */
+export function hoverColor(base: string, text: string) {
+  for (const share of [0.12, 0.16, 0.2, 0.25, 0.3]) {
+    const mixed = mixColors(text, base, share)
+    if (
+      contrastRatio(mixed, text) >= BUTTON_TEXT_MIN &&
+      contrastRatio(mixed, base) >= HOVER_CONTRAST_MIN
+    ) {
+      return mixed
+    }
+  }
+  const away = relativeLuminance(text) > relativeLuminance(base) ? '#000000' : '#ffffff'
+  for (const share of [0.15, 0.2, 0.3, 0.4, 0.5, 0.6]) {
+    const mixed = mixColors(away, base, share)
+    if (contrastRatio(mixed, base) >= HOVER_CONTRAST_MIN) return mixed
+  }
+  for (const share of [0.06, 0.08, 0.1, 0.12, 0.16, 0.2]) {
+    const mixed = mixColors(text, base, share)
+    if (contrastRatio(mixed, base) >= HOVER_CONTRAST_MIN) return mixed
+  }
+  return mixColors(text, base, 0.2)
+}
+
+/**
+ * Подложка пункта меню под курсором на фоне темы: «Поверхность», если она заметно отличается от
+ * фона (HOVER_CONTRAST_MIN) и текст на ней читается; во многих темах «Поверхность» почти цвета
+ * фона (бумага на бумаге, 1,07:1) — тогда сдвиг фона, как у кнопки (hoverColor)
+ */
+export function hoverBackground(colors: { background: string; surface: string; text: string }) {
+  const { background, surface, text } = colors
+  if (
+    contrastRatio(surface, background) >= HOVER_CONTRAST_MIN &&
+    contrastRatio(surface, text) >= BUTTON_TEXT_MIN
+  ) {
+    return surface
+  }
+  return hoverColor(background, text)
+}
+
+/**
+ * Насколько цвет ссылки должен отличаться от цвета текста, чтобы её было видно без подчёркивания
+ * (WCAG 1.4.1, техника G183)
+ */
+export const LINK_TEXT_CONTRAST_MIN = 3
+
+/**
+ * Подчёркивание пункта меню под курсором при наведении «Цвет акцента»: акцент заметно отличается
+ * от текста — подчёркивание не нужно; почти того же цвета (тёмно-зелёный рядом с чернилами,
+ * 1,25:1) — без подчёркивания наведения не видно, оно остаётся
+ */
+export const accentLinkLine = (accent: string, text: string) =>
+  contrastRatio(accent, text) >= LINK_TEXT_CONTRAST_MIN ? 'none' : 'underline'

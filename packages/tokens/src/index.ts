@@ -1,4 +1,11 @@
-import { coverScrim, defaultTheme, Theme } from '@averra/schema'
+import {
+  accentLinkLine,
+  coverScrim,
+  defaultTheme,
+  hoverBackground,
+  hoverColor,
+  Theme,
+} from '@averra/schema'
 import { fontCatalog, fontStack } from './fonts'
 
 export {
@@ -52,6 +59,14 @@ export function themeToCss(theme: Theme): string {
     '--color-accent': colors.accent,
     '--color-on-accent': colors.onAccent,
     '--color-border': colors.border,
+    // Фон кнопки под курсором: заметно другой в любой теме, текст на нём читается (hoverColor).
+    // «На акценте» — для кнопки цвета «Текст на акценте» (форма подвала на акценте)
+    '--color-accent-hover': hoverColor(colors.accent, colors.onAccent),
+    '--color-on-accent-hover': hoverColor(colors.onAccent, colors.accent),
+    // Пункты меню шапки под курсором: подложка заметна на фоне («Подложка»), а «Цвет акцента»
+    // почти цвета текста дополняется подчёркиванием — наведение видно в любой теме
+    '--color-background-hover': hoverBackground(colors),
+    '--accent-link-line': accentLinkLine(colors.accent, colors.text),
     // Затемнение фото «Первого экрана» на фото: посчитано так, чтобы текст читался над любым фото
     '--cover-scrim': String(coverScrim(colors)),
     '--font-heading': fontStack(fonts.heading),

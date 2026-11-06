@@ -1,5 +1,12 @@
 import { existsSync } from 'node:fs'
-import { readTheme, Theme, themeFontIds, themePresets } from '@averra/schema'
+import {
+  hoverBackground,
+  hoverColor,
+  readTheme,
+  Theme,
+  themeFontIds,
+  themePresets,
+} from '@averra/schema'
 import { describe, expect, it } from 'vitest'
 import {
   allFontFiles,
@@ -26,6 +33,19 @@ describe('тема по умолчанию', () => {
     expect(css).toContain('--font-heading-weight:700')
     // Затемнение фото первого экрана — посчитано из текста и фона темы
     expect(css).toContain('--cover-scrim:0.6')
+    // Фон кнопки под курсором — посчитан из акцента и текста на нём
+    const { accent, onAccent } = defaultTheme.colors
+    expect(css).toContain(`--color-accent-hover:${hoverColor(accent, onAccent)}`)
+    expect(css).toContain(`--color-on-accent-hover:${hoverColor(onAccent, accent)}`)
+    expect(hoverColor(accent, onAccent)).not.toBe(accent)
+    // Наведение на пункты меню шапки: подложка и подчёркивание у «Цвета акцента»
+    expect(css).toContain(`--color-background-hover:${hoverBackground(defaultTheme.colors)}`)
+    expect(css).toMatch(/--accent-link-line:(none|underline)(;|\})/)
+  })
+
+  it('le-english: акцент почти цвета текста — у «Цвета акцента» остаётся подчёркивание', () => {
+    const colors = { ...defaultTheme.colors, text: '#1e2b25', accent: '#213d32' }
+    expect(themeToCss({ ...defaultTheme, colors })).toContain('--accent-link-line:underline')
   })
 
   // Строка уходит в <style> страницы как есть: недопустимый цвет — исключение, а не CSS
