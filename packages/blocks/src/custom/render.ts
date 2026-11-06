@@ -1,5 +1,6 @@
 import {
   type CustomBlockDraft,
+  type CustomBlockPlacement,
   customBlockProps,
   exampleIssues,
   type MediaMap,
@@ -16,6 +17,8 @@ import {
   parseTemplate,
   renderTemplate,
 } from './liquid'
+import { PLACE_SHAPE, type PlaceData, type PlaceShape, samplePlaceData } from './place-data'
+import { legalFooterCssProblems } from './place-legal'
 import { type CustomBlockProblem, CustomBlockRenderError } from './problems'
 import { scriptProblems } from './script'
 
@@ -26,7 +29,11 @@ import { scriptProblems } from './script'
 export type RenderableCustomBlock = Pick<
   CustomBlockDraft,
   'key' | 'title' | 'fields' | 'template' | 'css'
-> & { script?: string | undefined }
+> & {
+  script?: string | undefined
+  /** Место: блок страницы (нет — тоже), свой вид шапки или подвала */
+  placement?: CustomBlockPlacement | undefined
+}
 
 /** Опубликованные определения по ключу: так их получают Page и рендерер */
 export type CustomBlockMap = Readonly<Record<string, RenderableCustomBlock>>
@@ -55,6 +62,28 @@ export function renderCustomBlockHtml(
   props: unknown,
   context: RenderContext,
 ) {
+  return renderWith(definition, props, {}, context)
+}
+
+/**
+ * HTML своего вида шапки или подвала: поля вида и данные места (site, page). Ошибка —
+ * CustomBlockRenderError: на сайте тогда стандартная шапка или подвал
+ */
+export function renderCustomPlaceHtml(
+  definition: RenderableCustomBlock,
+  props: unknown,
+  data: PlaceData,
+  context: RenderContext,
+) {
+  return renderWith(definition, props, data, context)
+}
+
+function renderWith(
+  definition: RenderableCustomBlock,
+  props: unknown,
+  extra: Partial<PlaceData>,
+  context: RenderContext,
+) {
   const parsed = customBlockProps(definition.fields).safeParse(props)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
@@ -63,7 +92,7 @@ export function renderCustomBlockHtml(
       `Данные блока не подходят под определение «${definition.title}» — ${where}${issue?.message ?? ''}`,
     )
   }
-  const scope = { ...parsed.data, block: { id: context.id, key: definition.key } }
+  const scope = { ...parsed.data, ...extra, block: { id: context.id, key: definition.key } }
   const html = renderTemplate(definition.template, scope, {
     media: context.media,
     priority: context.priority,
@@ -108,6 +137,61 @@ export function customBlocksCss(
 }
 
 const ALLOWED_GLOBALS = new Set(['block'])
+/** У шапки и подвала ещё данные места */
+const PLACE_GLOBALS = new Set(['block', 'site', 'page'])
+
+const isPlace = (definition: { placement?: CustomBlockPlacement | undefined }) =>
+  (definition.placement ?? 'block') !== 'block'
+
+/** Элемент списка по пути: first, last, номер */
+const isItem = (segment: Segment | undefined) =>
+  segment === 'first' || segment === 'last' || typeof segment === 'number'
+
+/** Форма по пути от site или page; переменная цикла по site.menu — форма пункта меню */
+function placeShapeOf(
+  path: readonly Segment[],
+  aliases: ReadonlyMap<string, string[] | undefined>,
+  depth = 0,
+): PlaceShape | undefined {
+  const [head, ...rest] = path
+  if (typeof head !== 'string' || depth > 8) return undefined
+  let shape: PlaceShape | undefined
+  if (head === 'site' || head === 'page') shape = PLACE_SHAPE[head]
+  else if (aliases.has(head)) {
+    const collection = aliases.get(head)
+    const list = collection && placeShapeOf(collection, aliases, depth + 1)
+    shape = Array.isArray(list) ? list[0] : undefined
+  }
+  for (const segment of rest) {
+    if (shape === undefined || shape === 'value') return undefined
+    if (Array.isArray(shape)) shape = isItem(segment) ? shape[0] : undefined
+    else
+      shape =
+        typeof segment === 'string' ? (shape as Record<string, PlaceShape>)[segment] : undefined
+  }
+  return shape
+}
+
+/**
+ * Опечатка в данных места на любом уровне: site.manu, site.organization.phon, item.hreff в цикле
+ * по site.menu. Значения (site.name.size) и списки (site.menu.size) не проверяются
+ */
+function placeVariableProblem(
+  segments: readonly Segment[],
+  aliases: ReadonlyMap<string, string[] | undefined>,
+) {
+  for (let end = 1; end < segments.length; end += 1) {
+    const shape = placeShapeOf(segments.slice(0, end), aliases)
+    if (shape === undefined || shape === 'value' || Array.isArray(shape)) return undefined
+    const key = segments[end]
+    if (typeof key !== 'string' || key === 'size') return undefined
+    if (key in shape) continue
+    const prefix = segments.slice(0, end).map(String).join('.')
+    const known = Object.keys(shape).map((one) => `${prefix}.${one}`)
+    return `Нет данных «${prefix}.${key}»: есть ${known.join(', ')}`
+  }
+  return undefined
+}
 
 /**
  * Всё, что не так с определением, — для редактора своего блока (на лету) и для API (публикация
@@ -143,6 +227,7 @@ export function customBlockProblems(
     mediaUrl: known ? (id) => (known.has(id) ? `/media/${id}` : undefined) : undefined,
   })
   problems.push(...css.problems)
+  if (definition.placement === 'footer') problems.push(...legalFooterCssProblems(definition.css))
   problems.push(...scriptProblems(definition.script))
   return problems
 }
@@ -158,8 +243,9 @@ function templateProblems(
     const templates = parseTemplate(definition.template)
     const fields = new Set(definition.fields.map((field) => field.name))
     const analysis = liquid.analyzeSync(templates, { partials: false })
+    const globals = isPlace(definition) ? PLACE_GLOBALS : ALLOWED_GLOBALS
     for (const [name, uses] of Object.entries(analysis.globals)) {
-      if (fields.has(name) || ALLOWED_GLOBALS.has(name)) continue
+      if (fields.has(name) || globals.has(name)) continue
       add(
         'error',
         `Нет поля «${name}»: ключи полей — ${[...fields].join(', ')}`,
@@ -170,9 +256,24 @@ function templateProblems(
     const aliases = loopAliases(definition.template, new Set(Object.keys(analysis.locals)))
     for (const uses of Object.values(analysis.variables)) {
       for (const use of uses) {
-        const message = nestedFieldProblem(definition.fields, use.segments, aliases)
+        const message =
+          (isPlace(definition) && !fields.has(String(use.segments[0]))
+            ? placeVariableProblem(use.segments, aliases)
+            : undefined) ?? nestedFieldProblem(definition.fields, use.segments, aliases)
         if (message) add('error', message, use.location.row)
       }
+    }
+    // Меню шапки на телефоне без JS открывается только через <details>: скрипт Averra его ещё и
+    // закрывает по Esc. Без него меню на узком экране либо не видно, либо не закрывается
+    if (
+      definition.placement === 'header' &&
+      /\bsite\.menu\b/.test(definition.template) &&
+      !/<details\b/i.test(definition.template)
+    ) {
+      add(
+        'warning',
+        'Меню без <details>: на телефоне без JavaScript его не открыть. Оберните меню телефона в <details><summary>Меню</summary>…</details>',
+      )
     }
   } catch (error) {
     const { message, line } = liquidErrorOf(error)
@@ -180,6 +281,8 @@ function templateProblems(
     return problems
   }
   const block = { id: 'example', key: definition.key }
+  // Шапка и подвал рисуются на образце данных сайта: меню, кнопка, «Организация», документы
+  const place = isPlace(definition) ? samplePlaceData() : {}
   const state = { media: {}, priority: false }
   // Пробный рендер на примере: ошибки, которые видно только при выполнении (лимиты, аргументы).
   // Он первый: если шаблон упёрся в лимит, вычислять дальше нечем — каждое вычисление было бы
@@ -189,7 +292,7 @@ function templateProblems(
   let exhausted = false
   if (example) {
     try {
-      rendered.push(renderTemplate(definition.template, { ...example, block }, state))
+      rendered.push(renderTemplate(definition.template, { ...example, ...place, block }, state))
     } catch (error) {
       if (error instanceof CustomBlockRenderError) {
         add('error', error.message, error.line)

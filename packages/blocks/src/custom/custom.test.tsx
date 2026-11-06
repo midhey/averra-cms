@@ -14,7 +14,7 @@ import { Page } from '../Page'
 import { compileCustomCss } from './css'
 import { checkTemplateHtml, maskLiquid, RAW_HTML_FILTERS, sanitizeHtml } from './html'
 import { liquid, liquidLint, renderTemplate } from './liquid'
-import { CUSTOM_BLOCK_ATTRIBUTE, isReservedDataAttribute } from './marker'
+import { CUSTOM_BLOCK_ROOT_ATTRIBUTE, isReservedDataAttribute } from './marker'
 import { customBlockProblems, customBlocksCss, renderCustomBlockHtml } from './render'
 
 const mediaId = '3f1c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'
@@ -1399,14 +1399,16 @@ assign u = q | replace: 'x', ':'
     expect([...names].filter((name) => !isReservedDataAttribute(name))).toEqual([])
   })
 
-  it('скрипты сайта ищут свою разметку вне своих блоков — по тому же атрибуту', () => {
+  // Граница — обёртка HTML шаблона, а не корень своего блока: в корне своей шапки и подвала стоит
+  // разметка Averra (строка документов, метки прокрутки), её скрипты находить должны
+  it('скрипты сайта ищут свою разметку вне шаблонов своих блоков — по тому же атрибуту', () => {
     for (const file of [
       '../cookie/consent-dom.ts',
       '../header/header-dom.ts',
       '../video/player-dom.ts',
     ]) {
       const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
-      expect(source, file).toContain(`closest('[${CUSTOM_BLOCK_ATTRIBUTE}]')`)
+      expect(source, file).toContain(`closest('[${CUSTOM_BLOCK_ROOT_ATTRIBUTE}]')`)
     }
   })
 

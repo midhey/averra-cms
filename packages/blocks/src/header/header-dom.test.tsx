@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-import { Header, type HeaderInput } from '@averra/schema'
+import { Header, type HeaderInput, starterCustomBlock } from '@averra/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { HeaderSlot } from '../place/CustomPlace'
 import { type HeaderEnvironment, startSiteHeader } from './header-dom'
 import { SiteHeader } from './SiteHeader'
 import { siteHeaderView } from './view'
@@ -182,5 +183,53 @@ describe('меню телефона', () => {
     link.addEventListener('click', (event) => event.preventDefault())
     link.click()
     expect(details.hasAttribute('open')).toBe(false)
+  })
+})
+
+describe('своя шапка (C7)', () => {
+  const menu = [{ label: 'Цены', page: 'index', block: 'pricing' }]
+  const definition = starterCustomBlock('my-header', 'Моя шапка', 'header')
+
+  function mountCustom(header: HeaderInput) {
+    const view = siteHeaderView({
+      header: Header.parse({ menu, ...header, custom: { key: 'my-header', props: {} } }),
+      siteName: 'Ремонт у Ивана',
+      page: { slug: 'index', content: { blocks: [] } },
+      pages: [{ slug: 'index', blockIds: ['pricing'] }],
+      contacts: { phone: '', address: '' },
+    })
+    if (!view) throw new Error('Шапки нет')
+    document.body.innerHTML = renderToStaticMarkup(
+      <HeaderSlot view={view} media={{}} definitions={{ 'my-header': definition }} />,
+    )
+    const element = document.querySelector('header[data-custom-block="my-header"]')
+    if (!element) throw new Error('Нет своей шапки')
+    return element
+  }
+
+  it('корень своей шапки находится: сборка ставит data-condensed на него', () => {
+    const header = mountCustom({ condense: true })
+    const observer = fakeObserver()
+    startSiteHeader(document, env(observer))
+    observer.scroll(true)
+    expect(header.hasAttribute('data-condensed')).toBe(true)
+  })
+
+  it('Esc закрывает <details> шаблона и возвращает фокус на его summary', () => {
+    mountCustom({})
+    startSiteHeader(document, env(fakeObserver()))
+    const details = document.querySelector('details') as HTMLDetailsElement
+    details.setAttribute('open', '')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(details.hasAttribute('open')).toBe(false)
+    expect(document.activeElement).toBe(details.querySelector('summary'))
+  })
+
+  it('«шапка» внутри шаблона своего блока страницы — не шапка сайта', () => {
+    document.body.innerHTML =
+      '<section data-custom-block="fake"><div data-custom-block-root=""><header data-site-header="" data-condense=""><details open><summary>x</summary></details></header></div></section>'
+    startSiteHeader(document, env(fakeObserver()))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('details')?.hasAttribute('open')).toBe(true)
   })
 })
