@@ -31,6 +31,8 @@ export const CUSTOM_BLOCK_LIMITS = {
   template: 20_000,
   /** Знаков в CSS */
   css: 20_000,
+  /** Знаков в скрипте: скрипт — улучшение поверх рабочего HTML, а не приложение */
+  script: 20_000,
   /** Знаков в текстовом поле */
   text: 2000,
   textarea: 5000,
@@ -286,6 +288,13 @@ export const CustomBlockDraft = z
     fields: z.array(CustomFieldDef).min(1).max(CUSTOM_BLOCK_LIMITS.fieldsPerLevel),
     template: z.string().max(CUSTOM_BLOCK_LIMITS.template).default(''),
     css: z.string().max(CUSTOM_BLOCK_LIMITS.css).default(''),
+    /**
+     * Скрипт блока: тело async-функции, которой рендерер передаёт blocks — корни блоков этого типа
+     * на странице. '' — скрипта нет. Файлом на сайте, только на страницах с блоком, один раз
+     * (решение «Свой JS на сайте»). В базе — отдельной колонкой: прежняя версия после отката
+     * читает определение без него и выводит блок без скрипта
+     */
+    script: z.string().max(CUSTOM_BLOCK_LIMITS.script).default(''),
     /** Пример данных: с ним блок встаёт на страницу, его видят каталог, предпросмотр и MCP */
     example: z.record(z.string(), z.unknown()).default({}),
   })
