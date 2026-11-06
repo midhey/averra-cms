@@ -1,5 +1,6 @@
 ---
 import {
+  consentPageHref,
   cookieNoticeView,
   customBlocksCss,
   headerMenuRow,
@@ -94,8 +95,9 @@ const header = siteHeaderView({
   contacts: headerContacts(site.settings.organization),
 })
 // Подвал: опубликованный, если страница его не скрыла (иначе — прежняя полоса с документами).
-// Разделы — пункты опубликованного меню шапки, реквизиты и контакты — из «SEO → Организация»,
-// форма «Перезвоните мне» шлёт заявку в API с адресом этой страницы. Год — год сборки
+// Разделы — пункты опубликованного меню шапки, логотип — её же, реквизиты и контакты — из «SEO →
+// Организация», согласие — ссылкой, если его включили и страница опубликована, форма «Перезвоните
+// мне» шлёт заявку в API с адресом этой страницы. Год — год сборки
 const footer = siteFooterView({
   footer: site.footer,
   siteName: site.name,
@@ -107,6 +109,7 @@ const footer = siteFooterView({
   })),
   contacts: footerContacts(site.settings.organization),
   legal: cookies.footer,
+  consentHref: consentPageHref(pages.map((candidate) => candidate.slug)),
   // Стандартной 404 нет в базе — API заявку с неё не примет, поэтому формы на ней нет (null)
   formAction: pages.includes(page) ? formActionFor(site.id, page.slug)(FOOTER_FORM_ID) : null,
   year: new Date().getFullYear(),
@@ -144,7 +147,7 @@ const hasVideo = page.content.blocks.some((block) => block.type === 'video')
       customBlocks={customBlocks}
       onCustomBlockError={customBlockError}
     />
-    {footer ? <SiteFooter view={footer} /> : <LegalFooter {...cookies.footer} />}
+    {footer ? <SiteFooter view={footer} media={media} /> : <LegalFooter {...cookies.footer} />}
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}
