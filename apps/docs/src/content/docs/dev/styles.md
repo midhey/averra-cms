@@ -148,6 +148,9 @@ sidebar:
 | `fonts.accent` (необязательно) | id из `themeFontIds` | `--font-accent`; не задан — `var(--font-heading)`. Для рукописных подписей и пометок в своих блоках; грузятся начертания 400 и жирное |
 | `radius` | `none`, `small`, `medium`, `large` (0, 4, 8, 16 px) | `--radius` |
 | — (из `text` и `background`) | затемнение фото «Первого экрана» на фото: `coverScrim(colors)` | `--cover-scrim` |
+| — (из `accent` и `onAccent`) | фон кнопки под курсором: `hoverColor(accent, onAccent)` и для «обратной» кнопки цвета `onAccent` | `--color-accent-hover`, `--color-on-accent-hover` |
+| — (из `background`, `surface`, `text`) | подложка пункта меню шапки под курсором: `hoverBackground(colors)` — «Поверхность», если она отличается от фона ≥ 1,15:1, иначе `hoverColor(background, text)` | `--color-background-hover` |
+| — (из `accent` и `text`) | подчёркивание пункта под курсором у наведения «Цвет акцента»: `accentLinkLine(accent, text)` — `none`, если акцент отличается от текста ≥ 3:1 (`LINK_TEXT_CONTRAST_MIN`, WCAG 1.4.1), иначе `underline` | `--accent-link-line` |
 
 - **Контраст** — `themeContrast(colors)` в `@averra/schema`: пары, пороги и какие блокируют
   (`contrastPairs`). `ThemeInput` — `Theme` плюс блокирующие пары: им проверяют и админка, и API
@@ -156,6 +159,13 @@ sidebar:
 - **Каждая переменная цвета** берётся хотя бы одним блоком — это проверяет
   `apps/renderer/src/lib/theme-roles.test.ts`. Новая роль без блока, который ею красит, уронит
   тест: цвет на экране «Тема» менялся бы впустую.
+- **Наведение кнопок** — `hoverColor(base, text)` в `contrast.ts`: фон под курсором отличается от
+  фона в покое не меньше чем на 1,15:1 (`HOVER_CONTRAST_MIN`) в любой теме, а текст кнопки на нём
+  не хуже 4,5:1. Сначала сдвиг к цвету текста (тёмная кнопка светлеет), не держит контраст — в
+  обратную сторону. Кнопка уже белая (чёрная), а текст на пределе — к тексту, с текстом не хуже 3:1
+  (на миг наведения). Блоки берут `--color-accent-hover` вместо `filter: brightness()`: на тёмной
+  кнопке яркость 1,08 не видна. Проверка — `contrast.test.ts` по всем готовым темам и крайним
+  цветам.
 - **Готовые темы** — `themePresets` (`theme-presets.ts`). Новая готовая тема проходит все пары, и
   блокирующие, и предупреждающую: это проверяет `contrast.test.ts`.
 - **Из базы** тема читается только `readTheme`: тема до редактора тем (шесть цветов) получает
