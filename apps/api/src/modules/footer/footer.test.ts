@@ -194,8 +194,39 @@ describe('подвал: права и контакты', () => {
     expect((await save({ layout: 'columns' }, editor.headers)).status).toBe(403)
     expect((await publish(editor.headers)).status).toBe(403)
     expect((await takeDown(editor.headers)).status).toBe(403)
+    // Администратор сайта меняет тексты и ссылки, а вид (раскладку, фон, линию, шрифт текста) —
+    // только владелец
     const admin = await api.loginAs('client', siteId)
-    expect((await save({ layout: 'columns' }, admin.headers)).status).toBe(200)
+    const texts = { text: 'Работаем с 9 до 18', consent: true, copyright: false, brand: true }
+    const saved = await save(texts, admin.headers)
+    expect(saved.status, await saved.clone().text()).toBe(200)
+    for (const look of [
+      { layout: 'columns' },
+      { tone: 'background' },
+      { divider: false },
+      { textFont: 'accent' },
+    ]) {
+      const res = await save({ ...texts, ...look }, admin.headers)
+      expect(res.status, JSON.stringify(look)).toBe(403)
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(
+        /Вид шапки и подвала .* меняет владелец/,
+      )
+    }
+    // Вид, который поставил владелец, администратор сохраняет вместе со своими правками
+    await ok(await save({ ...texts, tone: 'background', textFont: 'accent' }))
+    expect(
+      (
+        await save(
+          { ...texts, text: 'Пн–пт', tone: 'background', textFont: 'accent' },
+          admin.headers,
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('GET отдаёт страницу согласия: опубликована ли она', async () => {
+    const view = (await (await read()).json()) as { consent: { slug: string; published: boolean } }
+    expect(view.consent).toEqual({ slug: 'consent', published: false })
   })
 })
 

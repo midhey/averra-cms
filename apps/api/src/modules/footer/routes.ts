@@ -1,8 +1,17 @@
-import { cookieNoticeShown, Footer, footerContacts, MAIN_PAGE_SLUG, Uuid } from '@averra/schema'
+import {
+  cookieNoticeShown,
+  Footer,
+  footerContacts,
+  legalPages,
+  MAIN_PAGE_SLUG,
+  sameFooterLook,
+  Uuid,
+} from '@averra/schema'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
+import { can, forbiddenMessages } from '../../auth/access'
+import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { pages } from '../../db/schema'
 import { conflict } from '../../errors'
@@ -51,26 +60,33 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
         const found = state && (await sitesRepo(db).find(siteId))
         const policy = found && (await policyOf(db, siteId))
         if (!state || !found || !policy) return c.json(notFound('Сайт не найден'), 404)
-        const [main] = await db
-          .select({ id: pages.id })
-          .from(pages)
-          .where(
-            and(
-              eq(pages.siteId, siteId),
-              eq(pages.slug, MAIN_PAGE_SLUG),
-              isNotNull(pages.published),
-            ),
-          )
+        const published = async (slug: string) =>
+          (
+            await db
+              .select({ id: pages.id })
+              .from(pages)
+              .where(
+                and(eq(pages.siteId, siteId), eq(pages.slug, slug), isNotNull(pages.published)),
+              )
+          ).length > 0
+        const main = await published(MAIN_PAGE_SLUG)
+        // Страница согласия: ссылка на неё в подвале — только на опубликованную
+        const consent = {
+          slug: legalPages.consent.slug,
+          published: await published(legalPages.consent.slug),
+        }
         const settings = readStoredSettings(found.settings)
         const contacts =
           c.var.actor.kind === 'user' && main ? footerContacts(settings.organization) : null
         // «Настройки cookie» в подвале — как на сайте: только в режиме согласия и при счётчиках
         const cookieSettings =
           cookieNoticeShown(settings.analytics) && settings.cookies.mode === 'consent'
-        return c.json({ ...state, policy, cookieSettings, contacts }, 200)
+        return c.json({ ...state, policy, consent, cookieSettings, contacts }, 200)
       })
 
-      // Черновик: только схема — подвал ни на что, кроме «Организации» и меню шапки, не ссылается
+      // Черновик: только схема — подвал ни на что, кроме «Организации», меню шапки и документов,
+      // не ссылается. Вид подвала (раскладка, фон, линия, шрифт текста) — только владелец
+      // (header.look), как вид шапки
       .put(
         '/',
         validate('param', SiteParams),
@@ -78,7 +94,14 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
         validate('json', Footer),
         async (c) => {
           const { siteId } = c.req.valid('param')
-          const state = await repo.saveDraft(siteId, c.req.valid('json'))
+          const footer = c.req.valid('json')
+          if (!can(c.var.siteRole, 'header.look')) {
+            const current = await repo.read(siteId)
+            if (current && !sameFooterLook(current.draft, footer)) {
+              return c.json(forbidden(forbiddenMessages['header.look']), 403)
+            }
+          }
+          const state = await repo.saveDraft(siteId, footer)
           if (!state) return c.json(notFound('Сайт не найден'), 404)
           return c.json(state, 200)
         },

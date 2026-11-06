@@ -84,6 +84,7 @@ describe('таблица разрешений', () => {
     ['site.settings', [true, true, false]],
     ['theme.edit', [true, false, false]],
     ['header.edit', [true, true, false]],
+    ['header.look', [true, false, false]],
     ['blocks.define', [true, false, false]],
     ['blocks.draft', [true, false, false]],
     ['installation.update', [true, false, false]],
@@ -326,6 +327,7 @@ describe('токен API', () => {
     for (const permission of [
       'theme.edit',
       'header.edit',
+      'header.look',
       'installation.update',
       'blocks.define',
       'tokens.manage',

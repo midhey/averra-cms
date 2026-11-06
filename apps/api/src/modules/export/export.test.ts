@@ -270,7 +270,7 @@ describe('все данные сайта', () => {
     const files = await unzip(await api.app.request(url('data'), { headers }))
     const site = JSON.parse(decode(files['site.json'])).site
     expect(site.header).toBeNull()
-    expect(site.headerDraft.menu).toEqual(menu)
+    expect(site.headerDraft.menu).toEqual([{ ...menu[0], mobileLabel: '' }])
     expect(decode(files['README.txt'])).toContain('headerDraft')
   })
 

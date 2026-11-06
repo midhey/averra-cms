@@ -1,7 +1,16 @@
-import { Header, headerContacts, headerLinkIssues, MAIN_PAGE_SLUG, Uuid } from '@averra/schema'
+import {
+  Header,
+  headerContacts,
+  headerLinkIssues,
+  headerWithVisibleLogo,
+  MAIN_PAGE_SLUG,
+  sameHeaderLook,
+  Uuid,
+} from '@averra/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
+import { can, forbiddenMessages } from '../../auth/access'
+import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
@@ -61,8 +70,10 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
         return c.json({ ...state, targets, contacts }, 200)
       })
 
-      // Черновик: схема (раскладка, до 8 пунктов, только свои страницы и блоки), логотип из
-      // медиатеки, страницы и блоки меню существуют — хотя бы в черновике
+      // Черновик: схема (раскладка, до 8 пунктов, только свои страницы и блоки или внешние
+      // ссылки), логотип из медиатеки, страницы и блоки меню существуют — хотя бы в черновике.
+      // Вид шапки (раскладка, поведение, look) меняет только владелец (header.look): правка
+      // администратора сайта, которая трогает вид, — 403, а тексты и ссылки он меняет сам
       .put(
         '/',
         validate('param', SiteParams),
@@ -70,7 +81,14 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
         validate('json', Header),
         async (c) => {
           const { siteId } = c.req.valid('param')
-          const header = c.req.valid('json')
+          // У логотипа «Текст» картинки нет: спрятанная держала бы файл в медиатеке
+          const header = headerWithVisibleLogo(c.req.valid('json'))
+          if (!can(c.var.siteRole, 'header.look')) {
+            const current = await repo.read(siteId)
+            if (current && !sameHeaderLook(current.draft, header)) {
+              return c.json(forbidden(forbiddenMessages['header.look']), 403)
+            }
+          }
           const issues = [
             ...(await repo.logoIssues(siteId, header)),
             ...headerLinkIssues(header, await repo.targets(siteId), 'draft'),

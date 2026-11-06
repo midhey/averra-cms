@@ -319,6 +319,18 @@ describe('логотип', () => {
     expect((await problemOf(res)).message).toMatch(/логотип шапки сайта/)
   })
 
+  it('логотип «Текст» сохраняется без картинки — файл не держится и удаляется', async () => {
+    const logo = await uploadLogo()
+    await ok(await save({ logo }))
+    const saved = await ok(await save({ brand: 'text', logo, logoMark: 'Ре' }))
+    expect(saved.draft).toMatchObject({ brand: 'text', logo: null, logoMark: 'Ре' })
+    const res = await app.request(`/api/sites/${demoSiteId}/media/${logo}`, {
+      method: 'DELETE',
+      headers: owner.headers,
+    })
+    expect(res.status, await res.clone().text()).toBe(204)
+  })
+
   it('картинки нет в медиатеке — 409 у поля logo', async () => {
     const res = await save({ logo: 'b0000000-0000-4000-8000-00000000abcd' })
     expect(res.status).toBe(409)
@@ -356,5 +368,67 @@ describe('права', () => {
     const editor = await api.loginAs('editor')
     const res = await app.request(`/api/sites/${other}/header`, { headers: editor.headers })
     expect(res.status).toBe(404)
+  })
+})
+
+describe('вид шапки — владельцу, тексты и ссылки — администратору сайта', () => {
+  it('администратор меняет подписи, логотип-текст и пункты; вид — 403', async () => {
+    const admin = await api.loginAs('client', demoSiteId)
+    const texts = {
+      menu: [
+        {
+          label: 'Почему мы',
+          mobileLabel: 'Почему выбирают нас',
+          page: 'index',
+          block: 'benefits',
+        },
+        { label: 'Telegram', url: 'https://t.me/remont' },
+      ],
+      button: { label: 'Рассчитать', mobileLabel: 'Расчёт', page: 'index', block: 'contact' },
+      brand: 'text',
+      logoMark: 'Р',
+      logoText: 'Ремонт\nу Ивана',
+      phone: true,
+    }
+    const saved = await save(texts, admin.headers)
+    expect(saved.status, await saved.clone().text()).toBe(200)
+    for (const look of [
+      { layout: 'minimal' },
+      { sticky: false },
+      { overlay: true },
+      { look: { mobileButton: 'row' } },
+      { look: { divider: false } },
+    ]) {
+      const res = await save({ ...texts, ...look }, admin.headers)
+      expect(res.status, JSON.stringify(look)).toBe(403)
+    }
+    // Владелец меняет вид, администратор дальше правит тексты при этом виде
+    await ok(await save({ ...texts, look: { mobileButton: 'row', buttonShape: 'pill' } }))
+    const again = await save(
+      { ...texts, logoText: 'Ремонт', look: { mobileButton: 'row', buttonShape: 'pill' } },
+      admin.headers,
+    )
+    expect(again.status).toBe(200)
+  })
+
+  it('внешний пункт публикуется без проверки страниц и идёт в снимок как есть', async () => {
+    await ok(
+      await save({
+        menu: [{ label: 'Telegram', url: 'https://t.me/remont', newTab: false }],
+        button: { label: 'Позвонить', url: 'tel:+73420000000' },
+      }),
+    )
+    await ok(await publish())
+    const header = await snapshotHeader()
+    expect(header?.menu).toEqual([
+      { label: 'Telegram', mobileLabel: '', url: 'https://t.me/remont', newTab: false },
+    ])
+    expect(header?.button).toMatchObject({ url: 'tel:+73420000000' })
+  })
+
+  it('кривая внешняя ссылка — 400 с ошибкой у поля', async () => {
+    const res = await save({ menu: [{ label: 'X', url: 'javascript:alert(1)' }] })
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(await res.json())).toContain('menu.0.url')
   })
 })

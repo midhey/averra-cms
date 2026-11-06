@@ -30,12 +30,16 @@ site.json — все данные сайта (формат averra-site-export, �
               medium, large); черновик темы с экрана «Тема» (themeDraft, в том же формате; null —
               тему там не сохраняли); шапка сайта и меню (header: раскладка layout, липкая
               sticky, собирается при прокрутке condense, прозрачная на первом экране overlay,
-              телефон phone, кнопка button и пункты меню menu — подпись label, страница page и
-              блок на ней block, логотип logo — id картинки; null — шапку не публиковали) и её
-              черновик (headerDraft; null — такой же, как на сайте); подвал (footer: вид layout —
-              simple, columns, big, фон tone — surface или accent, строка о компании about,
-              разделы из меню sections, тексты формы «Перезвоните мне» callback; null — подвал
-              не публиковали) и его черновик (footerDraft); настройки заявок (leadSettings:
+              телефон phone, кнопка button и пункты меню menu — подпись label, подпись на
+              телефоне mobileLabel, страница page и блок на ней block или внешняя ссылка url,
+              новая вкладка newTab; логотип: вид brand — image, text, imageText, картинка logo —
+              id картинки, знак logoMark, подпись logoText; вид шапки look; null — шапку не
+              публиковали) и её черновик (headerDraft; null — такой же, как на сайте); подвал
+              (footer: вид layout — simple, columns, big, фон tone — background, surface или
+              accent, линия divider, строка о компании about, разделы из меню sections, свой
+              текст text и его шрифт textFont, «© и год» copyright, ссылка на согласие consent,
+              логотип шапки brand, тексты формы «Перезвоните мне» callback; null — подвал не
+              публиковали) и его черновик (footerDraft); настройки заявок (leadSettings:
               recipients — адреса почты для заявок, notificationRecipients — все получатели
               уведомлений о заявках: канал, адрес или id чата Telegram, название, события)
               и SEO (settings:
