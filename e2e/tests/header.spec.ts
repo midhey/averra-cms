@@ -219,7 +219,7 @@ test('настроить шапку и меню, опубликовать — н
   const fill = async (index: number, label: string, target: string) => {
     await page.getByRole('button', { name: 'Пункт меню', exact: true }).click()
     const item = items.nth(index)
-    await item.getByRole('textbox', { name: 'Подпись' }).fill(label)
+    await item.getByRole('textbox', { name: 'Подпись', exact: true }).fill(label)
     await item.getByRole('combobox', { name: 'Куда ведёт' }).selectOption(target)
   }
   await fill(0, 'Почему мы', 'index#benefits')
@@ -228,7 +228,9 @@ test('настроить шапку и меню, опубликовать — н
   await expect(items.nth(1).getByText(/страница «Акции» не опубликована/)).toBeVisible()
   // Порядок — стрелками (перетаскивание то же, что у блоков: tests/drag.spec.ts)
   await items.nth(2).getByRole('button', { name: 'Поднять пункт «Связаться»' }).click()
-  await expect(items.nth(1).getByRole('textbox', { name: 'Подпись' })).toHaveValue('Связаться')
+  await expect(items.nth(1).getByRole('textbox', { name: 'Подпись', exact: true })).toHaveValue(
+    'Связаться',
+  )
 
   // Предпросмотр — настоящая шапка над главной
   const preview = page.frameLocator('iframe[title="Предпросмотр шапки"]')

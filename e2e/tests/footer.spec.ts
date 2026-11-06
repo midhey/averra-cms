@@ -66,7 +66,7 @@ test('большой подвал: публикация с политикой, �
   await page.getByRole('tab', { name: 'Подвал' }).click()
   await expect(page.getByText('Подвал пока не опубликован')).toBeVisible()
   await page.getByRole('radio', { name: /^Большой/ }).check()
-  await page.getByRole('radio', { name: 'Акцент' }).check()
+  await page.getByRole('radio', { name: 'Акцент', exact: true }).check()
   await expect(page.getByText(/Политика конфиденциальности не выбрана/)).toBeVisible()
   await page.getByRole('textbox', { name: 'Заголовок формы' }).fill('Есть вопросы?')
 
@@ -125,7 +125,7 @@ test('большой подвал: публикация с политикой, �
   await page.getByRole('tab', { name: 'Подвал' }).click()
   // Черновик сохранён попыткой публикации: вид и фон на месте
   await expect(page.getByRole('radio', { name: /^Большой/ })).toBeChecked()
-  await expect(page.getByRole('radio', { name: 'Акцент' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Акцент', exact: true })).toBeChecked()
   await expect(page.getByText(/Политика конфиденциальности не выбрана/)).toBeHidden()
   await expect(previewFooter.getByRole('heading', { name: 'Есть вопросы?' })).toBeVisible()
   await page.getByRole('button', { name: 'Опубликовать подвал' }).click()
