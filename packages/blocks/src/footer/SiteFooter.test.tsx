@@ -11,7 +11,7 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { SiteFooter } from './SiteFooter'
-import { siteFooterView } from './view'
+import { consentPageHref, siteFooterView } from './view'
 
 /**
  * Текст CSS-модуля подвала: Vitest отдаёт CSS-модули пустыми, поэтому читаем файл. Модули Node —
@@ -45,9 +45,9 @@ const pages = [
 ]
 const header = {
   menu: [
-    { label: 'Цены', page: 'index', block: 'pricing' },
-    { label: 'Работы', page: 'raboty' },
-    { label: 'Акции', page: 'akcii' },
+    { label: 'Цены', mobileLabel: '', page: 'index', block: 'pricing' },
+    { label: 'Работы', mobileLabel: '', page: 'raboty' },
+    { label: 'Акции', mobileLabel: '', page: 'akcii' },
   ],
 }
 const contacts: FooterContacts = {
@@ -66,8 +66,9 @@ type Options = {
   hideFooter?: boolean
   contacts?: FooterContacts
   legal?: typeof legal | { policyHref: null; cookieSettings: boolean }
-  header?: typeof header | null
+  header?: Parameters<typeof siteFooterView>[0]['header']
   formAction?: string | null
+  consentHref?: string | null
 }
 
 function viewOf(footer: FooterInput | null, options: Options = {}) {
@@ -80,6 +81,7 @@ function viewOf(footer: FooterInput | null, options: Options = {}) {
     contacts: options.contacts ?? contacts,
     legal: options.legal ?? legal,
     formAction: options.formAction,
+    consentHref: options.consentHref,
     year: 2026,
   })
 }
@@ -105,8 +107,8 @@ describe('siteFooterView', () => {
   it('разделы — пункты меню шапки на опубликованное, текущий отмечен; у простого — нет', () => {
     const view = viewOf({ layout: 'columns' })
     expect(view?.sections).toEqual([
-      { label: 'Цены', href: '/#pricing', current: false },
-      { label: 'Работы', href: '/raboty/', current: true },
+      { label: 'Цены', mobileLabel: '', href: '/#pricing', current: false, newTab: false },
+      { label: 'Работы', mobileLabel: '', href: '/raboty/', current: true, newTab: false },
     ])
     expect(viewOf({ layout: 'simple' })?.sections).toEqual([])
     expect(viewOf({ layout: 'columns', sections: false })?.sections).toEqual([])
@@ -239,6 +241,102 @@ describe('SiteFooter', () => {
   })
 })
 
+describe('настройки подвала', () => {
+  it('подвал прежней версии (без новых полей) выводится как раньше', () => {
+    const root = render({ layout: 'simple', tone: 'surface' }, { consentHref: '/consent/' })
+    const footer = root
+    expect(footer?.getAttribute('data-tone')).toBe('surface')
+    expect(footer?.hasAttribute('data-line')).toBe(false)
+    expect(root.textContent).toContain('© 2026 Ремонт у Ивана')
+    // Согласие — только по флажку: старые подвалы его не показывали
+    expect(root.querySelector('a[href="/consent/"]')).toBeNull()
+    expect(root.querySelector('[data-part="brand"]')).toBeNull()
+  })
+
+  it('фон «как у страницы», без линии, свой текст акцентным шрифтом с переносами', () => {
+    const root = render({
+      tone: 'background',
+      divider: false,
+      text: 'See you in class ♡\nЛера',
+      textFont: 'accent',
+    })
+    const footer = root
+    expect(footer?.getAttribute('data-tone')).toBe('background')
+    expect(footer?.getAttribute('data-line')).toBe('none')
+    const text = root.querySelector('p[data-font="accent"]')
+    expect(text?.textContent).toBe('See you in class ♡\nЛера')
+  })
+
+  it('ссылка на согласие — по флажку и только на опубликованную страницу', () => {
+    const on = render({ consent: true }, { consentHref: '/consent/' })
+    const links = [...on.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])
+    expect(links).toContainEqual(['Согласие на обработку персональных данных', '/consent/'])
+    expect(
+      render({ consent: true }, { consentHref: null }).querySelector('a[href="/consent/"]'),
+    ).toBeNull()
+  })
+
+  it('«© и год» можно выключить — реквизиты остаются', () => {
+    const root = render({ copyright: false })
+    expect(root.textContent).not.toContain('©')
+    expect(root.textContent).toContain('ИНН 590000000000')
+    const empty = render({ copyright: false }, { contacts: emptyFooterContacts })
+    expect(empty.querySelector('p[class*="legalText"]')).toBeNull()
+  })
+
+  it('логотип шапки в подвале: знак и подпись; без шапки — название сайта', () => {
+    const textLogo = {
+      ...header,
+      brand: 'text' as const,
+      logo: null,
+      logoMark: 'Ve',
+      logoText: 'Vallex English',
+    }
+    const root = render({ brand: true }, { header: textLogo })
+    expect(root.querySelector('[data-part="mark"]')?.textContent).toBe('Ve')
+    expect(root.querySelector('[data-part="mark"]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(root.querySelector('[data-part="name"]')?.textContent).toBe('Vallex English')
+    const noHeader = render({ brand: true }, { header: null })
+    expect(noHeader.querySelector('[data-part="name"]')?.textContent).toBe('Ремонт у Ивана')
+  })
+
+  it('разделы: внешний пункт меню — в новой вкладке с noopener, как в шапке', () => {
+    const external = {
+      menu: [
+        ...header.menu,
+        { label: 'Telegram', mobileLabel: '', url: 'https://t.me/remont' },
+        { label: 'Почта', mobileLabel: '', url: 'mailto:info@remont.ru' },
+      ],
+    }
+    const root = render({ layout: 'columns' }, { header: external })
+    const nav = root.querySelector('nav[aria-label="Разделы сайта"]')
+    const telegram = nav?.querySelector('a[href="https://t.me/remont"]')
+    expect(telegram?.getAttribute('target')).toBe('_blank')
+    expect(telegram?.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(telegram?.textContent).toBe('Telegram (откроется в новой вкладке)')
+    expect(nav?.querySelector('a[href="mailto:info@remont.ru"]')?.hasAttribute('target')).toBe(
+      false,
+    )
+    expect(nav?.querySelector('a[href="/raboty/"]')?.hasAttribute('target')).toBe(false)
+  })
+
+  it('большой подвал: логотип шапки и свой текст — строкой над реквизитами', () => {
+    const textLogo = { ...header, brand: 'text' as const, logo: null, logoMark: 'Ve' }
+    const root = render(
+      { layout: 'big', brand: true, text: 'See you in class' },
+      { header: textLogo },
+    )
+    expect(root.querySelector('[data-part="mark"]')?.textContent).toBe('Ve')
+    expect(root.querySelector('[data-part="name"]')?.textContent).toBe('Ремонт у Ивана')
+    expect(root.textContent).toContain('See you in class')
+  })
+
+  it('consentPageHref — путь опубликованной страницы согласия', () => {
+    expect(consentPageHref(['index', 'consent'])).toBe('/consent/')
+    expect(consentPageHref(['index'])).toBeNull()
+  })
+})
+
 describe('палитра подвала', () => {
   /** Переменные палитры из правила с селектором selector: --footer-text → text и так далее */
   function paletteOf(selector: string) {
@@ -264,6 +362,7 @@ describe('палитра подвала', () => {
 
   it('CSS красит подвал теми же ролями, что схема (footerPalette)', () => {
     const selectors: Record<FooterTone, string> = {
+      background: '.footer[data-tone="background"]',
       surface: '.footer',
       accent: '.footer[data-tone="accent"]',
     }
@@ -273,8 +372,10 @@ describe('палитра подвала', () => {
       for (const [cssName, part] of Object.entries(names)) {
         expected[cssName] = footerPalette[tone][part as keyof (typeof footerPalette)[FooterTone]]
       }
-      const { line: _line, ...parts } = fromCss
+      const { line: _line, buttonHover, ...parts } = fromCss
       expect(parts, tone).toEqual(expected)
+      // Наведение кнопки — производный цвет той же роли, что фон кнопки (hoverColor темы)
+      expect(buttonHover, tone).toBe(`${expected.buttonBg}Hover`)
     }
   })
 

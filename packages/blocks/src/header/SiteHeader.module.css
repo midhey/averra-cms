@@ -50,6 +50,12 @@
   top: 0;
 }
 
+/* Без линии: шапка сливается с фоном страницы (тень у собранной остаётся) */
+.header[data-line="none"],
+.header[data-line="none"][data-overlay][data-stuck] {
+  border-bottom-color: transparent;
+}
+
 /* Прозрачная поверх первого экрана: лежит на «Первом экране», тот начинается ниже неё. Без
    скрипта не липнет — прозрачная липкая шапка легла бы поверх текста страницы */
 .header[data-overlay] {
@@ -77,6 +83,12 @@
 
 .header[data-overlay]:not([data-stuck]) :focus-visible {
   outline-color: currentcolor;
+}
+
+/* Раскрытое меню телефона у прозрачной шапки — на фоне темы, не на фото: кольцу снова цвет
+   текста, иначе кольцо цвета фона на фоне не видно */
+.header[data-overlay]:not([data-stuck]) .panel :focus-visible {
+  outline-color: var(--color-text);
 }
 
 /* Со скриптом прозрачная липкая шапка, как только страницу прокрутили, встаёт сверху с фоном */
@@ -150,37 +162,50 @@
   text-decoration: none;
 }
 
-.name {
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  font-weight: var(--font-heading-weight, 700);
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.header[data-condensed] .name {
+/* Логотип (Brand.tsx): в собранной шапке мельче */
+.header[data-condensed] [data-part="name"]:not([data-divided]) {
   font-size: var(--text-base);
 }
 
-.logo {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
+.header[data-condensed] [data-part="mark"] {
+  font-size: 2rem;
 }
 
-/* Логотип по высоте строки, ширина своя: и вытянутый, и квадратный — одного веса. Не шире
-   места в строке: на узком экране вытянутый логотип ужимается, сохраняя пропорции */
-.logo img {
-  width: auto;
-  max-width: min(12rem, 100%);
-  height: 2.5rem;
-  border-radius: 0;
-  object-fit: contain;
-  object-position: left center;
+/* Короткая шапка служебной страницы: «← На главную» контурной кнопкой справа */
+.back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: calc(var(--space-2) - 2px) var(--space-4);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.header[data-condensed] .logo img {
-  height: 2rem;
+.back:hover {
+  background: var(--color-surface);
+}
+
+/* Логотип слева, «На главную» справа — на любой ширине */
+.header[data-short] .brand {
+  margin-right: auto;
+}
+
+.header[data-overlay]:not([data-stuck]) .back {
+  border-color: currentcolor;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .list {
@@ -287,14 +312,101 @@
   overflow-wrap: anywhere;
 }
 
+/* Наведение: фон заметно другой в любой теме, текст на нём читается (--color-accent-hover считает
+   тема). Фокус — кольцо цветом текста через полосу фона: кольцо на фоне ≥ 4,5:1, кнопка на фоне
+   ≥ 3:1, и кольцо не сливается с кнопкой даже того же цвета */
 .button:hover,
 .panelButton:hover {
-  filter: brightness(1.08);
+  background: var(--color-accent-hover);
 }
 
-/* С меню кнопка на телефоне — в раскрытом меню: в строке ей места нет */
+.button:focus-visible,
+.panelButton:focus-visible,
+.back:focus-visible {
+  outline: 3px solid var(--color-text);
+  outline-offset: 3px;
+}
+
+/* Форма кнопки: «таблетка» и прямые углы — у всех кнопок шапки сразу */
+.header[data-button-shape="pill"] :is(.button, .panelButton, .back, .panelPhone) {
+  border-radius: 999px;
+}
+
+.header[data-button-shape="square"] :is(.button, .panelButton, .back, .panelPhone) {
+  border-radius: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button,
+  .panelButton {
+    transition:
+      background-color 0.15s,
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+
+  /* «Цвет и подъём»: кнопка приподнимается с тенью. При «уменьшить движение» — только цвет */
+  .header[data-button-hover="lift"] :is(.button, .panelButton):hover {
+    box-shadow: 0 0.5rem 1rem color-mix(in srgb, var(--color-text) 18%, transparent);
+    transform: translateY(-2px);
+  }
+}
+
+/* Подпись кнопки для телефона: на широком экране — основная */
+.labelNarrow {
+  display: none;
+}
+
+/* С меню кнопка на телефоне — в раскрытом меню: в строке ей места нет. «В строке шапки» —
+   наоборот: кнопка рядом с «Меню», в меню её нет */
 .header[data-panel] .button {
   display: none;
+}
+
+.header[data-mobile-button="row"] .button {
+  display: inline-flex;
+}
+
+@media (max-width: 63.99rem) {
+  .labelWide {
+    display: none;
+  }
+
+  .labelNarrow {
+    display: inline;
+  }
+
+  /* Кнопка в строке на телефоне: поля меньше, чтобы на 320 px встали логотип, кнопка и «Меню».
+     Длинная подпись переносится, а не выталкивает шапку за край: короткую задают «Текстом на
+     телефоне» */
+  .header[data-mobile-button="row"] .row {
+    gap: var(--space-2);
+  }
+
+  .header[data-mobile-button="row"] .actions {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .header[data-mobile-button="row"] .button {
+    padding-inline: var(--space-3);
+  }
+}
+
+/* Совсем узкий экран: у «Меню» рядом с кнопкой — только значок, слово слышит диктор */
+@media (max-width: 29.99rem) {
+  .header[data-mobile-button="row"] .summaryText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .header[data-mobile-button="row"] .summary {
+    padding-inline: var(--space-2);
+  }
 }
 
 /* Без меню (промо-шапка «Минимум») кнопка — главное действие, прятать её некуда. До 48rem —
@@ -395,6 +507,67 @@
   font-size: var(--text-lg);
 }
 
+/* Наведение «Подложка»: под пунктом — фон, заметно другой, чем у шапки, и текст на нём читается
+   (--color-background-hover считает тема: «Поверхность», если она заметно отличается от фона,
+   иначе сдвиг фона). Поля у пункта всегда — без сдвига строки */
+.header[data-link-hover="background"] .link {
+  padding-inline: var(--space-2);
+  border-radius: var(--radius);
+}
+
+.header[data-link-hover="background"] .link:hover {
+  background: var(--color-background-hover);
+  text-decoration: none;
+}
+
+/* Наведение «Цвет акцента»: пара «акцент на фоне» проверена темой (ссылки, 3:1). Акцент почти
+   цвета текста (тёмно-зелёный рядом с чернилами) на глаз не отличить — тогда тема оставляет и
+   подчёркивание (--accent-link-line) */
+.header[data-link-hover="color"] .link:hover {
+  color: var(--color-accent);
+  text-decoration: var(--accent-link-line, underline);
+}
+
+/* На фото «Первого экрана» — подчёркивание: акцент и подложка на затемнённом фото не видны */
+.header[data-overlay]:not([data-stuck]) .row .link:hover {
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* «Подложка» в меню телефона — пункт во всю ширину с полями */
+.header[data-link-hover="background"] .panelNav .link {
+  padding-inline: var(--space-3);
+}
+
+.header[data-mobile-align="center"] .panelNav .link {
+  text-align: center;
+}
+
+/* «Во весь экран»: меню закрывает экран под шапкой, пункты крупнее и без линий. Без JS тоже:
+   это тот же <details>. Высота — окно без шапки: панель отсчитывается от шапки (top: 100%), и
+   100% высоты у неё — тоже высота шапки, какой бы она ни была (верхняя строка, длинная подпись
+   кнопки в две строки) */
+.header[data-mobile-menu="fullscreen"] .panel {
+  height: calc(100vh - 100%);
+  max-height: none;
+  padding-top: var(--space-6);
+  box-shadow: none;
+}
+
+@supports (height: 100dvh) {
+  .header[data-mobile-menu="fullscreen"] .panel {
+    height: calc(100dvh - 100%);
+  }
+}
+
+.header[data-mobile-menu="fullscreen"] .panelNav .link {
+  padding-block: var(--space-4);
+  border-bottom: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+}
+
 .panelActions {
   display: grid;
   gap: var(--space-3);
@@ -489,7 +662,7 @@
     display: none;
   }
 
-  .logo img {
+  .brand [data-part="brand"] img {
     height: 2.75rem;
   }
 
@@ -620,11 +793,16 @@
   }
 }
 
+.header[data-condensed] [data-part="brand"] img {
+  height: 2rem;
+}
+
 /* Анимацию включает скрипт, и только если в системе не просили уменьшить движение */
 .header[data-animate],
 .header[data-animate] .row,
-.header[data-animate] .logo img,
-.header[data-animate] .name {
+.header[data-animate] [data-part="brand"] img,
+.header[data-animate] [data-part="name"],
+.header[data-animate] [data-part="mark"] {
   transition:
     padding 0.24s ease,
     height 0.24s ease,

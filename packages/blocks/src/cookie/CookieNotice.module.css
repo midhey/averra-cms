@@ -200,7 +200,7 @@
 }
 
 .button:hover {
-  filter: brightness(1.08);
+  background: var(--color-accent-hover);
 }
 
 .linkButton {
@@ -372,7 +372,7 @@ label.option {
 
 @media (prefers-reduced-motion: no-preference) {
   .button {
-    transition: filter 0.15s;
+    transition: background-color 0.15s;
   }
 
   .switch::before {

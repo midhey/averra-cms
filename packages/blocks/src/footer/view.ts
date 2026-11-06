@@ -1,20 +1,26 @@
 import {
+  canonicalPath,
   FOOTER_CONSENT_TEXT,
   type Footer,
   type FooterContacts,
   type FooterLayout,
+  type FooterTextFont,
   type FooterTone,
   footerRequisites,
   type Header,
-  isCurrentLink,
   type LinkablePage,
-  resolveSiteLink,
+  legalPages,
   type SocialLink,
   socialLinks,
   telHref,
 } from '@averra/schema'
 import type { LegalFooterProps } from '../cookie/CookieNotice'
-import type { SiteHeaderLink } from '../header/view'
+import {
+  type SiteBrandView,
+  type SiteHeaderLink,
+  siteBrandView,
+  siteHeaderLinks,
+} from '../header/view'
 
 /** Форма «Перезвоните мне», готовая к выводу */
 export type FooterCallbackView = {
@@ -35,8 +41,17 @@ export type SiteFooterView = {
   tone: FooterTone
   siteName: string
   about: string
-  /** «© 2026 Ремонт у Ивана» */
+  /** «© 2026 Ремонт у Ивана»; пусто — «© и год» выключены */
   copyright: string
+  /** Линия над подвалом */
+  divider: boolean
+  /** Свой текст подвала (подпись, часы работы); пусто — нет */
+  text: string
+  textFont: FooterTextFont
+  /** Логотип шапки в подвале; null — его нет */
+  brand: SiteBrandView | null
+  /** Согласие на обработку данных — ссылкой рядом с политикой; null — ссылки нет */
+  consentHref: string | null
   /** Название организации, ИНН, ОГРН — из «SEO → Организация» */
   requisites: string[]
   /** Разделы — пункты меню шапки, что ведут на опубликованное */
@@ -56,14 +71,21 @@ type ViewInput = {
   siteName: string
   /** Открытая страница: адрес (текущий пункт разделов) и не скрыт ли на ней подвал */
   page: { slug: string; content: { hideFooter?: boolean | undefined } }
-  /** Шапка сайта: её меню — разделы подвала. null — шапки нет, разделов тоже */
-  header: Pick<Header, 'menu'> | null
+  /**
+   * Шапка сайта: её меню — разделы подвала, её логотип — логотип подвала. null — шапки нет,
+   * разделов тоже, а логотип — название сайта
+   */
+  header:
+    | (Pick<Header, 'menu'> & Partial<Pick<Header, 'brand' | 'logo' | 'logoMark' | 'logoText'>>)
+    | null
   /** Опубликованные страницы с блоками: куда ссылки разделов ведут на собранном сайте */
   pages: readonly LinkablePage[]
   /** Реквизиты, контакты и соцсети из «SEO → Организация» */
   contacts: FooterContacts
   /** Политика и «Настройки cookie» — то же, что у прежней полосы (cookieNoticeView) */
   legal: LegalFooterProps
+  /** Опубликованная страница согласия (consentPageHref); null или нет — ссылки нет */
+  consentHref?: string | null | undefined
   /**
    * Адрес приёма формы подвала на этой странице; undefined — предпросмотр (форма видна, но не
    * отправляется); null — страницы нет в базе (стандартная 404): API заявку с неё не примет,
@@ -72,6 +94,15 @@ type ViewInput = {
   formAction?: string | null | undefined
   /** Год в «©» — год сборки сайта */
   year: number
+}
+
+/**
+ * Адрес страницы согласия на обработку данных, если она опубликована (published — адреса
+ * опубликованных страниц); иначе null — ссылки на неё нет
+ */
+export function consentPageHref(published: readonly string[]) {
+  const { slug } = legalPages.consent
+  return published.includes(slug) ? canonicalPath(slug) : null
 }
 
 /**
@@ -84,20 +115,32 @@ export function siteFooterView(input: ViewInput): SiteFooterView | null {
   if (!footer || input.page.content.hideFooter) return null
   const sections =
     footer.sections && footer.layout !== 'simple' && input.header
-      ? input.header.menu.flatMap((item) => {
-          const { href } = resolveSiteLink(item, input.pages)
-          return href
-            ? [{ label: item.label, href, current: isCurrentLink(item, input.page.slug) }]
-            : []
-        })
+      ? siteHeaderLinks(input.header.menu, input.pages, input.page.slug)
       : []
+  const header = input.header
+  const brand = footer.brand
+    ? siteBrandView(
+        {
+          brand: header?.brand ?? 'image',
+          logo: header?.logo ?? null,
+          logoMark: header?.logoMark ?? '',
+          logoText: header?.logoText ?? '',
+        },
+        input.siteName,
+      )
+    : null
   const organization = contacts.name.trim()
   return {
     layout: footer.layout,
     tone: footer.tone,
     siteName: input.siteName,
     about: footer.about,
-    copyright: `© ${input.year} ${input.siteName}`,
+    copyright: footer.copyright ? `© ${input.year} ${input.siteName}` : '',
+    divider: footer.divider,
+    text: footer.text,
+    textFont: footer.textFont,
+    brand,
+    consentHref: footer.consent ? (input.consentHref ?? null) : null,
     // Название организации, совпадающее с названием сайта, второй раз не пишем
     requisites: footerRequisites({
       ...contacts,

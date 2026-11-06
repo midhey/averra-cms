@@ -2,8 +2,12 @@ import {
   type Header,
   type HeaderContacts,
   type HeaderLayout,
+  type HeaderLink,
+  type HeaderLook,
   isCurrentLink,
   type LinkablePage,
+  MAIN_PAGE_SLUG,
+  opensNewTab,
   overlayFits,
   resolveSiteLink,
   telHref,
@@ -14,10 +18,20 @@ export const CONTENT_ID = 'content'
 
 export type SiteHeaderLink = {
   label: string
+  /** Подпись на телефоне: в меню телефона и у кнопки на узком экране; пусто — как label */
+  mobileLabel: string
   href: string
   /** Пункт ведёт на открытую страницу: aria-current="page" */
   current: boolean
+  /** Открыть в новой вкладке: target="_blank" rel="noopener noreferrer" */
+  newTab: boolean
 }
+
+/**
+ * Логотип, готовый к выводу: картинка (id в медиатеке), знак акцентным шрифтом и подпись. text —
+ * подпись или название сайта; null — только картинка (её alt — название сайта)
+ */
+export type SiteBrandView = { image: string | null; mark: string; text: string | null }
 
 /** Шапка, готовая к выводу: ссылки разрешены, лишнее для раскладки и страницы убрано */
 export type SiteHeaderView = {
@@ -29,8 +43,14 @@ export type SiteHeaderView = {
   siteName: string
   /** Логотип — id картинки медиатеки; null — в шапке название сайта */
   logo: string | null
+  /** Что в логотипе: картинка, знак, подпись */
+  brand: SiteBrandView
+  /** Короткая шапка служебной страницы: логотип и «← На главную» */
+  short: boolean
+  /** Вид шапки: форма и наведение кнопки, пункты, меню на телефоне */
+  look: HeaderLook
   menu: SiteHeaderLink[]
-  button: { label: string; href: string } | null
+  button: Omit<SiteHeaderLink, 'current'> | null
   phone: { text: string; href: string } | null
   /**
    * Адрес из «Организации»: в верхней строке двухэтажной шапки и в меню телефона под номером
@@ -50,6 +70,7 @@ type ViewInput = {
     content: {
       blocks: readonly { type: string; props: unknown }[]
       hideHeader?: boolean | undefined
+      shortHeader?: boolean | undefined
     }
   }
   /** Опубликованные страницы с блоками: куда ссылки шапки ведут на собранном сайте */
@@ -57,6 +78,54 @@ type ViewInput = {
   /** Телефон и адрес из «SEO → Организация» */
   contacts: HeaderContacts
 }
+
+/**
+ * Логотип по настройке шапки. «Картинка» без картинки — название сайта (так было всегда, и так
+ * обещает подсказка в админке), а не знак и подпись, оставшиеся от вида «Текст»; подпись пустая —
+ * название сайта; знак — только у вида «Текст»: картинка сама знак
+ */
+export function siteBrandView(
+  header: Pick<Header, 'brand' | 'logo' | 'logoMark' | 'logoText'>,
+  siteName: string,
+): SiteBrandView {
+  const caption = header.logoText === '' ? siteName : header.logoText
+  if (header.brand === 'image') {
+    return header.logo
+      ? { image: header.logo, mark: '', text: null }
+      : { image: null, mark: '', text: siteName }
+  }
+  // Знак вписывают только в виде «Текст»: у «Картинки и текста» без картинки — одна подпись
+  if (header.brand === 'imageText') return { image: header.logo, mark: '', text: caption }
+  return { image: null, mark: header.logoMark, text: caption }
+}
+
+/** Ссылка шапки на сайте: адрес, подписи, текущая ли и в новой ли вкладке. Нет цели — null */
+function linkView(
+  item: HeaderLink & { label: string; mobileLabel: string },
+  pages: readonly LinkablePage[],
+  slug: string,
+): SiteHeaderLink | null {
+  const { href } = resolveSiteLink(item, pages)
+  if (!href) return null
+  return {
+    label: item.label,
+    mobileLabel: item.mobileLabel,
+    href,
+    current: isCurrentLink(item, slug),
+    newTab: opensNewTab(item),
+  }
+}
+
+/** Пункты меню на сайте: только те, что ведут на опубликованное (или наружу) */
+export const siteHeaderLinks = (
+  menu: readonly (HeaderLink & { label: string; mobileLabel: string })[],
+  pages: readonly LinkablePage[],
+  slug: string,
+) =>
+  menu.flatMap((item) => {
+    const link = linkView(item, pages, slug)
+    return link ? [link] : []
+  })
 
 /**
  * Что вывести в шапке открытой страницы. null — шапки нет: её не публиковали или страница её
@@ -71,15 +140,29 @@ export function siteHeaderView({
   contacts,
 }: ViewInput): SiteHeaderView | null {
   if (!header || page.content.hideHeader) return null
+  const brand = siteBrandView(header, siteName)
+  // Короткая шапка служебной страницы: логотип и «← На главную», без меню, кнопки и телефона. На
+  // главной «На главную» вело бы на саму себя — там шапка полная
+  if (page.content.shortHeader && page.slug !== MAIN_PAGE_SLUG) {
+    return {
+      layout: header.layout,
+      sticky: header.sticky,
+      condense: false,
+      overlay: false,
+      siteName,
+      logo: header.logo,
+      brand,
+      short: true,
+      look: header.look,
+      menu: [],
+      button: null,
+      phone: null,
+      address: '',
+    }
+  }
   // В раскладке «Минимум» меню нет — она для промо-страницы: логотип и одна кнопка
-  const menu =
-    header.layout === 'minimal'
-      ? []
-      : header.menu.flatMap((item) => {
-          const { href } = resolveSiteLink(item, pages)
-          return href ? [{ label: item.label, href, current: isCurrentLink(item, page.slug) }] : []
-        })
-  const buttonHref = header.button && resolveSiteLink(header.button, pages).href
+  const menu = header.layout === 'minimal' ? [] : siteHeaderLinks(header.menu, pages, page.slug)
+  const button = header.button && linkView(header.button, pages, page.slug)
   const phone = header.phone && contacts.phone !== '' ? contacts.phone : ''
   return {
     layout: header.layout,
@@ -88,8 +171,18 @@ export function siteHeaderView({
     overlay: header.overlay && overlayFits(page.content.blocks),
     siteName,
     logo: header.logo,
+    brand,
+    short: false,
+    look: header.look,
     menu,
-    button: header.button && buttonHref ? { label: header.button.label, href: buttonHref } : null,
+    button: button
+      ? {
+          label: button.label,
+          mobileLabel: button.mobileLabel,
+          href: button.href,
+          newTab: button.newTab,
+        }
+      : null,
     phone: phone ? { text: phone, href: telHref(phone) } : null,
     address: header.layout === 'double' || header.phone ? contacts.address : '',
   }
@@ -113,7 +206,7 @@ export const headerWatchesScroll = (view: SiteHeaderView) =>
  * сайта это нужно знать ещё для отступа якорей
  */
 export const headerRowButton = (view: SiteHeaderView) =>
-  view.button !== null && view.menu.length === 0
+  view.button !== null && view.menu.length === 0 && !view.short
 
 /** Самый длинный пункт, который ещё встаёт в строку с логотипом, телефоном и кнопкой */
 const INLINE_ITEM_MAX = 24
@@ -137,6 +230,9 @@ export function headerMenuRow(view: SiteHeaderView) {
   const total =
     labels.reduce((sum, length) => sum + length, 0) +
     (view.button?.label.length ?? 0) +
-    (view.logo === null ? view.siteName.length : 0)
+    (view.brand.text === null
+      ? 0
+      : Math.max(...view.brand.text.split('\n').map((line) => line.length)) +
+        view.brand.mark.length)
   return Math.max(...labels) > INLINE_ITEM_MAX || total > INLINE_MENU_CHARS
 }

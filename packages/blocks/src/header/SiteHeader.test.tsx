@@ -37,6 +37,7 @@ type Options = {
   slug?: string
   blocks?: { type: string; props: unknown }[]
   hideHeader?: boolean
+  shortHeader?: boolean
   phone?: string
 }
 
@@ -46,7 +47,11 @@ function viewOf(header: HeaderInput | null, options: Options = {}) {
     siteName: 'Ремонт у Ивана',
     page: {
       slug: options.slug ?? 'raboty',
-      content: { blocks: options.blocks ?? [plainHero], hideHeader: options.hideHeader },
+      content: {
+        blocks: options.blocks ?? [plainHero],
+        hideHeader: options.hideHeader,
+        shortHeader: options.shortHeader,
+      },
     },
     pages,
     contacts: { ...contacts, phone: options.phone ?? contacts.phone },
@@ -171,7 +176,10 @@ describe('шапка на странице', () => {
     const view = (header: HeaderInput, siteName?: string) => {
       const result = viewOf(header)
       if (!result) throw new Error('Шапки нет')
-      return siteName === undefined ? result : { ...result, siteName }
+      // Подпись логотипа без своей — название сайта: подменяем и её
+      return siteName === undefined
+        ? result
+        : { ...result, siteName, brand: { ...result.brand, text: siteName } }
     }
     const short = Array.from({ length: 6 }, (_, index) => page(`Раздел ${index + 1}`))
     expect(headerMenuRow(view({ menu: short }))).toBe(false)
@@ -299,5 +307,213 @@ describe('скрипт шапки', () => {
   it('меню телефона — скрипт для Esc, даже без сборки при прокрутке', () => {
     expect(headerScriptNeeded(viewOf({ menu, condense: false }))).toBe(true)
     expect(headerScriptNeeded(null)).toBe(false)
+  })
+})
+
+describe('настройки шапки: ссылки, логотип, вид, короткая шапка', () => {
+  const header = (body: HTMLElement) => body.querySelector('header')
+
+  it('шапка прежней версии: разметка без новых признаков вида и без новой вкладки', () => {
+    const body = render({
+      menu,
+      button: { label: 'Рассчитать', page: 'index', block: 'contact' },
+      logo: logoId,
+    })
+    const root = header(body)
+    for (const name of [
+      'data-line',
+      'data-button-shape',
+      'data-button-hover',
+      'data-link-hover',
+      'data-mobile-button',
+      'data-mobile-menu',
+      'data-mobile-align',
+      'data-short',
+    ]) {
+      expect(root?.hasAttribute(name), name).toBe(false)
+    }
+    expect(body.querySelector('[target]')).toBeNull()
+    // Логотип-картинка: имя ссылки на главную — alt, название сайта
+    expect(body.querySelector('a[href="/"] img')?.getAttribute('alt')).toBe('Ремонт у Ивана')
+    expect(body.querySelector('[data-part="name"]')).toBeNull()
+  })
+
+  it('внешний пункт и кнопка: адрес как есть, https — в новой вкладке с noopener', () => {
+    const body = render({
+      menu: [
+        { label: 'Telegram', url: 'https://t.me/lera' },
+        { label: 'Почта', url: 'mailto:lera@example.ru' },
+        { label: 'VK', url: 'https://vk.com/lera', newTab: false },
+      ],
+      button: { label: 'Позвонить', url: 'tel:+79991234567' },
+    })
+    const nav = desktopNav(body)
+    const telegram = nav?.querySelector('a[href="https://t.me/lera"]')
+    expect(telegram?.getAttribute('target')).toBe('_blank')
+    expect(telegram?.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(telegram?.textContent).toBe('Telegram (откроется в новой вкладке)')
+    expect(nav?.querySelector('a[href="mailto:lera@example.ru"]')?.hasAttribute('target')).toBe(
+      false,
+    )
+    expect(nav?.querySelector('a[href="https://vk.com/lera"]')?.hasAttribute('target')).toBe(false)
+    expect(body.querySelector('a[href="tel:+79991234567"]')?.hasAttribute('target')).toBe(false)
+  })
+
+  it('подписи для телефона: в меню телефона и у кнопки на узком экране', () => {
+    const body = render({
+      menu: [{ label: 'Цели', mobileLabel: 'Цели занятий', page: 'index', block: 'pricing' }],
+      button: { label: 'Пробный урок →', mobileLabel: 'Урок →', page: 'raboty' },
+    })
+    expect(menuLinks(desktopNav(body))).toEqual([['Цели', '/#pricing']])
+    expect(menuLinks(body.querySelector('details nav'))).toEqual([['Цели занятий', '/#pricing']])
+    const button = body.querySelector('header a[href="/raboty/"]')
+    expect(button?.querySelectorAll('span')).toHaveLength(2)
+    expect(button?.textContent).toBe('Пробный урок →Урок →')
+    // В меню телефона кнопка — подписью для телефона
+    expect(body.querySelector('details a[href="/raboty/"]')?.textContent).toBe('Урок →')
+  })
+
+  it('кнопка на телефоне «в строке шапки» — признак у шапки, в меню её второй раз нет', () => {
+    const button = { label: 'Записаться', page: 'index', block: 'contact' }
+    const body = render({ menu, button, look: { mobileButton: 'row' } })
+    expect(header(body)?.getAttribute('data-mobile-button')).toBe('row')
+    expect(body.querySelector('details a[href="/#contact"]')).toBeNull()
+    // Без меню признака нет: кнопке и так место в строке
+    const alone = render({ button, look: { mobileButton: 'row' } })
+    expect(header(alone)?.hasAttribute('data-mobile-button')).toBe(false)
+    // Без кнопки тоже: в строке рядом с «Меню» ничего нет, и слово «Меню» остаётся на месте
+    const noButton = render({ menu, look: { mobileButton: 'row' } })
+    expect(header(noButton)?.hasAttribute('data-mobile-button')).toBe(false)
+  })
+
+  it('вид: линия, форма и наведение кнопки, наведение пунктов, меню телефона — признаками', () => {
+    const root = header(
+      render({
+        menu,
+        look: {
+          divider: false,
+          buttonShape: 'pill',
+          buttonHover: 'lift',
+          linkHover: 'color',
+          mobileMenu: 'fullscreen',
+          mobileAlign: 'center',
+        },
+      }),
+    )
+    expect(root?.getAttribute('data-line')).toBe('none')
+    expect(root?.getAttribute('data-button-shape')).toBe('pill')
+    expect(root?.getAttribute('data-button-hover')).toBe('lift')
+    expect(root?.getAttribute('data-link-hover')).toBe('color')
+    expect(root?.getAttribute('data-mobile-menu')).toBe('fullscreen')
+    expect(root?.getAttribute('data-mobile-align')).toBe('center')
+  })
+
+  it('логотип «текст»: знак акцентным шрифтом (украшение) и подпись в две строки', () => {
+    const body = render({
+      brand: 'text',
+      logo: logoId,
+      logoMark: 'Ve',
+      logoText: 'Vallex\nEnglish',
+    })
+    const link = body.querySelector('header a[href="/"]')
+    expect(link?.querySelector('img')).toBeNull()
+    expect(link?.querySelector('[data-part="mark"]')?.getAttribute('aria-hidden')).toBe('true')
+    const name = link?.querySelector('[data-part="name"]')
+    expect(name?.textContent).toBe('Vallex\nEnglish')
+    expect(name?.hasAttribute('data-divided')).toBe(true)
+  })
+
+  it('логотип «картинка и текст»: картинка без alt, имя ссылки — подпись', () => {
+    const body = render({ brand: 'imageText', logo: logoId })
+    const link = body.querySelector('header a[href="/"]')
+    expect(link?.querySelector('img')?.getAttribute('alt')).toBe('')
+    expect(link?.querySelector('[data-part="name"]')?.textContent).toBe('Ремонт у Ивана')
+    // Картинки нет в медиатеке — название вместо неё, без черты
+    const missing = viewOf({ brand: 'imageText', logo: '00000000-0000-4000-8000-000000000000' })
+    if (!missing) throw new Error('Шапки нет')
+    document.body.innerHTML = renderToStaticMarkup(<SiteHeader view={missing} media={media} />)
+    const name = document.body.querySelector('[data-part="name"]')
+    expect(name?.hasAttribute('data-divided')).toBe(false)
+  })
+
+  it('«Картинка» без картинки — название сайта, а не знак и подпись от вида «Текст»', () => {
+    const leftovers = { logoMark: 'Ve', logoText: 'Vallex\nEnglish' }
+    const body = render({ brand: 'image', ...leftovers })
+    const link = body.querySelector('header a[href="/"]')
+    expect(link?.querySelector('[data-part="mark"]')).toBeNull()
+    expect(link?.textContent).toBe('Ремонт у Ивана')
+    // «Картинка и текст» без картинки: подпись, знака нет — его вписывают только у «Текста»
+    const imageText = render({ brand: 'imageText', ...leftovers })
+    expect(imageText.querySelector('[data-part="mark"]')).toBeNull()
+    expect(imageText.querySelector('[data-part="name"]')?.textContent).toBe('Vallex\nEnglish')
+  })
+
+  it('короткая шапка: логотип и «← На главную», без меню и кнопки; на главной — полная', () => {
+    const full = { menu, button: { label: 'Рассчитать', page: 'index' }, phone: true }
+    const body = render(full, { shortHeader: true })
+    expect(header(body)?.hasAttribute('data-short')).toBe(true)
+    expect(body.querySelector('nav')).toBeNull()
+    expect(body.querySelector('details')).toBeNull()
+    expect(body.querySelector('a[href^="tel:"]')).toBeNull()
+    const back = [...body.querySelectorAll('header a[href="/"]')].at(-1)
+    expect(back?.textContent).toBe('← На главную')
+    expect(back?.querySelector('[aria-hidden="true"]')?.textContent).toBe('←')
+    expect(headerScriptNeeded(viewOf(full, { shortHeader: true }))).toBe(false)
+    expect(viewOf(full, { shortHeader: true, slug: 'index' })?.short).toBe(false)
+    // Скрытая шапка главнее короткой
+    expect(viewOf(full, { shortHeader: true, hideHeader: true })).toBeNull()
+  })
+})
+
+/**
+ * Текст CSS-модуля шапки: Vitest отдаёт CSS-модули пустыми, поэтому читаем файл (как в
+ * SiteFooter.test.tsx). Модули Node — через process.getBuiltinModule: пакет без типов Node
+ */
+type NodeModules = {
+  'node:fs': { readFileSync: (path: string, encoding: 'utf8') => string }
+  'node:url': { fileURLToPath: (url: string) => string }
+}
+const builtin = <K extends keyof NodeModules>(id: K) =>
+  (
+    globalThis as unknown as {
+      process: { getBuiltinModule: (id: K) => NodeModules[K] }
+    }
+  ).process.getBuiltinModule(id)
+const css = builtin('node:fs').readFileSync(
+  builtin('node:url')
+    .fileURLToPath(import.meta.url)
+    .replace(/[^/\\]+$/, 'SiteHeader.module.css'),
+  'utf8',
+)
+
+/** Объявления правила с селектором в начале строки */
+function rule(selector: string) {
+  const start = css.indexOf(`\n${selector} {`)
+  if (start < 0) throw new Error(`нет правила ${selector}`)
+  return css.slice(start, css.indexOf('}', start))
+}
+
+describe('стили шапки', () => {
+  it('наведение на пункты — по переменным темы, которые гарантируют заметную разницу', () => {
+    expect(rule('.header[data-link-hover="background"] .link:hover')).toContain(
+      'background: var(--color-background-hover)',
+    )
+    expect(rule('.header[data-link-hover="color"] .link:hover')).toContain(
+      'text-decoration: var(--accent-link-line, underline)',
+    )
+  })
+
+  it('прозрачная шапка: в раскрытом меню кольцо фокуса — цветом текста, а не фона', () => {
+    expect(rule('.header[data-overlay]:not([data-stuck]) .panel :focus-visible')).toContain(
+      'outline-color: var(--color-text)',
+    )
+  })
+
+  it('«Во весь экран»: панель до низа окна при любой высоте шапки, без числа высоты', () => {
+    expect(rule('.header[data-mobile-menu="fullscreen"] .panel')).toContain(
+      'height: calc(100vh - 100%)',
+    )
+    expect(css).toContain('height: calc(100dvh - 100%)')
+    expect(css).not.toMatch(/100d?vh - 4rem/)
   })
 })

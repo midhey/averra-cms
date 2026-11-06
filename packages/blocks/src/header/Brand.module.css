@@ -1,0 +1,73 @@
+/* Логотип: картинка, знак и подпись. Цвета — от родителя (шапка, подвал), шрифты — темы.
+   Размеры шапки по умолчанию; подвал мельче (data-size="footer"). Сборку шапки при прокрутке
+   и широкий экран подстраивает SiteHeader.module.css по data-part */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.logo {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Логотип по высоте строки, ширина своя: и вытянутый, и квадратный — одного веса. Не шире
+   места в строке: на узком экране вытянутый логотип ужимается, сохраняя пропорции */
+.logo img {
+  width: auto;
+  max-width: min(12rem, 100%);
+  height: 2.5rem;
+  border-radius: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand[data-size="footer"] .logo img {
+  height: 2rem;
+}
+
+/* Знак — одна-четыре буквы акцентным шрифтом (рукописная «Ve»), крупно */
+.mark {
+  flex: none;
+  font-family: var(--font-accent);
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.brand[data-size="footer"] .mark {
+  font-size: 1.875rem;
+}
+
+/* Подпись без знака и картинки — название сайта шрифтом заголовков, как было */
+.name {
+  min-width: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-heading-weight, 700);
+  line-height: 1.2;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.brand[data-size="footer"] .name {
+  font-size: var(--text-base);
+}
+
+/* Подпись рядом со знаком или картинкой — мельче, основным шрифтом, за чертой */
+.name[data-divided] {
+  padding-left: var(--space-3);
+  border-left: 1px solid currentcolor;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.brand[data-size="footer"] .name[data-divided] {
+  font-size: var(--text-sm);
+}

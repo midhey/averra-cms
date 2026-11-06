@@ -13,7 +13,7 @@
 }
 
 .button:hover {
-  filter: brightness(1.08);
+  background: var(--color-accent-hover);
 }
 
 /* Рамка — тем же акцентом, настоящей границей (тень пропала бы в контрастной теме Windows).
@@ -26,7 +26,6 @@
 }
 
 .button[data-appearance="outline"]:hover {
-  filter: none;
   background: var(--color-surface);
 }
 
@@ -37,8 +36,6 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .button {
-    transition:
-      filter 0.15s,
-      background-color 0.15s;
+    transition: background-color 0.15s;
   }
 }

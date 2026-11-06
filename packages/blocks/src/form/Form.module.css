@@ -100,7 +100,7 @@ textarea.input {
 }
 
 .submit:hover {
-  filter: brightness(1.08);
+  background: var(--color-accent-hover);
 }
 
 /* Ловушка для ботов: вне экрана, но не display: none — его боты узнают и пропускают */

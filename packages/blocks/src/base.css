@@ -17,6 +17,25 @@ body {
   overflow-wrap: break-word;
 }
 
+/* Подвал у низа окна и на короткой странице («Спасибо», документ, 404): body — колонка во всю
+   высоту окна, main забирает остаток. Без JS. dvh — где он есть: на телефоне 100vh выше
+   видимой части окна */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  body {
+    min-height: 100dvh;
+  }
+}
+
+body > main {
+  flex: 1 0 auto;
+}
+
 @supports (overflow-wrap: anywhere) {
   body {
     overflow-wrap: anywhere;

@@ -1,5 +1,6 @@
 import type { MediaMap } from '@averra/schema'
-import { Picture } from '../ui/Picture'
+import { Brand } from './Brand'
+import { NewTabNote, tabProps } from './new-tab'
 import styles from './SiteHeader.module.css'
 import {
   CONTENT_ID,
@@ -20,13 +21,15 @@ type SiteHeaderProps = {
  * Шапка сайта (концепт Headers): логотип или название, меню, телефон и кнопка. Работает без JS:
  * на широком экране меню — строкой, на телефоне — в <details>, липкость — position: sticky.
  * Скрипт (header-dom.ts) только улучшает: собирает шапку при прокрутке, фиксирует прозрачную
- * как только страницу прокрутили, закрывает меню по Esc. Цвета — только переменные темы
+ * как только страницу прокрутили, закрывает меню по Esc. Цвета — только переменные темы. Вид
+ * (форма и наведение кнопки, пункты, меню телефона) — data-атрибуты по настройкам шапки
  */
 export function SiteHeader({ view, media }: SiteHeaderProps) {
-  const { layout, menu, button, phone } = view
+  const { layout, menu, button, phone, look } = view
   const hasPanel = menu.length > 0
-  const logo = view.logo && media[view.logo] ? view.logo : null
   const topbar = layout === 'double' && (view.address !== '' || phone !== null)
+  // Кнопка на телефоне в строке шапки — в меню её второй раз нет
+  const buttonInPanel = button !== null && look.mobileButton === 'menu'
   return (
     <>
       <a className={styles.skip} href={`#${CONTENT_ID}`}>
@@ -46,10 +49,20 @@ export function SiteHeader({ view, media }: SiteHeaderProps) {
         data-condense={view.condense ? '' : undefined}
         data-overlay={view.overlay ? '' : undefined}
         data-panel={hasPanel ? '' : undefined}
+        data-short={view.short ? '' : undefined}
         // Без меню кнопке на телефоне место — своей строкой под логотипом (промо-шапка «Минимум»)
         data-row-button={headerRowButton(view) ? '' : undefined}
         // Длинное меню на широком экране — своей строкой под логотипом (headerMenuRow)
         data-menu-row={headerMenuRow(view) ? '' : undefined}
+        data-line={look.divider ? undefined : 'none'}
+        data-button-shape={look.buttonShape === 'theme' ? undefined : look.buttonShape}
+        data-button-hover={look.buttonHover === 'shade' ? undefined : look.buttonHover}
+        data-link-hover={look.linkHover === 'underline' ? undefined : look.linkHover}
+        data-mobile-button={
+          hasPanel && button !== null && look.mobileButton === 'row' ? 'row' : undefined
+        }
+        data-mobile-menu={look.mobileMenu === 'panel' ? undefined : look.mobileMenu}
+        data-mobile-align={look.mobileAlign === 'start' ? undefined : look.mobileAlign}
       >
         {topbar && (
           <div className={styles.topbar}>
@@ -65,66 +78,69 @@ export function SiteHeader({ view, media }: SiteHeaderProps) {
         )}
         <div className={styles.row}>
           <a className={styles.brand} href="/">
-            {logo ? (
-              <Picture
-                image={{ mediaId: logo, alt: view.siteName }}
-                media={media}
-                sizes="12rem"
-                priority={false}
-                eager
-                className={styles.logo}
-              />
-            ) : (
-              <span className={styles.name}>{view.siteName}</span>
-            )}
+            <Brand brand={view.brand} siteName={view.siteName} media={media} size="header" />
           </a>
+          {view.short && (
+            // Служебная страница: вместо меню и кнопки — дорога на главную
+            <a className={styles.back} href="/">
+              <span aria-hidden="true">←</span> На главную
+            </a>
+          )}
           {hasPanel && <MenuList items={menu} className={styles.nav} />}
-          <div className={styles.actions}>
-            {phone && (
-              // В двухэтажной шапке телефон — в верхней строке, здесь он появляется, только когда
-              // шапка собралась и верхней строки нет
-              <a
-                className={styles.phone}
-                href={phone.href}
-                data-in-topbar={topbar ? '' : undefined}
-              >
-                <PhoneIcon />
-                <span className={styles.phoneText}>{phone.text}</span>
-              </a>
-            )}
-            {button && (
-              <a className={styles.button} href={button.href}>
-                {button.label}
-              </a>
-            )}
-            {hasPanel && (
-              <details className={styles.menu} data-header-menu="">
-                <summary className={styles.summary}>
-                  <BurgerIcon />
-                  <span className={styles.summaryText}>Меню</span>
-                </summary>
-                <div className={styles.panel}>
-                  <MenuList items={menu} className={styles.panelNav} />
-                  {(button || phone || view.address) && (
-                    <div className={styles.panelActions}>
-                      {button && (
-                        <a className={styles.panelButton} href={button.href}>
-                          {button.label}
-                        </a>
-                      )}
-                      {phone && (
-                        <a className={styles.panelPhone} href={phone.href}>
-                          {phone.text}
-                        </a>
-                      )}
-                      {/* Адрес — как в концепте телефона, под номером */}
-                      {view.address && <p className={styles.panelAddress}>{view.address}</p>}
-                    </div>
-                  )}
-                </div>
-              </details>
-            )}
-          </div>
+          {!view.short && (
+            <div className={styles.actions}>
+              {phone && (
+                // В двухэтажной шапке телефон — в верхней строке, здесь он появляется, только когда
+                // шапка собралась и верхней строки нет
+                <a
+                  className={styles.phone}
+                  href={phone.href}
+                  data-in-topbar={topbar ? '' : undefined}
+                >
+                  <PhoneIcon />
+                  <span className={styles.phoneText}>{phone.text}</span>
+                </a>
+              )}
+              {button && (
+                <a className={styles.button} href={button.href} {...tabProps(button)}>
+                  <ButtonLabel label={button.label} mobileLabel={button.mobileLabel} />
+                  <NewTabNote link={button} className={styles.visuallyHidden} />
+                </a>
+              )}
+              {hasPanel && (
+                <details className={styles.menu} data-header-menu="">
+                  <summary className={styles.summary}>
+                    <BurgerIcon />
+                    <span className={styles.summaryText}>Меню</span>
+                  </summary>
+                  <div className={styles.panel}>
+                    <MenuList items={menu} className={styles.panelNav} mobile />
+                    {(buttonInPanel || phone || view.address) && (
+                      <div className={styles.panelActions}>
+                        {button && buttonInPanel && (
+                          <a
+                            className={styles.panelButton}
+                            href={button.href}
+                            {...tabProps(button)}
+                          >
+                            {button.mobileLabel || button.label}
+                            <NewTabNote link={button} className={styles.visuallyHidden} />
+                          </a>
+                        )}
+                        {phone && (
+                          <a className={styles.panelPhone} href={phone.href}>
+                            {phone.text}
+                          </a>
+                        )}
+                        {/* Адрес — как в концепте телефона, под номером */}
+                        {view.address && <p className={styles.panelAddress}>{view.address}</p>}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </div>
       </header>
     </>
@@ -132,15 +148,32 @@ export function SiteHeader({ view, media }: SiteHeaderProps) {
 }
 
 /**
- * Меню: на широком экране — строкой в шапке, на телефоне — в раскрытом <details>. Два списка
- * в разметке, но виден и слышен всегда один: другой скрыт display: none
+ * Текст кнопки: на узком экране — подпись для телефона, если она есть. Обе в разметке, видна и
+ * слышна одна: другая скрыта display: none
+ */
+function ButtonLabel({ label, mobileLabel }: { label: string; mobileLabel: string }) {
+  if (mobileLabel === '' || mobileLabel === label) return <>{label}</>
+  return (
+    <>
+      <span className={styles.labelWide}>{label}</span>
+      <span className={styles.labelNarrow}>{mobileLabel}</span>
+    </>
+  )
+}
+
+/**
+ * Меню: на широком экране — строкой в шапке, на телефоне — в раскрытом <details> (mobile:
+ * подписи для телефона). Два списка в разметке, но виден и слышен всегда один: другой скрыт
+ * display: none
  */
 function MenuList({
   items,
   className,
+  mobile = false,
 }: {
   items: readonly SiteHeaderLink[]
   className: string | undefined
+  mobile?: boolean
 }) {
   return (
     <nav aria-label="Меню сайта" className={className}>
@@ -153,8 +186,10 @@ function MenuList({
               className={styles.link}
               href={item.href}
               aria-current={item.current ? 'page' : undefined}
+              {...tabProps(item)}
             >
-              {item.label}
+              {mobile && item.mobileLabel ? item.mobileLabel : item.label}
+              <NewTabNote link={item} className={styles.visuallyHidden} />
             </a>
           </li>
         ))}

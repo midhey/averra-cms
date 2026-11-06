@@ -1,3 +1,4 @@
+import type { MediaMap } from '@averra/schema'
 import {
   CHECKED_VALUE,
   CONSENT_FIELD,
@@ -8,6 +9,8 @@ import {
 } from '@averra/schema'
 import type { FormEvent } from 'react'
 import { sentAnchor } from '../form/Form'
+import { Brand } from '../header/Brand'
+import { NewTabNote, tabProps } from '../header/new-tab'
 import styles from './SiteFooter.module.css'
 import type { FooterCallbackView, SiteFooterView } from './view'
 
@@ -26,9 +29,12 @@ const fieldId = (name: string) => `${FOOTER_FORM_ID}-${name}`
  */
 export function SiteFooter({
   view,
+  media = {},
   preview = false,
 }: {
   view: SiteFooterView
+  /** Картинки сайта: логотип шапки в подвале берёт из справочника адреса вариантов */
+  media?: MediaMap
   /**
    * Предпросмотр в админке: «Настройки cookie» видны сразу, как на сайте со скриптом. На сайте
    * кнопка скрыта, пока её не покажет скрипт: без JS она ничего не открыла бы
@@ -42,6 +48,7 @@ export function SiteFooter({
       data-site-footer=""
       data-layout={layout}
       data-tone={view.tone}
+      data-line={view.divider ? undefined : 'none'}
     >
       <div className={styles.inner}>
         {layout !== 'simple' && (
@@ -50,8 +57,20 @@ export function SiteFooter({
             <div className={styles.columns}>
               {layout === 'columns' && (
                 <div className={styles.column}>
-                  <p className={styles.brand}>{view.siteName}</p>
+                  {view.brand ? (
+                    <p className={styles.brandMark}>
+                      <Brand
+                        brand={view.brand}
+                        siteName={view.siteName}
+                        media={media}
+                        size="footer"
+                      />
+                    </p>
+                  ) : (
+                    <p className={styles.brand}>{view.siteName}</p>
+                  )}
                   {view.about && <p className={styles.muted}>{view.about}</p>}
+                  <FooterText view={view} />
                 </div>
               )}
               {view.sections.length > 0 && (
@@ -66,8 +85,10 @@ export function SiteFooter({
                           className={styles.link}
                           href={item.href}
                           aria-current={item.current ? 'page' : undefined}
+                          {...tabProps(item)}
                         >
                           {item.label}
+                          <NewTabNote link={item} className={styles.visuallyHidden} />
                         </a>
                       </li>
                     ))}
@@ -79,8 +100,24 @@ export function SiteFooter({
             </div>
           </div>
         )}
+        {layout !== 'columns' && (view.brand || view.text) && (
+          // Простой и большой подвал: логотип и свой текст строкой над реквизитами. В подвале «С
+          // колонками» они в первой колонке
+          <div className={styles.lead}>
+            {view.brand && (
+              <p className={styles.brandMark}>
+                <Brand brand={view.brand} siteName={view.siteName} media={media} size="footer" />
+              </p>
+            )}
+            <FooterText view={view} />
+          </div>
+        )}
         <div className={styles.bottom}>
-          <p className={styles.legalText}>{[view.copyright, ...view.requisites].join(' · ')}</p>
+          {(view.copyright || view.requisites.length > 0) && (
+            <p className={styles.legalText}>
+              {[view.copyright, ...view.requisites].filter(Boolean).join(' · ')}
+            </p>
+          )}
           <LegalLinks view={view} preview={preview} />
         </div>
       </div>
@@ -145,15 +182,34 @@ function SocialList({ view }: { view: SiteFooterView }) {
   )
 }
 
-/** Политика и «Настройки cookie» — та же разметка, что у прежней полосы LegalFooter */
+/** Свой текст подвала: подпись, часы работы — с переносами строк, основным или акцентным шрифтом */
+function FooterText({ view }: { view: SiteFooterView }) {
+  if (!view.text) return null
+  return (
+    <p className={styles.text} data-font={view.textFont}>
+      {view.text}
+    </p>
+  )
+}
+
+/**
+ * Политика, согласие и «Настройки cookie» — та же разметка, что у прежней полосы LegalFooter, и
+ * ссылка на согласие, если её включили и страница опубликована
+ */
 function LegalLinks({ view, preview }: { view: SiteFooterView; preview: boolean }) {
   const { policyHref, cookieSettings } = view.legal
-  if (!policyHref && !cookieSettings) return null
+  const { consentHref } = view
+  if (!policyHref && !cookieSettings && !consentHref) return null
   return (
     <div className={styles.legalLinks}>
       {policyHref && (
         <a href={policyHref} className={styles.legalLink}>
           Политика конфиденциальности
+        </a>
+      )}
+      {consentHref && (
+        <a href={consentHref} className={styles.legalLink}>
+          Согласие на обработку персональных данных
         </a>
       )}
       {cookieSettings && (
