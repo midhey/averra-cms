@@ -1,9 +1,12 @@
 import {
   type CustomBlockDraft,
   customH1Types,
+  MAIN_PAGE_SLUG,
+  NOT_FOUND_PAGE_SLUG,
   type PageContent,
   type PageSeo,
   PageTitle,
+  type PageWindow,
   pageSeoChecks,
   type SiteSeo,
   seoAdvice,
@@ -49,7 +52,7 @@ import { History, type HistoryRevision } from './History'
 import { restoredMessage, restoreQuestion, revisionLabel, revisionPreview } from './history-format'
 import { Inspector } from './Inspector'
 import { type Device, DeviceSwitch, initialDevice, Preview } from './Preview'
-import { type HeaderMode, SeoPanel } from './SeoPanel'
+import { type HeaderMode, SeoPanel, windowTitleError } from './SeoPanel'
 import { validateBlocks } from './validation'
 
 export type EditorSite = {
@@ -78,15 +81,18 @@ type Column = 'blocks' | 'preview' | 'fields' | 'seo'
  * Шапка сайта на этой странице (полная, короткая или скрыта) и скрыт ли подвал — панель «SEO».
  * Скрытая шапка главнее короткой, поэтому в содержимое страницы уходит одно из двух
  */
-type Chrome = { header: HeaderMode; hideFooter: boolean }
+type Chrome = { header: HeaderMode; hideFooter: boolean; window: PageWindow | null }
 
 const chromeOf = (content: {
   hideHeader?: boolean | undefined
   shortHeader?: boolean | undefined
   hideFooter?: boolean | undefined
+  window?: PageWindow | undefined
 }): Chrome => ({
   header: content.hideHeader === true ? 'hidden' : content.shortHeader === true ? 'short' : 'full',
   hideFooter: content.hideFooter === true,
+  // Страница-окно: её открывают поверх других ссылки с «Открывать в окне» (панель «SEO» → «Окно»)
+  window: content.window ?? null,
 })
 
 const snapshotOf = (title: string, blocks: readonly EditorBlock[], seo: PageSeo, chrome: Chrome) =>
@@ -199,6 +205,10 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
         ...(chrome.header === 'hidden' ? { hideHeader: true } : {}),
         ...(chrome.header === 'short' ? { shortHeader: true } : {}),
         ...(chrome.hideFooter ? { hideFooter: true } : {}),
+        // Главная и 404 окном не бывают (API не сохранит): раздела «Окно» у них нет, поле не шлём
+        ...(chrome.window && page.slug !== MAIN_PAGE_SLUG && page.slug !== NOT_FOUND_PAGE_SLUG
+          ? { window: chrome.window }
+          : {}),
       }
     : null
   // Советы SEO по черновику как есть: видны на кнопке «SEO» до публикации и публиковать не мешают
@@ -245,7 +255,9 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
   // Сообщение совпадёт с ответом сервера, пока и тут и там включён setupZodMessages
   const titleError = PageTitle.safeParse(title).error?.issues[0]?.message
   const titleValid = titleError === undefined
-  const canSave = content !== null && titleValid && seoError === undefined
+  const windowError = windowTitleError(chrome.window)
+  const canSave =
+    content !== null && titleValid && seoError === undefined && windowError === undefined
   const busy = status.kind === 'busy'
   const canSaveNow = dirty && canSave && !busy
   const canPublishNow = canSave && !busy
@@ -356,7 +368,7 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
   })
 
   async function save() {
-    if (!content || !titleValid || seoError !== undefined) return false
+    if (!content || !canSave) return false
     setStatus({ kind: 'busy', message: 'Сохраняю…' })
     try {
       const saved = await saveDraft.mutateAsync({ title, content })
@@ -752,6 +764,8 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
               onHeaderModeChange={(header) => setChrome({ ...chrome, header })}
               hideFooter={chrome.hideFooter}
               onHideFooterChange={(hideFooter) => setChrome({ ...chrome, hideFooter })}
+              window={chrome.window}
+              onWindowChange={(window) => setChrome({ ...chrome, window })}
             />
           ) : (
             <Inspector

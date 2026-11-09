@@ -117,6 +117,20 @@ export function LinkTarget({
         hint={external ? 'У ссылок на другие сайты — по умолчанию' : undefined}
         onChange={(event) => onChange({ ...link, newTab: event.target.checked })}
       />
+      {!external && (
+        <Checkbox
+          label="Открывать в окне"
+          name={`${path}.window`}
+          checked={link.window === true}
+          disabled={disabled}
+          error={errors[`${path}.window`]}
+          hint="Если страница — окно (SEO страницы → «Окно»): откроется поверх текущей. Без JavaScript — переход"
+          onChange={(event) => {
+            const { window: _window, ...rest } = link
+            onChange(event.target.checked ? { ...rest, window: true } : rest)
+          }}
+        />
+      )}
     </>
   )
 }

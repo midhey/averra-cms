@@ -32,12 +32,19 @@ export function linkOf(value: string, current?: HeaderLink): HeaderLink {
   return block ? { page, block } : { page }
 }
 
-/** Пункт или кнопка с другой целью: подписи остаются, цель и «новая вкладка» — новые */
+/** Пункт или кнопка с другой целью: подписи остаются, цель, «новая вкладка» и «окно» — новые */
 export const withTarget = <T extends { label: string; mobileLabel: string }>(
   item: T,
   link: HeaderLink,
 ): T & HeaderLink => {
-  const { page: _page, block: _block, url: _url, newTab: _newTab, ...rest } = item as T & HeaderLink
+  const {
+    page: _page,
+    block: _block,
+    url: _url,
+    newTab: _newTab,
+    window: _window,
+    ...rest
+  } = item as T & HeaderLink
   return { ...(rest as T), ...link }
 }
 

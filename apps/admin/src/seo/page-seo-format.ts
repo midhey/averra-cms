@@ -11,10 +11,16 @@ export function normalizedSeo(seo: PageSeo): PageSeo | undefined {
   const text = (value: string | undefined) => (value?.trim() ? value : undefined)
   const title = text(seo.title)
   const description = text(seo.description)
+  const shareTitle = text(seo.shareTitle)
+  const shareDescription = text(seo.shareDescription)
+  const imageAlt = text(seo.imageAlt)
   const canonical = text(seo.canonical)
   const result: PageSeo = {
     ...(title !== undefined ? { title } : {}),
     ...(description !== undefined ? { description } : {}),
+    ...(shareTitle !== undefined ? { shareTitle } : {}),
+    ...(shareDescription !== undefined ? { shareDescription } : {}),
+    ...(imageAlt !== undefined ? { imageAlt } : {}),
     ...(seo.image ? { image: seo.image } : {}),
     ...(canonical !== undefined ? { canonical } : {}),
     ...(seo.noindex === true ? { noindex: true } : {}),
@@ -29,6 +35,9 @@ export const seoFieldLabels: Record<SeoField, string> = {
   title: 'SEO-заголовок',
   description: 'Описание',
   image: 'Картинка для соцсетей',
+  shareTitle: 'Заголовок для соцсетей',
+  shareDescription: 'Описание для соцсетей',
+  imageAlt: 'Что на картинке',
   canonical: 'Канонический адрес',
   noindex: 'Скрыть от поисковиков',
 }

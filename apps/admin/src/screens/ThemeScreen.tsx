@@ -1,14 +1,19 @@
+import { compileWindowCss } from '@averra/blocks'
 import {
+  browserColorTitles,
   demoPage,
+  focusContrast,
   MAIN_PAGE_SLUG,
   PageContent,
   presetOf,
   sameTheme,
   type Theme,
+  ThemeBackgroundSize,
   type ThemeColorRole,
   ThemeInput,
   type ThemePresetId,
   ThemeRadius,
+  themeBackgroundSizeTitles,
   themeColorRoles,
   themeColorTitles,
   themePresets,
@@ -28,6 +33,7 @@ import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Pre
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
+import { MediaPickField } from '../media/MediaPickField'
 import { mediaMapOf } from '../media/media-format'
 import { canEditTheme } from '../permissions'
 import { mediaQuery, pageQuery, pagesQuery, queryKeys, siteQuery, themeQuery } from '../queries'
@@ -45,11 +51,13 @@ import {
   refusedField,
   rowCheck,
   type ThemeForm,
+  themeInputOf,
   themeOf,
   themeStatus,
 } from '../theme/theme-format'
 import { Button } from '../ui/Button'
-import { Select } from '../ui/Field'
+import { CodeEditor } from '../ui/CodeEditor'
+import { Select, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { FormActions, formClassName, Screen, Section } from '../ui/Screen'
@@ -111,7 +119,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
     setBase(draft)
     if (theme && sameTheme(theme, base)) setForm(formOf(draft))
   }
-  const parsed = ThemeInput.safeParse(form)
+  const parsed = ThemeInput.safeParse(themeInputOf(form))
   const errors = useFormErrors(zodFieldErrors(parsed.error))
   const checks = checksOf(form)
   const unsaved = theme === undefined || !sameTheme(theme, draft)
@@ -166,11 +174,14 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
   /** Форма не прошла проверку: ошибки у полей, фокус на изменённый цвет или первую ошибку */
   function refuse() {
     errors.attempt()
+    const focusIssue = parsed.error?.issues.some((issue) => issue.path[0] === 'focus')
     setNotice({
       kind: 'error',
       text: checks.some((check) => check.blocking && !check.ok)
         ? 'Тему не сохранить: не хватает контраста. Поправьте отмеченные цвета'
-        : 'Тему не сохранить: цвета — в формате #RRGGBB',
+        : focusIssue
+          ? 'Тему не сохранить: кольцо фокуса — цвет #RRGGBB с контрастом от 3 к фону и поверхности'
+          : 'Тему не сохранить: цвета — в формате #RRGGBB',
     })
     const name = refusedField(parsed.error?.issues ?? [], checks, lastColor.current)
     requestAnimationFrame(() => {
@@ -228,6 +239,11 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
   }
 
   const preset = theme ? presetOf(theme) : undefined
+  // CSS окон проверяется на лету тем же движком, что на сервере: ошибки и предупреждения со строкой
+  const windowCssProblems = useMemo(
+    () => (form.windowCss?.trim() ? compileWindowCss(form.windowCss).problems : []),
+    [form.windowCss],
+  )
   const status = themeStatus({ unsaved, unpublished })
   const blocking = checks.filter((check) => check.blocking && !check.ok)
   const warnings = checks.filter((check) => !check.blocking && !check.ok)
@@ -310,11 +326,17 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
 
         <Section title="Шрифты" card>
           <div className={styles.fonts}>
-            {(['heading', 'body', 'accent'] as const).map((role) => (
+            {(['heading', 'body', 'accent', 'mono'] as const).map((role) => (
               <Select
                 key={role}
                 label={fontRoleTitles[role]}
-                hint={role === 'accent' ? 'Подписи и пометки в своих блоках' : undefined}
+                hint={
+                  role === 'accent'
+                    ? 'Подписи и пометки в своих блоках'
+                    : role === 'mono'
+                      ? 'Номера и надзаголовки в своих блоках (var(--font-mono))'
+                      : undefined
+                }
                 name={`fonts.${role}`}
                 value={form.fonts[role] ?? ''}
                 disabled={readOnly}
@@ -324,14 +346,15 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
                     .find((item) => item === event.target.value)
                   if (font) {
                     change({ ...form, fonts: { ...form.fonts, [role]: font } })
-                  } else if (role === 'accent') {
-                    // «Как у заголовков»: акцентный шрифт не задан
-                    const { accent: _accent, ...fonts } = form.fonts
+                  } else if (role === 'accent' || role === 'mono') {
+                    // «Как у заголовков» и «Шрифт устройства»: шрифт роли не задан
+                    const { [role]: _unset, ...fonts } = form.fonts
                     change({ ...form, fonts })
                   }
                 }}
               >
                 {role === 'accent' && <option value="">Как у заголовков</option>}
+                {role === 'mono' && <option value="">Моноширинный шрифт устройства</option>}
                 {fontGroups.map((group) => (
                   <optgroup key={group.label} label={group.label}>
                     {group.fonts.map((font) => (
@@ -365,6 +388,123 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
             value={form.radius}
             onChange={(radius) => change({ ...form, radius })}
           />
+        </Section>
+
+        <Section
+          title="Страница и браузер"
+          description="Фон под всеми блоками, кольцо фокуса с клавиатуры и цвет строки браузера на телефоне"
+          card
+        >
+          <MediaPickField
+            siteId={siteId}
+            label="Фон-картинка страницы"
+            name="background.mediaId"
+            value={form.background?.mediaId ?? null}
+            disabled={readOnly}
+            error={fieldError(errors.errors, 'background.mediaId')}
+            onChange={(mediaId) => {
+              const { background: _old, ...rest } = form
+              change(
+                mediaId
+                  ? { ...rest, background: { mediaId, size: form.background?.size ?? 'tile' } }
+                  : rest,
+                'background.mediaId',
+              )
+            }}
+            hint="Узор (зерно бумаги, лёгкая текстура) или картинка на всю страницу. Под ней — цвет «Фон»: текст проверен на нём, поэтому картинка — светлая и спокойная"
+          />
+          {form.background && (
+            <SegmentedControl
+              legend="Как лежит картинка"
+              name="background.size"
+              disabled={readOnly}
+              options={ThemeBackgroundSize.options.map((size) => ({
+                value: size,
+                label: themeBackgroundSizeTitles[size],
+              }))}
+              value={form.background.size}
+              onChange={(size) =>
+                form.background && change({ ...form, background: { ...form.background, size } })
+              }
+            />
+          )}
+          <TextInput
+            label="Кольцо фокуса"
+            name="focus"
+            mono
+            spellCheck={false}
+            maxLength={7}
+            placeholder={form.colors.accent}
+            value={form.focus ?? ''}
+            disabled={readOnly}
+            error={fieldError(errors.errors, 'focus')}
+            onChange={(event) => {
+              const value = normalizeHex(event.target.value)
+              const { focus: _old, ...rest } = form
+              change(value.trim() === '' ? rest : { ...rest, focus: value }, 'focus')
+            }}
+            hint={focusHint(theme)}
+          />
+          <Select
+            label="Цвет строки браузера"
+            name="browserColor"
+            value={form.browserColor ?? ''}
+            disabled={readOnly}
+            hint="Полоса браузера на телефоне (Android): обычно фон или фирменный цвет"
+            onChange={(event) => {
+              const value = event.target.value
+              const { browserColor: _old, ...rest } = form
+              const role = (
+                Object.keys(browserColorTitles) as (keyof typeof browserColorTitles)[]
+              ).find((item) => item === value)
+              change(role ? { ...rest, browserColor: role } : rest)
+            }}
+          >
+            <option value="">Как фон</option>
+            {(Object.keys(browserColorTitles) as (keyof typeof browserColorTitles)[])
+              .filter((role) => role !== 'background')
+              .map((role) => (
+                <option key={role} value={role}>
+                  {browserColorTitles[role]}
+                </option>
+              ))}
+          </Select>
+        </Section>
+
+        <Section
+          title="Окна сайта"
+          description="Страницы, которые открываются окном поверх других (SEO страницы → «Окно»)"
+          card
+        >
+          <CodeEditor
+            label="Свой CSS окон"
+            hint="Необязательно. :scope — само окно, «> section» — блоки окна. Цвета и шрифты — переменными темы: var(--color-surface), var(--font-heading). Проверяется так же, как CSS своих блоков"
+            language="css"
+            rows={8}
+            value={form.windowCss ?? ''}
+            readOnly={readOnly}
+            error={fieldError(errors.errors, 'windowCss')}
+            onChange={(windowCss) => change({ ...form, windowCss }, 'windowCss')}
+          />
+          {windowCssProblems.length > 0 && (
+            <InlineAlert
+              tone={
+                windowCssProblems.some((problem) => problem.level === 'error')
+                  ? 'danger'
+                  : 'warning'
+              }
+              title="В CSS окон"
+            >
+              <ul className={styles.problems}>
+                {windowCssProblems.map((problem, index) => (
+                  <li key={index}>
+                    {problem.line ? `Строка ${problem.line}: ` : ''}
+                    {problem.message}
+                  </li>
+                ))}
+              </ul>
+            </InlineAlert>
+          )}
         </Section>
 
         {/* Кнопки и итог — прилипают к низу колонки: после правки цвета в середине формы не нужно
@@ -472,4 +612,15 @@ function ThemePreview({ siteId, theme }: { siteId: string; theme: Theme }) {
       </div>
     </section>
   )
+}
+
+/** Подсказка у кольца фокуса: контраст своего цвета или что будет без него */
+function focusHint(theme: Theme | undefined) {
+  if (!theme?.focus) {
+    return 'Пусто — цвет акцента. Свой цвет — если кольцо сливается с кнопками акцента: оно обводит кнопку с зазором'
+  }
+  const check = focusContrast(theme)
+  return check?.ok
+    ? `Контраст к фону и поверхности — ${check.ratio.toFixed(1).replace('.', ',')}: кольцо видно`
+    : 'Нужен контраст от 3 к фону и поверхности'
 }

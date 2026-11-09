@@ -119,6 +119,8 @@ export function mediaUseText(use: MediaUse) {
     }
     case 'header':
       return 'Шапка и подвал'
+    case 'theme':
+      return `Тема: ${use.roles.join(', ')}`
     case 'seo':
       return `SEO: ${use.roles.join(', ')}`
     case 'block':
@@ -141,6 +143,7 @@ export function deleteBlockedText(usage: readonly MediaUse[]) {
     places.push(onSite ? 'со страниц (и опубликуйте их)' : 'со страниц')
   }
   if (usage.some((use) => use.kind === 'header')) places.push('из «Шапки и подвала»')
+  if (usage.some((use) => use.kind === 'theme')) places.push('из «Темы»')
   if (usage.some((use) => use.kind === 'seo')) places.push('из настроек SEO')
   if (usage.some((use) => use.kind === 'block')) places.push('из своего блока')
   const list =

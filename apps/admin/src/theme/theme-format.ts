@@ -4,6 +4,7 @@ import {
   formatContrast,
   systemThemeFonts,
   type Theme,
+  ThemeColor,
   type ThemeColorRole,
   ThemeColors,
   type ThemeFont,
@@ -18,13 +19,50 @@ export type ThemeForm = {
   colors: Record<ThemeColorRole, string>
   fonts: Theme['fonts']
   radius: Theme['radius']
+  /** Кольцо фокуса, как набрали; пусто — акцент */
+  focus?: string | undefined
+  browserColor?: Theme['browserColor']
+  background?: Theme['background']
+  windowCss?: string | undefined
 }
 
 export const formOf = (theme: Theme): ThemeForm => ({
   colors: { ...theme.colors },
   fonts: { ...theme.fonts },
   radius: theme.radius,
+  ...(theme.focus !== undefined && { focus: theme.focus }),
+  ...(theme.browserColor !== undefined && { browserColor: theme.browserColor }),
+  ...(theme.background !== undefined && { background: { ...theme.background } }),
+  ...(theme.windowCss !== undefined && { windowCss: theme.windowCss }),
 })
+
+/**
+ * Необязательные части темы из формы: пустое — как будто их нет (так тема без них остаётся
+ * равной сохранённой). Кольцо фокуса — только дописанным цветом: недописанное покажет схема
+ */
+function extrasOf(form: ThemeForm): Partial<Theme> {
+  const focus = form.focus?.trim()
+  return {
+    ...(focus && ThemeColor.safeParse(focus).success && { focus }),
+    ...(form.browserColor !== undefined && { browserColor: form.browserColor }),
+    ...(form.background !== undefined && { background: form.background }),
+    ...(form.windowCss !== undefined &&
+      form.windowCss.trim() !== '' && { windowCss: form.windowCss }),
+  }
+}
+
+/** Тема на сохранение: как форма, без пустых необязательных полей (проверяет её ThemeInput) */
+export function themeInputOf(form: ThemeForm) {
+  const focus = form.focus?.trim()
+  return {
+    colors: form.colors,
+    fonts: form.fonts,
+    radius: form.radius,
+    ...extrasOf(form),
+    // Недописанный цвет фокуса — в проверку как есть: ошибка встанет у поля
+    ...(focus && !ThemeColor.safeParse(focus).success && { focus }),
+  }
+}
 
 /**
  * Цвет, как его набрали, — к виду #rrggbb, если это можно сделать без догадок: без решётки
@@ -42,7 +80,7 @@ export function normalizeHex(value: string) {
 export function themeOf(form: ThemeForm): Theme | undefined {
   const colors = ThemeColors.safeParse(form.colors)
   return colors.success
-    ? { colors: colors.data, fonts: form.fonts, radius: form.radius }
+    ? { colors: colors.data, fonts: form.fonts, radius: form.radius, ...extrasOf(form) }
     : undefined
 }
 
@@ -106,6 +144,7 @@ export const fontRoleTitles = {
   heading: 'Заголовки',
   body: 'Текст',
   accent: 'Акцентный',
+  mono: 'Моноширинный',
 } as const
 
 /** Состояние темы словами: что с правками и что на сайте */

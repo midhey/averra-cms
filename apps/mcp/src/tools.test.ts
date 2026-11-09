@@ -9,6 +9,7 @@ import {
   CheckCustomBlockInput,
   cmsTools,
   missingTokenMessage,
+  revealBlockTypes,
   SaveCustomBlockInput,
   SaveDraftInput,
 } from './tools'
@@ -240,6 +241,12 @@ describe('инструменты', () => {
     expect(rules).toContain('seo.image')
     expect(rules).toContain('seoChecks')
     expect(rules).toMatch(/30–60 символов/)
+  })
+
+  it('правило про анимации называет все блоки с появлением при прокрутке, и team тоже', () => {
+    const rule = blockCatalog().rules.find((one) => one.startsWith('Анимации встроенных блоков'))
+    expect(revealBlockTypes).toContain('team')
+    for (const type of revealBlockTypes) expect(rule).toContain(type)
   })
 
   it('возвращают ошибку API с путём до кривого поля', async () => {

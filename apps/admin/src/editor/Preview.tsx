@@ -1,4 +1,4 @@
-import { type CustomBlockMap, customBlocksCss, Page } from '@averra/blocks'
+import { type CustomBlockMap, customBlocksCss, Page, themeBackgroundCss } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
 import { customBlockKeysOf, type MediaMap, type PageContent, type Theme } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
@@ -164,8 +164,8 @@ export function Preview(props: PreviewProps) {
   // следим за <head> админки и копируем заново
   useEffect(() => {
     if (!frameDocument || !selectionStyle || !customStyle) return
-    // Шрифты темы — перед её переменными, как в <head> сайта
-    const themeCss = previewFontCss(theme) + themeToCss(theme)
+    // Шрифты темы — перед её переменными, фон-картинка страницы — после, как в <head> сайта
+    const themeCss = previewFontCss(theme) + themeToCss(theme) + themeBackgroundCss(theme, media)
     const sync = () => {
       const copied = previewStyleNodes(document).map((node) => node.cloneNode(true))
       frameHead(frameDocument).replaceChildren(
@@ -180,7 +180,7 @@ export function Preview(props: PreviewProps) {
     const observer = new MutationObserver(sync)
     observer.observe(document.head, { childList: true, subtree: true, characterData: true })
     return () => observer.disconnect()
-  }, [frameDocument, theme, selectionStyle, customStyle])
+  }, [frameDocument, theme, media, selectionStyle, customStyle])
 
   const interactive = onSelectBlock !== undefined
   useEffect(() => {

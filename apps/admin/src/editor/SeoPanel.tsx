@@ -1,12 +1,20 @@
 import {
   canonicalPath,
+  MAIN_PAGE_SLUG,
   NOT_FOUND_PAGE_SLUG,
   type PageSeo,
+  PageWindow,
   pageDocumentTitle,
   SEO_DESCRIPTION_MAX,
   SEO_TITLE_MAX,
   type SeoCheck,
+  SHARE_IMAGE_ALT_MAX,
   type SiteSeo,
+  WINDOW_TITLE_MAX,
+  type WindowSurface,
+  type WindowWidth,
+  windowSurfaceTitles,
+  windowWidthTitles,
 } from '@averra/schema'
 import { useId, useState } from 'react'
 import { MediaPickField } from '../media/MediaPickField'
@@ -46,7 +54,24 @@ type SeoPanelProps = {
   /** Скрыть подвал сайта на этой странице: останутся только ссылки на документы */
   hideFooter: boolean
   onHideFooterChange: (hidden: boolean) => void
+  /** Страница-окно: null — обычная страница */
+  window: PageWindow | null
+  onWindowChange: (window: PageWindow | null) => void
 }
+
+const widthOptions = (['narrow', 'medium', 'wide'] as const).map((value) => ({
+  value,
+  label: windowWidthTitles[value],
+})) satisfies readonly { value: WindowWidth; label: string }[]
+
+const surfaceOptions = (['background', 'surface'] as const).map((value) => ({
+  value,
+  label: windowSurfaceTitles[value],
+})) satisfies readonly { value: WindowSurface; label: string }[]
+
+/** Ошибка заголовка окна по схеме страницы: длинный не сохранить */
+export const windowTitleError = (window: PageWindow | null) =>
+  window ? PageWindow.safeParse(window).error?.issues[0]?.message : undefined
 
 /** Шапка на странице: полная, короткая (логотип и «← На главную») или скрыта */
 export type HeaderMode = 'full' | 'short' | 'hidden'
@@ -90,6 +115,8 @@ export function SeoPanel({
   onHeaderModeChange,
   hideFooter,
   onHideFooterChange,
+  window,
+  onWindowChange,
 }: SeoPanelProps) {
   const ids = useId()
   const [engine, setEngine] = useState<SearchEngine>('yandex')
@@ -215,10 +242,39 @@ export function SeoPanel({
                 : 'JPEG или PNG, лучше 1200 × 630. Пусто — карточка из заголовка страницы в цветах сайта'
           }
         />
+        <TextInput
+          label="Заголовок для соцсетей"
+          name="seo.shareTitle"
+          value={seo.shareTitle ?? ''}
+          maxChars={SEO_TITLE_MAX}
+          placeholder={seo.title?.trim() || pageTitle.trim()}
+          error={errors.shareTitle}
+          onChange={(event) => set('shareTitle', event.target.value)}
+          hint="В превью ссылки в Telegram, ВКонтакте и других: можно живее и с призывом. Пусто — SEO-заголовок"
+        />
+        <TextArea
+          label="Описание для соцсетей"
+          name="seo.shareDescription"
+          rows={3}
+          value={seo.shareDescription ?? ''}
+          maxChars={SEO_DESCRIPTION_MAX}
+          error={errors.shareDescription}
+          onChange={(event) => set('shareDescription', event.target.value)}
+          hint="Текст под заголовком в превью ссылки. Пусто — описание для поисковиков"
+        />
+        <TextInput
+          label="Что на картинке"
+          name="seo.imageAlt"
+          value={seo.imageAlt ?? ''}
+          maxChars={SHARE_IMAGE_ALT_MAX}
+          error={errors.imageAlt}
+          onChange={(event) => set('imageAlt', event.target.value)}
+          hint="Описание картинки для незрячих в соцсетях (og:image:alt). У карточки из заголовка пусто — сам заголовок"
+        />
         <SocialCard
           domain={domain}
-          title={seo.title?.trim() || pageTitle.trim()}
-          description={notFound ? '' : description}
+          title={seo.shareTitle?.trim() || seo.title?.trim() || pageTitle.trim()}
+          description={notFound ? '' : seo.shareDescription?.trim() || description}
           image={image}
           imageNote={imageNote}
         />
@@ -262,6 +318,56 @@ export function SeoPanel({
         />
         <p className={panel.note}>Сама шапка — в разделе «Шапка и подвал».</p>
       </section>
+
+      {!notFound && slug !== MAIN_PAGE_SLUG && (
+        <section className={panel.group} aria-labelledby={`${ids}-window`}>
+          <h3 id={`${ids}-window`} className={panel.heading}>
+            Окно
+          </h3>
+          <Checkbox
+            checked={window !== null}
+            onChange={(event) => onWindowChange(event.target.checked ? PageWindow.parse({}) : null)}
+            label="Открывать страницу окном"
+            hint="Кнопки и пункты меню с «Открывать в окне», которые ведут сюда, откроют блоки этой страницы поверх текущей. Без JavaScript и по прямому адресу — обычная страница"
+          />
+          {window && (
+            <>
+              <TextInput
+                label="Заголовок окна"
+                name="window.title"
+                value={window.title}
+                maxChars={WINDOW_TITLE_MAX}
+                error={windowTitleError(window)}
+                onChange={(event) => onWindowChange({ ...window, title: event.target.value })}
+                hint="Над содержимым окна. Пусто — без заголовка: у формы он свой"
+              />
+              <SegmentedControl
+                legend="Ширина окна"
+                options={widthOptions}
+                value={window.width}
+                onChange={(width) => onWindowChange({ ...window, width })}
+              />
+              <SegmentedControl
+                legend="Фон окна"
+                options={surfaceOptions}
+                value={window.surface}
+                onChange={(surface) => onWindowChange({ ...window, surface })}
+              />
+              <Checkbox
+                checked={window.closeOnBackdrop}
+                onChange={(event) =>
+                  onWindowChange({ ...window, closeOnBackdrop: event.target.checked })
+                }
+                label="Закрывать кликом мимо окна"
+                hint="Esc и кнопка «Закрыть» закрывают окно всегда. Для длинной формы клик мимо лучше выключить: случайный клик не закроет окно посреди ввода"
+              />
+              <p className={panel.note}>
+                Свой CSS окон — в разделе «Тема». На телефоне окно — шторкой снизу.
+              </p>
+            </>
+          )}
+        </section>
+      )}
 
       <section className={panel.group} aria-labelledby={`${ids}-footer`}>
         <h3 id={`${ids}-footer`} className={panel.heading}>

@@ -79,7 +79,7 @@ describe('отметка у строки цвета', () => {
 
 describe('шрифты и состояние', () => {
   it('свои шрифты первыми, системные — отдельной группой', () => {
-    expect(fontGroups.map((group) => group.fonts.length)).toEqual([9, 3])
+    expect(fontGroups.map((group) => group.fonts.length)).toEqual([10, 3])
     expect(fontGroups[1]?.fonts).toEqual(['system', 'humanist', 'serif'])
   })
 
@@ -114,5 +114,27 @@ describe('фокус после отказа сохранить', () => {
 
   it('последний изменённый цвет ни при чём — первая ошибка', () => {
     expect(refuse({ muted: '#cccccc' }, 'accent')).toBe('colors.muted')
+  })
+})
+
+describe('новые части темы в форме', () => {
+  it('пустое — как будто его нет; недописанный фокус — в проверку, а не в предпросмотр', async () => {
+    const { defaultTheme, ThemeInput } = await import('@averra/schema')
+    const { formOf, themeInputOf, themeOf } = await import('./theme-format')
+    const form = { ...formOf(defaultTheme), focus: '', windowCss: '  ' }
+    expect(themeOf(form)).toEqual(defaultTheme)
+    expect(themeInputOf(form)).toEqual(defaultTheme)
+    const half = { ...formOf(defaultTheme), focus: '#c24' }
+    expect(themeOf(half)?.focus).toBeUndefined()
+    expect(ThemeInput.safeParse(themeInputOf(half)).success).toBe(false)
+    const full = {
+      ...formOf(defaultTheme),
+      focus: '#c2410c',
+      browserColor: 'accent' as const,
+      windowCss: ':scope { padding: 0 }',
+    }
+    const theme = themeOf(full)
+    if (!theme) throw new Error('тема не собралась')
+    expect(formOf(theme)).toEqual(full)
   })
 })
