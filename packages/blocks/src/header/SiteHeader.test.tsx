@@ -493,7 +493,27 @@ function rule(selector: string) {
   return css.slice(start, css.indexOf('}', start))
 }
 
+const brandCss = builtin('node:fs').readFileSync(
+  builtin('node:url')
+    .fileURLToPath(import.meta.url)
+    .replace(/[^/\\]+$/, 'Brand.module.css'),
+  'utf8',
+)
+
 describe('стили шапки', () => {
+  it('подпись логотипа за чертой не рвётся посреди слова: на узком экране сжимается кнопка', () => {
+    const start = brandCss.indexOf('\n.name[data-divided] {')
+    expect(start).toBeGreaterThan(-1)
+    expect(brandCss.slice(start, brandCss.indexOf('}', start))).toContain('overflow-wrap: normal')
+    // У подписи без черты перенос по месту остаётся: длинное название не выпирает
+    const plain = brandCss.indexOf('\n.name {')
+    expect(brandCss.slice(plain, brandCss.indexOf('}', plain))).toContain('overflow-wrap: anywhere')
+  })
+
+  it('«← На главную» при наведении берёт ту же вычисленную темой подложку, что пункты меню', () => {
+    expect(rule('.back:hover')).toContain('var(--color-background-hover')
+  })
+
   it('наведение на пункты — по переменным темы, которые гарантируют заметную разницу', () => {
     expect(rule('.header[data-link-hover="background"] .link:hover')).toContain(
       'background: var(--color-background-hover)',

@@ -187,7 +187,8 @@
 }
 
 .back:hover {
-  background: var(--color-surface);
+  /* Как «Подложка» пунктов: тема считает цвет, заметно отличный от фона на любой теме */
+  background: var(--color-background-hover, var(--color-surface));
 }
 
 /* Логотип слева, «На главную» справа — на любой ширине */

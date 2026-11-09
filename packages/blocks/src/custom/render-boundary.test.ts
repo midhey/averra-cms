@@ -309,6 +309,7 @@ const define = (template: string, example: Record<string, unknown>) =>
     example,
   })
 
+const CTX = { id: 'x', media: {}, priority: false }
 const JS = 'javascript:alert(1)'
 /** Данные блока: пример, ветки «zz», числа для case и if, опасные значения в самих полях */
 const PROPS: readonly Record<string, unknown>[] = [
@@ -527,5 +528,79 @@ describe('граница защиты своего блока — очистка
       }
     }
     expect(unstable).toEqual([])
+  })
+  it('разбор идёт в контексте <div>, как у браузера: ячейка таблицы без таблицы — просто текст', () => {
+    expect(sanitizeHtml('<td>x</td>')).toBe('x')
+    expect(sanitizeHtml('<tr><td>{{ a }}</td></tr>')).toBe('{{ a }}')
+    const context = parseFragment('<div></div>').childNodes[0] as Element
+    for (const html of [
+      '<tr><td>a</td></tr>',
+      '<table><tr><td>a</td></tr></table>',
+      '<td>a</td>',
+    ]) {
+      const out = sanitizeHtml(html)
+      expect(serialize(parseFragment(context, out, {}))).toBe(out)
+    }
+  })
+
+  it('переводы строки в начале pre, textarea и listing не мешают очистке устояться', () => {
+    const context = parseFragment('<div></div>').childNodes[0] as Element
+    for (const tag of ['pre', 'textarea', 'listing']) {
+      for (let count = 1; count <= 9; count++) {
+        const lines = '\n'.repeat(count)
+        const out = sanitizeHtml(`<div><h2>T</h2><${tag}>${lines}код</${tag}></div>`)
+        // Блок не пропадает целиком, а повторная очистка вывод не меняет
+        expect(out, `${tag} ${count}`).toContain('<h2>T</h2>')
+        expect(sanitizeHtml(out), `${tag} ${count}`).toBe(out)
+        // Если элемент остался в выводе, первый перевод строки браузер отбросит при разборе, а
+        // остальные останутся как были
+        if (!out.includes(`<${tag}`)) continue
+        const outer = parseFragment(context, out, {}).childNodes[0] as Element
+        const kept = outer.childNodes.find((node) => node.nodeName === tag) as Element
+        const inner = kept.childNodes[0] as DefaultTreeAdapterTypes.TextNode
+        expect(inner.value, `${tag} ${count}`).toBe(`${'\n'.repeat(count - 1)}код`)
+      }
+    }
+  })
+
+  it('пять переводов строки подряд в начале pre (из поля) не убирают блок', () => {
+    const html = `<h2>Заголовок</h2><pre>${'\n'.repeat(5)}x</pre>`
+    expect(sanitizeHtml(html)).toContain('<h2>Заголовок</h2>')
+  })
+
+  it('неподвижная точка — по тексту, а не по счётчику: правка без записи в removed не проходит', () => {
+    let calls = 0
+    // Круг, который меняет текст, но «забывает» посчитать правку
+    const forgetful = (html: string) => ({ html: `${html}${calls++ < 10 ? 'x' : ''}`, removed: 0 })
+    expect(untilStable('<p>a</p>', forgetful)).toBe('')
+    expect(untilStable('<p>a</p>', (html) => ({ html, removed: 0 }))).toBe('<p>a</p>')
+    // Ссылка на id, которого нет, убрана из выдачи
+    expect(sanitizeHtml('<a aria-labelledby="nope" href="/x">x</a>')).toBe('<a href="/x">x</a>')
+  })
+
+  it('слишком глубокий вывод — ошибка рендера, а не RangeError; при сохранении — замечание', () => {
+    const deep = (n: number) => `{% for i in (1..${n}) %}<div>{% endfor %}x`
+    for (const n of [300, 5000, 20000]) {
+      expect(() =>
+        renderCustomBlockHtml(define(deep(n), { title: 'T' }), { title: 'T' }, CTX),
+      ).toThrow(CustomBlockRenderError)
+      const problems = customBlockProblems(define(deep(n), { title: 'T' }))
+      expect(
+        problems.some((one) => one.level === 'error' && /глубоко вложен/.test(one.message)),
+      ).toBe(true)
+    }
+    const ok = renderCustomBlockHtml(define(deep(100), { title: 'T' }), { title: 'T' }, CTX)
+    expect(ok).toContain('x')
+  }, 30_000)
+
+  it('глубокий шаблон без цикла: проверка при сохранении возвращает ошибку, а не RangeError', () => {
+    // 6000 уровней — 18–36 КБ текста, в пределах лимита шаблона; стек рекурсии кончился бы раньше
+    for (const open of ['<div>', '<i>', '<span>']) {
+      const template = `${open.repeat(Math.floor(19_000 / open.length))}x`
+      const problems = customBlockProblems(define(template, { title: 'T' }))
+      expect(
+        problems.some((one) => one.level === 'error' && /глубоко вложен/.test(one.message)),
+      ).toBe(true)
+    }
   })
 })

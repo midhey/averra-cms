@@ -55,6 +55,9 @@ const HIDING: Readonly<Record<string, RegExp>> = {
   'font-size': /^0+(?:\.0*)?(?:[a-z%]*)?\s*(?:!important)?$/i,
   height: /^0+(?:\.0*)?(?:[a-z%]*)?\s*(?:!important)?$/i,
   'max-height': /^0+(?:\.0*)?(?:[a-z%]*)?\s*(?:!important)?$/i,
+  color: /^transparent\b/i,
+  transform: /^scale\(\s*0*(?:\.0*)?\s*(?:,\s*0*(?:\.0*)?\s*)?\)/i,
+  'clip-path': /^inset\(\s*(?:50|100)%/i,
 }
 
 /**
@@ -74,7 +77,8 @@ export function legalFooterCssProblems(css: string): CustomBlockProblem[] {
   }
   const problems: CustomBlockProblem[] = []
   root.walkRules((rule) => {
-    if (!rule.selector.includes(LEGAL_FOOTER_ATTRIBUTE)) return
+    // Имя атрибута в селекторе HTML не различает по регистру
+    if (!rule.selector.toLowerCase().includes(LEGAL_FOOTER_ATTRIBUTE)) return
     rule.walkDecls((decl) => {
       const hiding = HIDING[decl.prop.toLowerCase()]
       if (!hiding?.test(decl.value.trim())) return

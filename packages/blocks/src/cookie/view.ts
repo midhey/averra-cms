@@ -1,17 +1,20 @@
 import {
   analyticsDescription,
+  canonicalPath,
   cookieNoticeShown,
   cookieNoticeText,
-  MAIN_PAGE_SLUG,
   type StoredSiteSettings,
 } from '@averra/schema'
 import type { CookieNoticeProps, LegalFooterProps } from './CookieNotice'
 
-/** Адрес страницы политики, если она опубликована; иначе null — ссылки на сайте нет */
+/**
+ * Адрес страницы политики, если она опубликована; иначе null — ссылки на сайте нет. Со слэшем в
+ * конце, как у согласия: на file_server адрес без него — лишний редирект 308
+ */
 export function policyHref(settings: Pick<StoredSiteSettings, 'cookies'>, published: string[]) {
   const slug = settings.cookies.policyPage
   if (slug === '' || !published.includes(slug)) return null
-  return slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`
+  return canonicalPath(slug)
 }
 
 /**

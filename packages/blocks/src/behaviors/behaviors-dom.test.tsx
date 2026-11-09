@@ -104,6 +104,25 @@ describe('окно сайта', () => {
     expect(document.activeElement?.getAttribute('tabindex')).toBe('-1')
   })
 
+  it('широкий экран, первое поле ниже видимой части окна: фокус на заголовке, окно сверху', () => {
+    const { dialog, link } = mount()
+    startBehaviors(document, { matchMedia: motion(false) })
+    const field = dialog.querySelector<HTMLElement>('[name="name"]')
+    // Окно 0–800, поле на 1200–1240: оно ниже видимой области (длинный текст перед ним)
+    dialog.getBoundingClientRect = () => ({ top: 0, bottom: 800 }) as DOMRect
+    if (field) field.getBoundingClientRect = () => ({ top: 1200, bottom: 1240 }) as DOMRect
+    dialog.scrollTop = 510
+    click(link)
+    expect(dialog.open).toBe(true)
+    expect(document.activeElement?.id).toBe('w-zapis~title')
+    expect(dialog.scrollTop).toBe(0)
+    // Поле на виду — как раньше, фокус в него
+    if (field) field.getBoundingClientRect = () => ({ top: 100, bottom: 140 }) as DOMRect
+    click(dialog.querySelector('[data-site-window-close]') as Element)
+    click(link)
+    expect(document.activeElement?.getAttribute('name')).toBe('name')
+  })
+
   it('Esc (cancel) закрывает окно и возвращает фокус на ссылку', () => {
     const { dialog, link } = mount()
     startBehaviors(document, {})

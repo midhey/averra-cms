@@ -1,4 +1,10 @@
-import { type FooterContacts, footerRequisites, socialLinks, telHref } from '@averra/schema'
+import {
+  canonicalPath,
+  type FooterContacts,
+  footerRequisites,
+  socialLinks,
+  telHref,
+} from '@averra/schema'
 
 // Данные шаблона своих шапки и подвала (свой блок с местом «шапка» или «подвал»). Ссылки уже
 // разрешены Averra: шаблон их не строит, поэтому проверка меню, запрет удалить страницу из меню и
@@ -223,6 +229,10 @@ export const samplePlaceData = (short = false): PlaceData =>
       ogrn: '1027700000000',
       socials: ['https://vk.com/example'],
     },
-    legal: { policyHref: '/privacy', consentHref: '/consent', cookieSettings: true },
+    legal: {
+      policyHref: canonicalPath('privacy'),
+      consentHref: canonicalPath('consent'),
+      cookieSettings: true,
+    },
     year: 2026,
   })

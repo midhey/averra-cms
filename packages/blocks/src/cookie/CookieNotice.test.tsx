@@ -43,7 +43,7 @@ describe('CookieNotice', () => {
     )
     expect(notice).toContain('<section class=')
     expect(notice).toContain('Яндекс Метрика')
-    expect(notice).toContain('href="/privacy"')
+    expect(notice).toContain('href="/privacy/"')
     expect(notice).toContain('Только необходимые')
     expect(notice).toContain('Принять все')
     expect(notice).toContain('Настроить')
@@ -103,7 +103,7 @@ describe('CookieNotice', () => {
     const { footer } = renderNotice(settings({ policyPage: 'privacy' }))
     expect(footer).toContain('<footer')
     expect(footer).not.toMatch(/^<footer[^>]*hidden/)
-    expect(footer).toContain('<a href="/privacy"')
+    expect(footer).toContain('<a href="/privacy/"')
     expect(footer).toMatch(/data-consent-open=""[^>]*hidden=""/)
   })
 

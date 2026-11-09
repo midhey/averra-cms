@@ -1,7 +1,7 @@
 import { defaultOptions, type TagToken, Tokenizer, TokenKind } from 'liquidjs'
 import { type DefaultTreeAdapterTypes, parseFragment, serialize } from 'parse5'
 import { isReservedDataAttribute, isReservedId } from './marker'
-import type { CustomBlockProblem } from './problems'
+import { type CustomBlockProblem, CustomBlockRenderError } from './problems'
 
 type Element = DefaultTreeAdapterTypes.Element
 type ParentNode = DefaultTreeAdapterTypes.ParentNode
@@ -295,6 +295,27 @@ function misplacedElement(node: Element, parentNamespace: string | undefined) {
  */
 const BLOCK_CONTEXT = parseFragment('<div></div>').childNodes[0] as Element
 
+/**
+ * Глубже блок не вкладывают: браузер режет дерево на 512 уровнях, а очистка и сборка parse5
+ * рекурсивны — на тысячах уровней упали бы со стеком, а не с понятной ошибкой
+ */
+export const DEPTH_MAX = 256
+
+/** Глубже ли дерево DEPTH_MAX: обход без рекурсии */
+export function treeTooDeep(root: ParentNode) {
+  const stack: Array<{ node: ParentNode; depth: number }> = [{ node: root, depth: 0 }]
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop() as { node: ParentNode; depth: number }
+    if (depth > DEPTH_MAX) return true
+    for (const child of node.childNodes) {
+      if (isElement(child)) stack.push({ node: child, depth: depth + 1 })
+    }
+  }
+  return false
+}
+
+export const TOO_DEEP_MESSAGE = `Блок слишком глубоко вложен: больше ${DEPTH_MAX} уровней элементов`
+
 /** Сколько раз разбираем свой же вывод заново, пока разбор не перестанет менять дерево */
 const PASSES_MAX = 3
 
@@ -337,7 +358,9 @@ export function untilStable(html: string, pass: SanitizePass) {
   let output = pass(html).html
   for (let round = 0; round < PASSES_MAX; round++) {
     const again = pass(output)
-    if (again.removed === 0) return output
+    // Устойчиво — когда повторный круг ничего не убрал И собрал тот же текст: счётчик убранного
+    // сам по себе не ловит правку, которую забыли в него записать
+    if (again.removed === 0 && again.html === output) return output
     output = again.html
   }
   return ''
@@ -350,6 +373,7 @@ function sanitizePass(
   isTaken: (id: string) => boolean,
 ) {
   const fragment = parseFragment(BLOCK_CONTEXT, html, {})
+  if (treeTooDeep(fragment)) throw new CustomBlockRenderError(TOO_DEEP_MESSAGE)
   const counter = { removed: 0 }
   clean(fragment, undefined, trusted, isTaken, counter)
   const ids = new Set<string>()
@@ -366,7 +390,27 @@ function sanitizePass(
     counter.removed += node.attrs.length - kept.length
     node.attrs = kept
   })
+  keepLeadingNewlines(fragment)
   return { html: serialize(fragment), removed: counter.removed }
+}
+
+const PRE_LIKE = new Set(['pre', 'textarea', 'listing'])
+
+/**
+ * Разбор HTML отбрасывает первый перевод строки в pre, textarea и listing, а сборка parse5 его
+ * не возвращает: каждый повторный разбор съедал бы по одному, и вывод с четырьмя переводами
+ * строки в начале не устаивался (блок пропадал). Возвращаем отброшенный — тогда разбор
+ * собранного текста даёт то же дерево, что мы чистили
+ */
+function keepLeadingNewlines(root: ParentNode) {
+  walkElements(root, (node) => {
+    if (node.namespaceURI !== 'http://www.w3.org/1999/xhtml') return
+    if (!PRE_LIKE.has(node.tagName)) return
+    const first = node.childNodes[0]
+    if (first && 'value' in first && first.value.startsWith('\n')) {
+      first.value = `\n${first.value}`
+    }
+  })
 }
 
 type SanitizeOptions = {
@@ -376,11 +420,18 @@ type SanitizeOptions = {
   ownId?: string | undefined
 }
 
+/** Обход элементов в глубину, сверху вниз; без рекурсии: на глубоком дереве стек не кончится */
 function walkElements(parent: ParentNode, visit: (node: Element) => void) {
-  for (const node of parent.childNodes) {
-    if (!isElement(node)) continue
-    visit(node)
-    walkElements(node, visit)
+  const stack: ParentNode[] = [parent]
+  while (stack.length > 0) {
+    const current = stack.pop() as ParentNode
+    const found: Element[] = []
+    for (const node of current.childNodes) {
+      if (isElement(node)) found.push(node)
+    }
+    // Порядок как у рекурсии: первый ребёнок и его потомки раньше второго
+    for (let at = found.length - 1; at >= 0; at--) stack.push(found[at] as Element)
+    if (current !== parent) visit(current as Element)
   }
 }
 
@@ -425,7 +476,8 @@ export function visibleLinkHrefs(html: string) {
       visit(node)
     }
   }
-  visit(parseFragment(BLOCK_CONTEXT, html, {}))
+  const fragment = parseFragment(BLOCK_CONTEXT, html, {})
+  if (!treeTooDeep(fragment)) visit(fragment)
   return hrefs
 }
 
@@ -870,6 +922,11 @@ export function checkTemplateHtml(
       if (error.code === 'duplicate-attribute') duplicates.push(error.startOffset)
     },
   })
+  // Рекурсивные проверки ниже на тысячах уровней упали бы со стеком, а не с замечанием
+  if (treeTooDeep(tree)) {
+    add('error', undefined, TOO_DEEP_MESSAGE)
+    return problems
+  }
   walkElements(tree, (node) => {
     const id = node.attrs.find((attr) => attr.name === 'id')?.value
     if (id) ids.add(id)
@@ -953,7 +1010,9 @@ export function renderedProblems(html: string): string[] {
       visit(node, node.namespaceURI)
     }
   }
-  visit(parseFragment(BLOCK_CONTEXT, html, {}), undefined)
+  const fragment = parseFragment(BLOCK_CONTEXT, html, {})
+  if (treeTooDeep(fragment)) return [TOO_DEEP_MESSAGE]
+  visit(fragment, undefined)
   return [...found]
 }
 

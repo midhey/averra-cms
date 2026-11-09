@@ -162,6 +162,13 @@ describe('данные своего вида', () => {
 })
 
 describe('проверка шаблона места', () => {
+  it('заготовка шапки: кольцо фокуса — общее, стрелка «Меню» не читается вслух', () => {
+    // Своё правило фокуса перекрыло бы настройку темы «Кольцо фокуса»
+    expect(headerDefinition.css).not.toContain('.toggle:focus-visible')
+    expect(headerDefinition.css).toContain('content: "▾" / ""')
+    expect(customBlockProblems(headerDefinition).filter((one) => one.level === 'error')).toEqual([])
+  })
+
   it('заготовки шапки и подвала — без ошибок', () => {
     for (const definition of [headerDefinition, footerDefinition]) {
       const errors = customBlockProblems(definition).filter((one) => one.level === 'error')
@@ -223,6 +230,26 @@ describe('проверка шаблона места', () => {
         (one) => one.level === 'error',
       ),
     ).toEqual([])
+  })
+
+  it('скрытие строки документов цветом, масштабом и обрезкой, и селектор в другом регистре — ошибка', () => {
+    const css = [
+      '[data-legal-footer] { color: transparent }',
+      '[data-legal-footer] { transform: scale(0) }',
+      '[data-legal-footer] { clip-path: inset(50%) }',
+      '[DATA-LEGAL-FOOTER] { display: none }',
+      '[data-legal-footer] { color: var(--color-text); transform: scale(1) }',
+    ].join('\n')
+    const errors = customBlockProblems({ ...footerDefinition, css }).filter(
+      (one) => one.level === 'error' && one.part === 'css',
+    )
+    expect(errors.map((one) => one.line)).toEqual([1, 2, 3, 4])
+  })
+
+  it('образец данных: ссылки на документы канонические, как на сайте', () => {
+    const { legal } = samplePlaceData().site
+    expect(legal.policy_href).toBe('/privacy/')
+    expect(legal.consent_href).toBe('/consent/')
   })
 
   it('кнопка заготовки шапки открывается в новой вкладке по new_tab', () => {

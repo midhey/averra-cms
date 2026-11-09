@@ -53,6 +53,13 @@ export function windowSlugOfPath(pathname: string): string | undefined {
   return /^\/([a-z0-9-]{1,64})\/?$/.exec(pathname)?.[1]
 }
 
+/** Элемент целиком в видимой области окна (по рамкам): ниже или выше — нет */
+function visibleIn(dialog: HTMLElement, element: HTMLElement) {
+  const frame = dialog.getBoundingClientRect()
+  const box = element.getBoundingClientRect()
+  return box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1
+}
+
 /** Запустить поведения на странице. Нечего делать — ничего не делает */
 export function startBehaviors(
   doc: Document = document,
@@ -188,10 +195,13 @@ export function startWindows(doc: Document, env: BehaviorsEnvironment) {
     const closeButton = dialog.querySelector<HTMLElement>('[data-site-window-close]')
     const narrow = env.matchMedia?.(NARROW_WINDOW).matches === true
     const content = dialog.querySelector<HTMLElement>('[data-site-window-content]') ?? dialog
-    const target = narrow
-      ? (dialog.querySelector<HTMLElement>('[data-site-window-title]') ?? closeButton)
-      : (focusables(content)[0] ?? closeButton)
-    target?.focus()
+    const title = dialog.querySelector<HTMLElement>('[data-site-window-title]') ?? closeButton
+    const first = focusables(content)[0]
+    // Первое поле или ссылка стоит ниже видимой части (длинный текст, кнопка в конце): фокус
+    // на него прокрутил бы окно, и начало содержимого осталось бы выше. Тогда — на заголовок
+    const target = narrow || (first && !visibleIn(dialog, first)) ? title : (first ?? closeButton)
+    dialog.scrollTop = 0
+    target?.focus({ preventScroll: true })
   }
 
   function close({ restoreFocus = true } = {}) {

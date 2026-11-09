@@ -346,6 +346,14 @@ describe('CSS окон и фон темы', () => {
     expect(
       themeBackgroundCss({ background: { mediaId, size: 'cover' } }, media as never),
     ).toContain('background-size:cover')
+    // iOS не умеет fixed у фона: там картинка — на закреплённом body::before
+    const cover = themeBackgroundCss({ background: { mediaId, size: 'cover' } }, media as never)
+    expect(cover).toContain('@supports (-webkit-touch-callout:none)')
+    expect(cover).toContain(
+      'body::before{content:"";position:fixed;top:0;right:0;bottom:0;left:0;z-index:-1',
+    )
+    // Узор повторяется и на iOS без обходов
+    expect(themeBackgroundCss(theme, media as never)).not.toContain('@supports')
     expect(themeBackgroundCss(theme, {})).toBe('')
     expect(themeBackgroundCss(defaultTheme, media as never)).toBe('')
   })
