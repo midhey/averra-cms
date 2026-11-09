@@ -28,13 +28,16 @@ site.json — все данные сайта (формат averra-site-export, �
               background — фон, surface — поверхность, text — текст, muted — приглушённый
               текст, accent — акцент, onAccent — текст на акценте, border — линии и рамки;
               #RRGGBB), шрифты заголовков и текста (fonts: heading, body — id шрифта, например
-              golos-text, lora или system — шрифт устройства), скругления (radius: none, small,
-              medium, large); черновик темы с экрана «Тема» (themeDraft, в том же формате; null —
+              golos-text, lora или system — шрифт устройства; accent — акцентный, mono —
+              моноширинный), скругления (radius: none, small, medium, large), кольцо фокуса
+              (focus, #RRGGBB), цвет строки браузера (browserColor — роль), фон-картинка страницы
+              (background: id картинки mediaId, вид size — tile или cover), свой CSS окон
+              (windowCss); черновик темы с экрана «Тема» (themeDraft, в том же формате; null —
               тему там не сохраняли); шапка сайта и меню (header: раскладка layout, липкая
               sticky, собирается при прокрутке condense, прозрачная на первом экране overlay,
               телефон phone, кнопка button и пункты меню menu — подпись label, подпись на
               телефоне mobileLabel, страница page и блок на ней block или внешняя ссылка url,
-              новая вкладка newTab; логотип: вид brand — image, text, imageText, картинка logo —
+              новая вкладка newTab, открыть окном window; логотип: вид brand — image, text, imageText, картинка logo —
               id картинки, знак logoMark, подпись logoText; вид шапки look; свой вид custom —
               ключ своего блока с местом header и его поля, null — стандартная; null — шапку не
               публиковали) и её черновик (headerDraft; null — такой же, как на сайте); подвал

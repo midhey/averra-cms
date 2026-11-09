@@ -327,6 +327,28 @@ describe('удаление страницы', () => {
     expect(await publishedSlugs(demo.id)).toContain('index')
   })
 
+  it('главная и 404 окном не бывают: window у них — 400 по-русски, обычная страница — можно', async () => {
+    const site = await newSite()
+    const content = { blocks: [], window: { title: 'Окно' } }
+    for (const [slug, message] of [
+      ['index', 'Главная страница не может быть окном'],
+      ['404', 'Страница 404 не может быть окном'],
+    ] as const) {
+      const res = await sendJson('PUT', `/api/sites/${site.id}/pages/${slug}`, {
+        title: 'Страница',
+        content,
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { error: { issues: { path: string; message: string }[] } }
+      expect(body.error.issues).toContainEqual({ path: 'content.window', message })
+    }
+    const ok = await sendJson('PUT', `/api/sites/${site.id}/pages/zapis`, {
+      title: 'Запись',
+      content,
+    })
+    expect(ok.status).toBe(200)
+  })
+
   it('удаляет только на своём сайте', async () => {
     const first = await newSite()
     const second = await newSite()

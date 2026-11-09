@@ -3,6 +3,7 @@ import {
   headerPageUses,
   MAIN_PAGE_SLUG,
   NewPage,
+  NOT_FOUND_PAGE_SLUG,
   PageContent,
   PageSlug,
   PageTitle,
@@ -170,6 +171,18 @@ export function sitesRoutes({
         async (c) => {
           const { siteId, slug } = c.req.valid('param')
           const { title } = c.req.valid('json')
+          // Главная и 404 окном не бывают: админка у них раздела «Окно» не показывает, и снять
+          // флажок там было бы нечем
+          if (
+            (slug === MAIN_PAGE_SLUG || slug === NOT_FOUND_PAGE_SLUG) &&
+            c.req.valid('json').content.window !== undefined
+          ) {
+            const message =
+              slug === MAIN_PAGE_SLUG
+                ? 'Главная страница не может быть окном'
+                : 'Страница 404 не может быть окном'
+            return c.json(validationError([{ path: 'content.window', message }]), 400)
+          }
           // Свои блоки — по опубликованным определениям сайта: их схем нет в коде, они в базе.
           // Дальше идёт страница после их схем: умолчания полей подставлены, как у встроенных
           const custom = await checkPageCustomBlocks(db, siteId, c.req.valid('json').content)

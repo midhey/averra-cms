@@ -7,10 +7,12 @@ import {
   themePresets,
 } from '@averra/schema'
 import { eq } from 'drizzle-orm'
+import sharp from 'sharp'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { sites } from '../../db/schema'
 import type { SitePublisher } from '../../publish/queue'
 import { createTestApi } from '../../testing'
+import { sitesRepo } from '../sites/repo'
 
 // Тема сайта: черновик (PUT), публикация (POST /publish) с пересборкой, контраст как в админке,
 // права и совместимость с темой в прежнем формате
@@ -225,5 +227,127 @@ describe('права', () => {
     const editor = await api.loginAs('editor')
     const res = await app.request(`/api/sites/${other}/theme`, { headers: editor.headers })
     expect(res.status).toBe(404)
+  })
+})
+
+describe('фон-картинка, CSS окон и кольцо фокуса', () => {
+  async function uploadPicture() {
+    const data = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#e8dcc8' },
+    })
+      .png()
+      .toBuffer()
+    const body = new FormData()
+    body.append('file', new File([new Uint8Array(data)], 'grain.png', { type: 'image/png' }))
+    const res = await app.request(`/api/sites/${demoSiteId}/media`, {
+      method: 'POST',
+      headers: owner.headers,
+      body,
+    })
+    expect(res.status, await res.clone().text()).toBe(201)
+    return ((await res.json()) as { id: string }).id
+  }
+
+  it('CSS окон с ошибкой не сохранить — со строкой; правильный сохраняется', async () => {
+    const bad = await save({
+      ...defaultTheme,
+      windowCss: ':scope { color: var(--color-text) }\nbody { position: fixed }',
+    })
+    expect(bad.status).toBe(400)
+    const found = await issues(bad)
+    expect(found[0]?.path).toBe('windowCss')
+    expect(found[0]?.message).toMatch(/^Строка 2:/)
+    const good = await ok(await save({ ...defaultTheme, windowCss: ':scope { border-radius: 0 }' }))
+    expect(good.draft.windowCss).toBe(':scope { border-radius: 0 }')
+    expect(good.unpublished).toBe(true)
+  })
+
+  it('плохой контраст кольца фокуса — 400 у поля focus', async () => {
+    const res = await save({ ...defaultTheme, focus: '#f0f0f0' })
+    expect(res.status).toBe(400)
+    expect((await issues(res))[0]?.path).toBe('focus')
+  })
+
+  it('фон — только картинка медиатеки; пока она в теме, её не удалить, и медиатека говорит где', async () => {
+    const missing = await save({
+      ...defaultTheme,
+      background: { mediaId: '7b0c2a54-0d7b-4b1e-9a6f-3f1f4e2a9c11', size: 'tile' },
+    })
+    expect(missing.status).toBe(400)
+    expect((await issues(missing))[0]?.path).toBe('background.mediaId')
+
+    const mediaId = await uploadPicture()
+    const view = await ok(await save({ ...defaultTheme, background: { mediaId, size: 'cover' } }))
+    expect(view.draft.background).toEqual({ mediaId, size: 'cover' })
+    const library = await app.request(`/api/sites/${demoSiteId}/media`, { headers: owner.headers })
+    const item = (
+      (await library.json()) as { items: { id: string; usage: unknown[] }[] }
+    ).items.find((one) => one.id === mediaId)
+    expect(item?.usage).toContainEqual({ kind: 'theme', roles: ['фон страницы'] })
+    const removed = await app.request(`/api/sites/${demoSiteId}/media/${mediaId}`, {
+      method: 'DELETE',
+      headers: owner.headers,
+    })
+    expect(removed.status).toBe(409)
+    const refusal = await removed.text()
+    expect(refusal).toContain('«Тема»')
+    expect(refusal).toContain('фон страницы')
+
+    // Опубликованная тема с фоном — картинка в снимке сайта для сборки
+    await ok(await publish())
+    const snapshot = await app.request(`/api/sites/${demoSiteId}/snapshot`)
+    const body = (await snapshot.json()) as {
+      media: Record<string, unknown>
+      site: { theme: Theme }
+    }
+    expect(body.site.theme.background?.mediaId).toBe(mediaId)
+    expect(Object.keys(body.media)).toContain(mediaId)
+    // …и в файлах релиза: без папки картинки фон на собранном сайте — 404
+    expect(await sitesRepo(db).publishedMediaIds(demoSiteId)).toContain(mediaId)
+    await ok(await save(defaultTheme))
+    await ok(await publish())
+    expect(await sitesRepo(db).publishedMediaIds(demoSiteId)).not.toContain(mediaId)
+  })
+
+  it('картинка в CSS окон — только из медиатеки; она в снимке, релизе и «где используется»', async () => {
+    const missing = await save({
+      ...defaultTheme,
+      windowCss: ':scope { background: url(media:7b0c2a54-0d7b-4b1e-9a6f-3f1f4e2a9c11) }',
+    })
+    expect(missing.status).toBe(400)
+    const found = await issues(missing)
+    expect(found[0]?.path).toBe('windowCss')
+    expect(found[0]?.message).toContain('нет в медиатеке')
+
+    const mediaId = await uploadPicture()
+    await ok(
+      await save({
+        ...defaultTheme,
+        windowCss: `:scope { border-top: 6px solid var(--color-accent) }
+:scope { background: url(media:${mediaId}) }`,
+      }),
+    )
+    const library = await app.request(`/api/sites/${demoSiteId}/media`, { headers: owner.headers })
+    const item = (
+      (await library.json()) as { items: { id: string; usage: unknown[] }[] }
+    ).items.find((one) => one.id === mediaId)
+    // Не «фон страницы»: человек искал бы картинку в поле «Фон-картинка» и не нашёл
+    expect(item?.usage).toContainEqual({ kind: 'theme', roles: ['CSS окон'] })
+    const removed = await app.request(`/api/sites/${demoSiteId}/media/${mediaId}`, {
+      method: 'DELETE',
+      headers: owner.headers,
+    })
+    expect(removed.status).toBe(409)
+    const refusal = await removed.text()
+    expect(refusal).toContain('CSS окон')
+    expect(refusal).not.toContain('фон страницы')
+
+    await ok(await publish())
+    const snapshot = await app.request(`/api/sites/${demoSiteId}/snapshot`)
+    const body = (await snapshot.json()) as { media: Record<string, unknown> }
+    expect(Object.keys(body.media)).toContain(mediaId)
+    expect(await sitesRepo(db).publishedMediaIds(demoSiteId)).toContain(mediaId)
+    await ok(await save(defaultTheme))
+    await ok(await publish())
   })
 })

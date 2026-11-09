@@ -10,6 +10,7 @@ import {
   type StoredSiteSettings,
   settingsMediaIds,
   type Theme,
+  themeMediaIds,
 } from '@averra/schema'
 import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
@@ -20,6 +21,7 @@ import { cssMediaIds } from '../custom-blocks/service'
 import { publishedFooter } from '../footer/read'
 import { publishedHeader } from '../header/read'
 import { readStoredSettings } from '../settings/read'
+import { publishedTheme } from '../theme/read'
 
 /**
  * Название сайта установки, когда SITE_NAME не задан: домен сайта (из SITE_URL), а без него —
@@ -264,8 +266,8 @@ export function sitesRepo(db: Db) {
 
     /**
      * Картинки опубликованного сайта — id из полей-картинок блоков опубликованных страниц
-     * (collectMediaRefs), картинки настроек (OG, логотип, иконка), логотип шапки и картинки из CSS
-     * своих блоков, как в снимке для рендерера.
+     * (collectMediaRefs), картинки настроек (OG, логотип, иконка), логотип шапки, картинки из CSS
+     * своих блоков и картинки опубликованной темы (фон, CSS окон), как в снимке для рендерера.
      * По ним сборка решает, какие файлы картинок класть в релиз
      */
     async publishedMediaIds(siteId: string) {
@@ -278,10 +280,14 @@ export function sitesRepo(db: Db) {
           settings: sites.settings,
           headerPublished: sites.headerPublished,
           footerPublished: sites.footerPublished,
+          theme: sites.theme,
+          themePublished: sites.themePublished,
         })
         .from(sites)
         .where(eq(sites.id, siteId))
       return new Set([
+        // Фон страницы и картинки CSS окон: без них в релизе стили темы ссылаются на 404
+        ...(site ? themeMediaIds(publishedTheme(site)) : []),
         ...rows.flatMap(({ content }) =>
           content ? collectMediaRefs(content).map((ref) => ref.mediaId) : [],
         ),

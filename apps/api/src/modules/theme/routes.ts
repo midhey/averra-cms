@@ -1,14 +1,65 @@
-import { ThemeInput, Uuid } from '@averra/schema'
+import { compileWindowCss } from '@averra/blocks/custom-engine'
+import { type Theme, ThemeInput, themeMediaIds, Uuid } from '@averra/schema'
+import { and, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
+import { media } from '../../db/schema'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
 import { themeRepo } from './repo'
 
 const SiteParams = z.object({ siteId: Uuid() })
+
+type Issue = { path: string; message: string }
+
+/**
+ * Проверки темы, которых нет в схеме: свой CSS окон — тем же движком, что CSS своих блоков (ошибки
+ * со строкой; предупреждения — нет, их показывает экран), и фон-картинка — картинка медиатеки
+ * этого сайта, а не чужая или удалённая
+ */
+async function themeIssues(db: Db, siteId: string, theme: Theme): Promise<Issue[]> {
+  const issues: Issue[] = []
+  if (theme.windowCss && theme.windowCss.trim() !== '') {
+    for (const problem of compileWindowCss(theme.windowCss).problems) {
+      if (problem.level !== 'error') continue
+      issues.push({
+        path: 'windowCss',
+        message: problem.line ? `Строка ${problem.line}: ${problem.message}` : problem.message,
+      })
+    }
+  }
+  // Картинки темы (фон и url(media:…) в CSS окон) — только из медиатеки этого сайта: чужой или
+  // удалённой нет в справочнике снимка, и сборка выбросила бы весь CSS окон
+  const ids = themeMediaIds(theme)
+  if (ids.length > 0) {
+    const found = new Set(
+      (
+        await db
+          .select({ id: media.id })
+          .from(media)
+          .where(and(eq(media.siteId, siteId), inArray(media.id, ids)))
+      ).map((row) => row.id),
+    )
+    if (theme.background && !found.has(theme.background.mediaId)) {
+      issues.push({
+        path: 'background.mediaId',
+        message: 'Картинки нет в медиатеке сайта: выберите другую',
+      })
+    }
+    const background = theme.background?.mediaId
+    for (const id of ids) {
+      if (id === background || found.has(id)) continue
+      issues.push({
+        path: 'windowCss',
+        message: `Картинки media:${id} нет в медиатеке сайта: загрузите её или уберите из CSS`,
+      })
+    }
+  }
+  return issues
+}
 
 type ThemeDeps = {
   db: Db
@@ -44,7 +95,11 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
         site('theme.edit'),
         validate('json', ThemeInput),
         async (c) => {
-          const view = await repo.saveDraft(c.req.valid('param').siteId, c.req.valid('json'))
+          const { siteId } = c.req.valid('param')
+          const theme = c.req.valid('json')
+          const issues = await themeIssues(db, siteId, theme)
+          if (issues.length > 0) return c.json(validationError(issues), 400)
+          const view = await repo.saveDraft(siteId, theme)
           if (!view) return c.json(notFound('Сайт не найден'), 404)
           return c.json(view, 200)
         },
@@ -54,6 +109,8 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
       // с плохим контрастом, и опубликовать её как есть, не поправив, нельзя
       .post('/publish', validate('param', SiteParams), site('theme.edit'), async (c) => {
         const { siteId } = c.req.valid('param')
+        // Фон-картинку из медиатеки не удалить, пока она в теме («где используется»), а CSS окон
+        // проверен при сохранении черновика: здесь — схема ещё раз
         const result = await repo.publish(siteId, (draft) =>
           ThemeInput.safeParse(draft).error?.issues.map((issue) => ({
             path: issue.path.map(String).join('.'),

@@ -426,6 +426,19 @@ describe('вид шапки — владельцу, тексты и ссылки
     expect(header?.button).toMatchObject({ url: 'tel:+73420000000' })
   })
 
+  it('«Открывать в окне» у кнопки и пункта доживает до ответа, черновика и снимка', async () => {
+    const button = { label: 'Записаться', page: 'index', block: 'contact', window: true }
+    const saved = await ok(await save({ menu: [{ ...menu[0], window: true }, menu[1]], button }))
+    expect(saved.draft.button).toMatchObject({ window: true })
+    expect(saved.draft.menu[0]).toMatchObject({ window: true })
+    expect((await ok(await read())).draft.button).toMatchObject({ window: true })
+    await ok(await publish())
+    const header = await snapshotHeader()
+    expect(header?.button).toMatchObject({ window: true })
+    expect(header?.menu[0]).toMatchObject({ window: true })
+    expect(header?.menu[1]).not.toHaveProperty('window')
+  })
+
   it('кривая внешняя ссылка — 400 с ошибкой у поля', async () => {
     const res = await save({ menu: [{ label: 'X', url: 'javascript:alert(1)' }] })
     expect(res.status).toBe(400)

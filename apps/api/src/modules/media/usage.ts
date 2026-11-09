@@ -1,4 +1,10 @@
-import { footerMediaIds, headerMediaIds, MAIN_PAGE_SLUG, type SiteSettings } from '@averra/schema'
+import {
+  footerMediaIds,
+  headerMediaIds,
+  MAIN_PAGE_SLUG,
+  type SiteSettings,
+  themeMediaRoles,
+} from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { type Actor, can, type SiteRole } from '../../auth/access'
 import type { Db } from '../../db/client'
@@ -7,11 +13,13 @@ import { customBlocksRepo } from '../custom-blocks/repo'
 import { footerRepo } from '../footer/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
+import { themeRepo } from '../theme/repo'
 
 /** Где используется картинка: для карточки медиатеки и для отказа удалить */
 export type MediaUse =
   | { kind: 'page'; slug: string; title: string; state: 'draft' | 'published' | 'both' }
   | { kind: 'header' }
+  | { kind: 'theme'; roles: string[] }
   | { kind: 'seo'; roles: string[] }
   | { kind: 'block'; key: string; title: string }
 
@@ -104,6 +112,13 @@ export async function mediaUsage(
   ])
   for (const id of ids) {
     if (chrome.has(id)) add(id, { kind: 'header' })
+  }
+
+  // Экран «Тема» (черновик или сайт): фон страницы и картинки CSS окон — где именно, словами
+  const theme = await themeRepo(db).read(siteId)
+  for (const id of ids) {
+    const roles = themeMediaRoles([theme?.draft, theme?.published], id)
+    if (roles.length > 0) add(id, { kind: 'theme', roles })
   }
 
   const settings = await settingsRepo(db).read(siteId)

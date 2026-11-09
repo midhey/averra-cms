@@ -10,6 +10,7 @@ import {
   mediaMimeTypes,
   SVG_MIME_TYPE,
   svgTooLargeMessage,
+  themeMediaRoles,
   Uuid,
 } from '@averra/schema'
 import { Hono } from 'hono'
@@ -38,6 +39,7 @@ import { customBlocksRepo } from '../custom-blocks/repo'
 import { footerRepo } from '../footer/repo'
 import { headerRepo } from '../header/repo'
 import { settingsRepo } from '../settings/repo'
+import { themeRepo } from '../theme/repo'
 import { type MediaUsage, mediaRepo } from './repo'
 import {
   HIDDEN_BLOCK_KEY,
@@ -366,6 +368,15 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
             const message =
               'Картинка — логотип шапки сайта. Замените его в разделе «Шапка и подвал», тогда её можно будет удалить'
             return c.json(conflict(message, [{ path: 'header', message: 'логотип шапки' }]), 409)
+          }
+
+          // Картинка темы (черновик или сайт): фон страницы или CSS окон — на каждой странице
+          const theme = await themeRepo(db).read(siteId)
+          const themeRoles = themeMediaRoles([theme?.draft, theme?.published], mediaId)
+          if (themeRoles.length > 0) {
+            const where = themeRoles.join(' и ')
+            const message = `Картинка в теме сайта: ${where}. Замените или уберите её в разделе «Тема», тогда её можно будет удалить`
+            return c.json(conflict(message, [{ path: 'theme', message: where }]), 409)
           }
 
           // Картинка в настройках SEO (иконка, картинка для соцсетей, логотип) — тоже на сайте

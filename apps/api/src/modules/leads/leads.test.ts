@@ -230,10 +230,15 @@ describe('приём заявки', () => {
     const res = await submit(siteId, validFields(), { headers: { accept: 'application/json' } })
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'accepted' })
+    // Форма в окне dev-сайта шлёт заявку на API с другого порта: ответ читается отовсюду, cookie
+    // запрос не несёт
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull()
     const bad = await submit(siteId, validFields({ phone: '' }), {
       headers: { accept: 'application/json' },
     })
     expect(bad.status).toBe(400)
+    expect(bad.headers.get('access-control-allow-origin')).toBe('*')
     expect(await bad.json()).toMatchObject({
       error: {
         code: 'validation',

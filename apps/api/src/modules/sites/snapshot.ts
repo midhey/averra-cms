@@ -5,6 +5,7 @@ import {
   MAIN_PAGE_SLUG,
   Organization,
   settingsMediaIds,
+  themeMediaIds,
 } from '@averra/schema'
 import type { Db } from '../../db/client'
 import { customBlocksRepo } from '../custom-blocks/repo'
@@ -47,7 +48,10 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
   // Свои блоки — опубликованные определения: их шаблон и CSS рендерер собирает в страницы. Картинки
   // из их CSS (url(media:…)) — в справочник, как картинки блоков
   const customBlocks = await customBlocksRepo(db).published(siteId)
+  const theme = publishedTheme(found)
   const mediaIds = [
+    // Фон-картинка страницы из темы
+    ...themeMediaIds(theme),
     ...customBlocks.flatMap((block) => cssMediaIds(block.css)),
     ...pages.flatMap((page) => collectMediaRefs(page.content).map((ref) => ref.mediaId)),
     ...settingsMediaIds(settings),
@@ -59,7 +63,7 @@ export async function siteSnapshot(db: Db, siteId: string, siteUrl: string | und
     site: {
       id: found.id,
       name: found.name,
-      theme: publishedTheme(found),
+      theme,
       header,
       footer,
       script: publishedSiteScript(found),

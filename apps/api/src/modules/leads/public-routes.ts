@@ -164,9 +164,18 @@ export function formsRoutes({
   const bySite = createRateLimiter(limits.perSite)
   const repo = leadsRepo(db)
 
+  /**
+   * JSON — для формы в окне сайта: её скрипт шлёт заявку fetch-запросом и показывает итог в окне.
+   * Ответ можно читать с любого источника (Access-Control-Allow-Origin: *): в нём нет ничего,
+   * кроме «принято» и ошибок полей, cookie запрос не несёт, а простую POST-форму на этот адрес и так
+   * может отправить любая страница — форма заявки открыта по смыслу. Нужно это только dev-сайту
+   * (формы ведут на API с другого порта): на сервере форма уходит на свой же домен
+   */
   const wantsJson = (c: Context) => {
     const accept = c.req.header('accept') ?? ''
-    return accept.includes('application/json') && !accept.includes('text/html')
+    const json = accept.includes('application/json') && !accept.includes('text/html')
+    if (json) c.header('Access-Control-Allow-Origin', '*')
+    return json
   }
 
   /** Ошибка: страница для браузера или ApiError для скрипта */
