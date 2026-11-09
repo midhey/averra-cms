@@ -15,6 +15,11 @@ export type PlaceMenuItem = {
   current: boolean
   /** Открывать в новой вкладке: target="_blank" */
   new_tab: boolean
+  /**
+   * Открывать окном (страница-окно поверх этой): шаблон ставит ссылке атрибут data-av-window —
+   * {% if item.window %}data-av-window{% endif %}
+   */
+  window: boolean
 }
 
 /** Что шаблон шапки и подвала получает в переменной site */
@@ -70,7 +75,13 @@ export type PlaceData = { site: PlaceSite; page: PlacePage }
  */
 export type PlaceShape = 'value' | readonly [PlaceShape] | { readonly [key: string]: PlaceShape }
 
-const link = { label: 'value', mobile_label: 'value', href: 'value', new_tab: 'value' } as const
+const link = {
+  label: 'value',
+  mobile_label: 'value',
+  href: 'value',
+  new_tab: 'value',
+  window: 'value',
+} as const
 
 export const PLACE_SHAPE: { readonly site: PlaceShape; readonly page: PlaceShape } = {
   site: {
@@ -110,6 +121,7 @@ type ViewLink = {
   href: string
   current?: boolean
   newTab: boolean
+  window?: boolean
 }
 
 const menuItem = (link: ViewLink): PlaceMenuItem => ({
@@ -118,6 +130,7 @@ const menuItem = (link: ViewLink): PlaceMenuItem => ({
   href: link.href,
   current: link.current === true,
   new_tab: link.newTab,
+  window: link.window === true,
 })
 
 export type PlaceDataInput = {

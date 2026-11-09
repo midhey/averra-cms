@@ -129,15 +129,22 @@ function socialImageOf(site: SeoSite, page: SeoPage, media: MediaMap) {
   const mediaId = page.content.seo?.image?.mediaId ?? site.settings.ogImage
   const file = mediaId ? media[mediaId] : undefined
   const variant = file && socialImage(file)
+  // Что на картинке (og:image:alt): своё описание из SEO страницы; у карточки из заголовка — сам
+  // заголовок (он на ней и написан); у картинки без описания — ничего, а не имя файла
+  const alt = page.content.seo?.imageAlt?.trim() ?? ''
   if (variant) {
     const url = absolute(site, variant.url)
-    return url ? { url, width: variant.width, height: variant.height } : undefined
+    return url ? { url, width: variant.width, height: variant.height, alt } : undefined
   }
   if (!needsOgCard(site, page)) return undefined
   const path = `${ogCardPath(page.slug)}?v=${ogCardVersion(pageOgCard(site, page))}`
   const url = absolute(site, path)
-  return url ? { url, ...OG_CARD_SIZE } : undefined
+  return url ? { url, ...OG_CARD_SIZE, alt: alt || page.title } : undefined
 }
+
+/** Роль темы для строки браузера на телефоне (theme-color): своя из темы, иначе фон */
+export const browserColorOf = (theme: SeoSite['theme']) =>
+  theme.colors[theme.browserColor ?? 'background']
 
 const meta = (attribute: 'name' | 'property', key: string, content: string) =>
   `<meta ${attribute}="${key}" content="${escapeHtml(content)}">`
@@ -187,14 +194,18 @@ export function headTags({
   // Canonical — у страниц, которые индексируются: у 404 адреса своего нет
   if (canonical && indexable) tags.push(`<link rel="canonical" href="${escapeHtml(canonical)}">`)
 
+  // Превью ссылки в соцсетях: свои заголовок и описание для соцсетей, иначе SEO-заголовок (без
+  // него — заголовок страницы: название сайта и так в og:site_name) и описание
+  const seo = page.content.seo
+  const shareTitle = seo?.shareTitle?.trim() || seo?.title?.trim() || page.title
+  const shareDescription = seo?.shareDescription?.trim() || description
   tags.push(
     meta('property', 'og:type', 'website'),
     meta('property', 'og:site_name', site.name),
-    // SEO-заголовок, а без него — заголовок страницы: название сайта и так в og:site_name
-    meta('property', 'og:title', page.content.seo?.title?.trim() || page.title),
+    meta('property', 'og:title', shareTitle),
     meta('property', 'og:locale', siteLanguages[settings.language].locale),
   )
-  if (description) tags.push(meta('property', 'og:description', description))
+  if (shareDescription) tags.push(meta('property', 'og:description', shareDescription))
   if (canonical && indexable) tags.push(meta('property', 'og:url', canonical))
   if (image) {
     tags.push(
@@ -202,6 +213,7 @@ export function headTags({
       meta('property', 'og:image:width', String(image.width)),
       meta('property', 'og:image:height', String(image.height)),
     )
+    if (image.alt) tags.push(meta('property', 'og:image:alt', image.alt))
   }
   tags.push(meta('name', 'twitter:card', image ? 'summary_large_image' : 'summary'))
 
@@ -212,7 +224,7 @@ export function headTags({
     tags.push(meta('name', 'google-site-verification', settings.verification.google))
   }
   tags.push(...(settings.icon ? ICON_LINKS : [NO_ICON_LINK]))
-  tags.push(meta('name', 'theme-color', site.theme.colors.background))
+  tags.push(meta('name', 'theme-color', browserColorOf(site.theme)))
   return tags
 }
 

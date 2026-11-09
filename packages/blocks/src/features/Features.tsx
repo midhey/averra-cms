@@ -1,4 +1,5 @@
 import type { BlockComponentProps } from '../types'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Features.module.css'
 
@@ -12,7 +13,7 @@ export function Features({ id, data, headingLevel }: BlockComponentProps<'featur
       <ul role="list" className={styles.grid} data-columns={data.columns}>
         {data.items.map((item, index) => (
           // У пунктов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index} className={styles.item}>
+          <li key={index} className={styles.item} {...revealProps(data.reveal, index)}>
             <ItemHeading className={styles.itemTitle}>{item.title}</ItemHeading>
             {item.text && <p className={styles.itemText}>{item.text}</p>}
           </li>

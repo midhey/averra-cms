@@ -14,7 +14,7 @@ import { Page } from '../Page'
 import { compileCustomCss } from './css'
 import { checkTemplateHtml, maskLiquid, RAW_HTML_FILTERS, sanitizeHtml } from './html'
 import { liquid, liquidLint, renderTemplate } from './liquid'
-import { CUSTOM_BLOCK_ROOT_ATTRIBUTE, isReservedDataAttribute } from './marker'
+import { BEHAVIOR_ATTRIBUTES, CUSTOM_BLOCK_ROOT_ATTRIBUTE, isReservedDataAttribute } from './marker'
 import { customBlockProblems, customBlocksCss, renderCustomBlockHtml } from './render'
 
 const mediaId = '3f1c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'
@@ -1381,6 +1381,7 @@ assign u = q | replace: 'x', ':'
       '../cookie/consent-dom.ts',
       '../header/header-dom.ts',
       '../video/player-dom.ts',
+      '../behaviors/behaviors-dom.ts',
       '../ui/Section.tsx',
       '../base.css',
     ]
@@ -1395,8 +1396,29 @@ assign u = q | replace: 'x', ':'
       }
     }
     names.delete('data-mode')
+    // Поведения Averra шаблон ставит сам: они только включают поведение
+    for (const name of BEHAVIOR_ATTRIBUTES) names.delete(name)
     expect(names.size).toBeGreaterThan(10)
     expect([...names].filter((name) => !isReservedDataAttribute(name))).toEqual([])
+  })
+
+  it('атрибуты поведений Averra в шаблоне — можно, метки скрипта поведений и окна — нет', () => {
+    const template =
+      '<a href="/zapis/" data-av-window>Записаться</a><li data-av-reveal="up">1</li><details data-av-details><summary>В</summary>О</details><div data-av-hint="flip">К</div><svg data-av-draw="svg"><path d="M0 0L1 1"/></svg>'
+    expect(templateErrors(template)).toEqual([])
+    for (const name of BEHAVIOR_ATTRIBUTES) expect(sanitizeHtml(template)).toContain(name)
+    for (const fake of [
+      '<dialog data-site-window="zapis"></dialog>',
+      '<div data-av-pending></div>',
+      '<div data-sent></div>',
+      '<div data-form-error></div>',
+      '<span data-field-error></span>',
+    ]) {
+      expect(
+        templateErrors(fake).some((p) => /занят разметкой сайта/.test(p.message)),
+        fake,
+      ).toBe(true)
+    }
   })
 
   // Граница — обёртка HTML шаблона, а не корень своего блока: в корне своей шапки и подвала стоит
@@ -1406,6 +1428,7 @@ assign u = q | replace: 'x', ':'
       '../cookie/consent-dom.ts',
       '../header/header-dom.ts',
       '../video/player-dom.ts',
+      '../behaviors/behaviors-dom.ts',
     ]) {
       const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
       expect(source, file).toContain(`closest('[${CUSTOM_BLOCK_ROOT_ATTRIBUTE}]')`)

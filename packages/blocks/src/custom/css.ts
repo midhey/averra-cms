@@ -255,6 +255,11 @@ const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 type CompileOptions = {
   /** Адрес файла картинки медиатеки по id. Нет — url(media:…) остаётся как есть (проверка) */
   mediaUrl?: ((mediaId: string) => string | undefined) | undefined
+  /**
+   * Своя область вместо [data-custom-block="ключ"] — CSS окон сайта ([data-site-window]). root —
+   * чьи дети «> .x» (по умолчанию обёртка HTML шаблона)
+   */
+  scope?: { selector: string; root: string } | undefined
 }
 
 export type CompiledCss = { css: string; problems: CustomBlockProblem[] }
@@ -306,7 +311,8 @@ export function compileCustomCss(
     throw error
   }
 
-  const scope = customBlockScope(key)
+  const scope = options.scope?.selector ?? customBlockScope(key)
+  const childRoot = options.scope?.root ?? `[${CUSTOM_BLOCK_ROOT_ATTRIBUTE}]`
   const keyframes = new Map<string, string>()
 
   root.walkAtRules((rule) => {
@@ -343,7 +349,7 @@ export function compileCustomCss(
     }
     try {
       let failed = false
-      const selector = scopeSelector(rule.selector, scope, (message) => {
+      const selector = scopeSelector(rule.selector, scope, childRoot, (message) => {
         failed = true
         add('error', line, message)
       })
@@ -615,9 +621,21 @@ const COMBINATORS: ReadonlySet<string> = new Set(['', '>', '+', '~'])
  * селектор начинается с элемента блока или с «>». «~», «+» в начале или после :scope выбрали бы
  * соседние блоки страницы, :scope в аргументах :not/:is/:has — всю страницу
  */
-function scopeSelector(selector: string, scope: string, fail: (message: string) => void) {
-  const scopeNode = () => selectorParser().astSync(scope).first.first
-  const rootNode = () => selectorParser().astSync(`[${CUSTOM_BLOCK_ROOT_ATTRIBUTE}]`).first.first
+function scopeSelector(
+  selector: string,
+  scope: string,
+  root: string,
+  fail: (message: string) => void,
+) {
+  // Область — составной селектор целиком: у окон он из нескольких частей (dialog[…][…])
+  const scopeNodes = () => [...selectorParser().astSync(scope).first.nodes]
+  const prependScope = (one: selectorParser.Selector, before: string) => {
+    const nodes = scopeNodes()
+    const head = nodes[0]
+    if (head) head.spaces.before = before
+    for (const node of nodes.reverse()) one.prepend(node)
+  }
+  const rootNode = () => selectorParser().astSync(root).first.first
   const isScope = (node: selectorParser.Node | undefined) =>
     node?.type === 'pseudo' && node.value.toLowerCase() === ':scope'
   return selectorParser((selectors) => {
@@ -678,9 +696,10 @@ function scopeSelector(selector: string, scope: string, fail: (message: string) 
           next.spaces.before = ' '
         }
         // Пробел после запятой остаётся перед селектором блока
-        const root = scopeNode()
-        root.spaces.before = lead.spaces.before
-        lead.replaceWith(root)
+        const nodes = scopeNodes()
+        const head = nodes[0]
+        if (head) head.spaces.before = lead.spaces.before
+        lead.replaceWith(...nodes)
       } else if (first?.type === 'combinator') {
         // «> .a» — ребёнок блока; «~ *» и «+ *» — соседние блоки страницы, мимо изоляции
         if (first.value.trim() !== '>') {
@@ -695,17 +714,13 @@ function scopeSelector(selector: string, scope: string, fail: (message: string) 
         const wrapper = rootNode()
         one.prepend(wrapper)
         one.prepend(selectorParser.combinator({ value: ' ' }))
-        const root = scopeNode()
-        root.spaces.before = before
-        one.prepend(root)
+        prependScope(one, before)
       } else {
         // Пробел после запятой остаётся перед селектором блока, а не между ним и потомком
         const before = first?.spaces.before ?? ''
         if (first) first.spaces.before = ''
-        const root = scopeNode()
-        root.spaces.before = before
         one.prepend(selectorParser.combinator({ value: ' ' }))
-        one.prepend(root)
+        prependScope(one, before)
       }
     })
   }).processSync(selector)

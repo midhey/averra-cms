@@ -33,3 +33,8 @@ export {
   settlePlace,
 } from './place/CustomPlace'
 export type { BlockComponentProps, BlockData } from './types'
+export { themeBackgroundCss } from './ui/theme-background'
+export { compileWindowCss, WINDOW_CSS_SCOPE, windowCssForPage } from './window/css'
+export { windowsAndBehaviors } from './window/needed'
+export { SiteWindows } from './window/SiteWindows'
+export { type SiteWindowView, siteWindowView, windowIdPrefix } from './window/view'

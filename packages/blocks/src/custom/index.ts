@@ -1,5 +1,7 @@
 // Движок своих блоков без React: Liquid, проверка и очистка HTML, CSS внутри блока. Им
 // пользуются Page (сайт и предпросмотр) и API (проверка определения при сохранении и публикации)
+
+export { compileWindowCss, WINDOW_CSS_SCOPE } from '../window/css'
 export { type CompiledCss, compileCustomCss, customBlockScope } from './css'
 export { checkTemplateHtml, isSafeUrl, maskLiquid, sanitizeHtml, visibleLinkHrefs } from './html'
 export { LIQUID_LIMITS, safeHref } from './liquid'

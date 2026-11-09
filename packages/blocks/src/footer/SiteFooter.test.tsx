@@ -107,8 +107,22 @@ describe('siteFooterView', () => {
   it('разделы — пункты меню шапки на опубликованное, текущий отмечен; у простого — нет', () => {
     const view = viewOf({ layout: 'columns' })
     expect(view?.sections).toEqual([
-      { label: 'Цены', mobileLabel: '', href: '/#pricing', current: false, newTab: false },
-      { label: 'Работы', mobileLabel: '', href: '/raboty/', current: true, newTab: false },
+      {
+        label: 'Цены',
+        mobileLabel: '',
+        href: '/#pricing',
+        current: false,
+        newTab: false,
+        window: false,
+      },
+      {
+        label: 'Работы',
+        mobileLabel: '',
+        href: '/raboty/',
+        current: true,
+        newTab: false,
+        window: false,
+      },
     ])
     expect(viewOf({ layout: 'simple' })?.sections).toEqual([])
     expect(viewOf({ layout: 'columns', sections: false })?.sections).toEqual([])

@@ -1,4 +1,5 @@
 import type { BlockComponentProps } from '../types'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Steps.module.css'
 
@@ -17,7 +18,7 @@ export function Steps({ id, data, headingLevel }: BlockComponentProps<'steps'>) 
       <ol role="list" className={styles.list} data-count={data.items.length}>
         {data.items.map((item, index) => (
           // У шагов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index} className={styles.step}>
+          <li key={index} className={styles.step} {...revealProps(data.reveal, index)}>
             <span className={styles.number} aria-hidden="true">
               {String(index + 1).padStart(2, '0')}
             </span>

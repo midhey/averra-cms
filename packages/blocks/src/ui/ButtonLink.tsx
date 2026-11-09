@@ -11,9 +11,16 @@ type ButtonLinkProps = BlockData<'cta'>['button'] & {
   wide?: boolean
 }
 
-export function ButtonLink({ label, href, appearance = 'filled', wide }: ButtonLinkProps) {
+export function ButtonLink({ label, href, window, appearance = 'filled', wide }: ButtonLinkProps) {
   return (
-    <a className={styles.button} href={href} data-appearance={appearance} data-wide={wide}>
+    <a
+      className={styles.button}
+      href={href}
+      data-appearance={appearance}
+      data-wide={wide}
+      // «Открывать в окне»: скрипт поведений откроет страницу по ссылке окном, если она — окно
+      data-av-window={window ? '' : undefined}
+    >
       {label}
     </a>
   )

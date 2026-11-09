@@ -1,4 +1,5 @@
 import type { BlockComponentProps } from '../types'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Stats.module.css'
 
@@ -15,7 +16,7 @@ export function Stats({ id, data, headingLevel }: BlockComponentProps<'stats'>) 
       <ul role="list" className={styles.grid} data-tone={data.tone} data-count={data.items.length}>
         {data.items.map((item, index) => (
           // У фактов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index} className={styles.item}>
+          <li key={index} className={styles.item} {...revealProps(data.reveal, index)}>
             <span className={styles.value}>{item.value}</span>{' '}
             <span className={styles.label}>{item.label}</span>
           </li>

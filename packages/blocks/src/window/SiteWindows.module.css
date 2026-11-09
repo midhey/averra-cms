@@ -1,0 +1,164 @@
+/* Окно сайта: <dialog> поверх страницы. Цвета — роли темы (фон окна — «Фон» или «Поверхность»),
+   затемнение — --color-backdrop темы. Закрытое не видно и там, где <dialog> браузер не знает */
+.window {
+  --window-width: 40rem;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: min(var(--window-width), calc(100% - 2rem));
+  max-width: none;
+  height: fit-content;
+  max-height: calc(100% - 2rem);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 2);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.window:not([open]) {
+  display: none;
+}
+
+/* Свой CSS окон (:scope — dialog[…][…]) специфичнее и своим display, даже важным, показал бы
+   закрытое окно. Важное объявление из слоя сильнее важного без слоя, а @layer в CSS окон
+   запрещён — как защита popover своих блоков в base.css */
+@layer averra-guard {
+  .window:not([open]) {
+    /* biome-ignore lint/complexity/noImportantStyles: важное из слоя — единственный способ перебить свой CSS окон */
+    display: none !important;
+  }
+}
+
+.window[data-width="narrow"] {
+  --window-width: 28rem;
+}
+
+.window[data-width="wide"] {
+  --window-width: 60rem;
+}
+
+.window[data-surface="surface"] {
+  background: var(--color-surface);
+}
+
+/* Затемнение: в старых Chrome и Safari ::backdrop не наследует переменные темы — тогда запасное */
+.window::backdrop {
+  background: var(--color-backdrop, rgb(0 0 0 / 50%));
+}
+
+/* Прокручиваемое окно (длинная форма на телефоне) само получает фокус с клавиатуры (Chrome 130+):
+   рамку снимаем только у фокуса мышью или скриптом, с клавиатуры кольцо видно — внутри окна. В
+   браузере без :focus-visible первое правило не применится, и останется обычная рамка браузера */
+.window:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.window:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+.frame {
+  position: relative;
+}
+
+/* Строка окна: заголовок и «Закрыть». Липкая — кнопка закрытия видна и в длинном окне */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  background: inherit;
+}
+
+.window[data-surface="surface"] .bar {
+  background: var(--color-surface);
+}
+
+.window[data-surface="background"] .bar {
+  background: var(--color-background);
+}
+
+.title {
+  font-size: var(--text-xl);
+}
+
+/* Фокус на заголовке ставит скрипт при открытии на телефоне: кольцо — только с клавиатуры */
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* «Закрыть» — 44 px, в углу; без заголовка — справа */
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-background-hover, var(--color-surface));
+  border-color: var(--color-text);
+}
+
+/* Встроенные блоки страницы-окна — с отступами окна, а не полосами во всю страницу. Свои блоки
+   (data-custom-block) — как на странице: их фон и отступы задаёт их CSS (:scope), окно не трогает */
+.content > section:not([data-custom-block]) {
+  padding: 0 var(--space-6) var(--space-6);
+  background: transparent;
+}
+
+.content > section:not([data-custom-block]) + section:not([data-custom-block]) {
+  padding-top: var(--space-6);
+}
+
+/* Телефон: шторка снизу во всю ширину — до полей и кнопки дотянуться большим пальцем */
+@media (max-width: 39.99rem) {
+  .window {
+    width: 100%;
+    max-height: calc(100% - var(--space-8));
+    margin: auto 0 0;
+    border-radius: calc(var(--radius) * 2) calc(var(--radius) * 2) 0 0;
+  }
+
+  .bar {
+    padding-left: var(--space-4);
+  }
+
+  .content > section:not([data-custom-block]) {
+    padding-inline: var(--space-4);
+  }
+}
+
+@supports (max-height: 100dvh) {
+  .window {
+    max-height: calc(100dvh - 2rem);
+  }
+
+  @media (max-width: 39.99rem) {
+    .window {
+      max-height: calc(100dvh - var(--space-8));
+    }
+  }
+}

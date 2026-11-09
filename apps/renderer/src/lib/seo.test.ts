@@ -160,6 +160,45 @@ describe('<head> страницы', () => {
     expect(head(s, page('ceny'))).toContain('<meta property="og:title" content="Цены">')
   })
 
+  it('свои заголовок, описание и alt картинки для соцсетей — в og, поиску — свои', () => {
+    const own = page('ceny', {
+      content: {
+        blocks: [],
+        seo: {
+          title: 'Цены на ремонт',
+          description: 'Для поиска',
+          shareTitle: 'Сколько стоит ремонт? Считаем за минуту',
+          shareDescription: 'Для превью в Telegram',
+          image: { mediaId: ogId },
+          imageAlt: 'Комната после ремонта',
+        },
+      },
+    })
+    const html = head(site(), own)
+    expect(html).toContain('<title>Цены на ремонт</title>')
+    expect(html).toContain('<meta name="description" content="Для поиска">')
+    expect(html).toContain(
+      '<meta property="og:title" content="Сколько стоит ремонт? Считаем за минуту">',
+    )
+    expect(html).toContain('<meta property="og:description" content="Для превью в Telegram">')
+    expect(html).toContain('<meta property="og:image:alt" content="Комната после ремонта">')
+    // Картинка без описания — без og:image:alt, а не с именем файла
+    const plain = page('ceny', { content: { blocks: [], seo: { image: { mediaId: ogId } } } })
+    expect(head(site(), plain)).not.toContain('og:image:alt')
+    // Карточка из заголовка — описание сам заголовок
+    expect(head(site(), page('ceny'))).toContain('<meta property="og:image:alt" content="Цены">')
+  })
+
+  it('цвет строки браузера — роль темы, по умолчанию фон', () => {
+    expect(head(site(), page('ceny'))).toContain(
+      `<meta name="theme-color" content="${defaultTheme.colors.background}">`,
+    )
+    const accent = { ...site(), theme: { ...defaultTheme, browserColor: 'accent' as const } }
+    expect(head(accent, page('ceny'))).toContain(
+      `<meta name="theme-color" content="${defaultTheme.colors.accent}">`,
+    )
+  })
+
   it('картинка страницы главнее картинки сайта', () => {
     const own = page('ceny', { content: { blocks: [], seo: { image: { mediaId: logoId } } } })
     const html = head(site({ ogImage: ogId }), own)

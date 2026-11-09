@@ -10,9 +10,14 @@ import {
   headerScriptNeeded,
   LegalFooter,
   Page,
+  SiteWindows,
   settlePlace,
   siteFooterView,
   siteHeaderView,
+  siteWindowView,
+  themeBackgroundCss,
+  windowCssForPage,
+  windowsAndBehaviors,
 } from '@averra/blocks'
 import '@averra/blocks/base.css'
 import {
@@ -27,6 +32,7 @@ import {
 } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import CookieConsent from '../components/CookieConsent.astro'
+import SiteBehaviors from '../components/SiteBehaviors.astro'
 import SiteHeaderScript from '../components/SiteHeaderScript.astro'
 import VideoPlayer from '../components/VideoPlayer.astro'
 import { siteFontCss, siteFontFiles } from '../lib/fonts'
@@ -75,8 +81,12 @@ const head = headTags({ site: seoSite, page, media })
 // Разметка для поисковиков — данные (application/ld+json), а не скрипт: CSP её не касается.
 // Счётчики аналитики вставляет модуль cookie-уведомления, inline-скриптов на сайте нет
 const jsonLd = [organizationJsonLd(seoSite, page, media) ?? '', faqJsonLd(seoSite, page) ?? '']
-// Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы
-const themeCss = siteFontCss(await siteFontFiles(site.theme)) + themeToCss(site.theme)
+// Шрифты темы — свои файлы с сервера сайта (/_fonts/), перед переменными темы. Фон-картинка
+// страницы и свой CSS окон — тоже тема: после переменных
+const themeCss =
+  siteFontCss(await siteFontFiles(site.theme)) +
+  themeToCss(site.theme) +
+  themeBackgroundCss(site.theme, media)
 // Cookie-уведомление и ссылки на документы: ссылка на политику — только на опубликованную страницу
 const cookies = cookieNoticeView(
   site.settings,
@@ -136,15 +146,39 @@ const footer = footerPlace?.view ?? null
 const placeKeys = [header?.custom?.key, footer?.custom?.key].filter(
   (key): key is string => key !== undefined,
 )
-const ownKeys = [...new Set([...placeKeys, ...customBlockKeysOf(page.content)])]
+const pageKeys = [...new Set([...placeKeys, ...customBlockKeysOf(page.content)])]
+// Окна сайта: страницы-окна, на которые ведут ссылки этой страницы, — закрытыми <dialog> после
+// подвала; скрипт поведений — только если есть окно или поведение (data-av-*, «Появление при
+// прокрутке», плавный FAQ). Свои блоки окон — со своими CSS и скриптами, как блоки страницы
+const needed = windowsAndBehaviors({
+  page,
+  pages,
+  chromeLinks: [
+    ...(header?.menu ?? []),
+    ...(header?.button ? [header.button] : []),
+    ...(footer?.sections ?? []),
+  ],
+  customBlocks,
+  ownKeys: [...customBlockKeysOf(page.content)],
+  placeHtml: [headerPlace?.html, footerPlace?.html].filter(
+    (html): html is string => html !== undefined,
+  ),
+})
+const windows = needed.windows.flatMap((candidate) => {
+  const view = siteWindowView(candidate, (slug) => formActionFor(site.id, slug))
+  return view ? [view] : []
+})
+const ownKeys = [...new Set([...pageKeys, ...needed.windowKeys])]
 // CSS своих блоков страницы — один раз на тип, после темы: роли темы в нём уже определены
-const customCss = customBlocksCss(ownKeys, customBlocks, media)
+const customCss =
+  customBlocksCss(ownKeys, customBlocks, media) +
+  (windows.length > 0 ? windowCssForPage(site.theme.windowCss, media) : '')
 // Свой блок, чьи данные не подходят под опубликованное определение, на сайт не попадает: сборка
 // идёт дальше, а причина — в журнале сборки
 const customBlockError = (blockId: string, message: string) =>
   console.warn(`Страница ${page.slug}, свой блок #${blockId} не выведен: ${message}`)
-// Скрипт плеера — только на страницах с блоком «Видео»
-const hasVideo = page.content.blocks.some((block) => block.type === 'video')
+// Скрипт плеера — только на страницах с блоком «Видео», в том числе в окне
+const hasVideo = needed.video
 // Свой JS: скрипт сайта и скрипты своих блоков этой страницы — файлами /_scripts/, каждый один раз
 // (lib/scripts.ts). Без них страница работает: контент, ссылки и формы — обычный HTML
 const ownScripts = pageScriptFiles({
@@ -212,9 +246,21 @@ if (import.meta.env.DEV) {
         <LegalFooter {...cookies.footer} />
       )
     }
+    {
+      windows.length > 0 && (
+        <SiteWindows
+          windows={windows}
+          media={media}
+          customBlocks={customBlocks}
+          metrika={site.settings.analytics.metrika}
+          onCustomBlockError={customBlockError}
+        />
+      )
+    }
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}
+    {needed.behaviors && <SiteBehaviors />}
     {ownScripts.map((file) => <script is:inline type="module" src={file.src} />)}
   </body>
 </html>

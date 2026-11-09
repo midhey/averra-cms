@@ -1,6 +1,7 @@
 import { splitParagraphs } from '@averra/schema'
 import type { BlockComponentProps } from '../types'
 import { Picture } from '../ui/Picture'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Reviews.module.css'
 
@@ -17,7 +18,7 @@ export function Reviews({ id, data, headingLevel, media }: BlockComponentProps<'
       <ul role="list" className={styles.grid} data-columns={data.columns}>
         {data.items.map((item, index) => (
           // У отзывов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index}>
+          <li key={index} {...revealProps(data.reveal, index)}>
             <figure className={styles.card}>
               <blockquote className={styles.quote}>
                 {splitParagraphs(item.quote).map((paragraph, paragraphIndex) => (

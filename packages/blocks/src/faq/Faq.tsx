@@ -16,7 +16,13 @@ export function Faq({ id, data, headingLevel }: BlockComponentProps<'faq'>) {
         <div>
           {data.items.map((item, index) => (
             // У вопросов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-            <details key={index} className={styles.item} open={data.openFirst && index === 0}>
+            <details
+              key={index}
+              className={styles.item}
+              open={data.openFirst && index === 0}
+              // Плавное раскрытие — скрипт поведений; без него обычный <details>
+              data-av-details={data.smooth ? '' : undefined}
+            >
               <summary className={styles.question}>
                 {item.question}
                 <span className={styles.marker} aria-hidden="true" />

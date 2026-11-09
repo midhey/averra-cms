@@ -1,5 +1,6 @@
 import type { BlockComponentProps } from '../types'
 import { ButtonLink } from '../ui/ButtonLink'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Pricing.module.css'
 
@@ -23,7 +24,12 @@ export function Pricing({ id, data, headingLevel }: BlockComponentProps<'pricing
       <ul role="list" className={styles.plans} data-count={data.plans.length}>
         {data.plans.map((plan, index) => (
           // У тарифов нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index} className={styles.plan} data-featured={plan.featured}>
+          <li
+            key={index}
+            className={styles.plan}
+            data-featured={plan.featured}
+            {...revealProps(data.reveal, index)}
+          >
             {plan.featured && <p className={styles.badge}>{data.featuredLabel}</p>}
             <PlanHeading className={styles.name}>{plan.name}</PlanHeading>
             <p className={styles.price}>{plan.price}</p>

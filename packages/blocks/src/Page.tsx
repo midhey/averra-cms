@@ -41,6 +41,11 @@ type PageProps = {
   onCustomBlockError?: (blockId: string, message: string) => void
   /** Предпросмотр в админке: вместо невыведенного своего блока — причина на его месте */
   preview?: boolean
+  /**
+   * Содержимое окна сайта (SiteWindows): без обёртки — секции прямо в содержимом окна (на них
+   * «> section» в CSS окон), без main с id «К содержимому», и h1 нет — он у страницы под окном
+   */
+  nested?: boolean
 }
 
 export function Page({
@@ -50,35 +55,33 @@ export function Page({
   customBlocks = {},
   onCustomBlockError,
   preview = false,
+  nested = false,
 }: PageProps) {
   // h1 на странице один: его получает первый блок «Первый экран» или свой блок, у которого h1
   // в шаблоне (тогда «Первый экран» после него — h2). Правило — в схеме: по нему же проверки SEO
   // в редакторе и MCP говорят, есть ли h1
-  const mainHeroId = mainHeadingBlock(
-    content.blocks,
-    customH1Types(Object.values(customBlocks)),
-  )?.id
+  const mainHeroId = nested
+    ? undefined
+    : mainHeadingBlock(content.blocks, customH1Types(Object.values(customBlocks)))?.id
   const pageIds = content.blocks.map((block) => block.id)
-  return (
-    // id — цель «К содержимому» в шапке сайта (SiteHeader)
-    <main id={CONTENT_ID}>
-      {content.blocks.map((block, index) => (
-        <Block
-          key={block.id}
-          block={block}
-          headingLevel={block.id === mainHeroId ? 1 : 2}
-          media={media}
-          formAction={formAction}
-          customBlocks={customBlocks}
-          onCustomBlockError={onCustomBlockError}
-          preview={preview}
-          pageIds={pageIds}
-          // Первый блок виден сразу при открытии: его картинку не откладываем
-          priority={index === 0}
-        />
-      ))}
-    </main>
-  )
+  const blocks = content.blocks.map((block, index) => (
+    <Block
+      key={block.id}
+      block={block}
+      headingLevel={block.id === mainHeroId ? 1 : 2}
+      media={media}
+      formAction={formAction}
+      customBlocks={customBlocks}
+      onCustomBlockError={onCustomBlockError}
+      preview={preview}
+      pageIds={pageIds}
+      // Первый блок виден сразу при открытии: его картинку не откладываем (в окне — откладываем:
+      // окно открывают не сразу)
+      priority={index === 0 && !nested}
+    />
+  ))
+  // id — цель «К содержимому» в шапке сайта (SiteHeader)
+  return nested ? blocks : <main id={CONTENT_ID}>{blocks}</main>
 }
 
 type BlockProps = {

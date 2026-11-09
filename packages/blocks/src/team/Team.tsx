@@ -1,6 +1,7 @@
 import type { BlockComponentProps } from '../types'
 import { gridSizes } from '../ui/grid-sizes'
 import { Picture } from '../ui/Picture'
+import { revealProps } from '../ui/reveal'
 import { Section } from '../ui/Section'
 import styles from './Team.module.css'
 
@@ -38,7 +39,7 @@ export function Team({ id, data, headingLevel, media }: BlockComponentProps<'tea
       >
         {data.members.map((member, index) => (
           // У людей нет id. Ключ по индексу здесь безопасен: список рендерится статично
-          <li key={index} className={styles.member}>
+          <li key={index} className={styles.member} {...revealProps(data.reveal, index)}>
             {member.photo && media[member.photo.mediaId] ? (
               <Picture
                 image={member.photo}

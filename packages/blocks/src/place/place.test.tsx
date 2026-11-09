@@ -81,14 +81,29 @@ describe('данные своего вида', () => {
     const view = headerView(place('my-header'))
     const site = view?.custom?.data.site
     expect(site?.menu).toEqual([
-      { label: 'Цены', mobile_label: null, href: '/#pricing', current: false, new_tab: false },
-      { label: 'О нас', mobile_label: 'Мы', href: '/about/', current: true, new_tab: false },
+      {
+        label: 'Цены',
+        mobile_label: null,
+        href: '/#pricing',
+        current: false,
+        new_tab: false,
+        window: false,
+      },
+      {
+        label: 'О нас',
+        mobile_label: 'Мы',
+        href: '/about/',
+        current: true,
+        new_tab: false,
+        window: false,
+      },
       {
         label: 'Telegram',
         mobile_label: null,
         href: 'https://t.me/remont',
         current: false,
         new_tab: true,
+        window: false,
       },
     ])
     expect(site?.organization).toMatchObject({
@@ -220,6 +235,26 @@ describe('проверка шаблона места', () => {
       priority: false,
     })
     expect(html).toMatch(/<a class="button" href="[^"]*" target="_blank" rel="noopener">/)
+  })
+
+  it('кнопка и пункты меню заготовки — с data-av-window по флажку «Открывать в окне»', () => {
+    const data = samplePlaceData()
+    if (!data.site.button) throw new Error('нет кнопки')
+    const render = () =>
+      renderCustomPlaceHtml(headerDefinition, {}, data, {
+        id: 'site-header',
+        media: {},
+        priority: false,
+      })
+    expect(render()).not.toContain('data-av-window')
+    data.site.button.window = true
+    for (const item of data.site.menu) item.window = true
+    const html = render()
+    expect(html).toMatch(/<a class="button"[^>]* data-av-window[^>]*>/)
+    // Пункт меню — и в строке меню, и в меню телефона
+    expect(html.match(/<a class="(?:panel-)?link"[^>]* data-av-window/g)?.length).toBe(
+      data.site.menu.length * 2,
+    )
   })
 
   it('меню шапки без <details> — предупреждение', () => {

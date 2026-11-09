@@ -11,6 +11,7 @@ import {
   type LinkablePage,
   MAIN_PAGE_SLUG,
   opensNewTab,
+  opensWindow,
   overlayFits,
   resolveSiteLink,
   telHref,
@@ -29,6 +30,8 @@ export type SiteHeaderLink = {
   current: boolean
   /** Открыть в новой вкладке: target="_blank" rel="noopener noreferrer" */
   newTab: boolean
+  /** Открыть окном: страница по ссылке — окно (data-av-window); без JS — переход */
+  window: boolean
 }
 
 /**
@@ -150,6 +153,7 @@ function linkView(
     href,
     current: isCurrentLink(item, slug),
     newTab: opensNewTab(item),
+    window: opensWindow(item),
   }
 }
 
@@ -253,6 +257,7 @@ function standardHeaderView({
           mobileLabel: button.mobileLabel,
           href: button.href,
           newTab: button.newTab,
+          window: button.window,
         }
       : null,
     phone: phone ? { text: phone, href: telHref(phone) } : null,

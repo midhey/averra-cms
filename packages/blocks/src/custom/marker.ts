@@ -43,7 +43,33 @@ const RESERVED_DATA = [
   'hero-cover',
   'row-button',
   'menu-row',
+  // Окна сайта и метки скрипта поведений. Сами поведения (data-av-window, data-av-reveal…) — нет:
+  // их шаблон ставит законно (BEHAVIOR_ATTRIBUTES)
+  'site-window',
+  'window-open',
+  'form-box',
+  'form-error',
+  'field-error',
+  'form-sending',
+  'sent',
+  'av-pending',
+  'av-armed',
+  'av-hinted',
+  'av-busy',
+  'av-shown',
 ]
+
+/**
+ * Атрибуты поведений Averra, которые шаблон своего блока ставит сам: окно, появление, плавный
+ * details, подсказка, рисование. Они только включают поведение скрипта сайта
+ */
+export const BEHAVIOR_ATTRIBUTES = [
+  'data-av-window',
+  'data-av-reveal',
+  'data-av-details',
+  'data-av-hint',
+  'data-av-draw',
+] as const
 
 /** data-атрибут занят разметкой сайта: data-consent-action, data-video-embed, data-custom-block… */
 export function isReservedDataAttribute(name: string) {

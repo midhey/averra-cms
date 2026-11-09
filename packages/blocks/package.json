@@ -7,6 +7,7 @@
     "./base.css": "./src/base.css",
     "./cookie-consent": "./src/cookie/consent-dom.ts",
     "./custom-engine": "./src/custom/index.ts",
+    "./site-behaviors": "./src/behaviors/behaviors-dom.ts",
     "./site-header": "./src/header/header-dom.ts",
     "./video-player": "./src/video/player-dom.ts"
   },

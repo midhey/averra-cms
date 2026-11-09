@@ -6,7 +6,9 @@
 
 body {
   margin: 0;
-  background: var(--color-background);
+  /* Только цвет, не сокращение background: фон-картинку темы (themeBackgroundCss) ставит <style>
+     темы, и в dev и сборке он может встать раньше этого файла — сокращение её бы сбросило */
+  background-color: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -58,9 +60,11 @@ p {
   text-wrap: pretty;
 }
 
+/* Кольцо фокуса — свой цвет темы (--color-focus; не задан — акцент) с зазором 3 px: на кнопке цвета
+   акцента кольцо того же цвета вплотную сливалось с ней */
 :focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
 }
 
 /* Липкая шапка не закрывает раздел, к которому перешли по якорю из меню: отступ — от верха
@@ -125,5 +129,175 @@ html[data-sticky-header="double"] {
   [data-custom-block] [popover]:not(:popover-open) {
     /* biome-ignore lint/complexity/noImportantStyles: важное из слоя — единственный способ перебить CSS блока */
     display: none !important;
+  }
+}
+
+/* ── Окна и поведения (скрипт behaviors-dom.ts, «Решения → Окна и поведения») ─────────────────
+
+   Открытое окно сайта: страница под ним не прокручивается */
+html[data-window-open] {
+  overflow: hidden;
+}
+
+/* Полоса прокрутки занимала место (Windows): без неё страница под затемнением сдвинулась бы на её
+   ширину — место остаётся пустым. Значение ставит скрипт, только если полоса была: у короткой
+   страницы без полосы пустого места не появится */
+html[data-window-open="gutter"] {
+  scrollbar-gutter: stable;
+}
+
+/* Затемнение окна в браузерах без showModal (iOS до 15.4): его ставит скрипт перед окном */
+[data-site-window-shade] {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: var(--color-backdrop);
+}
+
+/* Поведения по атрибутам data-av-reveal, data-av-draw и другим. Без JS ничего не скрыто: прячет только метка скрипта
+   data-av-pending — и только то, что ниже экрана. Переменные --av-* меняет CSS своего блока */
+@media (prefers-reduced-motion: no-preference) {
+  /* Появление — анимацией @keyframes, а не transition: свой transition или transform элемента
+     (CSS своего блока сильнее) её не отменяет. fill backwards — только на время задержки, потом
+     у элемента снова его собственные transform и transition (наведение и прочее) */
+  [data-av-reveal][data-av-pending] {
+    opacity: 0;
+  }
+
+  [data-av-reveal][data-av-shown] {
+    --av-reveal-from: translateY(var(--av-reveal-distance, 1.5rem));
+
+    animation: av-reveal var(--av-reveal-duration, 0.6s) ease-out
+      var(--av-reveal-delay, calc(min(var(--av-reveal-order, 0), 6) * 80ms)) backwards;
+  }
+
+  [data-av-reveal="fade"][data-av-shown] {
+    --av-reveal-from: none;
+  }
+
+  [data-av-reveal="left"][data-av-shown] {
+    --av-reveal-from: translateX(calc(-1 * var(--av-reveal-distance, 1.5rem)));
+  }
+
+  [data-av-reveal="right"][data-av-shown] {
+    --av-reveal-from: translateX(var(--av-reveal-distance, 1.5rem));
+  }
+
+  [data-av-reveal="zoom"][data-av-shown] {
+    --av-reveal-from: scale(0.94);
+  }
+
+  /* Рисование: линии SVG — по длине (pathLength="1" ставит скрипт) */
+  [data-av-draw="svg"][data-av-armed] path,
+  [data-av-draw="svg"][data-av-armed] line,
+  [data-av-draw="svg"][data-av-armed] polyline,
+  [data-av-draw="svg"][data-av-armed] polygon,
+  [data-av-draw="svg"][data-av-armed] circle,
+  [data-av-draw="svg"][data-av-armed] ellipse,
+  [data-av-draw="svg"][data-av-armed] rect {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset var(--av-draw-duration, 0.9s) ease-out var(--av-draw-delay, 0s);
+  }
+
+  [data-av-draw="svg"][data-av-pending] path,
+  [data-av-draw="svg"][data-av-pending] line,
+  [data-av-draw="svg"][data-av-pending] polyline,
+  [data-av-draw="svg"][data-av-pending] polygon,
+  [data-av-draw="svg"][data-av-pending] circle,
+  [data-av-draw="svg"][data-av-pending] ellipse,
+  [data-av-draw="svg"][data-av-pending] rect {
+    stroke-dashoffset: 1;
+  }
+
+  [data-av-draw]:not([data-av-draw="svg"])[data-av-armed] {
+    transition: background-size var(--av-draw-duration, 0.9s) ease-out var(--av-draw-delay, 0s);
+  }
+
+  [data-av-draw]:not([data-av-draw="svg"])[data-av-pending] {
+    background-size: 0% var(--av-draw-thickness, 0.1em);
+  }
+
+  /* Подсказка: один раз, когда элемент показался. flip — поворот карточки, wiggle — покачивание.
+     Ключевые кадры меняют отдельное свойство rotate, а не transform: свой наклон карточки
+     (transform: rotate(…) в CSS блока) на время подсказки остаётся. Браузер без отдельного rotate
+     (iOS до 14.5) подсказку просто не покажет */
+  [data-av-hint="flip"][data-av-hinted] {
+    animation: av-hint-flip 1.4s ease-in-out 0.3s 1;
+  }
+
+  [data-av-hint="wiggle"][data-av-hinted] {
+    animation: av-hint-wiggle 0.9s ease-in-out 0.3s 1;
+  }
+
+  /* Появление и подсказка у одного элемента — обе анимации списком: иначе правило подсказки
+     заменило бы появление, и оно оборвалось бы на середине. Появление меняет transform,
+     подсказка — rotate, они складываются */
+  [data-av-reveal][data-av-shown][data-av-hint="flip"][data-av-hinted] {
+    animation:
+      av-reveal var(--av-reveal-duration, 0.6s) ease-out
+      var(--av-reveal-delay, calc(min(var(--av-reveal-order, 0), 6) * 80ms)) backwards,
+      av-hint-flip 1.4s ease-in-out 0.3s 1;
+  }
+
+  [data-av-reveal][data-av-shown][data-av-hint="wiggle"][data-av-hinted] {
+    animation:
+      av-reveal var(--av-reveal-duration, 0.6s) ease-out
+      var(--av-reveal-delay, calc(min(var(--av-reveal-order, 0), 6) * 80ms)) backwards,
+      av-hint-wiggle 0.9s ease-in-out 0.3s 1;
+  }
+}
+
+/* Подчёркивание «рисованием» видно и без JS: это линия под текстом, скрипт только рисует её */
+[data-av-draw]:not([data-av-draw="svg"]) {
+  background-image: linear-gradient(
+    var(--av-draw-color, currentcolor),
+    var(--av-draw-color, currentcolor)
+  );
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% var(--av-draw-thickness, 0.1em);
+}
+
+@keyframes av-reveal {
+  from {
+    opacity: 0;
+    transform: var(--av-reveal-from);
+  }
+}
+
+@keyframes av-hint-flip {
+  0%,
+  100% {
+    rotate: y 0deg;
+  }
+
+  40% {
+    rotate: y -28deg;
+  }
+}
+
+@keyframes av-hint-wiggle {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+
+  25% {
+    rotate: -3deg;
+  }
+
+  75% {
+    rotate: 3deg;
+  }
+}
+
+/* Печать — всё на месте, даже если до элемента не долистали */
+@media print {
+  [data-av-pending] {
+    /* biome-ignore lint/complexity/noImportantStyles: печать сильнее любой метки скрипта */
+    opacity: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: печать сильнее любой метки скрипта */
+    transform: none !important;
   }
 }

@@ -13,6 +13,9 @@ import styles from './Form.module.css'
 /** Id элемента с текстом успеха: на него API возвращает браузер после приёма заявки (#…-sent) */
 export const sentAnchor = (blockId: string) => `${blockId}-sent`
 
+/** Id места для ошибки поля: id поля и «-error», как у подсказки «-hint» */
+export const fieldErrorId = (fieldId: string) => `${fieldId}-error`
+
 // Без адреса приёма (предпросмотр в админке) форма не отправляется: там это React в iframe
 // админки, и обработчик работает. На собранном сайте адрес есть всегда, а JS не нужен
 const preventSubmit = (event: FormEvent<HTMLFormElement>) => event.preventDefault()
@@ -29,7 +32,9 @@ export function Form({ id, data, headingLevel, formAction }: BlockComponentProps
   const fieldId = (name: string) => `${id}-${name}`
   return (
     <Section id={id}>
-      <div className={styles.box}>
+      {/* data-form-box и data-form-error — крючки скрипта окон: в окне форма уходит без
+          перехода, успех (data-sent) и ошибка API показываются здесь же */}
+      <div className={styles.box} data-form-box="">
         <Heading className={styles.title}>{data.title}</Heading>
         {data.text && <p className={styles.text}>{data.text}</p>}
         <p id={sentAnchor(id)} className={styles.sent} role="status" tabIndex={-1}>
@@ -87,6 +92,9 @@ export function Form({ id, data, headingLevel, formAction }: BlockComponentProps
               )}
             </label>
           </div>
+          {/* Общая ошибка — над кнопкой: её только что нажали, значит, сообщение в экране, и на
+              телефоне его не надо искать под кнопкой */}
+          <div className={styles.error} role="alert" data-form-error="" hidden />
           <button type="submit" className={styles.submit}>
             {data.submitLabel}
           </button>
@@ -104,6 +112,11 @@ function Field({ field, id }: { field: FormField; id: string }) {
     <span id={hintId} className={styles.hint}>
       {field.hint}
     </span>
+  )
+  // Ошибка поля от API (в окне, с JS): скрипт пишет текст сюда, рядом с полем, и связывает его с
+  // полем через aria-describedby. Без JS пусто и скрыто — ошибку показывает страница API
+  const error = (
+    <span id={fieldErrorId(id)} className={styles.fieldError} data-field-error="" hidden />
   )
   const mark = field.required && (
     <span className={styles.required} aria-hidden="true">
@@ -127,6 +140,7 @@ function Field({ field, id }: { field: FormField; id: string }) {
           {field.label}
           {mark}
         </label>
+        {error}
         {hint}
       </div>
     )
@@ -187,6 +201,7 @@ function Field({ field, id }: { field: FormField; id: string }) {
         {mark}
       </label>
       {control}
+      {error}
       {hint}
     </div>
   )
