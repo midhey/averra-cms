@@ -393,16 +393,21 @@ export const headerLinkHref = (link: HeaderLink) =>
   link.url ?? siteLinkHref({ page: link.page ?? MAIN_PAGE_SLUG, block: link.block })
 
 /**
+ * Поля вида шапки, кроме выбора своего вида (custom). Один список на сервер и админку: новое поле
+ * вида добавляют сюда, и проверка владельца, и перенос вида на экране администратора его видят
+ */
+export const HEADER_LOOK_FIELDS = ['layout', 'sticky', 'condense', 'overlay', 'look'] as const
+
+const pickFields = <T extends object, K extends keyof T>(source: T, keys: readonly K[]) =>
+  Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>
+
+/**
  * Вид шапки — то, что меняет только владелец (header.look): раскладка, поведение, группа look и
  * выбор своего вида. Тексты, ссылки, логотип, телефон и поля своего вида — администратор сайта
  * (header.edit)
  */
 export const headerLookOf = (header: Header) => ({
-  layout: header.layout,
-  sticky: header.sticky,
-  condense: header.condense,
-  overlay: header.overlay,
-  look: header.look,
+  ...pickFields(header, HEADER_LOOK_FIELDS),
   custom: customPlaceKey(header.custom),
 })
 

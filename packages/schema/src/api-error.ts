@@ -16,6 +16,13 @@ export const ApiError = z.object({
  */
 export const NO_SITE_ACCESS_CODE = 'no_site_access'
 
+/**
+ * Код 403 администратору сайта, который изменил вид шапки или подвала (их меняет владелец). По
+ * нему админка узнаёт, что вид сменили, пока экран был открыт, и подтягивает новый, а не пишет это
+ * про любой другой отказ (участника отключили). Общий для API и админки
+ */
+export const LOOK_LOCKED_CODE = 'look_locked'
+
 /** Ошибка API человеческим языком: что не так и в каком поле */
 export function describeApiError(status: number, body: unknown) {
   const parsed = ApiError.safeParse(body)

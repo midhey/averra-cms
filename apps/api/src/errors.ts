@@ -1,4 +1,4 @@
-import { NO_SITE_ACCESS_CODE } from '@averra/schema'
+import { LOOK_LOCKED_CODE, NO_SITE_ACCESS_CODE } from '@averra/schema'
 
 export type Issue = { path: string; message: string }
 
@@ -10,6 +10,9 @@ export const NO_INSTALLATION_SITE_ACCESS =
 export const noSiteAccess = () => ({
   error: { code: NO_SITE_ACCESS_CODE, message: NO_INSTALLATION_SITE_ACCESS },
 })
+
+/** 403: вид шапки или подвала меняет владелец; код LOOK_LOCKED_CODE — админка подтянет новый вид */
+export const lookLocked = (message: string) => ({ error: { code: LOOK_LOCKED_CODE, message } })
 
 /**
  * 409 — запрос правильный, но спорит с тем, что уже лежит в базе. issues с путём до поля,

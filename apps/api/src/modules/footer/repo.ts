@@ -1,4 +1,10 @@
-import { customPlaceIssues, type Footer, footerPublishIssues, sameFooter } from '@averra/schema'
+import {
+  customPlaceIssues,
+  type Footer,
+  footerPublishIssues,
+  sameFooter,
+  sameFooterLook,
+} from '@averra/schema'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { pages, sites } from '../../db/schema'
@@ -49,14 +55,31 @@ export function footerRepo(db: Db) {
       return row && stateOf(row)
     },
 
-    /** Черновик подвала. Сайт на сервере не меняется. undefined — сайта нет */
-    async saveDraft(siteId: string, footer: Footer): Promise<FooterState | undefined> {
-      const [row] = await db
-        .update(sites)
-        .set({ footerDraft: footer })
-        .where(eq(sites.id, siteId))
-        .returning(columns)
-      return row && stateOf(row)
+    /**
+     * Черновик подвала. Сайт на сервере не меняется. undefined — сайта нет. lookLocked — вид менять
+     * нельзя (администратор сайта): он сверяется с текущим черновиком в этой же транзакции под
+     * блокировкой строки; изменённый вид — 'look', ничего не записано
+     */
+    saveDraft(
+      siteId: string,
+      footer: Footer,
+      lookLocked = false,
+    ): Promise<FooterState | 'look' | undefined> {
+      return db.transaction(async (tx) => {
+        const [current] = await tx
+          .select(columns)
+          .from(sites)
+          .where(eq(sites.id, siteId))
+          .for('update')
+        if (!current) return undefined
+        if (lookLocked && !sameFooterLook(stateOf(current).draft, footer)) return 'look'
+        const [row] = await tx
+          .update(sites)
+          .set({ footerDraft: footer })
+          .where(eq(sites.id, siteId))
+          .returning(columns)
+        return row && stateOf(row)
+      })
     },
 
     /**

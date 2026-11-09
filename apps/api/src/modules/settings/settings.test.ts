@@ -589,6 +589,21 @@ describe('cookie и согласие', () => {
       const page = (await res.json()) as { draft: unknown; published: unknown }
       expect(JSON.stringify(page.draft)).toContain('проверьте с юристом')
       expect(JSON.stringify(page.published)).toContain('Правка')
+      // Вид шапки страницы шаблон не меняет: у страницы не было короткой — и не стала
+      expect((page.draft as { shortHeader?: boolean }).shortHeader).toBeUndefined()
+      // А была короткая — осталась
+      const shortened = await app.request(`/api/sites/${demoSiteId}/pages/privacy`, {
+        method: 'PUT',
+        headers: json(owner.headers),
+        body: JSON.stringify({
+          title: 'Политика',
+          content: { blocks: [], shortHeader: true },
+        }),
+      })
+      expect(shortened.status, await shortened.clone().text()).toBe(200)
+      const again = await send({ document: 'privacy', replaceDraft: true })
+      const againPage = (await again.json()) as { draft: { shortHeader?: boolean } }
+      expect(againPage.draft.shortHeader).toBe(true)
       // Страницы нет — флаг создаёт её, как обычно
       await removePage('privacy')
       expect((await send({ document: 'privacy', replaceDraft: true })).status).toBe(201)

@@ -263,7 +263,10 @@ export function settingsRoutes(deps: SettingsDeps) {
           const exists = await pages.findPage(siteId, slug)
           // Замена черновика — только по явной просьбе: без неё занятый адрес остаётся 409
           if (exists && replaceDraft) {
-            const replaced = await pages.updateDraft(siteId, slug, title, content)
+            // Вид шапки страницы — решение владельца: шаблон его не меняет
+            const { shortHeader: _template, ...rest } = content
+            const kept = exists.draft?.shortHeader ? { ...rest, shortHeader: true } : rest
+            const replaced = await pages.updateDraft(siteId, slug, title, kept)
             if (replaced) return c.json(replaced, 200)
           }
           const page = await pages.createPage(siteId, slug, title, content)

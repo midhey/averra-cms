@@ -246,9 +246,11 @@ export const NOT_FOUND_PAGE_TITLE = 'Страница не найдена'
 
 /**
  * Стандартная страница 404 — первый экран в теме сайта с кнопкой на главную. Проходит через
- * схему, как и страницы из редактора
+ * схему, как и страницы из редактора. `shortHeader` — для новой своей 404 из «SEO → Страница
+ * 404»: служебная страница с логотипом и «← На главную». Стандартная (её рисует рендерер, когда
+ * своей нет) остаётся с полной шапкой: у существующих установок вид не меняется
  */
-export function defaultNotFoundContent(): PageContent {
+export function defaultNotFoundContent(options: { shortHeader?: boolean } = {}): PageContent {
   return PageContent.parse({
     blocks: [
       {
@@ -262,5 +264,6 @@ export function defaultNotFoundContent(): PageContent {
       },
     ],
     seo: { noindex: true },
+    ...(options.shortHeader && { shortHeader: true }),
   })
 }

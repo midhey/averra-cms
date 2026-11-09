@@ -112,7 +112,7 @@ describe('определение места', () => {
       await send('POST', '/custom-blocks/check', { definition: footer.draft }),
     )
     expect(footerChecked.html).toContain(
-      '<div data-legal-footer=""><a href="/privacy">Политика конфиденциальности</a>',
+      '<div data-legal-footer=""><a href="/privacy/">Политика конфиденциальности</a>',
     )
   })
 

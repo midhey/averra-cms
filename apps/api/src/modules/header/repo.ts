@@ -8,6 +8,7 @@ import {
   overlayFits,
   plainAccent,
   sameHeader,
+  sameHeaderLook,
 } from '@averra/schema'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
@@ -123,14 +124,32 @@ export function headerRepo(db: Db) {
     /** Логотип — картинка медиатеки этого сайта (SVG можно): чужую или удалённую не поставить */
     logoIssues: (siteId: string, header: Header) => logoIssuesOf(db, siteId, header),
 
-    /** Черновик шапки. Сайт на сервере не меняется. undefined — сайта нет */
-    async saveDraft(siteId: string, header: Header): Promise<HeaderState | undefined> {
-      const [row] = await db
-        .update(sites)
-        .set({ headerDraft: header })
-        .where(eq(sites.id, siteId))
-        .returning(columns)
-      return row && stateOf(row)
+    /**
+     * Черновик шапки. Сайт на сервере не меняется. undefined — сайта нет. lookLocked — вид менять
+     * нельзя (администратор сайта): тогда вид сверяется с текущим черновиком в той же транзакции
+     * под блокировкой строки, а не отдельным чтением, — владелец не успеет поменять его между
+     * ними; изменённый вид — 'look', ничего не записано
+     */
+    saveDraft(
+      siteId: string,
+      header: Header,
+      lookLocked = false,
+    ): Promise<HeaderState | 'look' | undefined> {
+      return db.transaction(async (tx) => {
+        const [current] = await tx
+          .select(columns)
+          .from(sites)
+          .where(eq(sites.id, siteId))
+          .for('update')
+        if (!current) return undefined
+        if (lookLocked && !sameHeaderLook(stateOf(current).draft, header)) return 'look'
+        const [row] = await tx
+          .update(sites)
+          .set({ headerDraft: header })
+          .where(eq(sites.id, siteId))
+          .returning(columns)
+        return row && stateOf(row)
+      })
     },
 
     /**

@@ -106,15 +106,18 @@ export function sameFooter(a: Footer, b: Footer) {
   return JSON.stringify(Footer.parse(a)) === JSON.stringify(Footer.parse(b))
 }
 
+/** Поля вида подвала, кроме выбора своего вида (custom): один список на сервер и админку */
+export const FOOTER_LOOK_FIELDS = ['layout', 'tone', 'divider', 'textFont'] as const
+
 /**
  * Вид подвала — то, что меняет только владелец (header.look, как вид шапки): раскладка, фон,
  * линия, шрифт своего текста и выбор своего вида. Тексты, ссылки и что показать — администратор сайта
  */
 export const footerLookOf = (footer: Footer) => ({
-  layout: footer.layout,
-  tone: footer.tone,
-  divider: footer.divider,
-  textFont: footer.textFont,
+  ...(Object.fromEntries(FOOTER_LOOK_FIELDS.map((key) => [key, footer[key]])) as Pick<
+    Footer,
+    (typeof FOOTER_LOOK_FIELDS)[number]
+  >),
   custom: customPlaceKey(footer.custom),
 })
 

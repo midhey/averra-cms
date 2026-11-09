@@ -144,6 +144,8 @@ function documentContent(document: LegalDocument, facts: LegalFacts, sections: S
       }),
       ...sections.map(textBlock),
     ],
+    // Документ — служебная страница: короткая шапка «← На главную»
+    shortHeader: true,
   })
 }
 

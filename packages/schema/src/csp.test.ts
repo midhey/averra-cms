@@ -45,6 +45,18 @@ describe('siteCsp', () => {
     )
     expect(csp['img-src']).toContain('https://mc.yandex.ru')
     expect(csp['frame-ancestors']).toContain('https://metrika.yandex.ru')
+    // Адреса, которых не было в первой версии списка (по документации Яндекса — их 25)
+    for (const host of [
+      'metrika.yandex',
+      'metrica.yandex.ru',
+      'analytics.yandex.kz',
+      'metr.yandex.com',
+    ]) {
+      expect(csp['frame-ancestors']).toContain(`https://${host}`)
+    }
+    expect(
+      String(csp['frame-ancestors']).match(/https:\/\/(?:metri|analytics|metr)/g),
+    ).toHaveLength(25)
     expect(csp['script-src']).not.toContain('https://*.googletagmanager.com')
   })
 

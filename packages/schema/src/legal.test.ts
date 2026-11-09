@@ -45,6 +45,9 @@ describe('legalPageContent', () => {
     })
     expect(note).toMatchObject({ id: LEGAL_NOTE_BLOCK_ID, type: 'text' })
     expect(JSON.stringify(note)).toContain('проверьте с юристом')
+    // Документы — служебные страницы: короткая шапка
+    expect(content.shortHeader).toBe(true)
+    expect(legalPageContent('consent', facts()).shortHeader).toBe(true)
     const all = pageText('privacy', facts())
     expect(all).toContain('ИП Иванов Иван Иванович')
     expect(all).toContain('ИНН: 590212345678')

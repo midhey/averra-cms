@@ -1,4 +1,4 @@
-export { ApiError, describeApiError, NO_SITE_ACCESS_CODE } from './api-error'
+export { ApiError, describeApiError, LOOK_LOCKED_CODE, NO_SITE_ACCESS_CODE } from './api-error'
 export {
   ForgotPassword,
   InvitationAccept,
@@ -91,7 +91,7 @@ export {
   defaultCookieText,
   PolicyPage,
 } from './cookies'
-export { SITE_CSP_FILE, type SiteCspInput, siteCsp } from './csp'
+export { SITE_CSP_FILE, type SiteCspInput, siteCsp, VIDEO_FRAMES } from './csp'
 export {
   applyCustomBlocks,
   CONTAINER_FIELD_TYPES,
@@ -154,6 +154,7 @@ export {
   FOOTER_ABOUT_MAX,
   FOOTER_CONSENT_TEXT,
   FOOTER_FORM_ID,
+  FOOTER_LOOK_FIELDS,
   FOOTER_TEXT_MAX,
   Footer,
   FooterCallback,
@@ -212,6 +213,7 @@ export {
   EXTERNAL_HREF_HINT,
   ExternalHref,
   HEADER_LABEL_MAX,
+  HEADER_LOOK_FIELDS,
   HEADER_MENU_MAX,
   Header,
   HeaderBrand,

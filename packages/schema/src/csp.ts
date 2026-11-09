@@ -40,18 +40,34 @@ const METRIKA = {
   img: METRIKA_HTTPS,
   connect: [...METRIKA_HTTPS, ...METRIKA_HOSTS.map((host) => `wss://${host}`)],
   frame: METRIKA_HTTPS,
-  // Карта кликов и ссылок открывает сайт во фрейме интерфейса Метрики
+  // Карта кликов и ссылок открывает сайт во фрейме интерфейса Метрики: 25 адресов из раздела
+  // «Адреса для frame-ancestors» той же страницы документации (сверено 2026-11)
   ancestors: [
     'https://metrika.yandex.ru',
-    'https://metrika.yandex.by',
-    'https://metrika.yandex.kz',
-    'https://metrika.yandex.uz',
-    'https://metrika.yandex.com',
-    'https://metrika.yandex.com.tr',
+    'https://analytics.yandex.by',
+    'https://analytics.yandex.com',
+    'https://analytics.yandex.com.tr',
+    'https://analytics.yandex.kz',
+    'https://analytics.yandex.ru',
+    'https://metr.yandex.by',
+    'https://metr.yandex.com',
+    'https://metr.yandex.com.tr',
+    'https://metr.yandex.kz',
+    'https://metr.yandex.ru',
+    'https://metrica.ya.ru',
+    'https://metrica.yandex',
+    'https://metrica.yandex.by',
     'https://metrica.yandex.com',
     'https://metrica.yandex.com.tr',
+    'https://metrica.yandex.kz',
+    'https://metrica.yandex.ru',
     'https://metrika.ya.ru',
-    'https://metrica.ya.ru',
+    'https://metrika.yandex',
+    'https://metrika.yandex.by',
+    'https://metrika.yandex.com',
+    'https://metrika.yandex.com.tr',
+    'https://metrika.yandex.kz',
+    'https://metrika.yandex.uz',
   ],
 }
 
@@ -67,7 +83,11 @@ const GA4 = {
 }
 
 /** Плеер блока «Видео» ставит iframe этих площадок (packages/schema/src/video.ts) */
-const VIDEO_FRAMES = ['https://www.youtube-nocookie.com', 'https://rutube.ru', 'https://vkvideo.ru']
+export const VIDEO_FRAMES = [
+  'https://www.youtube-nocookie.com',
+  'https://rutube.ru',
+  'https://vkvideo.ru',
+]
 
 export type SiteCspInput = {
   /** Номер счётчика Метрики из настроек ('' — нет) */

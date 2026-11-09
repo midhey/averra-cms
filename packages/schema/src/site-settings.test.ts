@@ -365,5 +365,8 @@ describe('страница', () => {
       props: { title: 'Страница не найдена' },
     })
     expect(content.seo?.noindex).toBe(true)
+    // Стандартная — с полной шапкой, своя новая — служебная, с короткой
+    expect(content.shortHeader).toBeUndefined()
+    expect(defaultNotFoundContent({ shortHeader: true }).shortHeader).toBe(true)
   })
 })

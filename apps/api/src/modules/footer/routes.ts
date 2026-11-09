@@ -12,10 +12,10 @@ import { and, eq, isNotNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { can, forbiddenMessages } from '../../auth/access'
-import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
+import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { pages } from '../../db/schema'
-import { conflict } from '../../errors'
+import { conflict, lookLocked } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
@@ -98,10 +98,12 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
         async (c) => {
           const { siteId } = c.req.valid('param')
           const footer = c.req.valid('json')
-          if (!can(c.var.siteRole, 'header.look')) {
+          const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+          // Быстрая сверка вида — до проверок 409; окончательная — внутри сохранения
+          if (lookLockedForMe) {
             const current = await repo.read(siteId)
             if (current && !sameFooterLook(current.draft, footer)) {
-              return c.json(forbidden(forbiddenMessages['header.look']), 403)
+              return c.json(lookLocked(forbiddenMessages['header.look']), 403)
             }
           }
           // Свой вид: определение подвала есть (опубликованное или черновик) и поля ему подходят
@@ -116,7 +118,9 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
           if (issues.length > 0) {
             return c.json(conflict('Подвал не сохранить: причина — у каждого поля', issues), 409)
           }
-          const state = await repo.saveDraft(siteId, footer)
+          // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
+          const state = await repo.saveDraft(siteId, footer, lookLockedForMe)
+          if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
           if (!state) return c.json(notFound('Сайт не найден'), 404)
           return c.json(state, 200)
         },

@@ -1,4 +1,4 @@
-import { defaultFooter, type Footer } from '@averra/schema'
+import { defaultFooter, type Footer, LOOK_LOCKED_CODE } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { leads, mailOutbox, sites } from '../../db/schema'
@@ -208,10 +208,17 @@ describe('подвал: права и контакты', () => {
     ]) {
       const res = await save({ ...texts, ...look }, admin.headers)
       expect(res.status, JSON.stringify(look)).toBe(403)
-      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(
-        /Вид шапки и подвала .* меняет владелец/,
-      )
+      const body = (await res.json()) as { error: { code: string; message: string } }
+      expect(body.error.message).toMatch(/Вид шапки и подвала .* меняет владелец/)
+      // Код отличает «вид сменил владелец» от любого другого 403: по нему админка подтягивает вид
+      expect(body.error.code).toBe(LOOK_LOCKED_CODE)
     }
+    // Чужой вид — 403 раньше проверок 409: определения подвала с таким ключом нет
+    const missing = await save(
+      { ...texts, custom: { key: 'no-such-footer', props: {} } },
+      admin.headers,
+    )
+    expect(missing.status).toBe(403)
     // Вид, который поставил владелец, администратор сохраняет вместе со своими правками
     await ok(await save({ ...texts, tone: 'background', textFont: 'accent' }))
     expect(

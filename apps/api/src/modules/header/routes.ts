@@ -11,9 +11,9 @@ import {
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { can, forbiddenMessages } from '../../auth/access'
-import { type AuthEnv, forbidden, notFound, requireSite } from '../../auth/middleware'
+import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
-import { conflict } from '../../errors'
+import { conflict, lookLocked } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate } from '../../validate'
@@ -86,10 +86,13 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
           const { siteId } = c.req.valid('param')
           // У логотипа «Текст» картинки нет: спрятанная держала бы файл в медиатеке
           const header = headerWithVisibleLogo(c.req.valid('json'))
-          if (!can(c.var.siteRole, 'header.look')) {
+          const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+          // Быстрая сверка вида — до проверок 409: чужой вид отвечает 403, а не списком полей.
+          // Окончательная — внутри сохранения, под блокировкой строки
+          if (lookLockedForMe) {
             const current = await repo.read(siteId)
             if (current && !sameHeaderLook(current.draft, header)) {
-              return c.json(forbidden(forbiddenMessages['header.look']), 403)
+              return c.json(lookLocked(forbiddenMessages['header.look']), 403)
             }
           }
           // Свой вид: определение шапки есть (опубликованное или черновик) и поля ему подходят
@@ -106,7 +109,9 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
           if (issues.length > 0) {
             return c.json(conflict('Шапку не сохранить: причина — у каждого поля', issues), 409)
           }
-          const state = await repo.saveDraft(siteId, header)
+          // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
+          const state = await repo.saveDraft(siteId, header, lookLockedForMe)
+          if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
           if (!state) return c.json(notFound('Сайт не найден'), 404)
           return c.json(state, 200)
         },

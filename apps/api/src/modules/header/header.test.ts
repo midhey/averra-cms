@@ -1,9 +1,16 @@
-import { defaultHeader, demoSiteId, type Header, type HeaderTargetPage } from '@averra/schema'
+import {
+  defaultHeader,
+  demoSiteId,
+  type Header,
+  type HeaderTargetPage,
+  LOOK_LOCKED_CODE,
+} from '@averra/schema'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pages, sites } from '../../db/schema'
 import type { SitePublisher } from '../../publish/queue'
 import { createTestApi } from '../../testing'
+import { headerRepo } from './repo'
 
 // Шапка сайта и меню: черновик (PUT), публикация (POST /publish) с проверкой целей меню против
 // опубликованного, снимок для сборки, логотип из медиатеки и права. Демо-сайт: главная
@@ -372,6 +379,19 @@ describe('права', () => {
 })
 
 describe('вид шапки — владельцу, тексты и ссылки — администратору сайта', () => {
+  it('вид сверяется в самом сохранении: изменённый вид при запрете — отказ, в базе прежний черновик', async () => {
+    const before = await ok(await save({ menu }))
+    const changed = { ...before.draft, layout: 'minimal' as const }
+    const result = await headerRepo(db).saveDraft(demoSiteId, changed, true)
+    expect(result).toBe('look')
+    expect((await ok(await read())).draft.layout).toBe(before.draft.layout)
+    // Тексты при прежнем виде проходят и под запретом на вид
+    const texts = { ...before.draft, logoText: 'Новый' }
+    expect(await headerRepo(db).saveDraft(demoSiteId, texts, true)).toMatchObject({
+      draft: { logoText: 'Новый' },
+    })
+  })
+
   it('администратор меняет подписи, логотип-текст и пункты; вид — 403', async () => {
     const admin = await api.loginAs('client', demoSiteId)
     const texts = {
@@ -401,7 +421,14 @@ describe('вид шапки — владельцу, тексты и ссылки
     ]) {
       const res = await save({ ...texts, ...look }, admin.headers)
       expect(res.status, JSON.stringify(look)).toBe(403)
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(LOOK_LOCKED_CODE)
     }
+    // Чужой вид — 403 раньше проверок 409: определения шапки с таким ключом нет
+    const missing = await save(
+      { ...texts, custom: { key: 'no-such-header', props: {} } },
+      admin.headers,
+    )
+    expect(missing.status).toBe(403)
     // Владелец меняет вид, администратор дальше правит тексты при этом виде
     await ok(await save({ ...texts, look: { mobileButton: 'row', buttonShape: 'pill' } }))
     const again = await save(
