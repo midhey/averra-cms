@@ -272,7 +272,8 @@ Liquid» выше).
 не всё, кроме запрещённого. Так новая возможность браузера не проходит мимо проверки сама.
 
 - Селектор — внутри `[data-custom-block="ключ"]` (атрибут у `<section>` блока). Он начинается с
-  `:scope` (сама секция: фон на всю ширину, отступы), с элемента, класса, атрибута или `*` блока
+  `:scope` (сама секция: фон на всю ширину, отступы — см. оговорку ниже), с элемента, класса,
+  атрибута или `*` блока
   (к нему спереди дописывается селектор блока и пробел) или с `>`. HTML шаблона лежит в обёртке
   `[data-custom-block-root]` внутри секции, поэтому `> .a` и `:scope > .a` собираются в
   `[data-custom-block="ключ"] [data-custom-block-root] > .a` — верхние элементы шаблона, а не
@@ -285,6 +286,10 @@ Liquid» выше).
   псевдоэлементы (`::before`, `::marker`, `::placeholder`…, свои у браузеров `::-webkit-…`).
   Остальное (`:host`, `::part()`, экранированное имя) — ошибка. `html`, `body`, `:root` и вложенные
   правила (`&` — нет в старом Safari) — ошибка.
+- Оговорка про отступы: `:scope` собирается в `[data-custom-block="ключ"]` — той же специфичности,
+  что правило рамки секции Averra, и рамка его перебивает. Свои отступы и поля секции пишите в
+  `:scope[data-custom-block] { padding: … }`; фон и переменные работают и в простом `:scope`.
+  Сделать `:scope` сильнее рамки — в [дорожной карте](/averra-cms/roadmap/).
 - Можно `@media`, `@supports`, `@container`, `@starting-style`, `@keyframes` (имя получает префикс `ключ--`,
   `animation` переписывается); остальные @-правила (`@import`, `@font-face`, `@layer`…) — ошибка.
 - Функции в значениях — из списка: `var()`, математика (`calc()`, `clamp()`, `min()`…), цвета
@@ -354,7 +359,7 @@ Liquid» выше).
 
 | Атрибут | Поведение | Настройка CSS-переменными |
 |---|---|---|
-| `data-av-reveal` = `up` (пусто), `fade`, `left`, `right`, `zoom` | появление, когда элемент показался (IntersectionObserver) | `--av-reveal-duration`, `--av-reveal-distance`, `--av-reveal-delay`, `--av-reveal-order` (лесенка по 80 мс) |
+| `data-av-reveal` = `up` (пусто), `fade`, `left`, `right`, `zoom` | появление, когда элемент показался (IntersectionObserver) | `--av-reveal-duration`, `--av-reveal-distance`, `--av-reveal-delay`, `--av-reveal-order` (лесенка по 80 мс); `--av-reveal-from` — начальный `transform` целиком (наклон: `translateY(36px) rotate(-4deg)`), задаётся селектором с `[data-av-reveal]`, чтобы перебить направление |
 | `data-av-details` на `<details>` | раскрытие и сворачивание анимацией высоты (Web Animations, 280 мс) | — |
 | `data-av-hint` = `flip`, `wiggle` | один раз, когда видно на 60 %: поворот по Y или покачивание | — |
 | `data-av-draw` | подчёркивание `background-size` от 0 до 100 % | `--av-draw-color`, `--av-draw-thickness`, `--av-draw-duration`, `--av-draw-delay` |
