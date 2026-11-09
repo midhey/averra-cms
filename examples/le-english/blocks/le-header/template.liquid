@@ -12,7 +12,7 @@
     {% endfor %}
   </nav>
   {% endif %}
-  {% if site.button %}<a class="cta" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}"{% if site.button.window %} data-av-window{% endif %} rel="noopener">{{ site.button.label }}</a>{% endif %}
+  {% if site.button %}<a class="cta" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}"{% if site.button.window %} data-av-window{% endif %} rel="noopener">{% if site.button.mobile_label %}<span class="cta__full">{{ site.button.label }}</span><span class="cta__short">{{ site.button.mobile_label }}</span>{% else %}{{ site.button.label }}{% endif %}</a>{% endif %}
   {% if site.menu.size > 0 %}
   <details class="menu" data-av-details>
     <summary class="menu__toggle" aria-label="Меню разделов сайта">{{ menu_label }} <span class="menu__icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>

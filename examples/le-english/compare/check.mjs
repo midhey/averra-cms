@@ -12,9 +12,17 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(join(here, '..', '..', '..', 'e2e', 'package.json'))
 const { chromium } = require('@playwright/test')
-const URL = process.argv[2]
+const URL = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
 if (!URL) {
-  console.error('Нужно: <адрес сайта Averra>')
+  console.error('Нужно: <адрес сайта Averra> [--send-leads]')
+  process.exit(2)
+}
+// Проверка шлёт настоящие заявки: на боевом адресе они уйдут хозяину и в «Заявки» установки
+const local = ['localhost', '127.0.0.1', '[::1]'].includes(new globalThis.URL(URL).hostname)
+if (!local && !process.argv.includes('--send-leads')) {
+  console.error(
+    `${URL} — не localhost: проверка отправляет настоящие заявки. Запускайте на временной копии или добавьте --send-leads`,
+  )
   process.exit(2)
 }
 const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v))

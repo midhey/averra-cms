@@ -191,7 +191,7 @@ export const headerBase = {
   condense: false,
   overlay: false,
   phone: false,
-  button: { label: 'Пробный урок →', page: 'zapis', window: true },
+  button: { label: 'Пробный урок →', mobileLabel: 'Пробный урок', page: 'zapis', window: true },
   look: {
     divider: false,
     buttonShape: 'pill',

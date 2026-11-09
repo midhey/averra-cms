@@ -10,7 +10,11 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createTestApi, TEST_PASSWORD, testOrigins } from '@averra/api/testing'
-import { customBlockProblems, renderCustomBlockHtml } from '@averra/blocks/custom-engine'
+import {
+  compileWindowCss,
+  customBlockProblems,
+  renderCustomBlockHtml,
+} from '@averra/blocks/custom-engine'
 import { customBlockProps, form, PageContent, parsedExample } from '@averra/schema'
 import sharp from 'sharp'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -332,6 +336,10 @@ describe('файл выгрузки блоков', () => {
     expect(header?.template.match(/\{% if site\.button\.window %\} data-av-window/g)).toHaveLength(
       2,
     )
+    // Кнопка на узком экране — короткой подписью (набор её задаёт), а не переносом в две строки
+    expect(header?.template).toContain('{{ site.button.mobile_label }}')
+    expect(header?.css).toMatch(/\.cta__full \{[^}]*display: none/)
+    expect(header?.css).toMatch(/\.cta__short \{[^}]*display: inline/)
     // На 404 «← На главную» нет — как у оригинала, только логотип
     expect(header?.template).toContain("{% unless page.slug == '404' %}")
     const footerBlock = built.blocks.find((block) => block.key === 'le-footer')
@@ -538,6 +546,19 @@ describe('скрипт переноса на настоящем API', () => {
     expect(theme).toMatchObject({ focus: '#b85418', browserColor: 'accent' })
     expect(theme.background?.size).toBe('tile')
     expect(theme.windowCss).toContain('[data-site-window-title]')
+    // Экран успеха окна: CSS проходит движок Averra без ошибок и после него держит все правила —
+    // иначе после отправки заявки в окне остались бы «Попробуем?», приглашение и форма-пустышка
+    const compiled = compileWindowCss(theme.windowCss ?? '')
+    expect(compiled.problems.filter((problem) => problem.level === 'error')).toEqual([])
+    const windowCss = compiled.css
+    expect(windowCss).toMatch(
+      /:has\(\[data-form-box\]\[data-sent\]\)[^{]*\[data-site-window-title\]/,
+    )
+    expect(windowCss).toMatch(/\[data-form-box\]\[data-sent\] > h2[^{]*\{[^}]*display: ?none/)
+    expect(windowCss).toMatch(
+      /\[data-sent\] > \[role="status"\]::before[^{]*\{[^}]*content: ?"Ура!"/,
+    )
+    expect(windowCss).toMatch(/\[data-sent\] \[data-done-title\]/)
     // Свои виды шапки и подвала; тексты — поля вида
     expect(header).toMatchObject({ custom: { key: 'le-header', props: { menu_label: 'Меню' } } })
     expect(header.button).toMatchObject({ page: 'zapis', window: true })
@@ -871,7 +892,10 @@ describe('скрипт переноса на настоящем API', () => {
   it('повторный запуск обновляет вид, а правки клиента в контенте и текстах шапки не трогает', async () => {
     const client = await ownerClient()
     const base = `/api/sites/${api.demoSiteId}`
-    const run = (resetContent = false) =>
+    const run = (
+      resetContent = false,
+      extra: { publish?: boolean; publishDrafts?: boolean } = {},
+    ) =>
       importSite({
         client,
         contentFile: join(dir, 'content.json'),
@@ -882,13 +906,17 @@ describe('скрипт переноса на настоящем API', () => {
         publish: false,
         backupDir: join(dir, 'backup'),
         resetContent,
+        ...extra,
       })
     type Block = { id: string; type: string; props: Record<string, unknown> }
     type PageState = { title: string; draft: { blocks: Block[] } & Record<string, unknown> }
     const page = (slug: string) => client.get<PageState>(`${base}/pages/${slug}`)
     const draftOf = async (path: string) =>
       (await client.get<{ draft: Record<string, unknown> }>(`${base}/${path}`)).draft
-    await run()
+    // Чистая установка: неопубликованного клиентского нет, а второй запуск не принимает свои
+    // черновики первого (демо опубликовано, черновик отличается) за правки клиента
+    expect((await run()).draftsBefore).toEqual([])
+    expect((await run()).draftsBefore).toEqual([])
 
     // Установка прошлой версии переноса: кнопки без «Открывать в окне», /zapis — не окно, 404 —
     // встроенный первый экран, шапка — стандартная без своего вида, тема — без моно-шрифта
@@ -985,8 +1013,10 @@ describe('скрипт переноса на настоящем API', () => {
     })
 
     const again = await run()
-    // Настройки — клиента: название, описание, шаблон заголовка и реквизиты на месте, соцсети
-    // объединены (VK клиента и Telegram набора), пустой ИНН дописан из исходника
+    // Черновики, лежавшие до запуска, названы: с --publish они ушли бы на сайт вместе с видом
+    expect(again.draftsBefore).toEqual(['страница /index', 'страница /zapis', 'шапка', 'подвал'])
+    // Настройки — клиента: название, описание, шаблон заголовка и реквизиты на месте, соцсети —
+    // только VK (убранный Telegram набора не возвращается), стёртый ИНН остаётся стёртым
     const settingsAfter = (await client.get<{ settings: Settings }>(`${base}/settings`)).settings
     expect(settingsAfter).toMatchObject({
       name: 'Vallex English — Лера',
@@ -994,8 +1024,9 @@ describe('скрипт переноса на настоящем API', () => {
       titleTemplate: '%s | Лера',
     })
     expect(settingsAfter.organization.name).toBe('ИП Лера')
-    expect(settingsAfter.organization.inn).toBe(settingsNow.organization.inn)
-    expect(settingsAfter.organization.socials).toEqual(['https://vk.com/lera', ...kitSocials])
+    expect(settingsAfter.organization.inn).toBe('')
+    expect(settingsAfter.organization.socials).toEqual(['https://vk.com/lera'])
+    expect(kitSocials.length).toBeGreaterThan(0)
     expect(again.keptPages).toEqual(['index', 'zapis'])
     const next = (await page('index')).draft
     const nextHero = next.blocks.find((block) => block.id === 'top') as Block
@@ -1058,6 +1089,71 @@ describe('скрипт переноса на настоящем API', () => {
     expect((await page('404')).draft.blocks[0]?.props.title).toBe('Тут ничего нет')
     expect(((await draftOf('theme')).fonts as { mono?: string }).mono).toBe('jetbrains-mono')
 
+    // Публикация: документы опубликованы человеком; правка клиента на главной не опубликована —
+    // сайт не публикуется, пока человек не проверит её или не скажет --publish-drafts
+    for (const slug of ['privacy', 'consent']) await client.post(`${base}/pages/${slug}/publish`)
+    // Клиент проверил и опубликовал остальные правки выше: они больше не черновики
+    for (const slug of ['index', 'zapis', '404']) await client.post(`${base}/pages/${slug}/publish`)
+    for (const path of ['header', 'footer']) await client.post(`${base}/${path}/publish`)
+    const mine = await page('index')
+    const mineBlocks = mine.draft.blocks.map((block) =>
+      block.id === 'top'
+        ? { ...block, props: { ...block.props, title: 'Ещё не закончено' } }
+        : block,
+    )
+    await client.put(`${base}/pages/index`, {
+      title: mine.title,
+      content: { ...mine.draft, blocks: mineBlocks },
+    })
+    const logsBlocked: string[] = []
+    const blocked = await importSite({
+      client,
+      contentFile: join(dir, 'content.json'),
+      publicDir: join(dir, 'public'),
+      blocksFile: BLOCKS_FILE,
+      grainFile: GRAIN,
+      siteScriptFile: SITE_SCRIPT,
+      publish: true,
+      backupDir: join(dir, 'backup'),
+      log: (line) => logsBlocked.push(line),
+    })
+    expect(blocked.draftsBefore).toEqual(['страница /index'])
+    expect(blocked.published).toBe(false)
+    expect(logsBlocked.join(' ')).toContain('--publish-drafts')
+    const unfinished = await client.get<{ published: { blocks: Block[] } | null }>(
+      `${base}/pages/index`,
+    )
+    expect(unfinished.published?.blocks.find((block) => block.id === 'top')?.props.title).not.toBe(
+      'Ещё не закончено',
+    )
+    // Блокировку не снимает простой повтор: слитый черновик с правкой клиента не становится «своим»
+    const blockedAgain = await importSite({
+      client,
+      contentFile: join(dir, 'content.json'),
+      publicDir: join(dir, 'public'),
+      blocksFile: BLOCKS_FILE,
+      grainFile: GRAIN,
+      siteScriptFile: SITE_SCRIPT,
+      publish: true,
+      backupDir: join(dir, 'backup'),
+      log: () => {},
+    })
+    expect(blockedAgain.draftsBefore).toEqual(['страница /index'])
+    expect(blockedAgain.published).toBe(false)
+    const stillUnfinished = await client.get<{ published: { blocks: Block[] } | null }>(
+      `${base}/pages/index`,
+    )
+    expect(
+      stillUnfinished.published?.blocks.find((block) => block.id === 'top')?.props.title,
+    ).not.toBe('Ещё не закончено')
+    // Тот же запуск с флагом публикует и правку клиента
+    const forced = await run(false, { publish: true, publishDrafts: true })
+    expect(forced.published).toBe(true)
+    const done = await client.get<{ published: { blocks: Block[] } }>(`${base}/pages/index`)
+    expect(done.published.blocks.find((block) => block.id === 'top')?.props.title).toBe(
+      'Ещё не закончено',
+    )
+
     // --reset-content: контент — снова из исходного сайта
     const reset = await run(true)
     expect(reset.keptPages).toEqual([])
@@ -1070,7 +1166,7 @@ describe('скрипт переноса на настоящем API', () => {
     )
   })
 
-  it('settingsPatch: повторный запуск дописывает пустые поля, а заполненные клиентом оставляет', () => {
+  it('settingsPatch: повторный запуск не возвращает то, что клиент стёр; дописывает только то, чего нет вовсе', () => {
     const current = {
       name: 'Лера',
       titleTemplate: '',
@@ -1086,7 +1182,7 @@ describe('скрипт переноса на настоящем API', () => {
         email: '',
         inn: '',
         phone: '+7 900 000-00-00',
-        socials: ['https://vk.com/lera', 'https://t.me/lera'],
+        socials: ['https://vk.com/lera'],
       },
     }
     const kit = {
@@ -1103,21 +1199,29 @@ describe('скрипт переноса на настоящем API', () => {
         socials: ['https://t.me/lera'],
       },
     }
+    // Пустые поля и список соцсетей — выбор клиента: ничего не возвращается, список не объединяется
     expect(settingsPatch(current, kit, true)).toEqual({
       name: 'Лера',
-      titleTemplate: '%s — Vallex English',
+      titleTemplate: '',
       language: 'ru',
-      description: 'Описание',
-      ogImage: 'share',
+      description: '',
+      ogImage: null,
       icon: 'icon-client',
       organization: {
         type: 'Organization',
         name: 'ИП Лера',
-        email: 'kit@example.com',
-        inn: '1234567890',
+        email: '',
+        inn: '',
         phone: '+7 900 000-00-00',
-        socials: ['https://vk.com/lera', 'https://t.me/lera'],
+        socials: ['https://vk.com/lera'],
       },
+    })
+    // Поля, которых у установки нет вовсе (undefined), набор дописывает
+    const bare = { ...current, organization: { type: 'Organization', name: 'ИП Лера' } }
+    expect(settingsPatch(bare, kit, true).organization).toMatchObject({
+      email: 'kit@example.com',
+      inn: '1234567890',
+      socials: ['https://t.me/lera'],
     })
     // Первый перенос: значения набора, телефон, вписанный раньше, остаётся
     expect(settingsPatch(current, kit, false)).toMatchObject({

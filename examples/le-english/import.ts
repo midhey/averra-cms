@@ -39,7 +39,9 @@ const usage = `Перенос сайта le-english на Averra через API.
                      запуск обновляет только вид: блоки, тему, шапку и подвал, окно, скрипт сайта
   --publish          опубликовать страницы, тему, шапку, подвал и скрипт сайта (без флага — только черновики);
                      сработает, только когда /privacy и /consent уже опубликованы: форма записи
-                     собирает персональные данные
+                     собирает персональные данные. Если у оставленных страниц, шапки или подвала
+                     есть неопубликованные правки клиента, сайт не публикуется
+  --publish-drafts   с --publish: опубликовать и неопубликованные правки клиента
 
 Пароль: переменная AVERRA_PASSWORD или скрытый ввод.`
 
@@ -84,6 +86,7 @@ async function main() {
       'site-url': { type: 'string' },
       logo: { type: 'string' },
       publish: { type: 'boolean', default: false },
+      'publish-drafts': { type: 'boolean', default: false },
       'rebuild-documents': { type: 'boolean', default: false },
       'reset-content': { type: 'boolean', default: false },
       'backup-dir': { type: 'string' },
@@ -123,6 +126,7 @@ async function main() {
     resetContent: values['reset-content'],
     ...(values['site-url'] && { siteUrl: values['site-url'] }),
     publish: values.publish,
+    publishDrafts: values['publish-drafts'],
     rebuildDocuments: values['rebuild-documents'],
     ...(values['backup-dir'] && { backupDir: resolve(values['backup-dir']) }),
     log: (line) => console.log(line),

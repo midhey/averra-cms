@@ -60,9 +60,13 @@ export type ImportOptions = {
   /**
    * Опубликовать страницы, тему, шапку и подвал. Без флага — только черновики. Форма записи
    * собирает персональные данные, поэтому сайт публикуется, только когда политика и согласие уже
-   * опубликованы человеком: иначе ссылки формы вели бы на 404
+   * опубликованы человеком: иначе ссылки формы вели бы на 404. Если у оставленных страниц или
+   * шапки клиента есть неопубликованные правки, не сделанные самим скриптом, сайт не публикуется,
+   * пока человек не проверит их или не добавит publishDrafts
    */
   publish: boolean
+  /** Опубликовать и неопубликованные правки клиента (флаг --publish-drafts) */
+  publishDrafts?: boolean
   /**
    * Заменить черновики /privacy и /consent свежим шаблоном целиком, даже если их правили (правки
    * в черновике пропадут). Опубликованная версия остаётся до публикации человеком. Без флага
@@ -97,6 +101,11 @@ export type ImportResult = {
   published: boolean
   /** Скрипт сайта набора сохранён черновиком; false — файла нет или на установке свой скрипт */
   siteScriptSaved: boolean
+  /**
+   * Оставленные страницы, шапка и подвал, где есть неопубликованные правки не этого скрипта
+   * (клиента): с --publish без --publish-drafts сайт не публикуется
+   */
+  draftsBefore: string[]
   /** Документы, которые надо опубликовать в админке, прежде чем публиковать сайт с формой */
   missingDocuments: string[]
 }
@@ -104,6 +113,44 @@ export type ImportResult = {
 type Json = Record<string, unknown>
 
 type PageRecord = { title: string; draft: unknown; published: unknown }
+
+/** JSON с ключами по алфавиту: тот же объект даёт тот же текст, в каком бы порядке он пришёл */
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value).sort()
+    const body = keys.map((key) => `${JSON.stringify(key)}:${stable((value as Json)[key])}`)
+    return `{${body.join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
+const fingerprint = (value: unknown) => createHash('sha256').update(stable(value)).digest('hex')
+
+/**
+ * Что скрипт оставил черновиком в прошлый запуск: отпечатки страниц, шапки и подвала. Черновик с
+ * тем же отпечатком — работа скрипта (первый запуск без --publish, потом с ним), с другим —
+ * правка клиента. Файла нет или он не читается — каждый неопубликованный черновик считается
+ * клиентским: лучше лишнее предупреждение, чем чужая незаконченная правка на сайте
+ */
+const draftsFile = (dir: string, siteId: string) => join(dir, `drafts-${siteId}.json`)
+
+function readDrafts(dir: string, siteId: string): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(draftsFile(dir, siteId), 'utf8')) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function writeDrafts(dir: string, siteId: string, drafts: Record<string, string>) {
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(draftsFile(dir, siteId), `${JSON.stringify(drafts, null, 2)}\n`)
+  } catch {
+    // Страховка необязательная: без файла следующий запуск осторожнее, но работает
+  }
+}
 
 /**
  * Документ явно врёт про форму: в нём есть фраза шаблона «на нём нет форм заявок» (политика
@@ -209,7 +256,8 @@ const isSignupButton = (value: unknown): value is { href: string; window?: unkno
 
 /**
  * Черновик главной от прошлого запуска с тем, что нужно новому виду: флажок окна у кнопок записи и
- * поля соцсетей SEO, если их нет. Тексты, порядок и состав блоков — клиента, не трогаем
+ * поля для соцсетей в SEO, которых нет вовсе (пустое — выбор клиента). Тексты, порядок и состав
+ * блоков — клиента, не трогаем
  */
 export function upgradeHome(
   draft: Json,
@@ -231,7 +279,8 @@ export function upgradeHome(
   })
   const seo = { ...((draft.seo ?? {}) as Json) }
   for (const [key, value] of Object.entries(share)) {
-    if (value && (seo[key] === undefined || seo[key] === '')) seo[key] = value
+    // Стёртое клиентом поле — его выбор: дописываем только то, чего нет вовсе
+    if (value && seo[key] === undefined) seo[key] = value
   }
   return { ...draft, blocks: nextBlocks, seo }
 }
@@ -325,22 +374,18 @@ type KitSettings = Pick<
   organization: { name: string; email: string; inn: string; socials: string[] }
 }
 
-const filled = (value: unknown) =>
-  value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === '')
-
 /**
  * Настройки сайта набора поверх того, что уже на установке. Первый перенос — значения набора
  * (организация дополняется: адрес и телефон, вписанные раньше, остаются). Повторный запуск
- * (`keepClient`) — правки клиента главнее: набор заполняет только пустые поля, соцсети
- * объединяются со списком клиента, а не заменяют его. Группа organization в API заменяется
- * целиком, поэтому собираем её полностью
+ * (`keepClient`) — настройки клиента не трогаются совсем: пустое поле (стёртый ИНН, убранный
+ * Telegram, очищенное описание) — это выбор клиента, а не «не заполнено», поэтому набор
+ * дописывает только то, чего у установки нет вовсе (undefined), и соцсети не объединяет. Группа
+ * organization в API заменяется целиком, поэтому собираем её полностью
  */
 export function settingsPatch(current: SettingsNow, kit: KitSettings, keepClient: boolean) {
-  const pick = <T>(now: T, ours: T) => (keepClient && filled(now) ? now : ours)
+  const pick = <T>(now: T | undefined, ours: T): T => (keepClient && now !== undefined ? now : ours)
   const org = current.organization
-  const socials = keepClient
-    ? [...new Set([...(org.socials ?? []), ...kit.organization.socials])]
-    : kit.organization.socials
+  const socials = pick(org.socials, kit.organization.socials)
   return {
     name: pick(current.name, kit.name),
     titleTemplate: pick(current.titleTemplate, kit.titleTemplate),
@@ -495,13 +540,34 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   // Контент — клиента: страница, уже перенесённая этим скриптом (ported), остаётся как есть,
   // дописывается только то, что нужно новому виду. --reset-content, первая установка и чужая
   // страница новой установки (демо-главная) — контент из исходного сайта
-  const pagesBefore = await client.get<{ slug: string }[]>(`${base}/pages`)
+  const pagesBefore = await client.get<{ slug: string; hasUnpublishedChanges: boolean }[]>(
+    `${base}/pages`,
+  )
   const keptPages: string[] = []
+  // Неопубликованные правки клиента в том, что скрипт оставляет как есть: с --publish они ушли
+  // бы на сайт вместе с новым видом. Свой черновик прошлого запуска (отпечаток в backupDir) не в
+  // счёт: иначе предупреждение выходило бы и на втором шаге «без --publish, потом с ним»
+  const draftsBefore: string[] = []
+  const draftBackupDir = options.backupDir ?? defaultBackupDir()
+  const ownDrafts = readDrafts(draftBackupDir, site.id)
+  // Части с правкой клиента: черновик после запуска — правка клиента, слитая с новым видом, и пока
+  // её не опубликовали, он не наш (отпечаток не обновляем)
+  const clientParts = new Set<string>()
+  const noteClientDraft = (part: string, label: string, draft: unknown) => {
+    if (fingerprint(draft) === ownDrafts[part]) return
+    draftsBefore.push(label)
+    clientParts.add(part)
+  }
   const draftOfPage = async (slug: string) => {
-    if (options.resetContent || !pagesBefore.some((page) => page.slug === slug)) return undefined
+    const listedPage = pagesBefore.find((page) => page.slug === slug)
+    if (options.resetContent || !listedPage) return undefined
     const page = await client.get<PageRecord>(`${base}/pages/${slug}`)
     const draft = (page.draft ?? page.published) as Json | null
-    return draft && ported[slug]?.(draft) ? { title: page.title, draft } : undefined
+    if (!draft || !ported[slug]?.(draft)) return undefined
+    if (listedPage.hasUnpublishedChanges && page.published !== null) {
+      noteClientDraft(`page:${slug}`, `страница /${slug}`, draft)
+    }
+    return { title: page.title, draft }
   }
   // Главная уже перенесена — это повторный запуск: настройки сайта, шапка и подвал — клиента
   const home = await draftOfPage('index')
@@ -742,11 +808,18 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   if (options.logoFile && existsSync(options.logoFile)) await uploadFile(options.logoFile)
   type Chrome = Json & { custom?: { key?: string; props?: Json } | null }
   const chromeDraft = async (path: string) => {
-    const state = await client.get<{ draft: Chrome | null; published: Chrome | null }>(
-      `${base}/${path}`,
-    )
+    const state = await client.get<{
+      draft: Chrome | null
+      published: Chrome | null
+      unpublished: boolean
+    }>(`${base}/${path}`)
+    // Правка клиента — только то, чего нет на сайте и что скрипт оставит: решается ниже (Ours)
+    if (state.draft && state.published !== null && state.unpublished) {
+      clientChrome[path] = state.draft
+    }
     return state.draft ?? state.published
   }
+  const clientChrome: Record<string, Chrome> = {}
   const brand = headerBrand(content)
   const headerNow = options.resetContent ? null : await chromeDraft('header')
   // Шапку и подвал уже ставил этот скрипт — их тексты клиента. Признак не тексты (их клиент мог
@@ -761,6 +834,9 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
       (look.buttonShape === headerBase.look.buttonShape &&
         look.linkHover === headerBase.look.linkHover) ||
       (headerNow.brand === 'text' && headerNow.logoMark === brand.logoMark))
+  if (headerOurs && clientChrome.header) {
+    noteClientDraft('header', 'шапка', clientChrome.header)
+  }
   const fresh = {
     ...headerBase,
     ...brand,
@@ -802,6 +878,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
         footerNow.tone === footer.tone &&
         footerNow.textFont === footer.textFont) ||
       footerNow.text === sign)
+  if (footerOurs && clientChrome.footer) noteClientDraft('footer', 'подвал', clientChrome.footer)
   const footerProps = (text: string) => ({ sign: text, ...footerCustomLabels })
   if (footerNow && footerOurs) {
     const text = typeof footerNow.text === 'string' ? footerNow.text : sign
@@ -834,7 +911,9 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   const missingDocuments = DOCUMENTS.filter(
     (slug) => !listed.some((page) => page.slug === slug && page.publishedAt !== null),
   ).map((slug) => `/${slug}`)
-  const publish = options.publish && missingDocuments.length === 0 && staleDocuments.length === 0
+  const clientDrafts = draftsBefore.length > 0 && !options.publishDrafts
+  const publish =
+    options.publish && missingDocuments.length === 0 && staleDocuments.length === 0 && !clientDrafts
   if (options.publish && missingDocuments.length > 0) {
     log(
       `Сайт не опубликован: форма записи собирает персональные данные, а ${missingDocuments.join(' и ')} — черновики. Проверьте их в админке, опубликуйте и запустите скрипт с --publish ещё раз`,
@@ -844,6 +923,31 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
       'Сайт не опубликован: политика всё ещё говорит, что форм на сайте нет («нет форм заявок»). Поправьте её (см. предупреждение выше) и запустите скрипт с --publish ещё раз',
     )
   }
+  if (options.publish && clientDrafts) {
+    log(
+      `Сайт не опубликован: у оставленных частей есть неопубликованные правки клиента (${draftsBefore.join(', ')}). Проверьте их в админке и опубликуйте сами или запустите скрипт с --publish-drafts: они уйдут на сайт вместе с новым видом`,
+    )
+  }
+  // Что осталось черновиком от этого запуска: следующий не примет это за правку клиента. Кроме
+  // частей с правкой клиента, которую не опубликовали: слитый с новым видом черновик содержит её,
+  // и с новым отпечатком повторный --publish принял бы её за свою и выпустил на сайт
+  const after: Record<string, string> = {}
+  const keep = (part: string, draft: unknown) => {
+    if (clientParts.has(part) && !publish) {
+      const previous = ownDrafts[part]
+      if (previous !== undefined) after[part] = previous
+    } else {
+      after[part] = fingerprint(draft)
+    }
+  }
+  for (const slug of ['index', 'zapis', NOT_FOUND_SLUG]) {
+    const page = await client.get<PageRecord>(`${base}/pages/${slug}`)
+    keep(`page:${slug}`, page.draft)
+  }
+  for (const path of ['header', 'footer']) {
+    keep(path, (await client.get<{ draft: unknown }>(`${base}/${path}`)).draft)
+  }
+  writeDrafts(draftBackupDir, site.id, after)
   if (publish) {
     await client.post(`${base}/pages/index/publish`)
     await client.post(`${base}/pages/zapis/publish`)
@@ -867,6 +971,7 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     staleDocuments,
     published: publish,
     siteScriptSaved: siteScript !== undefined,
+    draftsBefore,
     missingDocuments,
   }
 }

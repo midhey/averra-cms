@@ -90,6 +90,11 @@
   white-space: nowrap;
 }
 
+/* Короткая подпись для телефона (поле «Подпись на телефоне»): на узком экране вместо полной */
+.cta__short {
+  display: none;
+}
+
 /* Как у оригинала: под мышью кнопка светлеет (и приподнимается — ниже, без «уменьшить движение») */
 .cta:hover {
   background: var(--green-hover);
@@ -268,6 +273,12 @@
   .cta {
     padding: 12px 14px;
     font-size: 12px;
+  }
+  .cta__full {
+    display: none;
+  }
+  .cta__short {
+    display: inline;
   }
   .back {
     padding: 10px 12px;

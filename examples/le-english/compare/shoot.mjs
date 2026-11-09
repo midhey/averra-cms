@@ -16,7 +16,18 @@ const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(join(here, '..', '..', '..', 'e2e', 'package.json'))
 const { chromium } = require('@playwright/test')
 
-const [out, original, averra] = process.argv.slice(2)
+const args = process.argv.slice(2)
+const [out, original, averra] = args.filter((arg) => !arg.startsWith('--'))
+// Снимок «заявка отправлена» шлёт настоящую заявку «Боря / @borya_shot»: на боевой адрес она
+// уйдёт хозяину и в «Заявки» боевой установки. Поэтому — только на localhost или с --send-leads
+const sendLeadsFlag = args.includes('--send-leads')
+const isLocal = (address) => {
+  try {
+    return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)
+  } catch {
+    return false
+  }
+}
 if (!out || !original || !averra) {
   console.error('Нужно: <папка снимков> <адрес оригинала> <адрес Averra>')
   process.exit(2)
@@ -144,18 +155,24 @@ for (const size of sizes) {
         file: `window-${size.name}-${label}.png`,
       })
       // Успех в окне: настоящая заявка (у оригинала — в его временную папку данных)
-      await dialog.locator('input[name="name"]').fill('Боря')
-      await dialog.locator('input[name="contact"]').fill('@borya_shot')
-      await dialog.locator('input[name="consent"]').check()
-      await dialog.locator('button[type="submit"]').click()
-      await page.waitForTimeout(1500)
-      await page.screenshot({ path: join(out, `window-sent-${size.name}-${label}.png`) })
-      shots.push({
-        state: 'window-sent',
-        size: size.name,
-        label,
-        file: `window-sent-${size.name}-${label}.png`,
-      })
+      if (sendLeadsFlag || isLocal(site.base)) {
+        await dialog.locator('input[name="name"]').fill('Боря')
+        await dialog.locator('input[name="contact"]').fill('@borya_shot')
+        await dialog.locator('input[name="consent"]').check()
+        await dialog.locator('button[type="submit"]').click()
+        await page.waitForTimeout(1500)
+        await page.screenshot({ path: join(out, `window-sent-${size.name}-${label}.png`) })
+        shots.push({
+          state: 'window-sent',
+          size: size.name,
+          label,
+          file: `window-sent-${size.name}-${label}.png`,
+        })
+      } else {
+        console.log(
+          `  ${label} ${size.name}: заявку не шлю на ${site.base} (не localhost; нужен --send-leads)`,
+        )
+      }
     } else console.log(`  ${label} ${size.name}: окно не открылось, адрес ${page.url()}`)
 
     for (const [state, path] of [
