@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { revealField } from '../common'
 import { defineBlock } from '../define-block'
 
 const Step = z.strictObject({
@@ -15,6 +16,7 @@ export const steps = defineBlock({
   props: z.strictObject({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     items: z.array(Step).min(3).max(6).meta({ title: 'Шаги' }),
+    reveal: revealField(),
   }),
   example: {
     title: 'Как мы работаем',

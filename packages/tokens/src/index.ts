@@ -6,7 +6,7 @@ import {
   hoverColor,
   Theme,
 } from '@averra/schema'
-import { fontCatalog, fontStack } from './fonts'
+import { fontCatalog, fontStack, MONO } from './fonts'
 
 export {
   allFontFiles,
@@ -49,7 +49,7 @@ const scales = {
 /** Тема целиком — одна строка CSS-переменных для <style> в <head> */
 export function themeToCss(theme: Theme): string {
   // Строка уходит в страницу как есть, поэтому тему ещё раз проверяем схемой
-  const { colors, fonts, radius } = Theme.parse(theme)
+  const { colors, fonts, radius, focus } = Theme.parse(theme)
   const vars = {
     ...scales,
     '--color-background': colors.background,
@@ -73,8 +73,14 @@ export function themeToCss(theme: Theme): string {
     '--font-body': fontStack(fonts.body),
     // Акцентный шрифт (рукописные подписи, цифры): не выбран — как у заголовков
     '--font-accent': fonts.accent ? fontStack(fonts.accent) : 'var(--font-heading)',
+    // Моноширинный (номера, надзаголовки, код): не выбран — шрифт устройства
+    '--font-mono': fonts.mono ? fontStack(fonts.mono) : MONO,
     '--font-heading-weight': String(fontCatalog[fonts.heading].headingWeight),
     '--radius': radii[radius],
+    // Кольцо фокуса: свой цвет темы, иначе акцент (base.css, :focus-visible)
+    '--color-focus': focus ?? colors.accent,
+    // Затемнение под окном сайта: цвет текста темы, полупрозрачный (#RRGGBBAA)
+    '--color-backdrop': `${colors.text}99`,
   }
   const declarations = Object.entries(vars).map(([name, value]) => `${name}:${value}`)
   return `:root{${declarations.join(';')}}`

@@ -230,3 +230,23 @@ describe('плагин Vite с файлами шрифтов', () => {
     expect(load('url')).toMatch(/import f0 from ".+\.woff2\?url"/)
   })
 })
+
+describe('моно-шрифт, кольцо фокуса и затемнение окна', () => {
+  it('моноширинный: свой шрифт файлами, без него — шрифт устройства', () => {
+    expect(themeToCss(defaultTheme)).toContain('--font-mono:ui-monospace')
+    const mono = {
+      ...defaultTheme,
+      fonts: { ...defaultTheme.fonts, mono: 'jetbrains-mono' as const },
+    }
+    expect(themeToCss(mono)).toContain('--font-mono:"JetBrains Mono", ui-monospace')
+    const files = themeFontFiles(mono).filter((file) => file.family === 'JetBrains Mono')
+    expect(files.map((file) => file.weight)).toContain(400)
+    expect(files.some((file) => file.subset === 'cyrillic')).toBe(true)
+  })
+
+  it('кольцо фокуса — свой цвет темы, без него акцент; затемнение — из текста темы', () => {
+    expect(themeToCss(defaultTheme)).toContain(`--color-focus:${defaultTheme.colors.accent}`)
+    expect(themeToCss({ ...defaultTheme, focus: '#c2410c' })).toContain('--color-focus:#c2410c')
+    expect(themeToCss(defaultTheme)).toContain(`--color-backdrop:${defaultTheme.colors.text}99`)
+  })
+})

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { revealField } from '../common'
 import { defineBlock } from '../define-block'
 import { Image } from '../media'
 
@@ -28,6 +29,7 @@ export const reviews = defineBlock({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     columns: z.literal([1, 2, 3]).default(2).meta({ title: 'Колонок' }),
     items: z.array(Review).min(1).max(12).meta({ title: 'Отзывы' }),
+    reveal: revealField(),
   }),
   example: {
     title: 'Отзывы',

@@ -14,6 +14,59 @@ export const SEO_DESCRIPTION_RECOMMENDED = 160
 /** SEO-заголовок страницы: тот же предел, что у заголовка страницы */
 export const SEO_TITLE_MAX = 120
 
+/** Описание картинки для соцсетей (og:image:alt): коротко, что на ней */
+export const SHARE_IMAGE_ALT_MAX = 200
+
+/** Ширина окна: узкое — форма, среднее — форма с текстом, широкое — свои блоки, таблица */
+export const WindowWidth = z.enum(['narrow', 'medium', 'wide'])
+export type WindowWidth = z.infer<typeof WindowWidth>
+export const windowWidthTitles: Record<WindowWidth, string> = {
+  narrow: 'Узкое',
+  medium: 'Среднее',
+  wide: 'Широкое',
+}
+
+/** Фон окна — роль темы: контраст текста на ней тема уже проверила */
+export const WindowSurface = z.enum(['background', 'surface'])
+export type WindowSurface = z.infer<typeof WindowSurface>
+export const windowSurfaceTitles: Record<WindowSurface, string> = {
+  background: 'Фон',
+  surface: 'Поверхность',
+}
+
+/** Заголовок окна: короткий, как подпись кнопки */
+export const WINDOW_TITLE_MAX = 80
+
+/**
+ * Страница-окно: её блоки открываются поверх другой страницы, когда кнопка или ссылка туда стоит
+ * с «Открывать в окне». Сама страница остаётся страницей: без JS, Ctrl-кликом и по прямому адресу
+ * её открывают как обычно — поэтому форма в окне и на странице одна. Решение — «Решения → Окна и
+ * поведения»
+ */
+export const PageWindow = z.strictObject({
+  title: z
+    .string()
+    .trim()
+    .max(WINDOW_TITLE_MAX)
+    .default('')
+    .meta({ title: 'Заголовок окна', description: 'Над содержимым окна; пусто — без заголовка' }),
+  width: WindowWidth.default('medium').meta({
+    title: 'Ширина окна',
+    'x-enum-titles': windowWidthTitles,
+  }),
+  surface: WindowSurface.default('background').meta({
+    title: 'Фон окна',
+    'x-enum-titles': windowSurfaceTitles,
+  }),
+  // Esc и кнопка «Закрыть» закрывают окно всегда: так требует доступность. Клик мимо окна — по
+  // выбору: в длинной форме его делают нечаянно и теряют введённое
+  closeOnBackdrop: z.boolean().default(true).meta({
+    title: 'Закрывать кликом мимо окна',
+    description: 'Esc и кнопка «Закрыть» закрывают окно всегда',
+  }),
+})
+export type PageWindow = z.infer<typeof PageWindow>
+
 /**
  * Canonical страницы: путь на этом сайте (/ceny/) или ссылка https:// — по тем же правилам, что
  * «куда» у редиректов. Пусто — свой адрес страницы. Кавычки, < > и управляющие символы на выходе
@@ -57,6 +110,24 @@ export const PageSeo = z.strictObject({
     .strictObject({ mediaId: MediaId.meta({ title: 'Картинка' }) })
     .optional()
     .meta({ title: 'Картинка для соцсетей' }),
+  // Превью ссылки в мессенджерах и соцсетях бывает другим, чем строка в поиске: короче, живее, с
+  // призывом. Пусто — SEO-заголовок и описание
+  shareTitle: z
+    .string()
+    .trim()
+    .max(SEO_TITLE_MAX)
+    .optional()
+    .meta({ title: 'Заголовок для соцсетей', description: 'og:title; пусто — SEO-заголовок' }),
+  shareDescription: z
+    .string()
+    .trim()
+    .max(SEO_DESCRIPTION_MAX)
+    .optional()
+    .meta({ title: 'Описание для соцсетей', description: 'og:description; пусто — описание' }),
+  imageAlt: z.string().trim().max(SHARE_IMAGE_ALT_MAX).optional().meta({
+    title: 'Что на картинке для соцсетей',
+    description: 'og:image:alt — для незрячих в соцсетях; у карточки из заголовка — заголовок',
+  }),
   canonical: PageCanonical.optional().meta({ title: 'Канонический адрес (canonical)' }),
   noindex: z.boolean().optional().meta({ title: 'Скрыть страницу от поисковиков' }),
 })
@@ -80,6 +151,9 @@ export const PageContent = z
       title: 'Короткая шапка',
       description: 'Для служебной страницы: логотип и ссылка «← На главную» без меню и кнопки',
     }),
+    // Страница может открываться окном поверх других (форма заявки): настройки окна. Нет — обычная
+    // страница, и ссылки «Открывать в окне» на неё ведут переходом
+    window: PageWindow.optional().meta({ title: 'Окно' }),
     // Скрыть подвал сайта на этой странице: остаётся только строка с политикой и cookie
     hideFooter: z.boolean().optional().meta({
       title: 'Скрыть подвал сайта',

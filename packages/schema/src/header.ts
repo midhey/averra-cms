@@ -86,6 +86,9 @@ const linkShape = {
   block: BlockId.optional().meta({ title: 'Блок на странице' }),
   url: ExternalHref.optional().meta({ title: 'Внешняя ссылка' }),
   newTab: z.boolean().optional().meta({ title: 'Открывать в новой вкладке' }),
+  // Страница сайта, настроенная как окно (форма заявки), открывается поверх текущей; без JS —
+  // переход на неё. Внешнюю ссылку окном не открыть
+  window: z.boolean().optional().meta({ title: 'Открывать в окне' }),
 }
 
 /** Ссылка шапки: на страницу сайта или внешняя */
@@ -94,6 +97,7 @@ export type HeaderLink = {
   block?: string | undefined
   url?: string | undefined
   newTab?: boolean | undefined
+  window?: boolean | undefined
 }
 
 /** Ровно одна цель: страница (с блоком или без) или внешняя ссылка */
@@ -112,7 +116,17 @@ function oneTarget(link: HeaderLink, ctx: z.RefinementCtx) {
       message: 'Пункт ведёт либо на страницу сайта, либо по внешней ссылке',
     })
   }
+  if (link.window === true && link.url !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['window'],
+      message: 'Окном открывается только страница сайта, а не внешняя ссылка',
+    })
+  }
 }
+
+/** Ссылка шапки открывает окно: только на страницу сайта (внешнюю схема и так не пустит) */
+export const opensWindow = (link: HeaderLink) => link.window === true && link.url === undefined
 
 /** Пункт меню: подпись, подпись для телефона и куда ведёт */
 export const MenuItem = z
@@ -289,12 +303,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const knownLinkKeys = (value: unknown) => {
   if (!isRecord(value)) return value
   const known: Record<string, unknown> = Object.fromEntries(
-    ['page', 'block', 'url', 'label', 'mobileLabel', 'newTab'].flatMap((key) =>
+    ['page', 'block', 'url', 'label', 'mobileLabel', 'newTab', 'window'].flatMap((key) =>
       key in value ? [[key, value[key]]] : [],
     ),
   )
   if (!MobileLabel.safeParse(known.mobileLabel).success) delete known.mobileLabel
   if (known.newTab !== undefined && typeof known.newTab !== 'boolean') delete known.newTab
+  // Кривой флажок окна (или окно у внешней ссылки после ручной правки) не роняет весь пункт
+  if (known.window !== undefined && (typeof known.window !== 'boolean' || 'url' in known)) {
+    delete known.window
+  }
   return known
 }
 

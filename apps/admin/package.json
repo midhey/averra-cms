@@ -24,7 +24,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/golos-text": "catalog:",
-    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/jetbrains-mono": "catalog:",
     "@tanstack/react-query": "^5.104.1",
     "@tanstack/react-router": "^1.170.42",
     "hono": "catalog:",

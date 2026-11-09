@@ -6,6 +6,8 @@ import type { Theme, ThemeFont } from '@averra/schema'
 
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 const SERIF = 'Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif'
+/** Моноширинный шрифт устройства: им пишется --font-mono, пока в теме свой не выбран */
+export const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
 
 type SystemFont = { kind: 'system'; stack: string; headingWeight: number }
 
@@ -111,6 +113,16 @@ export const fontCatalog: Record<ThemeFont, SystemFont | HostedFont> = {
     headingWeight: 700,
     boldWeight: 700,
   },
+  // Моноширинный: номера, надзаголовки и код в своих блоках (роль темы «Моноширинный шрифт»)
+  'jetbrains-mono': {
+    kind: 'hosted',
+    family: 'JetBrains Mono',
+    package: '@fontsource/jetbrains-mono',
+    prefix: 'jetbrains-mono',
+    fallback: MONO,
+    headingWeight: 700,
+    boldWeight: 700,
+  },
   system: { kind: 'system', stack: SANS, headingWeight: 700 },
   humanist: {
     kind: 'system',
@@ -194,6 +206,11 @@ export function themeFontFiles(theme: Theme): FontFile[] {
   if (theme.fonts.accent) {
     const accent = fontCatalog[theme.fonts.accent]
     need(theme.fonts.accent, 400, accent.kind === 'hosted' ? accent.boldWeight : 600)
+  }
+  // Моноширинный (номера, надзаголовки): обычное и жирное начертание
+  if (theme.fonts.mono) {
+    const mono = fontCatalog[theme.fonts.mono]
+    need(theme.fonts.mono, 400, mono.kind === 'hosted' ? mono.boldWeight : 600)
   }
   const upright = [...weights].flatMap(([font, set]) => {
     const entry = fontCatalog[font]

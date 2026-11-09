@@ -3,9 +3,12 @@
 // <details>, Esc и выбор пункта его закрывает скрипт шапки Averra. Данные — site и page
 // (документация «Разработчику → Свои блоки», раздел «Шапка и подвал»)
 
-/** Ссылка пункта меню: текущий пункт и новая вкладка — по данным Averra */
+/**
+ * Ссылка пункта меню: текущий пункт, новая вкладка и «Открывать в окне» — по данным Averra. Без
+ * data-av-window флажок «Открывать в окне» в разделе «Шапка и подвал» молча ничего бы не делал
+ */
 const menuLink = (className: string, label: string) =>
-  `<a class="${className}" href="{{ item.href }}" aria-current="{% if item.current %}page{% else %}false{% endif %}" target="{% if item.new_tab %}_blank{% else %}_self{% endif %}" rel="noopener">${label}</a>`
+  `<a class="${className}" href="{{ item.href }}" aria-current="{% if item.current %}page{% else %}false{% endif %}" target="{% if item.new_tab %}_blank{% else %}_self{% endif %}"{% if item.window %} data-av-window{% endif %} rel="noopener">${label}</a>`
 
 const lines = (...rows: string[]) => `${rows.join('\n')}\n`
 
@@ -30,7 +33,7 @@ const headerTemplate = lines(
   '  {% if site.button or site.menu.size > 0 %}',
   '  <div class="actions">',
   '    {% if site.button %}',
-  '    <a class="button" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}" rel="noopener">',
+  '    <a class="button" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}"{% if site.button.window %} data-av-window{% endif %} rel="noopener">',
   '      {% if site.button.mobile_label %}<span class="full">{{ site.button.label }}</span><span class="short">{{ site.button.mobile_label }}</span>{% else %}{{ site.button.label }}{% endif %}',
   '    </a>',
   '    {% endif %}',

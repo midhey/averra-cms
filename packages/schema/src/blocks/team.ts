@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { revealField } from '../common'
 import { defineBlock } from '../define-block'
 import { Image } from '../media'
 
@@ -32,6 +33,7 @@ export const team = defineBlock({
       .default('portrait')
       .meta({ title: 'Фото', 'x-enum-titles': teamPhotoTitles }),
     members: z.array(Member).min(1).max(24).meta({ title: 'Люди' }),
+    reveal: revealField(),
   }),
   example: {
     title: 'Команда',

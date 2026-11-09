@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { revealField } from '../common'
 import { defineBlock } from '../define-block'
 
 const FeatureItem = z.strictObject({
@@ -15,6 +16,7 @@ export const features = defineBlock({
     title: z.string().trim().max(120).optional().meta({ title: 'Заголовок' }),
     columns: z.literal([2, 3, 4]).default(3).meta({ title: 'Колонок' }),
     items: z.array(FeatureItem).min(1).max(12).meta({ title: 'Пункты' }),
+    reveal: revealField(),
   }),
   example: {
     title: 'Почему выбирают нас',

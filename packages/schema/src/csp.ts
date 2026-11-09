@@ -100,7 +100,8 @@ export function siteCsp({ metrika, ga4, origins, apiOrigin = null }: SiteCspInpu
     ['style-src', list(["'self'", "'unsafe-inline'"], origins)],
     ['img-src', list(["'self'", 'data:'], api, m ? METRIKA.img : [], g ? GA4.img : [], origins)],
     ['font-src', list(["'self'"], origins)],
-    ['connect-src', list(["'self'"], m ? METRIKA.connect : [], g ? GA4.connect : [], origins)],
+    // API — когда формы ведут на него (dev): форма в окне сайта отправляет заявку fetch-запросом
+    ['connect-src', list(["'self'"], api, m ? METRIKA.connect : [], g ? GA4.connect : [], origins)],
     ['media-src', list(["'self'"], api)],
     ['frame-src', list(VIDEO_FRAMES, m ? METRIKA.frame : [], origins)],
     ['form-action', list(["'self'"], api)],

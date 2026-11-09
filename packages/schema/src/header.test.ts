@@ -203,6 +203,28 @@ describe('readHeader', () => {
     expect(invalid).toEqual(['brand', 'look.mobileMenu'])
   })
 
+  it('флажок «Открывать в окне» у кнопки и пункта сохраняется, кривой — отбрасывается', () => {
+    const header = readHeader({
+      button: { label: 'Записаться', page: 'zapis', window: true },
+      menu: [
+        { label: 'Заявка', page: 'zapis', window: true },
+        { label: 'Цены', page: 'index', window: 'yes' },
+        { label: 'Telegram', url: 'https://t.me/lera', window: true },
+      ],
+    })
+    expect(header.button).toEqual({
+      label: 'Записаться',
+      mobileLabel: '',
+      page: 'zapis',
+      window: true,
+    })
+    expect(header.menu).toEqual([
+      { label: 'Заявка', mobileLabel: '', page: 'zapis', window: true },
+      { label: 'Цены', mobileLabel: '', page: 'index' },
+      { label: 'Telegram', mobileLabel: '', url: 'https://t.me/lera' },
+    ])
+  })
+
   it('пункт с кривой подписью для телефона или «новой вкладкой» — остаётся без них', () => {
     const header = readHeader({
       menu: [

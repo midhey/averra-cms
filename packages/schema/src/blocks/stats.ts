@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { revealField } from '../common'
 import { defineBlock } from '../define-block'
 
 const StatItem = z.strictObject({
@@ -31,6 +32,7 @@ export const stats = defineBlock({
       .default('surface')
       .meta({ title: 'Оформление', 'x-enum-titles': statsToneTitles }),
     items: z.array(StatItem).min(2).max(4).meta({ title: 'Факты' }),
+    reveal: revealField(),
   }),
   example: {
     items: [

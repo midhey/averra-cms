@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { contrastRatio, formatContrast, mixColors, relativeLuminance } from './contrast'
+import { MediaId } from './media'
 
 // Строго #RRGGBB: значения темы попадают прямо в CSS страницы, поэтому произвольную строку
 // (например, с `}</style>`) сюда не пропускаем
@@ -20,6 +21,7 @@ export const themeFontIds = [
   'caveat',
   'lora',
   'pt-serif',
+  'jetbrains-mono',
   'system',
   'humanist',
   'serif',
@@ -37,6 +39,7 @@ export const themeFontTitles: Record<ThemeFont, string> = {
   caveat: 'Caveat (рукописный)',
   lora: 'Lora',
   'pt-serif': 'PT Serif',
+  'jetbrains-mono': 'JetBrains Mono (моноширинный)',
   system: 'Системный',
   humanist: 'Системный гуманистический',
   serif: 'Системный с засечками',
@@ -78,6 +81,35 @@ export const themeColorTitles: Record<ThemeColorRole, string> = {
   border: 'Линии и рамки',
 }
 
+/** Роли темы для цвета строки браузера */
+const BrowserColor = z.enum(['background', 'surface', 'text', 'accent'])
+export const browserColorTitles: Record<z.infer<typeof BrowserColor>, string> = {
+  background: 'Фон',
+  surface: 'Поверхность',
+  text: 'Текст',
+  accent: 'Акцент',
+}
+
+/** Фон-картинка страницы: узор (повтор, как зерно бумаги) или одна картинка на всю страницу */
+export const ThemeBackgroundSize = z.enum(['tile', 'cover'])
+export type ThemeBackgroundSize = z.infer<typeof ThemeBackgroundSize>
+export const themeBackgroundSizeTitles: Record<ThemeBackgroundSize, string> = {
+  tile: 'Узор (повторяется)',
+  cover: 'На всю страницу',
+}
+
+export const ThemeBackground = z.strictObject({
+  mediaId: MediaId.meta({ title: 'Картинка' }),
+  size: ThemeBackgroundSize.default('tile').meta({
+    title: 'Как лежит',
+    'x-enum-titles': themeBackgroundSizeTitles,
+  }),
+})
+export type ThemeBackground = z.infer<typeof ThemeBackground>
+
+/** Свой CSS окон сайта: столько же, сколько CSS своего блока */
+export const WINDOW_CSS_MAX = 50_000
+
 export const Theme = z.strictObject({
   colors: ThemeColors,
   fonts: z.strictObject({
@@ -89,11 +121,29 @@ export const Theme = z.strictObject({
       description: 'Рукописные подписи и пометки; не выбран — шрифт заголовков',
       'x-enum-titles': themeFontTitles,
     }),
+    // Номера, надзаголовки и код в своих блоках (--font-mono). Нет — моноширинный шрифт устройства
+    mono: ThemeFont.optional().meta({
+      title: 'Моноширинный шрифт',
+      description: 'Номера, надзаголовки и код; не выбран — моноширинный шрифт устройства',
+      'x-enum-titles': themeFontTitles,
+    }),
   }),
   radius: ThemeRadius.default('medium').meta({
     title: 'Скругления',
     'x-enum-titles': themeRadiusTitles,
   }),
+  // Цвет кольца фокуса с клавиатуры. Нет — акцент: на кнопке цвета акцента кольцо того же цвета
+  // почти не видно (le-english: тёмно-зелёное на тёмно-зелёном), тогда его задают отдельно
+  focus: ThemeColor.optional().meta({ title: 'Кольцо фокуса' }),
+  // Строка браузера на телефоне (meta theme-color) — роль темы. Нет — фон
+  browserColor: BrowserColor.optional().meta({
+    title: 'Цвет строки браузера',
+    'x-enum-titles': browserColorTitles,
+  }),
+  background: ThemeBackground.optional().meta({ title: 'Фон-картинка страницы' }),
+  // Свой CSS окон сайта (страниц-окон поверх других): пишет владелец, как CSS своих блоков, и
+  // проверяет тот же движок с областью окна ([data-site-window])
+  windowCss: z.string().max(WINDOW_CSS_MAX).optional().meta({ title: 'Свой CSS окон' }),
 })
 export type Theme = z.infer<typeof Theme>
 
@@ -207,7 +257,30 @@ export const ThemeInput = Theme.superRefine((theme, ctx) => {
       message: contrastMessage(check),
     })
   }
+  const focus = focusContrast(theme)
+  if (focus && !focus.ok) ctx.addIssue({ code: 'custom', path: ['focus'], message: focus.message })
 })
+
+/** Кольцу фокуса, как элементу интерфейса, нужно 3:1 к тому, на чём оно стоит (WCAG 1.4.11) */
+const FOCUS_CONTRAST_MIN = 3
+
+/**
+ * Контраст своего цвета фокуса к фону и поверхности (худший из двух): кольцо стоит на обоих.
+ * Своего цвета нет — undefined: акцент уже проверен парами темы
+ */
+export function focusContrast(theme: Pick<Theme, 'colors' | 'focus'>) {
+  if (!theme.focus || !ThemeColor.safeParse(theme.focus).success) return undefined
+  const ratio = Math.min(
+    contrastRatio(theme.focus, theme.colors.background),
+    contrastRatio(theme.focus, theme.colors.surface),
+  )
+  const ok = ratio >= FOCUS_CONTRAST_MIN
+  return {
+    ratio,
+    ok,
+    message: `Кольцо фокуса на фоне и поверхности: контраст ${formatContrast(ratio)} — нужно не меньше ${formatContrast(FOCUS_CONTRAST_MIN)}`,
+  }
+}
 
 /** Контраст текста на затемнённом фото: 4,5 по WCAG и запас на округление смешения в браузере */
 const COVER_CONTRAST = 4.6
@@ -287,6 +360,20 @@ export function readTheme(stored: unknown, onInvalid?: (field: string) => void):
   if (!radius.success) onInvalid?.('radius')
   const accent = ThemeFont.optional().safeParse(fonts.accent)
   if (!accent.success) onInvalid?.('fonts.accent')
+  const mono = ThemeFont.optional().safeParse(fonts.mono)
+  if (!mono.success) onInvalid?.('fonts.mono')
+  // Необязательные части темы: непонятное (записала версия новее) — как будто их нет
+  const optional = <T>(field: string, schema: z.ZodType<T>, value: unknown): T | undefined => {
+    if (value === undefined) return undefined
+    const parsed = schema.safeParse(value)
+    if (parsed.success) return parsed.data
+    onInvalid?.(field)
+    return undefined
+  }
+  const focus = optional('focus', ThemeColor, theme.focus)
+  const browserColor = optional('browserColor', BrowserColor, theme.browserColor)
+  const pageBackground = optional('background', ThemeBackground, theme.background)
+  const windowCss = optional('windowCss', z.string().max(WINDOW_CSS_MAX), theme.windowCss)
   return {
     colors: {
       background,
@@ -302,9 +389,52 @@ export function readTheme(stored: unknown, onInvalid?: (field: string) => void):
       body: font('body'),
       // Акцентный шрифт необязателен: нет или непонятен (шрифт новее этой версии) — не задан
       ...(accent.success && accent.data !== undefined && { accent: accent.data }),
+      ...(mono.success && mono.data !== undefined && { mono: mono.data }),
     },
     radius: radius.success ? radius.data : defaultTheme.radius,
+    ...(focus !== undefined && { focus }),
+    ...(browserColor !== undefined && { browserColor }),
+    ...(pageBackground !== undefined && { background: pageBackground }),
+    ...(windowCss !== undefined && windowCss.trim() !== '' && { windowCss }),
   }
+}
+
+const MEDIA_IN_WINDOW_CSS = /media:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi
+
+/**
+ * Картинки темы: фон страницы и url(media:…) из своего CSS окон. Для снимка сайта, файлов
+ * релиза, «где используется» и запрета удалить: картинка, которой нет в справочнике снимка, роняет
+ * весь CSS окон, а без папки в релизе фон на сервере — 404
+ */
+export const themeMediaIds = (
+  theme: Pick<Theme, 'background' | 'windowCss'> | null | undefined,
+): string[] => [
+  ...new Set([
+    ...(theme?.background ? [theme.background.mediaId] : []),
+    ...[...(theme?.windowCss ?? '').matchAll(MEDIA_IN_WINDOW_CSS)].map((match) =>
+      (match[1] ?? '').toLowerCase(),
+    ),
+  ]),
+]
+
+/**
+ * Где в теме стоит картинка — словами для медиатеки и отказа удалить: фон страницы ищут в поле
+ * «Фон-картинка», картинку из CSS окон — в поле CSS окон, и человеку надо сказать, где именно
+ */
+export const themeMediaRoles = (
+  themes: readonly (Pick<Theme, 'background' | 'windowCss'> | null | undefined)[],
+  mediaId: string,
+): string[] => {
+  const id = mediaId.toLowerCase()
+  const roles = new Set<string>()
+  for (const theme of themes) {
+    if (theme?.background?.mediaId.toLowerCase() === id) roles.add('фон страницы')
+    const inCss = [...(theme?.windowCss ?? '').matchAll(MEDIA_IN_WINDOW_CSS)].some(
+      (match) => (match[1] ?? '').toLowerCase() === id,
+    )
+    if (inCss) roles.add('CSS окон')
+  }
+  return [...roles]
 }
 
 /** Тема в формате до редактора тем: шесть цветов и системные шрифты */
@@ -342,6 +472,12 @@ export function sameTheme(a: Theme, b: Theme) {
     a.fonts.heading === b.fonts.heading &&
     a.fonts.body === b.fonts.body &&
     a.fonts.accent === b.fonts.accent &&
-    a.radius === b.radius
+    a.fonts.mono === b.fonts.mono &&
+    a.radius === b.radius &&
+    a.focus?.toLowerCase() === b.focus?.toLowerCase() &&
+    a.browserColor === b.browserColor &&
+    a.background?.mediaId === b.background?.mediaId &&
+    a.background?.size === b.background?.size &&
+    (a.windowCss ?? '') === (b.windowCss ?? '')
   )
 }

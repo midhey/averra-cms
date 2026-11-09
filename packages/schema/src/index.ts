@@ -41,7 +41,7 @@ export {
   video,
 } from './blocks'
 export { TEXT_BODY_MAX } from './blocks/text'
-export { Button, Href } from './common'
+export { Button, Href, Reveal, revealField, revealTitles } from './common'
 export {
   Coordinates,
   EmailAddress,
@@ -252,6 +252,7 @@ export {
   LOGO_TEXT_MAX,
   MenuItem,
   opensNewTab,
+  opensWindow,
   overlayFits,
   pageLinkTitle,
   readHeader,
@@ -362,11 +363,18 @@ export {
   PageSlug,
   PageTemplate,
   PageTitle,
+  PageWindow,
   pageTemplateContent,
   RESERVED_PAGE_SLUGS,
   SEO_DESCRIPTION_MAX,
   SEO_DESCRIPTION_RECOMMENDED,
   SEO_TITLE_MAX,
+  SHARE_IMAGE_ALT_MAX,
+  WINDOW_TITLE_MAX,
+  WindowSurface,
+  WindowWidth,
+  windowSurfaceTitles,
+  windowWidthTitles,
 } from './page'
 export { countRu, pluralRu } from './plural'
 export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
@@ -483,6 +491,7 @@ export {
   type TextPart,
 } from './text-body'
 export {
+  browserColorTitles,
   type ContrastCheck,
   type ContrastPair,
   contrastMessage,
@@ -490,24 +499,31 @@ export {
   coverScrim,
   defaultTheme,
   derivedBorder,
+  focusContrast,
   type LegacyTheme,
   legacyTheme,
   readTheme,
   sameTheme,
   systemThemeFonts,
   Theme,
+  ThemeBackground,
+  ThemeBackgroundSize,
   ThemeColor,
   type ThemeColorRole,
   ThemeColors,
   ThemeFont,
   ThemeInput,
   ThemeRadius,
+  themeBackgroundSizeTitles,
   themeColorRoles,
   themeColorTitles,
   themeContrast,
   themeFontIds,
   themeFontTitles,
+  themeMediaIds,
+  themeMediaRoles,
   themeRadiusTitles,
+  WINDOW_CSS_MAX,
 } from './theme'
 export {
   presetOf,
@@ -535,4 +551,13 @@ export {
   videoProviderTitles,
   videoWatchUrl,
 } from './video'
+export {
+  BEHAVIOR_ATTRIBUTE_PREFIX,
+  blocksUseBehaviors,
+  pageSlugOfHref,
+  templateUsesBehaviors,
+  templateUsesWindow,
+  WINDOW_LINK_ATTRIBUTE,
+  windowSlugsOfBlocks,
+} from './window'
 export { setupZodMessages } from './zod-messages'

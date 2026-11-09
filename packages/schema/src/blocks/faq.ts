@@ -25,6 +25,10 @@ export const faq = defineBlock({
       description: 'Посетитель сразу видит, что ответы раскрываются',
     }),
     items: z.array(Question).min(1).max(20).meta({ title: 'Вопросы' }),
+    smooth: z.boolean().optional().meta({
+      title: 'Плавно раскрывать ответы',
+      description: 'Ответ раскрывается анимацией. Без JavaScript — сразу, как обычно',
+    }),
   }),
   example: {
     title: 'Вопросы и ответы',

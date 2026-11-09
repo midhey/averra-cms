@@ -72,12 +72,13 @@ describe('siteCsp', () => {
     expect(csp['frame-ancestors']).not.toContain(origin)
   })
 
-  it('адрес API в dev — для картинок и форм, не для скриптов', () => {
+  it('адрес API в dev — для картинок и форм (и формы в окне), не для скриптов', () => {
     const csp = directives(
       siteCsp({ metrika: '', ga4: '', origins: [], apiOrigin: 'http://localhost:4000' }),
     )
     expect(csp['img-src']).toContain('http://localhost:4000')
     expect(csp['form-action']).toContain('http://localhost:4000')
+    expect(csp['connect-src']).toContain('http://localhost:4000')
     expect(csp['script-src']).toEqual(["'self'"])
   })
 })

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Button } from '../common'
+import { Button, revealField } from '../common'
 import { defineBlock } from '../define-block'
 
 const Plan = z.strictObject({
@@ -39,6 +39,7 @@ export const pricing = defineBlock({
           'Над выделенным тарифом. Это утверждение о клиентах — пишите, что правда: «Чаще выбирают», «Выгодно», «Новинка»',
       }),
       plans: z.array(Plan).min(2).max(4).meta({ title: 'Тарифы' }),
+      reveal: revealField(),
     })
     // Путь — флажок второго выделенного: ошибка встанет у него в редакторе
     .superRefine((props, ctx) => {
