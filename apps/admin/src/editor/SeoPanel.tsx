@@ -86,6 +86,9 @@ const headerModes = [
   { value: 'hidden', label: 'Скрыта', description: 'Для промо-страницы: без шапки и меню сайта' },
 ] as const satisfies readonly { value: HeaderMode; label: string; description: string }[]
 
+/** На главной «Короткая» не действует (шапка там всегда полная): варианта в списке нет */
+const withoutShort = headerModes.filter((mode) => mode.value !== 'short')
+
 const engines = [
   { value: 'yandex', label: 'Яндекс' },
   { value: 'google', label: 'Google' },
@@ -312,11 +315,14 @@ export function SeoPanel({
         <SegmentedControl
           legend="Шапка на этой странице"
           appearance="list"
-          options={headerModes}
+          options={slug === MAIN_PAGE_SLUG && headerMode !== 'short' ? withoutShort : headerModes}
           value={headerMode}
           onChange={onHeaderModeChange}
         />
-        <p className={panel.note}>Сама шапка — в разделе «Шапка и подвал».</p>
+        <p className={panel.note}>
+          Сама шапка — в разделе «Шапка и подвал».
+          {slug === MAIN_PAGE_SLUG && ' На главной короткой шапки нет: она для служебных страниц.'}
+        </p>
       </section>
 
       {!notFound && slug !== MAIN_PAGE_SLUG && (

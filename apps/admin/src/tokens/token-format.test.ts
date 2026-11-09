@@ -5,6 +5,7 @@ import {
   issuedDoneLabel,
   mcpConfigFragment,
   rightsSummary,
+  tokenRightHints,
   tokenState,
 } from './token-format'
 
@@ -50,5 +51,12 @@ describe('состояние', () => {
   it('действует, пока не отозван', () => {
     expect(tokenState({ revokedAt: '2026-11-01' })).toBe('revoked')
     expect(tokenState({ revokedAt: null })).toBe('active')
+  })
+})
+
+describe('подсказки прав', () => {
+  it('право на черновики блоков честно говорит и про скрипт сайта с доменами CSP', () => {
+    expect(tokenRightHints.blocksDraft).toContain('скрипта сайта')
+    expect(tokenRightHints.blocksDraft).toContain('CSP')
   })
 })

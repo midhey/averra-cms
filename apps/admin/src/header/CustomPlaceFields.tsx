@@ -129,8 +129,8 @@ export function CustomPlaceFields({
       </Select>
       {value && definition && (
         <p className={styles.note}>
-          {definition.description}. Меню, кнопку и логотип {word.subject} получает данными — они в
-          своих разделах.
+          {definition.description}. Свой вид получает меню, кнопку и логотип шапки данными: их
+          правят на вкладках «Меню» и «Шапка».
           {place === 'footer' &&
             ' Ссылки на политику, согласие и «Настройки cookie», которых нет в шаблоне, Averra допишет строкой ниже.'}
         </p>

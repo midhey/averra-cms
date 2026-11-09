@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Рамки админки — только свои (srcdoc предпросмотра и письма; плееры блока «Видео» админка не
+      встраивает). Директива frame-src родителя распространяется и на переход, который начала сама
+      рамка: скрипт в изолированном предпросмотре не уведёт её на чужой адрес (location.href,
+      document.open) — браузер заблокирует запрос. Это не закрывает WebRTC: подробности — в
+      decisions/custom-js.md
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="frame-src 'self'"
+    />
     <title>Averra CMS</title>
   </head>
   <body>

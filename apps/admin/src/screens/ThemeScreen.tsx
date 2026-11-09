@@ -106,6 +106,7 @@ type EditorProps = { siteId: string; draft: Theme; unpublished: boolean; readOnl
 function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
   const queryClient = useQueryClient()
   const formRef = useRef<HTMLFormElement>(null)
+  const windowCssRef = useRef<HTMLTextAreaElement>(null)
   const [form, setForm] = useState<ThemeForm>(() => formOf(draft))
   const [notice, setNotice] = useState<Notice>()
   // Цвет, который меняли последним: на него фокус, если сохранить не дали из-за него
@@ -190,7 +191,26 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
     })
   }
 
+  /** В CSS окон ошибка: запрос не уходит, причина названа, фокус в поле над липкой полосой */
+  function refuseWindowCss(line: number | undefined) {
+    setNotice({
+      kind: 'error',
+      text: `Тему не сохранить: ошибка в CSS окон${line ? `, строка ${line}` : ''}. Поправьте её в разделе «Окна сайта»`,
+    })
+    requestAnimationFrame(() => {
+      const field = windowCssRef.current
+      if (!field) return
+      field.scrollIntoView({ block: 'center' })
+      field.focus({ preventScroll: true })
+    })
+  }
+
   async function saveDraft() {
+    const cssError = windowCssProblems.find((problem) => problem.level === 'error')
+    if (cssError) {
+      refuseWindowCss(cssError.line)
+      return false
+    }
     if (!parsed.success) {
       refuse()
       return false
@@ -411,7 +431,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
                 'background.mediaId',
               )
             }}
-            hint="Узор (зерно бумаги, лёгкая текстура) или картинка на всю страницу. Под ней — цвет «Фон»: текст проверен на нём, поэтому картинка — светлая и спокойная"
+            hint="Узор (зерно бумаги, лёгкая текстура) или картинка на всю страницу. Под ней — цвет «Фон»: текст проверен на нём, поэтому картинка — светлая и спокойная. Форматы PNG, JPEG, WebP; SVG для фона не подходит"
           />
           {form.background && (
             <SegmentedControl
@@ -481,6 +501,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
             hint="Необязательно. :scope — само окно, «> section» — блоки окна. Цвета и шрифты — переменными темы: var(--color-surface), var(--font-heading). Проверяется так же, как CSS своих блоков"
             language="css"
             rows={8}
+            textareaRef={windowCssRef}
             value={form.windowCss ?? ''}
             readOnly={readOnly}
             error={fieldError(errors.errors, 'windowCss')}

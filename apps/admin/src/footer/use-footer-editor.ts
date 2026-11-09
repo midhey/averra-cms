@@ -5,7 +5,8 @@ import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
-import { queryKeys } from '../queries'
+import { adoptFooterLook, isLookConflict, LOOK_CHANGED_NOTICE } from '../header/look-conflict'
+import { footerQuery, queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
 import { useConfirm } from '../ui/Confirm'
 
@@ -96,6 +97,17 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
       errors.reset()
       return true
     } catch (error) {
+      if (isLookConflict(error)) {
+        // Владелец поменял вид, пока экран был открыт: берём новый вид, тексты остаются
+        try {
+          const fresh = await queryClient.fetchQuery({ ...footerQuery(siteId), staleTime: 0 })
+          setForm((current) => adoptFooterLook(current, fresh.draft))
+          onNotice({ kind: 'error', text: LOOK_CHANGED_NOTICE })
+        } catch (reload) {
+          showError(reload, 'Не удалось обновить экран')
+        }
+        return false
+      }
       showError(error, 'Не удалось сохранить')
       return false
     }

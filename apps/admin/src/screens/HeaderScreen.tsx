@@ -1,5 +1,6 @@
 import {
   CustomBlockDraft,
+  canonicalPath,
   demoPage,
   emptyFooterContacts,
   type Footer,
@@ -55,11 +56,11 @@ import {
   overlayHint,
   withTarget,
 } from '../header/header-format'
+import { adoptHeaderLook, isLookConflict, LOOK_CHANGED_NOTICE } from '../header/look-conflict'
 import { siteChrome } from '../header/site-chrome'
 import { ImageField } from '../media/ImageField'
 import { MediaPickField } from '../media/MediaPickField'
 import { mediaMapOf } from '../media/media-format'
-import { pagePath } from '../pages-format'
 import { canDefineBlocks, canEditHeader, canEditHeaderLook, canEditSeo } from '../permissions'
 import {
   customBlocksQuery,
@@ -315,6 +316,17 @@ function HeaderEditor(props: EditorProps) {
       errors.reset()
       return true
     } catch (error) {
+      if (isLookConflict(error)) {
+        // Владелец поменял вид, пока экран был открыт: берём новый вид, тексты остаются
+        try {
+          const fresh = await queryClient.fetchQuery({ ...headerQuery(siteId), staleTime: 0 })
+          setForm((current) => adoptHeaderLook(current, fresh.draft))
+          setNotice({ kind: 'error', text: LOOK_CHANGED_NOTICE })
+        } catch (reload) {
+          showError(reload, 'Не удалось обновить экран')
+        }
+        return false
+      }
       showError(error, 'Не удалось сохранить')
       return false
     }
@@ -906,7 +918,9 @@ function HeaderEditor(props: EditorProps) {
         organization={props.footer.contacts ?? emptyFooterContacts}
         legal={{
           // Политика — ссылкой, только если опубликована: как на сайте
-          policyHref: props.footer.policy.published ? pagePath(props.footer.policy.slug) : null,
+          policyHref: props.footer.policy.published
+            ? canonicalPath(props.footer.policy.slug)
+            : null,
           consentHref: props.footer.consent.published
             ? siteLinkHref({ page: props.footer.consent.slug })
             : null,
@@ -997,7 +1011,7 @@ function HeaderPreview(props: PreviewProps) {
       {chrome.scripts.length > 0 && (
         <Checkbox
           label="Выполнять скрипты своих шапки и подвала"
-          hint="В изолированной рамке: скриптам недоступны вход в админку, её данные и запросы"
+          hint="В изолированной рамке: скриптам недоступны вход в админку и её данные, рамку на чужой адрес браузер не пускает. Скрипт в рамке может передать введённое в ней наружу (WebRTC, CSP это не закрывает): не вводите в предпросмотре пароли и личные данные, черновик от ИИ сначала прочитайте. Запускаются только скрипты определений; поведение шапки Averra (Esc, закрытие меню после выбора пункта, сжатие при прокрутке) видно только на сайте"
           checked={runScripts}
           onChange={(event) => setRunScripts(event.currentTarget.checked)}
         />

@@ -310,7 +310,7 @@ function CreateDialog({
         <p className={styles.note}>{placementHints[placement]}</p>
         <TextInput
           label="Название"
-          hint="Его видят администратор сайта и редактор в каталоге блоков"
+          hint={titleHints[placement]}
           value={title}
           maxChars={60}
           error={errors.title}
@@ -342,6 +342,13 @@ function CreateDialog({
       </form>
     </Dialog>
   )
+}
+
+/** Кто увидит название: блок страницы — в каталоге, шапка и подвал — в списке видов */
+const titleHints: Record<CustomBlockPlacement, string> = {
+  block: 'Его видят администратор сайта и редактор в каталоге блоков',
+  header: 'Его видят в списке «Вид шапки» на экране «Шапка и подвал»',
+  footer: 'Его видят в списке «Вид подвала» на экране «Шапка и подвал»',
 }
 
 /** Что значит место — подсказка под выбором при создании */

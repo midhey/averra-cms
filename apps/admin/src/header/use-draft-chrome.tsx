@@ -1,5 +1,6 @@
 import { type CustomBlockMap, LegalFooter } from '@averra/blocks'
 import {
+  canonicalPath,
   defaultFooter,
   defaultHeader,
   emptyFooterContacts,
@@ -12,7 +13,6 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { pagePath } from '../pages-format'
 import { footerQuery, headerQuery } from '../queries'
 import { siteChrome } from './site-chrome'
 
@@ -41,7 +41,7 @@ export function useDraftChrome(input: {
   const footerShown =
     footer.published !== null || !sameFooter(footer.draft, defaultFooter) ? footer.draft : null
   const legal = {
-    policyHref: footer.policy.published ? pagePath(footer.policy.slug) : null,
+    policyHref: footer.policy.published ? canonicalPath(footer.policy.slug) : null,
     consentHref: footer.consent.published ? siteLinkHref({ page: footer.consent.slug }) : null,
     cookieSettings: footer.cookieSettings,
   }

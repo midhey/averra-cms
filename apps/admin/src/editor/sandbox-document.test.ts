@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { highlightCode } from '../ui/code-highlight'
-import { SANDBOX_PERMISSIONS, sandboxCsp, sandboxDocument } from './sandbox-document'
+import {
+  SANDBOX_PERMISSIONS,
+  sandboxCsp,
+  sandboxDocument,
+  sandboxGoneMessage,
+} from './sandbox-document'
 
 describe('изолированный предпросмотр', () => {
   it('рамке разрешены только скрипты: без своего источника, форм, окон и перехода наверх', () => {
@@ -24,6 +29,7 @@ describe('изолированный предпросмотр', () => {
       head: '<style>p{}</style>',
       body: '<main><p>Текст</p></main>',
       scripts: [{ label: 'tabs', file: code }],
+      token: '7',
     })
     expect(html).not.toContain('</script><script>alert(1)')
     const tags = [
@@ -36,6 +42,10 @@ describe('изолированный предпросмотр', () => {
     expect(decodeURIComponent(tags[1]?.[1] ?? '')).toBe(code)
     expect(html.indexOf('<main>')).toBeLessThan(html.indexOf('<script'))
     expect(html).toContain('http-equiv="Content-Security-Policy"')
+    // Первый модуль сообщает родителю об уходе документа с меткой этого документа
+    const guard = decodeURIComponent(tags[0]?.[1] ?? '')
+    expect(guard).toContain("addEventListener('pagehide'")
+    expect(guard).toContain(JSON.stringify(sandboxGoneMessage('7')))
   })
 })
 

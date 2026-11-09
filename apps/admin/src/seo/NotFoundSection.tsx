@@ -31,7 +31,10 @@ export function NotFoundSection({ siteId }: { siteId: string }) {
       if (created.status !== 201) throw await apiRequestError(created)
       const saved = await api.sites[':siteId'].pages[':slug'].$put({
         param: { siteId, slug: NOT_FOUND_PAGE_SLUG },
-        json: { title: NOT_FOUND_PAGE_TITLE, content: defaultNotFoundContent() },
+        json: {
+          title: NOT_FOUND_PAGE_TITLE,
+          content: defaultNotFoundContent({ shortHeader: true }),
+        },
       })
       if (saved.status !== 200) throw await apiRequestError(saved)
     },
