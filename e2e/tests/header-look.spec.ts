@@ -191,6 +191,13 @@ test('настройки шапки и подвала: админка → сай
   await page.getByRole('button', { name: /^SEO/ }).click()
   await expect(page.getByRole('radio', { name: /^Короткая/ })).toBeChecked()
 
+  // На главной «Короткая» не действует: варианта нет, рядом пояснение
+  await page.goto('/pages/index')
+  await page.getByRole('button', { name: /^SEO/ }).click()
+  await expect(page.getByRole('radio', { name: /^Полная/ })).toBeChecked()
+  await expect(page.getByRole('radio', { name: /^Короткая/ })).toHaveCount(0)
+  await expect(page.getByText('На главной короткой шапки нет')).toBeVisible()
+
   // ── Сайт ────────────────────────────────────────────────────────────────────────────────────
   await expect
     .poll(
@@ -354,10 +361,9 @@ test('настройки шапки и подвала: админка → сай
       expect((await styleOf(firstItem, ['text-align']))['text-align']).toBe('center')
       // Во весь экран: панель закрывает окно под строкой шапки
       const panel = await panelNav.locator('..').boundingBox()
-      const headerBox = await row.boundingBox()
-      expect((panel?.y ?? 0) + (panel?.height ?? 0)).toBeGreaterThanOrEqual(
-        812 - 2 - Math.max(0, (headerBox?.height ?? 0) - 64),
-      )
+      // Низ панели — ровно низ окна, без поправки на высоту шапки: так ловится высота «64 px»
+      // вместо настоящей
+      expect((panel?.y ?? 0) + (panel?.height ?? 0)).toBeGreaterThanOrEqual(812 - 1)
       await narrow.page.screenshot({ path: testInfo.outputPath(`site-${width}-nojs-menu.png`) })
       await narrow.context.close()
     }

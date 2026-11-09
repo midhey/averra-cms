@@ -70,7 +70,7 @@ test('режим согласия на собранном сайте: Метри
     await expect(notice(page)).toBeVisible()
     await expect(
       notice(page).getByRole('link', { name: 'Политика конфиденциальности' }),
-    ).toHaveAttribute('href', '/privacy')
+    ).toHaveAttribute('href', '/privacy/')
     await expect(page.locator(METRIKA_SCRIPT)).toHaveCount(0)
     expect(first.requested).toEqual([])
     // Кнопки равные: один класс у «Принять все» и «Только необходимые»

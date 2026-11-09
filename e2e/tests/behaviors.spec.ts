@@ -569,6 +569,16 @@ test('тема и SEO для соцсетей из админки: моно-шр
   const windowCss = page.getByRole('region', { name: 'Окна сайта' }).getByLabel('Свой CSS окон')
   const css =
     ':scope { border-top: 6px solid var(--color-accent) }\n> section h2 { font-family: var(--font-mono) }'
+  // Ошибка в CSS окон: запрос не уходит, причина названа, фокус в поле
+  const saves: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().includes('/theme')) saves.push(request.url())
+  })
+  await windowCss.fill(':scope { background: url(https://evil.example/a.png) }')
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(page.getByText(/Тему не сохранить: ошибка в CSS окон, строка 1/)).toBeVisible()
+  await expect(windowCss).toBeFocused()
+  expect(saves).toEqual([])
   await windowCss.fill(css)
   await page.screenshot({ path: testInfo.outputPath('theme-admin-1440.png'), fullPage: true })
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()

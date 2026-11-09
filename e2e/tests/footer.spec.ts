@@ -159,7 +159,7 @@ test('большой подвал: публикация с политикой, �
     )
     await expect(
       footer.getByRole('link', { name: 'Политика конфиденциальности', exact: true }),
-    ).toHaveAttribute('href', '/privacy')
+    ).toHaveAttribute('href', '/privacy/')
     // Счётчиков нет — и «Настроек cookie» нет
     await expect(footer.getByRole('button', { name: 'Настройки cookie' })).toHaveCount(0)
     expect(await noHorizontalScroll(site.page)).toBe(true)
