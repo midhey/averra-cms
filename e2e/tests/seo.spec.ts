@@ -218,7 +218,9 @@ test('описание и noindex страницы — в редакторе; т
   await ed.open('spasibo')
   await page.getByRole('button', { name: /^SEO/ }).click()
   const panel = page.getByRole('complementary', { name: 'SEO страницы' })
-  await panel.getByLabel('Описание').fill('Заявка получена — перезвоним за 15 минут')
+  await panel
+    .getByLabel('Описание', { exact: true })
+    .fill('Заявка получена — перезвоним за 15 минут')
   await panel.getByLabel('Скрыть страницу от поисковиков').check()
   await ed.publishButton.click()
   await expect(ed.status).toHaveText(/Опубликовано/)
@@ -438,7 +440,7 @@ test('SEO страницы в редакторе: советы до публик
 
   await panel.getByLabel('SEO-заголовок').fill('Цены на ремонт квартир в Твери — Ремонт у Ивана')
   await panel
-    .getByLabel('Описание')
+    .getByLabel('Описание', { exact: true })
     .fill(
       'Сколько стоит ремонт квартиры под ключ: смета за день, цена в договоре и гарантия 3 года',
     )

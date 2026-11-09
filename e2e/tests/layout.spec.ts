@@ -192,7 +192,9 @@ test('редактор на 375 px: вкладки «Блоки / Предпро
   await tabs.getByRole('tab', { name: /^SEO/ }).click()
   await expect(tabs.getByRole('tab', { name: /^SEO/ })).toHaveAttribute('aria-selected', 'true')
   await expect(
-    page.getByRole('complementary', { name: 'SEO страницы' }).getByLabel('Описание'),
+    page
+      .getByRole('complementary', { name: 'SEO страницы' })
+      .getByLabel('Описание', { exact: true }),
   ).toBeVisible()
   expect(Number(await overflowOf(page))).toBeLessThanOrEqual(0)
 })
