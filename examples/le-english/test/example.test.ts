@@ -17,7 +17,11 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { BLOCK_ORDER, BLOCKS_FILE, buildFile } from '../build-blocks.ts'
 import { createClient } from '../src/api-client.ts'
 import { homeBlocks, menuItems, photosOf, signupFormProps } from '../src/content.ts'
-import { defaultBackupDir, importSite } from '../src/import-site.ts'
+import { defaultBackupDir, importSite, settingsPatch, upgradeHome } from '../src/import-site.ts'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const GRAIN = join(here, '..', 'assets', 'grain.png')
+const SITE_SCRIPT = join(here, '..', 'site', 'script.js')
 
 // Пример переноса: файл выгрузки блоков свежий и без ошибок, контент превращается в страницу, а
 // скрипт ставит всё на настоящий API (в памяти) так же, как владелец в админке
@@ -186,7 +190,7 @@ describe('файл выгрузки блоков', () => {
     }
   })
 
-  it('карточке цели под клавиатурным фокусом подсказана клавиша: Enter флажок не переворачивает', () => {
+  it('карточке цели под клавиатурным фокусом подсказана клавиша: без JS Enter флажок не переворачивает', () => {
     expect(html('le-goals')).toContain('goal-card__by-key')
     expect(html('le-goals')).not.toContain('goal-card__keyhint')
   })
@@ -231,10 +235,108 @@ describe('файл выгрузки блоков', () => {
     expect(props.fields.find((field) => field.name === 'contact')?.contactBy).toBe('channel')
   })
 
-  it('блоки без скриптов и без чужих адресов: правила безопасности движка проходят', () => {
+  it('шаблоны без скриптов и без чужих адресов; свой JS — только у карточек целей, файлом', () => {
     for (const block of built.blocks) {
       expect(block.template).not.toMatch(/<script|on\w+=|javascript:/i)
     }
+    expect(built.blocks.filter((block) => block.script !== '').map((block) => block.key)).toEqual([
+      'le-goals',
+    ])
+  })
+
+  it('кнопки записи открывают окно по флажку «Открывать в окне», без флажка — обычная ссылка', () => {
+    const cases = [
+      ['le-hero', 'button'],
+      ['le-reviews', 'cta'],
+      ['le-signup', 'button'],
+      ['le-message', 'button'],
+    ] as const
+    for (const [key, field] of cases) {
+      const on = html(key, { [field]: { label: 'Записаться', href: '/zapis/', window: true } })
+      expect(on, key).toMatch(/href="\/zapis\/" data-av-window/)
+      const off = html(key, { [field]: { label: 'Записаться', href: '/zapis/', window: false } })
+      expect(off, key).not.toContain('data-av-window')
+    }
+    // Импорт ставит флажок всем трём кнопкам главной
+    const blocks = homeBlocks(content, () => undefined)
+    for (const [id, field] of [
+      ['top', 'button'],
+      ['reviews', 'cta'],
+      ['signup', 'button'],
+    ] as const) {
+      const props = blocks.find((block) => block.id === id)?.props as Record<string, unknown>
+      expect(props[field], id).toMatchObject({ href: '/zapis/', window: true })
+    }
+  })
+
+  it('анимации оригинала — поведения Averra: появление, рисование линий, подсказка, плавный FAQ', () => {
+    const goals = html('le-goals')
+    const cards = (goals.match(/class="goal-card goal-card--\d" data-av-reveal/g) ?? []).length
+    expect(cards).toBeGreaterThan(0)
+    // Подсказка-поворот — только у первой карточки, один раз
+    expect(goals.match(/data-av-hint="flip"/g)).toHaveLength(1)
+    expect(goals).toContain('data-av-draw="svg"')
+    for (const key of ['le-steps', 'le-prices', 'le-faq']) {
+      expect(html(key), key).toMatch(/class="section-head[^"]*" data-av-reveal|faq__head/)
+      expect(html(key), key).toContain('data-av-draw="svg"')
+    }
+    expect(html('le-faq')).toMatch(
+      /<details class="faq__item" data-av-details(="")? data-av-reveal/,
+    )
+    // Пузыри отзывов — со своей стороны
+    const reviews = html('le-reviews')
+    expect(reviews).toContain('data-av-reveal="left"')
+    expect(reviews).toContain('data-av-reveal="right"')
+    // Наклон и длительность — переменными поведений в CSS блока
+    expect(cssOf('le-goals')).toMatch(/\.goal-card\[data-av-reveal\] \{\s*--av-reveal-from:/)
+    expect(cssOf('le-goals')).toContain('--av-reveal-duration: 0.7s')
+  })
+
+  it('отступы секций — свои, как у оригинала: [data-custom-block] сильнее рамки секции', () => {
+    // Восемь секций главной и «Ой!» 404
+    for (const key of BLOCK_ORDER.slice(0, 9)) {
+      expect(cssOf(key), key).toMatch(/:scope\[data-custom-block\] \{[^}]*padding:/)
+    }
+  })
+
+  it('моноширинный шрифт — из темы (--font-mono), а не стек устройства: в Safari ui-monospace — SF Mono', () => {
+    for (const block of built.blocks) {
+      expect(block.css, block.key).not.toMatch(/ui-monospace|monospace\s*;/)
+    }
+    for (const key of ['le-hero', 'le-goals', 'le-reviews']) {
+      expect(cssOf(key), key).toContain('font-family: var(--font-mono)')
+    }
+  })
+
+  it('курсор «взять» у карточек — только когда скрипт включил перетаскивание', () => {
+    expect(cssOf('le-goals')).toMatch(
+      /\.goals__board\[data-draggable\] \.goal-card \{\s*cursor: grab;\s*user-select: none;/,
+    )
+    expect(cssOf('le-goals')).not.toMatch(/(^|\n)\.goal-card \{[^}]*cursor/)
+  })
+
+  it('кнопку «Разложить заново» вставляет скрипт: без JS её нет, чтобы она не молчала', () => {
+    expect(html('le-goals')).not.toContain('goals__reset')
+    const script = built.blocks.find((block) => block.key === 'le-goals')?.script ?? ''
+    expect(script).toContain("reset.className = 'goals__reset'")
+    // Enter у флажка и перетаскивание — только мышью на широком экране
+    expect(script).toMatch(/event\.key !== 'Enter'/)
+    expect(script).toContain("event.pointerType !== 'mouse'")
+  })
+
+  it('шапка: на телефоне строка «Меню» с плавным раскрытием, последний пункт — в окно записи', () => {
+    const header = built.blocks.find((block) => block.key === 'le-header')
+    expect(header?.placement).toBe('header')
+    expect(header?.template).toContain('<details class="menu" data-av-details>')
+    expect(header?.template).toMatch(/\{% if site\.button and menu_cta %\}/)
+    expect(header?.template.match(/\{% if site\.button\.window %\} data-av-window/g)).toHaveLength(
+      2,
+    )
+    // На 404 «← На главную» нет — как у оригинала, только логотип
+    expect(header?.template).toContain("{% unless page.slug == '404' %}")
+    const footerBlock = built.blocks.find((block) => block.key === 'le-footer')
+    expect(footerBlock?.placement).toBe('footer')
+    expect(footerBlock?.template).toContain('site.legal.policy_href')
   })
 })
 
@@ -281,6 +383,20 @@ afterAll(api.close)
 
 describe('скрипт переноса на настоящем API', () => {
   const dir = mkdtempSync(join(tmpdir(), 'le-english-'))
+  // Один вход владельца на все проверки: у входа лимит попыток, и третий вход подряд получил бы 429
+  let signed: ReturnType<typeof createClient> | undefined
+  const ownerClient = async () => {
+    if (signed) return signed
+    const owner = await api.createUser('owner')
+    const client = createClient({
+      baseUrl: testOrigins.api,
+      origin: testOrigins.admin,
+      fetch: async (input, init) => api.app.request(input, init),
+    })
+    await client.signIn(owner.email, TEST_PASSWORD)
+    signed = client
+    return client
+  }
   it('страховочные файлы по умолчанию — вне репозитория и не под именем бэкапов установки', () => {
     // Скрипт запускают из examples/le-english: файл с текстом юриста в рабочем дереве легко
     // закоммитить, а «averra-backup» — имя бэкапов самой установки на сервере
@@ -305,23 +421,26 @@ describe('скрипт переноса на настоящем API', () => {
       .png()
       .toBuffer()
     writeFileSync(join(dir, 'public', 'assets', 'images', 'apple-touch-icon.png'), touchIcon)
+    // Картинка для соцсетей: с ней SEO главной получает и описание картинки (og:image:alt)
+    const card = await sharp({
+      create: { width: 120, height: 63, channels: 3, background: '#f3ece0' },
+    })
+      .jpeg()
+      .toBuffer()
+    writeFileSync(join(dir, 'public', 'assets', 'images', 'social-card.jpg'), card)
     const contentFile = join(dir, 'content.json')
     // Живой сайт хранит контент внутри записи { version, savedAt, content }
     writeFileSync(contentFile, JSON.stringify({ version: '1', savedAt: 'x', content }))
 
-    const owner = await api.createUser('owner')
-    const client = createClient({
-      baseUrl: testOrigins.api,
-      origin: testOrigins.admin,
-      fetch: async (input, init) => api.app.request(input, init),
-    })
-    await client.signIn(owner.email, TEST_PASSWORD)
+    const client = await ownerClient()
     const run = (publish: boolean, siteUrl?: string) =>
       importSite({
         client,
         contentFile,
         publicDir: join(dir, 'public'),
         blocksFile: BLOCKS_FILE,
+        grainFile: GRAIN,
+        siteScriptFile: SITE_SCRIPT,
         publish,
         ...(siteUrl !== undefined && { siteUrl }),
       })
@@ -390,6 +509,7 @@ describe('скрипт переноса на настоящем API', () => {
     const { items: before } = await client.get<{ items: unknown[] }>(`${base}/media`)
     const result = await run(true)
     expect(result.published).toBe(true)
+    expect(result.siteScriptSaved).toBe(true)
     expect(result.missingDocuments).toEqual([])
 
     const page = PageContent.parse(await publishedOf('pages/index'))
@@ -406,8 +526,39 @@ describe('скрипт переноса на настоящем API', () => {
     expect(header.button.page).toBe('zapis')
     // Логотип текстом: картинка в шапке не хранится и не держит файл в медиатеке
     expect(header).toMatchObject({ brand: 'text', logo: null })
-    const theme = (await publishedOf('theme')) as { fonts: { accent?: string } }
-    expect(theme.fonts.accent).toBe('caveat')
+    const theme = (await publishedOf('theme')) as {
+      fonts: { accent?: string; mono?: string }
+      focus?: string
+      browserColor?: string
+      background?: { mediaId: string; size: string }
+      windowCss?: string
+    }
+    expect(theme.fonts).toMatchObject({ accent: 'caveat', mono: 'jetbrains-mono' })
+    // Кольцо фокуса — ржавое, строка браузера — тёмно-зелёная, фон — зерно бумаги узором
+    expect(theme).toMatchObject({ focus: '#b85418', browserColor: 'accent' })
+    expect(theme.background?.size).toBe('tile')
+    expect(theme.windowCss).toContain('[data-site-window-title]')
+    // Свои виды шапки и подвала; тексты — поля вида
+    expect(header).toMatchObject({ custom: { key: 'le-header', props: { menu_label: 'Меню' } } })
+    expect(header.button).toMatchObject({ page: 'zapis', window: true })
+    expect(await publishedOf('footer')).toMatchObject({
+      custom: {
+        key: 'le-footer',
+        props: { policy_label: 'Политика обработки персональных данных' },
+      },
+    })
+    // /zapis — окно записи с заголовком «Попробуем?», кнопки главной открывают его
+    expect(await publishedOf('pages/zapis')).toMatchObject({
+      window: { title: 'Попробуем?' },
+      shortHeader: true,
+    })
+    expect(JSON.stringify(page.blocks)).toContain('"window":true')
+    expect(page.seo).toMatchObject({ imageAlt: expect.stringContaining('Валерия') })
+    // 404 — свой блок «Ой!», как у оригинала
+    expect(JSON.stringify(await publishedOf('pages/404'))).toContain('custom:le-message')
+    // Скрипт сайта (улучшения формы) опубликован вместе с сайтом
+    const script = await client.get<{ published: { script: string } }>(`${base}/script`)
+    expect(script.published.script).toContain('Скрипт сайта Vallex English')
 
     // Повторный запуск не плодит фото и не затирает то, что владелец вписал сам
     const { items: after } = await client.get<{ items: unknown[] }>(`${base}/media`)
@@ -425,13 +576,7 @@ describe('скрипт переноса на настоящем API', () => {
   })
 
   it('документы: правка не пропадает, ложный черновик пересобирается, опубликованное не трогается', async () => {
-    const owner = await api.createUser('owner')
-    const client = createClient({
-      baseUrl: testOrigins.api,
-      origin: testOrigins.admin,
-      fetch: async (input, init) => api.app.request(input, init),
-    })
-    await client.signIn(owner.email, TEST_PASSWORD)
+    const client = await ownerClient()
     const base = `/api/sites/${api.demoSiteId}`
     let logs: string[] = []
     const run = (extra: { publish?: boolean; rebuildDocuments?: boolean } = {}) => {
@@ -722,6 +867,290 @@ describe('скрипт переноса на настоящем API', () => {
       JSON.stringify((await client.get<{ draft: unknown }>(`${base}/pages/privacy`)).draft),
     ).toContain(lawyerText)
   }, 30_000)
+
+  it('повторный запуск обновляет вид, а правки клиента в контенте и текстах шапки не трогает', async () => {
+    const client = await ownerClient()
+    const base = `/api/sites/${api.demoSiteId}`
+    const run = (resetContent = false) =>
+      importSite({
+        client,
+        contentFile: join(dir, 'content.json'),
+        publicDir: join(dir, 'public'),
+        blocksFile: BLOCKS_FILE,
+        grainFile: GRAIN,
+        siteScriptFile: SITE_SCRIPT,
+        publish: false,
+        backupDir: join(dir, 'backup'),
+        resetContent,
+      })
+    type Block = { id: string; type: string; props: Record<string, unknown> }
+    type PageState = { title: string; draft: { blocks: Block[] } & Record<string, unknown> }
+    const page = (slug: string) => client.get<PageState>(`${base}/pages/${slug}`)
+    const draftOf = async (path: string) =>
+      (await client.get<{ draft: Record<string, unknown> }>(`${base}/${path}`)).draft
+    await run()
+
+    // Установка прошлой версии переноса: кнопки без «Открывать в окне», /zapis — не окно, 404 —
+    // встроенный первый экран, шапка — стандартная без своего вида, тема — без моно-шрифта
+    const home = await page('index')
+    const oldBlocks = home.draft.blocks.map((block) => ({
+      ...block,
+      props: Object.fromEntries(
+        Object.entries(block.props).map(([key, value]) => {
+          if (typeof value !== 'object' || value === null || !('window' in value)) {
+            return [key, value]
+          }
+          const { window: _drop, ...rest } = value as Record<string, unknown>
+          return [key, rest]
+        }),
+      ),
+    }))
+    // Клиент поправил текст первого экрана и снял окно у кнопки отзывов
+    const hero = oldBlocks.find((block) => block.id === 'top') as Block
+    hero.props.title = 'Английский *от клиента*'
+    const reviews = oldBlocks.find((block) => block.id === 'reviews') as Block
+    reviews.props.cta = { ...(reviews.props.cta as object), window: false }
+    await client.put(`${base}/pages/index`, {
+      title: home.title,
+      content: { ...home.draft, blocks: oldBlocks, seo: { title: 'Свой SEO-заголовок' } },
+    })
+    const zapis = await page('zapis')
+    const { window: _window, ...zapisOld } = zapis.draft
+    const formBlock = zapisOld.blocks[0] as Block
+    formBlock.props.title = 'Запишись ко мне'
+    await client.put(`${base}/pages/zapis`, { title: zapis.title, content: zapisOld })
+    await client.put(`${base}/pages/404`, {
+      title: 'Страница не найдена',
+      content: {
+        blocks: [
+          {
+            id: 'not-found',
+            type: 'hero',
+            props: {
+              title: 'Такой страницы нет',
+              subtitle: 'Ой! Возможно, ссылка устарела. Всё самое важное — на главной.',
+              button: { label: 'На главную →', href: '/' },
+            },
+          },
+        ],
+        shortHeader: true,
+      },
+    })
+    const header = await draftOf('header')
+    const menu = (header.menu as Record<string, unknown>[]).map((item, index) =>
+      index === 0 ? { ...item, label: 'Мои цели' } : item,
+    )
+    const { custom: _custom, ...oldHeader } = header
+    // Клиент сменил и знак логотипа: шапку прошлого переноса узнаём не по нему
+    await client.put(`${base}/header`, {
+      ...oldHeader,
+      menu,
+      logoMark: 'Ле',
+      logoText: 'Лера\nEnglish',
+      button: { label: 'Хочу урок', page: 'zapis' },
+    })
+    // Подвал прошлой версии без своего вида, подпись клиент поправил
+    const footerNow = await draftOf('footer')
+    await client.put(`${base}/footer`, { ...footerNow, custom: null, text: 'See you soon ♡' })
+    // Интегратор дописал своё в скрипт сайта набора
+    const scriptNow = await client.get<{ draft: { script: string; origins: string[] } }>(
+      `${base}/script`,
+    )
+    const ownScript = `${scriptNow.draft.script}console.log('интегратор')\n`
+    await client.put(`${base}/script`, { ...scriptNow.draft, script: ownScript })
+    const themeNow = await draftOf('theme')
+    await client.put(`${base}/theme`, {
+      ...themeNow,
+      fonts: { ...(themeNow.fonts as object), mono: undefined },
+    })
+    // Клиент переименовал сайт, переписал описание, добавил VK и стёр ИНН
+    type Settings = {
+      name: string
+      description: string
+      titleTemplate: string
+      organization: Record<string, unknown> & { socials: string[] }
+    }
+    const settingsNow = (await client.get<{ settings: Settings }>(`${base}/settings`)).settings
+    const kitSocials = settingsNow.organization.socials
+    await client.patch(`${base}/settings`, {
+      name: 'Vallex English — Лера',
+      description: 'Своё описание сайта',
+      titleTemplate: '%s | Лера',
+      organization: {
+        ...settingsNow.organization,
+        name: 'ИП Лера',
+        inn: '',
+        socials: ['https://vk.com/lera'],
+      },
+    })
+
+    const again = await run()
+    // Настройки — клиента: название, описание, шаблон заголовка и реквизиты на месте, соцсети
+    // объединены (VK клиента и Telegram набора), пустой ИНН дописан из исходника
+    const settingsAfter = (await client.get<{ settings: Settings }>(`${base}/settings`)).settings
+    expect(settingsAfter).toMatchObject({
+      name: 'Vallex English — Лера',
+      description: 'Своё описание сайта',
+      titleTemplate: '%s | Лера',
+    })
+    expect(settingsAfter.organization.name).toBe('ИП Лера')
+    expect(settingsAfter.organization.inn).toBe(settingsNow.organization.inn)
+    expect(settingsAfter.organization.socials).toEqual(['https://vk.com/lera', ...kitSocials])
+    expect(again.keptPages).toEqual(['index', 'zapis'])
+    const next = (await page('index')).draft
+    const nextHero = next.blocks.find((block) => block.id === 'top') as Block
+    // Текст клиента на месте, кнопка — в окно; снятый клиентом флажок остался снятым
+    expect(nextHero.props.title).toBe('Английский *от клиента*')
+    expect(nextHero.props.button).toMatchObject({ href: '/zapis/', window: true })
+    const nextReviews = next.blocks.find((block) => block.id === 'reviews') as Block
+    expect(nextReviews.props.cta).toMatchObject({ window: false })
+    // SEO клиента остался, поля для соцсетей дописаны (в контенте теста их нет — пусто)
+    expect(next.seo).toMatchObject({ title: 'Свой SEO-заголовок' })
+    // /zapis: форма клиента, страница стала окном
+    const nextZapis = (await page('zapis')).draft
+    expect((nextZapis.blocks[0] as Block).props.title).toBe('Запишись ко мне')
+    expect(nextZapis.window).toMatchObject({ title: 'Попробуем?', width: 'wide' })
+    // 404 прошлой версии без правок — заменена своим блоком «Ой!»
+    expect((await page('404')).draft.blocks[0]?.type).toBe('custom:le-message')
+    // Шапка: тексты клиента, вид — свой, кнопке — окно
+    const nextHeader = await draftOf('header')
+    expect((nextHeader.menu as { label: string }[])[0]?.label).toBe('Мои цели')
+    expect(nextHeader).toMatchObject({
+      logoMark: 'Ле',
+      logoText: 'Лера\nEnglish',
+      button: { label: 'Хочу урок', page: 'zapis', window: true },
+      custom: { key: 'le-header' },
+    })
+    expect(await draftOf('footer')).toMatchObject({
+      text: 'See you soon ♡',
+      custom: { key: 'le-footer', props: { sign: 'See you soon ♡' } },
+    })
+    // Дописанный интегратором скрипт не затёрт
+    expect((await client.get<{ draft: { script: string } }>(`${base}/script`)).draft.script).toBe(
+      ownScript,
+    )
+    expect(again.siteScriptSaved).toBe(false)
+
+    // Третий запуск: клиент выключил окно у /zapis (админка убирает ключ) — окно не возвращается
+    const zapisNow = (await page('zapis')).draft
+    const { window: _off, ...zapisNoWindow } = zapisNow
+    await client.put(`${base}/pages/zapis`, { title: 'Запись', content: zapisNoWindow })
+    // 404 прошлой версии, где клиент поправил только заголовок, — его правка, она остаётся
+    await client.put(`${base}/pages/404`, {
+      title: 'Страница не найдена',
+      content: {
+        blocks: [
+          {
+            id: 'not-found',
+            type: 'hero',
+            props: {
+              title: 'Тут ничего нет',
+              subtitle: 'Ой! Возможно, ссылка устарела. Всё самое важное — на главной.',
+              button: { label: 'На главную →', href: '/' },
+            },
+          },
+        ],
+        shortHeader: true,
+      },
+    })
+    await run()
+    expect((await page('zapis')).draft.window).toBeUndefined()
+    expect((await page('404')).draft.blocks[0]?.props.title).toBe('Тут ничего нет')
+    expect(((await draftOf('theme')).fonts as { mono?: string }).mono).toBe('jetbrains-mono')
+
+    // --reset-content: контент — снова из исходного сайта
+    const reset = await run(true)
+    expect(reset.keptPages).toEqual([])
+    const resetHero = (await page('index')).draft.blocks.find((block) => block.id === 'top')
+    expect(resetHero?.props.title).toBe(content.hero.title)
+    expect(((await draftOf('header')).menu as { label: string }[])[0]?.label).toBe('Цели')
+    // и настройки сайта — тоже из набора
+    expect((await client.get<{ settings: Settings }>(`${base}/settings`)).settings.name).toBe(
+      'Vallex English',
+    )
+  })
+
+  it('settingsPatch: повторный запуск дописывает пустые поля, а заполненные клиентом оставляет', () => {
+    const current = {
+      name: 'Лера',
+      titleTemplate: '',
+      language: 'ru',
+      description: '',
+      ogImage: null,
+      icon: 'icon-client',
+      redirects: [],
+      cookies: {},
+      organization: {
+        type: 'Organization',
+        name: 'ИП Лера',
+        email: '',
+        inn: '',
+        phone: '+7 900 000-00-00',
+        socials: ['https://vk.com/lera', 'https://t.me/lera'],
+      },
+    }
+    const kit = {
+      name: 'Vallex English',
+      titleTemplate: '%s — Vallex English',
+      language: 'ru',
+      description: 'Описание',
+      ogImage: 'share',
+      icon: 'icon-kit',
+      organization: {
+        name: 'ИП Набор',
+        email: 'kit@example.com',
+        inn: '1234567890',
+        socials: ['https://t.me/lera'],
+      },
+    }
+    expect(settingsPatch(current, kit, true)).toEqual({
+      name: 'Лера',
+      titleTemplate: '%s — Vallex English',
+      language: 'ru',
+      description: 'Описание',
+      ogImage: 'share',
+      icon: 'icon-client',
+      organization: {
+        type: 'Organization',
+        name: 'ИП Лера',
+        email: 'kit@example.com',
+        inn: '1234567890',
+        phone: '+7 900 000-00-00',
+        socials: ['https://vk.com/lera', 'https://t.me/lera'],
+      },
+    })
+    // Первый перенос: значения набора, телефон, вписанный раньше, остаётся
+    expect(settingsPatch(current, kit, false)).toMatchObject({
+      name: 'Vallex English',
+      icon: 'icon-kit',
+      organization: { name: 'ИП Набор', phone: '+7 900 000-00-00', socials: ['https://t.me/lera'] },
+    })
+    // Нет картинок в исходнике — поля не трогаются
+    expect(settingsPatch(current, { ...kit, ogImage: null, icon: null }, false)).not.toHaveProperty(
+      'icon',
+    )
+  })
+
+  it('upgradeHome: только флажок окна у кнопок записи и пустые поля соцсетей', () => {
+    const draft = {
+      blocks: [
+        { id: 'top', type: 'custom:le-hero', props: { button: { label: 'A', href: '/zapis' } } },
+        { id: 'x', type: 'cta', props: { button: { label: 'B', href: '/zapis/' } } },
+        {
+          id: 'faq',
+          type: 'custom:le-faq',
+          props: { aside: { label: 'C', href: 'https://t.me/x' } },
+        },
+      ],
+      seo: { title: 'T', shareTitle: 'Свой' },
+    }
+    const next = upgradeHome(draft, { shareTitle: 'Наш', shareDescription: 'Описание' })
+    expect(next.blocks[0]?.props).toMatchObject({ button: { window: true } })
+    // Встроенный блок клиента и внешняя ссылка — как были
+    expect(next.blocks[1]).toEqual(draft.blocks[1])
+    expect(next.blocks[2]).toEqual(draft.blocks[2])
+    expect(next.seo).toEqual({ title: 'T', shareTitle: 'Свой', shareDescription: 'Описание' })
+  })
 
   it('кривой --site-url отвергается до первых изменений', async () => {
     // Проверка — до первого запроса к API: входить не нужно (и лимит попыток входа не тратится)

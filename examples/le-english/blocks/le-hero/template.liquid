@@ -4,7 +4,7 @@
     <h1 class="hero__title">{{ title | accent }}</h1>
     {% if lead %}<p class="hero__lead">{{ lead | newline_to_br }}</p>{% endif %}
     <div class="hero__actions">
-      <a class="cta-dark" href="{{ button | link }}">{{ button.label }} <span aria-hidden="true">→</span></a>
+      <a class="cta-dark" href="{{ button | link }}"{% if button.window %} data-av-window{% endif %}>{{ button.label }} <span aria-hidden="true">→</span></a>
       {% if note %}{% assign note_text = note | strip %}{% assign note_text_last = note_text | slice: -1 %}{% if note_text_last == '↗' %}{% assign note_text_cut = note_text.size | minus: 1 %}{% assign note_text = note_text | slice: 0, note_text_cut | strip %}{% endif %}<div class="hero__note">{{ note_text | newline_to_br }} <span aria-hidden="true">↗</span></div>{% endif %}
     </div>
     {% if badges.size > 0 %}

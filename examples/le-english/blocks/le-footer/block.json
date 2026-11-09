@@ -1,0 +1,29 @@
+{
+  "key": "le-footer",
+  "title": "Vallex: подвал",
+  "description": "Подвал исходного сайта: знак «Ve» с названием, рукописная подпись и ссылки на документы",
+  "category": "about",
+  "placement": "footer",
+  "fields": [
+    { "type": "text", "name": "sign", "label": "Рукописная подпись", "maxLength": 80 },
+    {
+      "type": "text",
+      "name": "policy_label",
+      "label": "Подпись ссылки на политику",
+      "required": true,
+      "maxLength": 80
+    },
+    {
+      "type": "text",
+      "name": "consent_label",
+      "label": "Подпись ссылки на согласие",
+      "required": true,
+      "maxLength": 80
+    }
+  ],
+  "example": {
+    "sign": "See you in class ♡",
+    "policy_label": "Политика обработки персональных данных",
+    "consent_label": "Согласие на обработку данных"
+  }
+}

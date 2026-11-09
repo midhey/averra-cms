@@ -1,14 +1,14 @@
 <div class="faq">
-  <div class="faq__head">
+  <div class="faq__head" data-av-reveal>
     <div>
       <h2 class="section-title">{{ title | accent }}</h2>
-      <svg width="260" height="16" viewBox="0 0 260 16" class="section-underline" aria-hidden="true"><path d="M4 9 C 70 3, 170 4, 256 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+      <svg width="260" height="16" viewBox="0 0 260 16" class="section-underline" aria-hidden="true" data-av-draw="svg"><path d="M4 9 C 70 3, 170 4, 256 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
     </div>
     {% if aside %}{% assign aside_href = aside | link %}{% assign aside_label = aside.label | strip %}{% assign aside_label_last = aside_label | slice: -1 %}{% if aside_label_last == '↗' %}{% assign aside_label_cut = aside_label.size | minus: 1 %}{% assign aside_label = aside_label | slice: 0, aside_label_cut | strip %}{% endif %}<a class="hand-aside faq__aside" href="{{ aside_href }}"{% if aside_href contains '://' %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ aside_label | newline_to_br }} <span aria-hidden="true">↗</span></a>{% endif %}
   </div>
   <div class="faq__list">
     {% for item in items %}
-    <details class="faq__item">
+    <details class="faq__item" data-av-details data-av-reveal>
       <summary class="faq__question">{{ item.question }}<span class="faq__icon" aria-hidden="true"></span></summary>
       <div class="faq__answer">{{ item.answer | paragraphs }}</div>
     </details>

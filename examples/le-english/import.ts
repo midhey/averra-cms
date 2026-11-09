@@ -34,7 +34,10 @@ const usage = `Перенос сайта le-english на Averra через API.
                      куда перед заменой черновика /privacy или /consent сохраняется его прежний
                      текст (по умолчанию ~/.averra/le-english-backup): черновики не попадают
                      в историю версий
-  --publish          опубликовать страницы, тему, шапку и подвал (без флага — только черновики);
+  --reset-content    вернуть контент из исходного сайта: страницы, тексты шапки и подвала
+                     перезаписываются (правки клиента в них пропадут). Без флага повторный
+                     запуск обновляет только вид: блоки, тему, шапку и подвал, окно, скрипт сайта
+  --publish          опубликовать страницы, тему, шапку, подвал и скрипт сайта (без флага — только черновики);
                      сработает, только когда /privacy и /consent уже опубликованы: форма записи
                      собирает персональные данные
 
@@ -82,6 +85,7 @@ async function main() {
       logo: { type: 'string' },
       publish: { type: 'boolean', default: false },
       'rebuild-documents': { type: 'boolean', default: false },
+      'reset-content': { type: 'boolean', default: false },
       'backup-dir': { type: 'string' },
       help: { type: 'boolean', default: false },
     },
@@ -114,6 +118,9 @@ async function main() {
     publicDir,
     blocksFile: join(here, 'le-english.blocks.json'),
     ...(existsSync(logo) && { logoFile: logo }),
+    grainFile: join(here, 'assets', 'grain.png'),
+    siteScriptFile: join(here, 'site', 'script.js'),
+    resetContent: values['reset-content'],
     ...(values['site-url'] && { siteUrl: values['site-url'] }),
     publish: values.publish,
     rebuildDocuments: values['rebuild-documents'],
@@ -131,10 +138,14 @@ async function main() {
     console.log('Сайт опубликован.')
     return
   }
-  console.log('Страницы, тема, шапка и подвал сохранены черновиками.')
+  console.log(
+    result.siteScriptSaved
+      ? 'Страницы, тема, шапка, подвал и скрипт сайта сохранены черновиками.'
+      : 'Страницы, тема, шапка и подвал сохранены черновиками. Скрипт сайта не тронут (см. выше).',
+  )
   if (result.missingDocuments.length > 0) {
     console.log(
-      `Документы ${result.missingDocuments.join(' и ')} — черновики из шаблона: заполните реквизиты, проверьте с юристом и опубликуйте в админке. Потом запустите скрипт с --publish или опубликуйте страницы, тему, шапку и подвал в админке.`,
+      `Документы ${result.missingDocuments.join(' и ')} — черновики из шаблона: заполните реквизиты, проверьте с юристом и опубликуйте в админке. Потом запустите скрипт с --publish или опубликуйте в админке страницы, тему, шапку, подвал и «Скрипт сайта» (без него форма записи работает, но без улучшений).`,
     )
   }
 }

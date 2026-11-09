@@ -21,6 +21,7 @@
     "@averra/blocks": "workspace:*",
     "@averra/schema": "workspace:*",
     "@types/node": "catalog:",
+    "happy-dom": "catalog:",
     "sharp": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",

@@ -1,0 +1,29 @@
+{
+  "key": "le-message",
+  "title": "Vallex: короткое сообщение",
+  "description": "Рукописная надпись, заголовок, текст и тёмная кнопка по центру — для страницы 404",
+  "category": "about",
+  "sketch": "cta",
+  "fields": [
+    {
+      "type": "text",
+      "name": "eyebrow",
+      "label": "Рукописная надпись над заголовком",
+      "maxLength": 30
+    },
+    { "type": "text", "name": "title", "label": "Заголовок", "required": true, "maxLength": 80 },
+    { "type": "textarea", "name": "text", "label": "Текст", "maxLength": 300 },
+    {
+      "type": "link",
+      "name": "button",
+      "label": "Кнопка",
+      "hint": "Нет кнопки — её не показываем."
+    }
+  ],
+  "example": {
+    "eyebrow": "Ой!",
+    "title": "Такой страницы нет",
+    "text": "Возможно, ссылка устарела. Всё самое важное — на главной.",
+    "button": { "label": "На главную", "href": "/" }
+  }
+}

@@ -1,18 +1,19 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { customBlockProblems } from '@averra/blocks/custom-engine'
 import { CUSTOM_BLOCKS_FILE_FORMAT, CustomBlockDraft, CustomBlocksFile } from '@averra/schema'
 
 // Собирает файл выгрузки своих блоков (формат averra.custom-blocks, версия 1) из папок blocks/:
-// block.json — ключ, поля, пример; template.liquid — шаблон; style.css — стили. Файл
+// block.json — ключ, поля, пример; template.liquid — шаблон; style.css — стили; script.js — скрипт
+// блока, если он есть. Файл
 // le-english.blocks.json лежит в репозитории готовым: его грузят «Свои блоки» → «Загрузить из
 // файла» и import.ts. Правят исходники в blocks/, потом `pnpm --filter @averra/example-le-english build`
 
 const folder = dirname(fileURLToPath(import.meta.url))
 export const BLOCKS_FILE = join(folder, 'le-english.blocks.json')
 
-/** Порядок блоков в файле — порядок секций главной */
+/** Порядок блоков в файле: секции главной по порядку, затем сообщение 404, шапка и подвал (места) */
 export const BLOCK_ORDER = [
   'le-hero',
   'le-goals',
@@ -22,6 +23,9 @@ export const BLOCK_ORDER = [
   'le-prices',
   'le-faq',
   'le-signup',
+  'le-message',
+  'le-header',
+  'le-footer',
 ] as const
 
 /** Определение блока из его папки: схема проверяет структуру, движок — шаблон, CSS и пример */
@@ -32,6 +36,9 @@ export function readBlock(key: string) {
     ...meta,
     template: readFileSync(join(dir, 'template.liquid'), 'utf8'),
     css: readFileSync(join(dir, 'style.css'), 'utf8'),
+    ...(existsSync(join(dir, 'script.js')) && {
+      script: readFileSync(join(dir, 'script.js'), 'utf8'),
+    }),
   })
 }
 

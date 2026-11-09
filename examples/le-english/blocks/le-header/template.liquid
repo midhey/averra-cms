@@ -1,0 +1,26 @@
+<div class="bar">
+  <a class="brand" href="{% if page.home %}#top{% else %}{{ site.home }}{% endif %}">
+    {% if site.logo.image %}{{ site.logo.image | image: '160px', 'brand__image' }}{% endif %}
+    {% if site.logo.mark %}<span class="brand__mark">{{ site.logo.mark }}</span>{% endif %}
+    {% if site.logo.text %}<span class="brand__tagline">{{ site.logo.text | newline_to_br }}</span>{% endif %}
+    {% unless site.logo.image or site.logo.mark or site.logo.text %}<span class="brand__tagline">{{ site.name }}</span>{% endunless %}
+  </a>
+  {% if page.short %}{% unless page.slug == '404' %}<a class="back" href="{{ site.home }}">← На главную</a>{% endunless %}{% endif %}
+  {% if site.menu.size > 0 %}
+  <nav class="nav" aria-label="Основная навигация">
+    {% for item in site.menu %}<a class="nav__link" href="{{ item.href }}" aria-current="{% if item.current %}page{% else %}false{% endif %}" target="{% if item.new_tab %}_blank{% else %}_self{% endif %}"{% if item.window %} data-av-window{% endif %} rel="noopener">{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+  {% if site.button %}<a class="cta" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}"{% if site.button.window %} data-av-window{% endif %} rel="noopener">{{ site.button.label }}</a>{% endif %}
+  {% if site.menu.size > 0 %}
+  <details class="menu" data-av-details>
+    <summary class="menu__toggle" aria-label="Меню разделов сайта">{{ menu_label }} <span class="menu__icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
+    <nav class="menu__panel" aria-label="Мобильная навигация">
+      {% for item in site.menu %}<a class="menu__link" href="{{ item.href }}" aria-current="{% if item.current %}page{% else %}false{% endif %}" target="{% if item.new_tab %}_blank{% else %}_self{% endif %}"{% if item.window %} data-av-window{% endif %} rel="noopener">{% if item.mobile_label %}{{ item.mobile_label }}{% else %}{{ item.label }}{% endif %}</a>
+      {% endfor %}
+      {% if site.button and menu_cta %}<a class="menu__link" href="{{ site.button.href }}" target="{% if site.button.new_tab %}_blank{% else %}_self{% endif %}"{% if site.button.window %} data-av-window{% endif %} rel="noopener">{{ menu_cta }}</a>{% endif %}
+    </nav>
+  </details>
+  {% endif %}
+</div>

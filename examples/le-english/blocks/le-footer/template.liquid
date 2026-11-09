@@ -1,0 +1,10 @@
+<div class="footer">
+  <div class="brand">{% if site.logo.mark %}<span class="brand__mark">{{ site.logo.mark }}</span>{% endif %}{% if site.logo.text %}{{ site.logo.text }}{% else %}{{ site.name }}{% endif %}</div>
+  {% if sign %}<div class="sign">{{ sign }}</div>{% endif %}
+  {% if site.legal.policy_href or site.legal.consent_href %}
+  <nav class="docs" aria-label="Документы">
+    {% if site.legal.policy_href %}<a href="{{ site.legal.policy_href }}">{{ policy_label }}</a>{% endif %}
+    {% if site.legal.consent_href %}<a href="{{ site.legal.consent_href }}">{{ consent_label }}</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>

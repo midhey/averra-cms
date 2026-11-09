@@ -1,5 +1,5 @@
 <div class="about">
-  <div class="about__media">
+  <div class="about__media" data-av-reveal>
     <div class="about__polaroid">
       <div class="about__frame">
         <div class="about__tape-left"></div>
@@ -11,7 +11,7 @@
     <div class="about__sticker"><div class="about__sticker-paper">{{ sticker | newline_to_br }}</div></div>
     {% endif %}
   </div>
-  <div class="about__text">
+  <div class="about__text" data-av-reveal>
     <h2 class="section-title">{{ title | accent }}</h2>
     {{ text | paragraphs }}
     {% if points.size > 0 %}

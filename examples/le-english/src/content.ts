@@ -90,6 +90,15 @@ const link = (label: unknown, href: string) => {
   return caption === '' ? undefined : { label: caption, href }
 }
 
+/**
+ * Кнопка записи: на страницу /zapis/ и с «Открывать в окне» — с JS форма открывается поверх
+ * страницы, как у оригинала (data-lead), без JS и Ctrl-кликом — переход на страницу записи
+ */
+const signupLink = (label: unknown) => {
+  const button = link(label, SIGNUP_HREF)
+  return button && { ...button, window: true }
+}
+
 /** Свойства блоков главной по содержимому исходного сайта */
 export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, Json> {
   const hero = record(content.hero)
@@ -107,7 +116,7 @@ export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, J
       eyebrow: text(hero.eyebrow),
       title: text(hero.title),
       lead: text(hero.lead),
-      button: link(hero.button, SIGNUP_HREF),
+      button: signupLink(hero.button),
       note: withoutArrow(text(hero.note)),
       badges: texts(hero.badges),
       photo: mediaOf(hero.photo),
@@ -141,7 +150,7 @@ export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, J
       title: text(reviews.title),
       lead: text(reviews.lead),
       note: text(reviews.note),
-      cta: link(reviews.cta, SIGNUP_HREF),
+      cta: signupLink(reviews.cta),
       sticker: text(reviews.sticker),
       items: items(reviews.items, (item) => ({
         name: text(item.name),
@@ -174,7 +183,7 @@ export function blockProps(content: Json, mediaOf: MediaOf): Record<SectionId, J
       eyebrow: text(signup.eyebrow),
       title: text(signup.title),
       text: text(signup.text),
-      button: link(signup.button, SIGNUP_HREF),
+      button: signupLink(signup.button),
       note: text(signup.note),
       telegram: link('или напиши мне в Telegram', telegram),
     }),
@@ -222,6 +231,22 @@ export function headerBrand(content: Json) {
 
 /** Свой текст подвала — рукописная подпись исходного сайта (footer.sign), до 300 знаков */
 export const footerSign = (content: Json) => text(record(content.footer).sign).slice(0, 300)
+
+/** Заголовок окна записи — рукописная надпись над формой оригинала (signup.eyebrow) */
+export const windowTitle = (content: Json) =>
+  text(record(content.signup).eyebrow).trim().slice(0, 80) || 'Попробуем?'
+
+/** Страница 404 исходного сайта (src/render/not-found.js): «Ой!», заголовок, текст, кнопка */
+export const notFoundBlock = {
+  id: 'not-found',
+  type: 'custom:le-message',
+  props: {
+    eyebrow: 'Ой!',
+    title: 'Такой страницы нет',
+    text: 'Возможно, ссылка устарела. Всё самое важное — на главной.',
+    button: { label: 'На главную', href: '/' },
+  },
+}
 
 /** Форма записи: поля и тексты страницы /zapis — как в форме исходного сайта */
 export function signupFormProps(content: Json) {

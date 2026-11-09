@@ -1,0 +1,6 @@
+<div class="message">
+  {% if eyebrow %}<div class="message__eyebrow">{{ eyebrow }}</div>{% endif %}
+  <h1 class="message__title">{{ title | accent }}</h1>
+  {% if text %}<p class="message__text">{{ text | newline_to_br }}</p>{% endif %}
+  {% if button %}<a class="cta-dark" href="{{ button | link }}"{% if button.window %} data-av-window{% endif %}>{{ button.label }} <span aria-hidden="true">→</span></a>{% endif %}
+</div>

@@ -1,18 +1,20 @@
 <div class="goals">
-  <div class="goals__head">
+  <div class="goals__head" data-av-reveal>
     <div class="goals__heading">
       <h2 class="section-title">{{ title | accent }}</h2>
-      <svg width="220" height="16" viewBox="0 0 220 16" class="section-underline" aria-hidden="true"><path d="M4 10 C 60 4, 140 4, 216 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+      <svg width="220" height="16" viewBox="0 0 220 16" class="section-underline" aria-hidden="true" data-av-draw="svg"><path d="M4 10 C 60 4, 140 4, 216 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
     </div>
-    <div class="hand-aside">Нажми на карточку,<br>чтобы узнать больше ↓</div>
+    <div class="goals__controls">
+      <div class="hand-aside goals__hint">Нажми на карточку,<br>чтобы узнать больше ↓</div>
+    </div>
   </div>
 
   <div class="goals__board">
     {% for card in cards %}
     {% assign look = forloop.index0 | modulo: 4 | plus: 1 %}
-    <div class="goal-card goal-card--{{ look }}">
+    <div class="goal-card goal-card--{{ look }}" data-av-reveal>
       <input class="goal-card__toggle" type="checkbox" id="{{ block.id }}-flip-{{ forloop.index }}" aria-label="{{ card.title }} — перевернуть карточку">
-      <div class="goal-card__inner">
+      <div class="goal-card__inner"{% if forloop.first %} data-av-hint="flip"{% endif %}>
         <div class="goal-card__front">
           <div class="goal-card__tape"></div>
           <div class="goal-card__number">{% if forloop.index < 10 %}0{% endif %}{{ forloop.index }}</div>

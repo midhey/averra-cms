@@ -1,7 +1,9 @@
 /* Первый экран Vallex English. Цвета страницы, текста, акцента и шрифты — роли темы; бумага
    стикеров, скотч и маркер — свои цвета блока (в теме для них роли нет), поэтому они объявлены
    один раз здесь, а ниже используются переменными. */
-:scope {
+/* [data-custom-block] у :scope — чтобы отступы секции были свои, как у оригинала: правило рамки
+   секции Averra (.section) той же специфичности, что :scope, и иначе перебивает их */
+:scope[data-custom-block] {
   /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
   --paper-ink: #1e2b25;
   --paper-green: #213d32;
@@ -52,6 +54,26 @@
   padding: 24px 24px 72px;
 }
 
+/* Межстрочный интервал по умолчанию — как у оригинала (у его body свой не задан): у Averra он 1.6,
+   и пункты списков без своего line-height вставали бы реже */
+:scope[data-custom-block] {
+  line-height: normal;
+}
+
+/* Заголовки и абзацы переносятся как у оригинала: у Averra по умолчанию у заголовков balance и
+   line-height 1.15, у абзацев pretty, и строки карточек ложились бы иначе. Где оригинал сам задаёт
+   перенос или интервал, правило класса сильнее */
+h1,
+h2,
+h3 {
+  line-height: normal;
+  text-wrap: wrap;
+}
+
+p {
+  text-wrap: wrap;
+}
+
 .hero {
   display: flex;
   flex-wrap: wrap;
@@ -68,7 +90,7 @@
 }
 
 .hero__eyebrow {
-  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -400,7 +422,7 @@
 }
 
 @media (max-width: 819px) {
-  :scope {
+  :scope[data-custom-block] {
     padding-top: 20px;
     padding-bottom: 48px;
   }

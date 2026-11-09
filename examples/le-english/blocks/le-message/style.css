@@ -1,0 +1,124 @@
+/* Короткое сообщение по центру — страница 404 исходного сайта (src/render/not-found.js): «Ой!»
+   рукописным, заголовок, текст и тёмная кнопка-«таблетка». */
+:scope {
+  --shadow-ink: rgba(30, 43, 37, 0.18);
+  --shadow-ink-lift: rgba(30, 43, 37, 0.3);
+  --terracotta: #c0503d;
+}
+
+/* Межстрочный интервал по умолчанию — как у оригинала (у его body свой не задан): у Averra он 1.6,
+   и пункты списков без своего line-height вставали бы реже. Отступы — оригинала (.not-found) и на
+   самой секции: [data-custom-block] сильнее рамки секции Averra, иначе её поля добавились бы к
+   своим и на 375 px заголовок «Такой страницы нет» переносился бы на две строки */
+:scope[data-custom-block] {
+  padding: 40px 24px 96px;
+  line-height: normal;
+}
+
+/* Заголовки и абзацы переносятся как у оригинала: у Averra по умолчанию у заголовков balance и
+   line-height 1.15, у абзацев pretty, и строки карточек ложились бы иначе. Где оригинал сам задаёт
+   перенос или интервал, правило класса сильнее */
+h1,
+h2,
+h3 {
+  line-height: normal;
+  text-wrap: wrap;
+}
+
+p {
+  text-wrap: wrap;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  min-height: calc(60vh - 136px);
+  text-align: center;
+}
+
+.message__eyebrow {
+  font-family: var(--font-accent);
+  font-size: 38px;
+  line-height: 1;
+  color: var(--color-accent);
+  transform: rotate(-4deg);
+}
+
+.message__title {
+  margin: 0;
+  font-size: clamp(34px, 4.8vw, 58px);
+  line-height: 1.08;
+  text-wrap: balance;
+  color: var(--color-text);
+}
+
+.message__title em {
+  font-style: italic;
+  color: var(--terracotta);
+}
+
+.message__text {
+  max-width: 520px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.cta-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 19px 32px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 10px 24px var(--shadow-ink);
+}
+
+.cta-dark:hover {
+  filter: brightness(1.25);
+  box-shadow: 0 14px 28px var(--shadow-ink-lift);
+  color: var(--color-on-accent);
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .cta-dark {
+    transition:
+      translate 0.25s ease,
+      box-shadow 0.25s ease,
+      filter 0.2s ease;
+  }
+  .cta-dark:hover {
+    translate: 0 -2px;
+  }
+  .cta-dark > span {
+    transition: translate 0.25s ease;
+  }
+  .cta-dark:hover > span {
+    translate: 4px 0;
+  }
+}
+
+@media (max-width: 540px) {
+  .message__title {
+    font-size: clamp(30px, 8vw, 40px);
+    line-height: 1.15;
+  }
+  .message__text {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .cta-dark {
+    justify-content: center;
+    width: 100%;
+    padding: 16px 18px;
+    font-size: 15px;
+  }
+}

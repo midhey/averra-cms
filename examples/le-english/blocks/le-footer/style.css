@@ -1,0 +1,66 @@
+/* Подвал исходного сайта (src/styles/footer.css): знак «Ve» и название в строку, рукописная подпись
+   справа, ниже — ссылки на документы. Ссылки шаблон выводит сам, поэтому строка документов Averra
+   их не повторяет; «Настройки cookie» Averra добавляет ниже, когда уведомление о cookies включено. */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand__mark {
+  font-family: var(--font-accent);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-text);
+}
+
+.sign {
+  font-family: var(--font-accent);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--color-accent);
+}
+
+.docs {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  font-size: 12px;
+}
+
+.docs a {
+  color: var(--color-muted);
+  text-underline-offset: 3px;
+}
+
+.docs a:hover {
+  color: var(--color-text);
+}
+
+@media (max-width: 819px) {
+  .footer {
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 540px) {
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

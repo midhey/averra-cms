@@ -1,0 +1,24 @@
+{
+  "key": "le-header",
+  "title": "Vallex: шапка",
+  "description": "Шапка исходного сайта: знак «Ve» с подписью, меню, кнопка-«таблетка», на телефоне — строка «Меню»",
+  "category": "about",
+  "placement": "header",
+  "fields": [
+    {
+      "type": "text",
+      "name": "menu_label",
+      "label": "Подпись строки меню на телефоне",
+      "required": true,
+      "maxLength": 20
+    },
+    {
+      "type": "text",
+      "name": "menu_cta",
+      "label": "Последний пункт меню на телефоне",
+      "hint": "Ведёт туда же, куда кнопка шапки. Пусто — пункта нет.",
+      "maxLength": 60
+    }
+  ],
+  "example": { "menu_label": "Меню", "menu_cta": "Записаться на пробный урок →" }
+}

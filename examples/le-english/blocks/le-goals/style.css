@@ -1,7 +1,10 @@
 /* Цели: четыре бумажные карточки, которые переворачиваются по нажатию — без JavaScript: на каждой
-   карточке скрытый флажок, а переворот делает :checked. Перетаскивания карточек, как в исходном
-   сайте, здесь нет: оно держалось на скрипте, а блоки Averra работают без него. */
-:scope {
+   карточке скрытый флажок, а переворот делает :checked. Скрипт блока (script.js) добавляет то, что
+   было у исходного сайта на JS: перетаскивание мышью на широком экране, «Разложить заново» и Enter.
+   Появление при прокрутке и подсказка-поворот первой карточки — поведения Averra (data-av-*). */
+/* [data-custom-block] у :scope — чтобы отступы секции были свои, как у оригинала: правило рамки
+   секции Averra (.section) той же специфичности, что :scope, и иначе перебивает их */
+:scope[data-custom-block] {
   /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
   --paper-ink: #1e2b25;
   --paper-green: #213d32;
@@ -26,6 +29,26 @@
   overflow-x: clip;
 }
 
+/* Межстрочный интервал по умолчанию — как у оригинала (у его body свой не задан): у Averra он 1.6,
+   и пункты списков без своего line-height вставали бы реже */
+:scope[data-custom-block] {
+  line-height: normal;
+}
+
+/* Заголовки и абзацы переносятся как у оригинала: у Averra по умолчанию у заголовков balance и
+   line-height 1.15, у абзацев pretty, и строки карточек ложились бы иначе. Где оригинал сам задаёт
+   перенос или интервал, правило класса сильнее */
+h1,
+h2,
+h3 {
+  line-height: normal;
+  text-wrap: wrap;
+}
+
+p {
+  text-wrap: wrap;
+}
+
 .goals__head {
   display: flex;
   flex-wrap: wrap;
@@ -33,6 +56,36 @@
   justify-content: space-between;
   gap: 16px 40px;
   margin-bottom: 48px;
+}
+
+.goals__controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* Кнопку вставляет скрипт блока: без JS она ничего не делала бы, поэтому в шаблоне её нет */
+.goals__reset {
+  min-height: 36px;
+  padding: 9px 16px;
+  border: 1px solid rgba(33, 61, 50, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper-green);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.goals__reset:hover {
+  background: var(--paper-green);
+  color: var(--paper-bright);
+}
+
+.goals__reset:focus-visible {
+  outline: 3px solid var(--rust);
+  outline-offset: 6px;
 }
 
 .goals__heading {
@@ -93,6 +146,18 @@
   margin-top: var(--card-offset);
   transform: rotate(var(--rotation));
   perspective: 1400px;
+}
+
+/* Перетаскиваемую карточку двигает скрипт свойством translate, поверх наклона и появления.
+   Курсор «взять» — только когда скрипт включил перетаскивание (data-draggable на доске): без JS и
+   на телефоне он обещал бы то, чего нет */
+.goals__board[data-draggable] .goal-card {
+  cursor: grab;
+  user-select: none;
+}
+
+.goals__board[data-draggable] .goal-card[data-dragging] {
+  cursor: grabbing;
 }
 
 .goal-card--1 {
@@ -217,7 +282,7 @@
 }
 
 .goal-card__number {
-  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-muted);
 }
@@ -327,7 +392,7 @@
 }
 
 @media (max-width: 819px) {
-  :scope {
+  :scope[data-custom-block] {
     padding-top: 44px;
     padding-bottom: 52px;
   }
@@ -387,5 +452,50 @@
   }
   .goal-card__title {
     font-size: 29px;
+  }
+}
+
+/* Появление при прокрутке — как у исходного сайта: заголовок поднимается, карточки падают на доску
+   с наклоном и выпрямляются по очереди, линия под заголовком рисуется следом */
+:scope[data-custom-block] {
+  --av-reveal-duration: 0.7s;
+}
+
+.goals__head {
+  --av-reveal-distance: 22px;
+}
+
+.section-underline {
+  --av-draw-duration: 0.8s;
+  --av-draw-delay: 0.25s;
+}
+
+.goal-card[data-av-reveal] {
+  --av-reveal-from: translateY(36px) rotate(calc(var(--rotation) - 4deg));
+}
+
+@media (min-width: 820px) {
+  .goal-card:nth-child(4n + 2) {
+    --av-reveal-delay: 110ms;
+  }
+  .goal-card:nth-child(4n + 3) {
+    --av-reveal-delay: 220ms;
+  }
+  .goal-card:nth-child(4n + 4) {
+    --av-reveal-delay: 330ms;
+  }
+}
+
+@media (max-width: 819px) {
+  .goals__controls {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .goals__reset {
+    display: none;
+  }
+  .goal-card[data-av-reveal] {
+    --av-reveal-from: translateY(36px) rotate(-4deg);
   }
 }

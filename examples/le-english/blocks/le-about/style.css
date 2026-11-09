@@ -1,5 +1,7 @@
 /* Обо мне: фото на полароиде с клейкой лентой и стикером, рассказ и пункты с галочками. */
-:scope {
+/* [data-custom-block] у :scope — чтобы отступы секции были свои, как у оригинала: правило рамки
+   секции Averra (.section) той же специфичности, что :scope, и иначе перебивает их */
+:scope[data-custom-block] {
   /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
   --paper-ink: #1e2b25;
   --paper-green: #213d32;
@@ -27,6 +29,26 @@
     0 98%
   );
   padding: 64px 24px 96px;
+}
+
+/* Межстрочный интервал по умолчанию — как у оригинала (у его body свой не задан): у Averra он 1.6,
+   и пункты списков без своего line-height вставали бы реже */
+:scope[data-custom-block] {
+  line-height: normal;
+}
+
+/* Заголовки и абзацы переносятся как у оригинала: у Averra по умолчанию у заголовков balance и
+   line-height 1.15, у абзацев pretty, и строки карточек ложились бы иначе. Где оригинал сам задаёт
+   перенос или интервал, правило класса сильнее */
+h1,
+h2,
+h3 {
+  line-height: normal;
+  text-wrap: wrap;
+}
+
+p {
+  text-wrap: wrap;
 }
 
 .about {
@@ -174,7 +196,7 @@
 }
 
 @media (max-width: 819px) {
-  :scope {
+  :scope[data-custom-block] {
     padding-top: 44px;
     padding-bottom: 52px;
   }
@@ -215,4 +237,18 @@
     font-size: 16px;
     line-height: 1.65;
   }
+}
+
+/* Появление при прокрутке — как у исходного сайта (поведения Averra, data-av-*): без JS и при
+   «уменьшить движение» всё на месте сразу */
+:scope[data-custom-block] {
+  --av-reveal-duration: 0.7s;
+}
+
+.about__text {
+  --av-reveal-distance: 22px;
+}
+
+.about__media[data-av-reveal] {
+  --av-reveal-from: translateY(30px) rotate(3deg);
 }

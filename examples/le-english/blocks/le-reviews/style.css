@@ -1,6 +1,8 @@
 /* Отзывы: тёмная полоса с рваными краями на всю ширину страницы, слева — вступление, справа —
    переписка. Фон полосы — акцент темы, текст — фон темы. */
-:scope {
+/* [data-custom-block] у :scope — чтобы отступы секции были свои, как у оригинала: правило рамки
+   секции Averra (.section) той же специфичности, что :scope, и иначе перебивает их */
+:scope[data-custom-block] {
   /* Своя бумага — свой и текст: тёмная тема не положит светлый текст на розовую бумагу */
   --paper-ink: #1e2b25;
   --paper-green: #213d32;
@@ -70,6 +72,26 @@
     6% calc(100% - 13px),
     0 calc(100% - 4px)
   );
+}
+
+/* Межстрочный интервал по умолчанию — как у оригинала (у его body свой не задан): у Averra он 1.6,
+   и пункты списков без своего line-height вставали бы реже */
+:scope[data-custom-block] {
+  line-height: normal;
+}
+
+/* Заголовки и абзацы переносятся как у оригинала: у Averra по умолчанию у заголовков balance и
+   line-height 1.15, у абзацев pretty, и строки карточек ложились бы иначе. Где оригинал сам задаёт
+   перенос или интервал, правило класса сильнее */
+h1,
+h2,
+h3 {
+  line-height: normal;
+  text-wrap: wrap;
+}
+
+p {
+  text-wrap: wrap;
 }
 
 .reviews {
@@ -254,7 +276,7 @@ picture.review__avatar img {
 }
 
 .review__caption {
-  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--caption);
   align-self: flex-end;
@@ -297,7 +319,7 @@ picture.review__avatar img {
 }
 
 @media (max-width: 819px) {
-  :scope {
+  :scope[data-custom-block] {
     padding: 64px 24px 72px;
   }
   .reviews {
@@ -334,7 +356,7 @@ picture.review__avatar img {
     font-size: clamp(30px, 8vw, 40px);
     line-height: 1.15;
   }
-  :scope {
+  :scope[data-custom-block] {
     padding: 56px 24px 64px;
   }
   .review__avatar {
@@ -349,5 +371,35 @@ picture.review__avatar img {
   }
   .review__text {
     font-size: 15px;
+  }
+}
+
+/* Появление при прокрутке — как у исходного сайта (поведения Averra, data-av-*): без JS и при
+   «уменьшить движение» всё на месте сразу */
+:scope[data-custom-block] {
+  --av-reveal-duration: 0.7s;
+}
+
+.reviews__aside {
+  --av-reveal-distance: 22px;
+}
+
+.reviews__underline {
+  --av-draw-duration: 0.8s;
+  --av-draw-delay: 0.25s;
+}
+
+/* Пузыри приезжают со своей стороны: левые слева, правые справа, и немного снизу */
+.review[data-av-reveal="left"] {
+  --av-reveal-from: translate(-28px, 10px);
+}
+
+.review[data-av-reveal="right"] {
+  --av-reveal-from: translate(28px, 10px);
+}
+
+@media (min-width: 820px) {
+  .review:nth-child(2n + 2) {
+    --av-reveal-delay: 160ms;
   }
 }

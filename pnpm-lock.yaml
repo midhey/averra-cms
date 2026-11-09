@@ -594,6 +594,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
+      happy-dom:
+        specifier: 'catalog:'
+        version: 21.0.3
       node:
         specifier: runtime:^24.21.0
         version: runtime:24.22.2

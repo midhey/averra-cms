@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -8,17 +9,32 @@ import {
   homeBlocks,
   legalOf,
   menuItems,
+  notFoundBlock,
   type Photo,
   photosOf,
+  SIGNUP_HREF,
   seoOf,
   signupFormProps,
   telegramOf,
+  windowTitle,
 } from './content.ts'
-import { footer, headerBase, redirects, theme } from './site-parts.ts'
+import {
+  FOOTER_KEY,
+  footer,
+  footerCustomLabels,
+  HEADER_KEY,
+  headerBase,
+  headerCustomProps,
+  redirects,
+  signupWindow,
+  theme,
+  windowCss,
+} from './site-parts.ts'
 
 // Перенос Vallex English на Averra через API — так же, как это делает владелец в админке, а не в
 // обход неё: все проверки (схемы, контраст темы, ссылки меню) работают те же. Скрипт можно
-// запускать повторно: блоки заменяются, страницы и настройки перезаписываются черновиками.
+// запускать повторно: вид (блоки, тема, шапка и подвал, окно, скрипт сайта) обновляется, а контент
+// страниц и тексты шапки и подвала, которые клиент мог поправить, остаются (кроме --reset-content).
 
 export type ImportOptions = {
   client: Client
@@ -30,6 +46,15 @@ export type ImportOptions = {
   blocksFile: string
   /** Картинка логотипа — в медиатеку про запас (в шапке логотип текстом); нет файла — без неё */
   logoFile?: string
+  /** Зерно бумаги для фона темы (assets/grain.png); нет файла — фон сплошным цветом */
+  grainFile?: string
+  /** Скрипт сайта (site/script.js): улучшения формы записи; нет файла — без скрипта */
+  siteScriptFile?: string
+  /**
+   * Вернуть контент из исходного сайта: страницы, тексты шапки и подвала перезаписываются
+   * (правки клиента в них пропадут). Без флага на установке с прошлым переносом контент остаётся
+   */
+  resetContent?: boolean
   /** Адрес сайта (https://домен): для canonical и карты сайта; не задан — остаётся как есть */
   siteUrl?: string
   /**
@@ -60,6 +85,8 @@ export type ImportResult = {
   /** Предупреждения публикации блоков (конкретные цвета и т. п.) — не ошибки */
   warnings: string[]
   pages: string[]
+  /** Страницы, контент которых остался от прошлого запуска (правки клиента не тронуты) */
+  keptPages: string[]
   legalDrafts: string[]
   /** Документы, чей черновик заменён свежим шаблоном целиком (флаг --rebuild-documents) */
   rebuiltDocuments: string[]
@@ -68,6 +95,8 @@ export type ImportResult = {
   /** Опубликованные документы, которые говорят «нет форм заявок»: правит и публикует человек */
   staleDocuments: string[]
   published: boolean
+  /** Скрипт сайта набора сохранён черновиком; false — файла нет или на установке свой скрипт */
+  siteScriptSaved: boolean
   /** Документы, которые надо опубликовать в админке, прежде чем публиковать сайт с формой */
   missingDocuments: string[]
 }
@@ -167,16 +196,170 @@ const MIME: Record<string, string> = {
   avif: 'image/avif',
 }
 
+/**
+ * Кнопка записи в данных блока (первый экран, отзывы, запись внизу): ссылка на /zapis. Прошлый
+ * перенос клал их без «Открывать в окне» — повторный запуск дописывает флажок, если клиент его не
+ * трогал (поля нет). Снятый клиентом флажок (window: false) остаётся снятым
+ */
+const isSignupButton = (value: unknown): value is { href: string; window?: unknown } => {
+  const href = (value as { href?: unknown } | null)?.href
+  const bare = (path: string) => path.replace(/\/$/, '')
+  return typeof href === 'string' && bare(href) === bare(SIGNUP_HREF)
+}
+
+/**
+ * Черновик главной от прошлого запуска с тем, что нужно новому виду: флажок окна у кнопок записи и
+ * поля соцсетей SEO, если их нет. Тексты, порядок и состав блоков — клиента, не трогаем
+ */
+export function upgradeHome(
+  draft: Json,
+  share: { shareTitle?: string; shareDescription?: string; imageAlt?: string },
+) {
+  const blocks = Array.isArray(draft.blocks) ? (draft.blocks as Json[]) : []
+  const nextBlocks = blocks.map((block) => {
+    const props = (block.props ?? {}) as Json
+    if (typeof block.type !== 'string' || !block.type.startsWith('custom:le-')) return block
+    let changed = false
+    const nextProps: Json = { ...props }
+    for (const [key, value] of Object.entries(props)) {
+      if (isSignupButton(value) && value.window === undefined) {
+        nextProps[key] = { ...value, window: true }
+        changed = true
+      }
+    }
+    return changed ? { ...block, props: nextProps } : block
+  })
+  const seo = { ...((draft.seo ?? {}) as Json) }
+  for (const [key, value] of Object.entries(share)) {
+    if (value && (seo[key] === undefined || seo[key] === '')) seo[key] = value
+  }
+  return { ...draft, blocks: nextBlocks, seo }
+}
+
+/** Первая строка скрипта сайта набора: по ней видно, что скрипт наш, а не интегратора */
+const SITE_SCRIPT_MARK = '// Скрипт сайта Vallex English'
+/**
+ * Последняя строка скрипта сайта, который ставит импорт: контрольная сумма кода над ней. Совпала —
+ * скрипт никто не правил, его можно заменить новой версией набора; не совпала — интегратор дописал
+ * своё, и повторный запуск скрипт не трогает
+ */
+const SITE_SCRIPT_SUM = '// Контрольная сумма набора: '
+const sumOf = (code: string) => createHash('sha256').update(code).digest('hex').slice(0, 16)
+export const stampSiteScript = (code: string) =>
+  `${code.trim()}\n${SITE_SCRIPT_SUM}${sumOf(code.trim())}\n`
+/** Скрипт сайта — набора и без правок: пустой или с меткой набора и верной контрольной суммой */
+export const siteScriptUntouched = (script: string) => {
+  const text = script.trim()
+  if (text === '') return true
+  const cut = text.lastIndexOf('\n')
+  const body = text.slice(0, cut).trim()
+  return (
+    body.startsWith(SITE_SCRIPT_MARK) && text.slice(cut + 1) === `${SITE_SCRIPT_SUM}${sumOf(body)}`
+  )
+}
+
 const SITE_NAME = 'Vallex English'
+/** Описание картинки для соцсетей — как og:image:alt исходного сайта (src/render/main-page.js) */
+const SHARE_IMAGE_ALT =
+  'Валерия, преподаватель Vallex English, и надпись «Английский, который вписывается в твою жизнь»'
 const DOCUMENTS = ['privacy', 'consent'] as const
 /** Служебный адрес своей 404 в Averra (NOT_FOUND_PAGE_SLUG) */
 const NOT_FOUND_SLUG = '404'
-/** Тексты 404 исходного сайта (src/render/not-found.js) — первым экраном по центру */
-const notFoundHero = {
+const blocksOf = (draft: Json) => (Array.isArray(draft.blocks) ? (draft.blocks as Json[]) : [])
+
+/**
+ * Страница уже перенесена этим скриптом (и её контент мог править клиент) — или это чужая страница
+ * новой установки (демо-главная, своя 404 студии), которую перенос заменяет. Признак — блоки
+ * переноса: свои блоки набора на главной, форма записи на /zapis, «Ой!» на 404 (и встроенный первый
+ * экран 404 прошлых версий скрипта, если клиент правил в нём хоть одно поле)
+ */
+const OLD_NOT_FOUND = {
   title: 'Такой страницы нет',
   subtitle: 'Ой! Возможно, ссылка устарела. Всё самое важное — на главной.',
-  button: { label: 'На главную →', href: '/' },
+  label: 'На главную →',
+  href: '/',
 }
+const oldNotFoundEdited = (props: Json | undefined) => {
+  const button = (props?.button ?? {}) as Json
+  return (
+    props?.title !== OLD_NOT_FOUND.title ||
+    props?.subtitle !== OLD_NOT_FOUND.subtitle ||
+    button.label !== OLD_NOT_FOUND.label ||
+    button.href !== OLD_NOT_FOUND.href
+  )
+}
+/**
+ * Главную уже обновлял этот скрипт с окнами записи: у кнопок записи включено «Открывать в окне»
+ * (прошлые версии переноса его не ставили, а без страницы-окна клиент включать его не стал бы).
+ * Тогда страница /zapis без окна — это клиент выключил окно
+ */
+const hasWindowFlags = (draft: Json) => JSON.stringify(blocksOf(draft)).includes('"window":true')
+const ported: Record<string, (draft: Json) => boolean> = {
+  index: (draft) => blocksOf(draft).some((block) => String(block.type).startsWith('custom:le-')),
+  zapis: (draft) => blocksOf(draft).some((block) => block.type === 'form'),
+  '404': (draft) =>
+    blocksOf(draft).some(
+      (block) =>
+        block.type === 'custom:le-message' ||
+        // 404 прошлых версий скрипта: тот же блок, но с правками клиента — остаётся
+        (block.id === 'not-found' &&
+          block.type === 'hero' &&
+          oldNotFoundEdited(block.props as Json | undefined)),
+    ),
+}
+type SettingsNow = {
+  name: string
+  titleTemplate: string
+  language: string
+  description: string
+  ogImage: string | null
+  icon: string | null
+  redirects: { from: string; to: string }[]
+  organization: Json & { socials?: string[] }
+  cookies: Json
+}
+type KitSettings = Pick<
+  SettingsNow,
+  'name' | 'titleTemplate' | 'language' | 'description' | 'ogImage' | 'icon'
+> & {
+  organization: { name: string; email: string; inn: string; socials: string[] }
+}
+
+const filled = (value: unknown) =>
+  value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === '')
+
+/**
+ * Настройки сайта набора поверх того, что уже на установке. Первый перенос — значения набора
+ * (организация дополняется: адрес и телефон, вписанные раньше, остаются). Повторный запуск
+ * (`keepClient`) — правки клиента главнее: набор заполняет только пустые поля, соцсети
+ * объединяются со списком клиента, а не заменяют его. Группа organization в API заменяется
+ * целиком, поэтому собираем её полностью
+ */
+export function settingsPatch(current: SettingsNow, kit: KitSettings, keepClient: boolean) {
+  const pick = <T>(now: T, ours: T) => (keepClient && filled(now) ? now : ours)
+  const org = current.organization
+  const socials = keepClient
+    ? [...new Set([...(org.socials ?? []), ...kit.organization.socials])]
+    : kit.organization.socials
+  return {
+    name: pick(current.name, kit.name),
+    titleTemplate: pick(current.titleTemplate, kit.titleTemplate),
+    language: pick(current.language, kit.language),
+    description: pick(current.description, kit.description),
+    // Нет картинки в исходнике — поле не трогаем, а не обнуляем
+    ...(kit.ogImage && { ogImage: pick(current.ogImage, kit.ogImage) }),
+    ...(kit.icon && { icon: pick(current.icon, kit.icon) }),
+    organization: {
+      type: 'Organization',
+      ...org,
+      name: pick(org.name, kit.organization.name),
+      email: pick(org.email, kit.organization.email),
+      inn: pick(org.inn, kit.organization.inn),
+      socials,
+    },
+  }
+}
+
 // Как SiteUrl в настройках: только https и только адрес сайта, без пути
 const SITE_URL = /^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i
 
@@ -272,75 +455,162 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
   }
 
   // ── Тема ────────────────────────────────────────────────────────────────────────────────────
-  await client.put(`${base}/theme`, theme)
+  // Вид — от набора: перезаписывается при каждом запуске. Зерно бумаги — картинкой из медиатеки
+  const grainId =
+    options.grainFile && existsSync(options.grainFile)
+      ? await uploadFile(options.grainFile)
+      : undefined
+  await client.put(`${base}/theme`, {
+    ...theme,
+    windowCss,
+    ...(grainId && { background: { mediaId: grainId, size: 'tile' } }),
+  })
   log('Тема: черновик сохранён')
 
+  // ── Скрипт сайта: улучшения формы записи ────────────────────────────────────────────────────
+  // Заменяем только пустой скрипт или скрипт набора без правок (метка и контрольная сумма). Свой
+  // скрипт интегратора — и скрипт набора, в который дописали своё, — не затираем: предупреждаем
+  let siteScript: { script: string; origins: string[] } | undefined
+  if (options.siteScriptFile && existsSync(options.siteScriptFile)) {
+    const raw = readFileSync(options.siteScriptFile, 'utf8')
+    const code = stampSiteScript(raw)
+    const present = await client.get<{ draft: { script: string; origins: string[] } }>(
+      `${base}/script`,
+    )
+    // Тот же код без суммы — скрипт набора, вписанный руками из site/script.js: тоже не правка
+    if (siteScriptUntouched(present.draft.script) || present.draft.script.trim() === raw.trim()) {
+      siteScript = { script: code, origins: present.draft.origins }
+      await client.put(`${base}/script`, siteScript)
+      log('Скрипт сайта: черновик сохранён')
+    } else {
+      log(
+        present.draft.script.trim().startsWith(SITE_SCRIPT_MARK)
+          ? 'Скрипт сайта: скрипт набора на установке правили, не трогаю. Новая версия — site/script.js набора: перенесите отличия в «Скрипт сайта» вручную'
+          : 'Скрипт сайта: на установке свой скрипт, не трогаю. Улучшения формы записи — site/script.js набора: перенесите их в «Скрипт сайта» вручную',
+      )
+    }
+  }
+
+  // ── Страницы прошлого переноса ──────────────────────────────────────────────────────────────
+  // Контент — клиента: страница, уже перенесённая этим скриптом (ported), остаётся как есть,
+  // дописывается только то, что нужно новому виду. --reset-content, первая установка и чужая
+  // страница новой установки (демо-главная) — контент из исходного сайта
+  const pagesBefore = await client.get<{ slug: string }[]>(`${base}/pages`)
+  const keptPages: string[] = []
+  const draftOfPage = async (slug: string) => {
+    if (options.resetContent || !pagesBefore.some((page) => page.slug === slug)) return undefined
+    const page = await client.get<PageRecord>(`${base}/pages/${slug}`)
+    const draft = (page.draft ?? page.published) as Json | null
+    return draft && ported[slug]?.(draft) ? { title: page.title, draft } : undefined
+  }
+  // Главная уже перенесена — это повторный запуск: настройки сайта, шапка и подвал — клиента
+  const home = await draftOfPage('index')
+
   // ── Настройки сайта: название, организация, адреса документов ────────────────────────────────
-  const current = await client.get<{
-    settings: { redirects: { from: string; to: string }[]; organization: Json; cookies: Json }
-  }>(`${base}/settings`)
+  const current = await client.get<{ settings: SettingsNow }>(`${base}/settings`)
   const keptRedirects = current.settings.redirects.filter(
     (one) => !redirects.some((redirect) => redirect.from === one.from),
   )
-  // Группы настроек заменяются целиком: дополняем то, что уже есть (адрес и телефон, вписанные
-  // владельцем после первого запуска, вид уведомления о cookies), а не затираем
-  const organization = {
-    type: 'Organization',
-    ...current.settings.organization,
-    name: legal.operator || SITE_NAME,
-    email: legal.email,
-    inn: legal.inn,
-    socials: telegramOf(content) ? [telegramOf(content)] : [],
-  }
-  await client.patch(`${base}/settings`, {
+  const kitSettings: KitSettings = {
     name: SITE_NAME,
     // В заголовке вкладки документов и записи — название сайта, как у оригинала
     titleTemplate: `%s — ${SITE_NAME}`,
     language: 'ru',
     description: seo.description,
-    ...(shareImageId && { ogImage: shareImageId }),
-    ...(iconId && { icon: iconId }),
+    ogImage: shareImageId ?? null,
+    icon: iconId ?? null,
+    organization: {
+      name: legal.operator || SITE_NAME,
+      email: legal.email,
+      inn: legal.inn,
+      socials: telegramOf(content) ? [telegramOf(content) as string] : [],
+    },
+  }
+  await client.patch(`${base}/settings`, {
+    ...settingsPatch(current.settings, kitSettings, home !== undefined),
     ...(options.siteUrl && { url: options.siteUrl }),
-    organization,
     redirects: [...keptRedirects, ...redirects],
   })
-  log('Настройки: название, описание, организация, редиректы со старых адресов документов')
+  log(
+    home
+      ? 'Настройки: правки клиента оставлены, пустые поля дописаны, редиректы со старых адресов документов'
+      : 'Настройки: название, описание, организация, редиректы со старых адресов документов',
+  )
 
   // ── Страницы ────────────────────────────────────────────────────────────────────────────────
-  await client.put(`${base}/pages/index`, {
-    title: 'Vallex English',
-    content: {
-      blocks: homeBlocks(content, mediaOf),
-      seo: {
-        title: seo.title,
-        description: seo.description,
-        ...(shareImageId && { image: { mediaId: shareImageId } }),
+  const share = {
+    ...(seo.shareTitle && { shareTitle: seo.shareTitle }),
+    ...(seo.shareDescription && { shareDescription: seo.shareDescription }),
+    ...(shareImageId && { imageAlt: SHARE_IMAGE_ALT }),
+  }
+  if (home) {
+    await client.put(`${base}/pages/index`, {
+      title: home.title,
+      content: upgradeHome(home.draft, share),
+    })
+    keptPages.push('index')
+    log('Страница index: контент клиента оставлен, кнопкам записи — окно, SEO — поля для соцсетей')
+  } else {
+    await client.put(`${base}/pages/index`, {
+      title: 'Vallex English',
+      content: {
+        blocks: homeBlocks(content, mediaOf),
+        seo: {
+          title: seo.title,
+          description: seo.description,
+          ...share,
+          ...(shareImageId && { image: { mediaId: shareImageId } }),
+        },
       },
-    },
-  })
-  log('Страница index: черновик сохранён')
-  await client.put(`${base}/pages/zapis`, {
-    title: 'Запись на пробный урок',
-    content: {
-      blocks: [{ id: 'zapis-form', type: 'form', props: signupFormProps(content) }],
-      // Как у /zapis/ исходного сайта: страница для ссылок из биографий и сообщений, в шапке —
-      // логотип и «← На главную» вместо меню
-      seo: { noindex: true },
-      shortHeader: true,
-    },
-  })
-  log('Страница zapis: черновик сохранён')
-  // Своя 404, как у оригинала: «Ой! Такой страницы нет» и кнопка на главную, шапка короткая. Без
-  // неё на чужом адресе была бы стандартная «Страница не найдена» с полной шапкой
-  await client.put(`${base}/pages/${NOT_FOUND_SLUG}`, {
-    title: 'Страница не найдена',
-    content: {
-      blocks: [{ id: 'not-found', type: 'hero', props: notFoundHero }],
-      seo: { noindex: true },
-      shortHeader: true,
-    },
-  })
-  log('Страница 404: черновик сохранён')
+    })
+    log('Страница index: черновик сохранён')
+  }
+  // Запись: страница-окно. Как у /zapis/ исходного сайта — страница для ссылок из биографий и
+  // сообщений и для перехода без JS: в шапке логотип и «← На главную». Подвал остаётся (у
+  // оригинала его здесь нет): без подвала Averra всё равно выводит служебную полосу со ссылкой на
+  // политику — она обязательна на каждой странице, а свой подвал в стиле сайта смотрится роднее
+  const zapis = await draftOfPage('zapis')
+  const zapisLook = { shortHeader: true, window: { ...signupWindow, title: windowTitle(content) } }
+  if (zapis) {
+    const draft = zapis.draft as Json & { window?: unknown }
+    // Своё окно клиента (ширина, заголовок) остаётся. Нет окна: на установке прошлой версии
+    // переноса — ставим окно набора, а если главную уже обновляла эта версия, окно выключил клиент
+    const zapisWindow =
+      draft.window ?? (home && hasWindowFlags(home.draft) ? undefined : zapisLook.window)
+    await client.put(`${base}/pages/zapis`, {
+      title: zapis.title,
+      content: { ...draft, ...(zapisWindow !== undefined && { window: zapisWindow }) },
+    })
+    keptPages.push('zapis')
+    log('Страница zapis: форма клиента оставлена, страница — окно записи')
+  } else {
+    await client.put(`${base}/pages/zapis`, {
+      title: 'Запись на пробный урок',
+      content: {
+        blocks: [{ id: 'zapis-form', type: 'form', props: signupFormProps(content) }],
+        seo: { noindex: true },
+        ...zapisLook,
+      },
+    })
+    log('Страница zapis: черновик сохранён — окно записи')
+  }
+  // Своя 404, как у оригинала: «Ой! Такой страницы нет» и кнопка на главную, в шапке только
+  // логотип. Без неё на чужом адресе была бы стандартная «Страница не найдена»
+  const notFound = await draftOfPage(NOT_FOUND_SLUG)
+  if (notFound) {
+    keptPages.push(NOT_FOUND_SLUG)
+    log('Страница 404: контент клиента оставлен')
+  } else {
+    await client.put(`${base}/pages/${NOT_FOUND_SLUG}`, {
+      title: 'Страница не найдена',
+      content: {
+        blocks: [notFoundBlock],
+        seo: { noindex: true },
+        shortHeader: true,
+      },
+    })
+    log('Страница 404: черновик сохранён')
+  }
 
   // ── Политика и согласие: черновики из шаблона Averra ────────────────────────────────────────
   // Только после страниц: шаблон собирается по фактам сайта в момент создания (есть ли форма,
@@ -465,16 +735,99 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
 
   // ── Шапка и подвал ──────────────────────────────────────────────────────────────────────────
   // Логотип в шапке — текстом (headerBrand). Картинка логотипа — только в медиатеку, про запас: в
-  // виде «Текст» шапка картинку не хранит, а Лера может переключить на «Картинку» и выбрать её
+  // виде «Текст» шапка картинку не хранит, а Лера может переключить на «Картинку» и выбрать её.
+  // Вид (свой вид le-header, настройки запасной стандартной шапки) — от набора. Тексты (логотип,
+  // меню, кнопка, подписи своего вида) после первого переноса — клиента: повторный запуск их не
+  // трогает, только дописывает кнопке записи «Открывать в окне», если флажка ещё нет
   if (options.logoFile && existsSync(options.logoFile)) await uploadFile(options.logoFile)
-  await client.put(`${base}/header`, {
+  type Chrome = Json & { custom?: { key?: string; props?: Json } | null }
+  const chromeDraft = async (path: string) => {
+    const state = await client.get<{ draft: Chrome | null; published: Chrome | null }>(
+      `${base}/${path}`,
+    )
+    return state.draft ?? state.published
+  }
+  const brand = headerBrand(content)
+  const headerNow = options.resetContent ? null : await chromeDraft('header')
+  // Шапку и подвал уже ставил этот скрипт — их тексты клиента. Признак не тексты (их клиент мог
+  // поправить), а установка и вид: главная уже перенесена (home), свой вид набора или вид прошлых
+  // версий переноса (у шапки — кнопка-«таблетка» с фоном у пунктов, у подвала — одна строка фоном
+  // страницы рукописной подписью). Иначе это шапка и подвал новой установки — ставим свои
+  const look = (headerNow?.look ?? {}) as Json
+  const headerOurs =
+    headerNow !== null &&
+    (home !== undefined ||
+      headerNow.custom?.key === HEADER_KEY ||
+      (look.buttonShape === headerBase.look.buttonShape &&
+        look.linkHover === headerBase.look.linkHover) ||
+      (headerNow.brand === 'text' && headerNow.logoMark === brand.logoMark))
+  const fresh = {
     ...headerBase,
-    ...headerBrand(content),
+    ...brand,
     logo: null,
     menu: menuItems(content),
-  })
-  await client.put(`${base}/footer`, { ...footer, text: footerSign(content) })
-  log('Шапка и подвал: черновики сохранены')
+    custom: { key: HEADER_KEY, props: headerCustomProps },
+  }
+  if (headerNow && headerOurs) {
+    const button = headerNow.button as Json | null | undefined
+    await client.put(`${base}/header`, {
+      ...fresh,
+      brand: headerNow.brand,
+      logoMark: headerNow.logoMark,
+      logoText: headerNow.logoText,
+      logo: headerNow.logo ?? null,
+      menu: headerNow.menu,
+      button:
+        button && button.page === 'zapis' && button.window === undefined
+          ? { ...button, window: true }
+          : button,
+      custom: {
+        key: HEADER_KEY,
+        props:
+          headerNow.custom?.key === HEADER_KEY
+            ? { ...headerCustomProps, ...headerNow.custom.props }
+            : headerCustomProps,
+      },
+    })
+  } else {
+    await client.put(`${base}/header`, fresh)
+  }
+  const sign = footerSign(content)
+  const footerNow = options.resetContent ? null : await chromeDraft('footer')
+  const footerOurs =
+    footerNow !== null &&
+    (home !== undefined ||
+      footerNow.custom?.key === FOOTER_KEY ||
+      (footerNow.layout === footer.layout &&
+        footerNow.tone === footer.tone &&
+        footerNow.textFont === footer.textFont) ||
+      footerNow.text === sign)
+  const footerProps = (text: string) => ({ sign: text, ...footerCustomLabels })
+  if (footerNow && footerOurs) {
+    const text = typeof footerNow.text === 'string' ? footerNow.text : sign
+    await client.put(`${base}/footer`, {
+      ...footer,
+      text,
+      custom: {
+        key: FOOTER_KEY,
+        props:
+          footerNow.custom?.key === FOOTER_KEY
+            ? { ...footerProps(text), ...footerNow.custom.props }
+            : footerProps(text),
+      },
+    })
+  } else {
+    await client.put(`${base}/footer`, {
+      ...footer,
+      text: sign,
+      custom: { key: FOOTER_KEY, props: footerProps(sign) },
+    })
+  }
+  log(
+    headerOurs || footerOurs
+      ? 'Шапка и подвал: вид обновлён, тексты клиента оставлены'
+      : 'Шапка и подвал: черновики сохранены',
+  )
 
   // ── Публикация ──────────────────────────────────────────────────────────────────────────────
   const listed = await client.get<{ slug: string; publishedAt: string | null }[]>(`${base}/pages`)
@@ -498,7 +851,8 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     await client.post(`${base}/theme/publish`)
     await client.post(`${base}/header/publish`)
     await client.post(`${base}/footer/publish`)
-    log('Опубликованы: страницы, тема, шапка, подвал')
+    if (siteScript) await client.post(`${base}/script/publish`, { draft: siteScript })
+    log(`Опубликованы: страницы, тема, шапка, подвал${siteScript ? ', скрипт сайта' : ''}`)
   }
 
   return {
@@ -506,11 +860,13 @@ export async function importSite(options: ImportOptions): Promise<ImportResult> 
     blocks: file.blocks.map((block) => block.key),
     warnings,
     pages: ['index', 'zapis', NOT_FOUND_SLUG],
+    keptPages,
     legalDrafts,
     rebuiltDocuments,
     repairedDocuments,
     staleDocuments,
     published: publish,
+    siteScriptSaved: siteScript !== undefined,
     missingDocuments,
   }
 }
