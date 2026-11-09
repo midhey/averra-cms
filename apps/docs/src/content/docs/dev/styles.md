@@ -146,7 +146,13 @@ sidebar:
 | `colors.border` | рамки карточек «Преимуществ» и окон cookie (декор, без проверки контраста) | `--color-border` |
 | `fonts.heading`, `fonts.body` | id из `themeFontIds` | `--font-heading`, `--font-body`, `--font-heading-weight` |
 | `fonts.accent` (необязательно) | id из `themeFontIds` | `--font-accent`; не задан — `var(--font-heading)`. Для рукописных подписей и пометок в своих блоках; грузятся начертания 400 и жирное |
+| `fonts.mono` (необязательно) | id из `themeFontIds` | `--font-mono`; не задан — моноширинный шрифт устройства (`ui-monospace, …`). Номера шагов, надзаголовки и код в своих блоках |
 | `radius` | `none`, `small`, `medium`, `large` (0, 4, 8, 16 px) | `--radius` |
+| `focus` (необязательно) | `#RRGGBB` — кольцо фокуса с клавиатуры (`:focus-visible` в `base.css`) | `--color-focus`; не задан — `colors.accent` |
+| `browserColor` (необязательно) | роль темы `background`, `surface`, `text`, `accent` — строка браузера на телефоне | — (`<meta name="theme-color">`); не задан — фон |
+| `background` (необязательно) | `{ mediaId, size: tile \| cover }` — фон-картинка страницы из медиатеки: узор или на всю страницу | — (правило `body` в `<style>` темы, `themeBackgroundCss`); цвет фона остаётся под картинкой |
+| `windowCss` (необязательно) | свой CSS окон сайта, до 50 000 знаков; проверяется движком CSS своих блоков с областью `dialog[data-site-window][data-site-window]` (специфичность выше вида окна по умолчанию), «>» — дети `[data-site-window-content]`, то есть секции блоков; имена `@keyframes` — `site_window--…` | — (только на страницах с окном, `windowCssForPage`) |
+| — (из `text`) | затемнение фона под окном сайта: `text` с прозрачностью 60 % | `--color-backdrop` |
 | — (из `text` и `background`) | затемнение фото «Первого экрана» на фото: `coverScrim(colors)` | `--cover-scrim` |
 | — (из `accent` и `onAccent`) | фон кнопки под курсором: `hoverColor(accent, onAccent)` и для «обратной» кнопки цвета `onAccent` | `--color-accent-hover`, `--color-on-accent-hover` |
 | — (из `background`, `surface`, `text`) | подложка пункта меню шапки под курсором: `hoverBackground(colors)` — «Поверхность», если она отличается от фона ≥ 1,15:1, иначе `hoverColor(background, text)` | `--color-background-hover` |

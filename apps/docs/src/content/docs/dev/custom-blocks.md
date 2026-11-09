@@ -321,7 +321,9 @@ Liquid» выше).
 
 Переменные темы — те же, что у встроенных блоков: `--color-*`, `--font-heading`, `--font-body`,
 `--space-*`, `--text-*`, `--radius`, `--container`. Для своих блоков есть ещё `--font-accent` —
-акцентный шрифт темы (рукописные подписи, пометки); не выбран в теме — тот же, что у заголовков.
+акцентный шрифт темы (рукописные подписи, пометки); не выбран в теме — тот же, что у заголовков, и
+`--font-mono` — моноширинный шрифт темы (номера шагов, надзаголовки, код); не выбран — моноширинный
+шрифт устройства.
 
 ## Рендер
 
@@ -340,6 +342,60 @@ Liquid» выше).
   Блок, в шаблоне которого есть литеральный `<h1`, считается главным заголовком: проверка SEO не
   ругается «нет h1», а «Первый экран» после него получает h2. Два h1 на странице — совет «несколько
   h1». `<h1` внутри `{% if %}` считается присутствующим.
+
+## Готовые поведения
+
+Эффекты, ради которых обычно пишут скрипт, — атрибуты в шаблоне
+([решение](/averra-cms/decisions/windows-behaviors/)). Их включает один модуль Averra —
+`packages/blocks/src/behaviors/behaviors-dom.ts` (`@averra/blocks/site-behaviors`, компонент
+рендерера `SiteBehaviors.astro`); сборка подключает его, только если на странице есть окно или
+поведение (`windowsAndBehaviors` в `packages/blocks/src/window/needed.ts`: шаблон своего блока или
+места с `data-av-`, «Появление при прокрутке» и плавный FAQ встроенных блоков).
+
+| Атрибут | Поведение | Настройка CSS-переменными |
+|---|---|---|
+| `data-av-reveal` = `up` (пусто), `fade`, `left`, `right`, `zoom` | появление, когда элемент показался (IntersectionObserver) | `--av-reveal-duration`, `--av-reveal-distance`, `--av-reveal-delay`, `--av-reveal-order` (лесенка по 80 мс) |
+| `data-av-details` на `<details>` | раскрытие и сворачивание анимацией высоты (Web Animations, 280 мс) | — |
+| `data-av-hint` = `flip`, `wiggle` | один раз, когда видно на 60 %: поворот по Y или покачивание | — |
+| `data-av-draw` | подчёркивание `background-size` от 0 до 100 % | `--av-draw-color`, `--av-draw-thickness`, `--av-draw-duration`, `--av-draw-delay` |
+| `data-av-draw="svg"` | линии `path`, `line`, `polyline`… по `stroke-dashoffset` (скрипт ставит `pathLength="1"`) | те же |
+| `data-av-window` на `<a href>` | открыть страницу-окно поверх (см. ниже) | — |
+
+Правило «без JS видно всё»: стили в `base.css` прячут элемент только по метке скрипта
+`data-av-pending`, а скрипт ставит её лишь тому, что ниже экрана при загрузке, и не ставит ничего
+при `prefers-reduced-motion: reduce` или без IntersectionObserver (iOS до 12.2). Подчёркивание
+`data-av-draw` видно и без JS — скрипт его только рисует. Появление — анимация `@keyframes` по
+метке `data-av-shown`, а не `transition`: свой `transition` или `transform` элемента (наведение у
+карточки) её не отменяет, а после неё у элемента снова его собственные. `data-av-reveal` и
+`data-av-hint` у одного элемента совмещаются: подсказка меняет отдельное свойство `rotate`, а не
+`transform`, поэтому появление не обрывается и свой наклон карточки остаётся (в iOS до 14.5
+подсказки просто нет). Метки скрипта
+(`data-av-pending`, `data-av-shown`, `data-av-armed`, `data-av-hinted`, `data-av-busy`) и разметка окна (`data-site-window…`,
+`data-sent`, `data-form-…`, `data-field-error`, `data-window-open`) заняты сайтом (`RESERVED_DATA` в `marker.ts`); сами
+поведения — нет (`BEHAVIOR_ATTRIBUTES`), тест сверяет оба списка с исходниками.
+
+**Окна.** Страница с `content.window` (`PageWindow`: `title`, `width`, `surface`,
+`closeOnBackdrop`) — окно. Сборка кладёт в страницу `<dialog data-site-window="<адрес>">`
+(`SiteWindows`) для окон, на которые ведут кнопки блоков с `window: true` (`windowSlugsOfBlocks`),
+ссылки шапки и подвала с `window` и окна из окон; если на странице шаблон с `data-av-window` — все
+окна сайта (адрес такой ссылки известен только после рендера). Свои шапка и подвал смотрятся по
+готовому HTML (`placeHtml`): атрибут из заготовки без флажка не выводится и окон не добавляет.
+Главная и 404 окном не бывают (API отвечает 400 на `content.window` у них). Блоки окна — `Page
+nested` (без `main`, без обёртки и без h1: секции — прямые дети `[data-site-window-content]`), id с префиксом `w-<адрес>-`, форма шлёт заявку на адрес приёма страницы-окна с
+исходным id блока. Скрипт: клик по `a[data-av-window]` (без модификаторов, не `_blank`, свой
+источник, окно есть) → `showModal()`, в iOS до 15.4 — `open`, `role="dialog"`, своя ловушка
+фокуса с затемнением `[data-site-window-shade]`, а остальная страница на время окна —
+`aria-hidden` и `inert`; фокус — на первое поле (на узком экране — на заголовок окна `[data-site-window-title]`
+или «Закрыть»: клавиатура не поднимается сразу), возврат — на ссылку; Esc (`cancel`), «Закрыть»
+и клик по фону (`data-site-window-backdrop`) закрывают; `html[data-window-open]` запрещает
+прокрутку (значение `gutter` — была полоса прокрутки: `scrollbar-gutter: stable` держит её место,
+и страница не сдвигается). Отправка формы в окне — `fetch` с `Accept: application/json` на тот же адрес: успех —
+`data-sent` у `[data-form-box]`, общая ошибка API — в `[data-form-error]` (`role="alert"`, над
+кнопкой), ошибка поля — текстом у поля (`[data-field-error]`, связан через `aria-describedby`), поле
+получает `aria-invalid` и фокус; цель Метрики `reachGoal('lead')`, GA4 `generate_lead` и событие
+`averra:lead` на `document`. В своих шапке и подвале у `site.menu[]` и `site.button` есть `window`:
+шаблон выводит `{% if item.window %} data-av-window{% endif %}` сам (так делают заготовки шапки и
+подвала), иначе флажок «Открывать в окне» ничего не меняет.
 
 ## Скрипт блока и скрипт сайта
 

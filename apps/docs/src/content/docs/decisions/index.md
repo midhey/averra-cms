@@ -32,6 +32,7 @@ sidebar:
 - [Подвал сайта](/averra-cms/decisions/site-footer/)
 - [Свои блоки: Liquid в базе, без JavaScript](/averra-cms/decisions/custom-blocks/)
 - [Свой JS на сайте: файлами, под CSP, предпросмотр в изоляции](/averra-cms/decisions/custom-js/)
+- [Окна и поведения: окно — страница, эффекты — атрибутами](/averra-cms/decisions/windows-behaviors/)
 
 ## Стек
 
