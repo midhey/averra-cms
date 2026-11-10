@@ -42,9 +42,11 @@
     border-color: var(--color-text-muted);
   }
 
-  // Кольцо фокуса — от foundation; рамка не спорит с ним
+  // Кольцо фокуса — от foundation, но у поля оно ложится прямо на рамку: с зазором рамка и
+  // кольцо читались двойной обводкой. Толщина кольца та же, фокус виден не хуже
   &:focus-visible {
     border-color: var(--color-focus-ring);
+    outline-offset: ui.rem(-1);
   }
 
   &[aria-invalid="true"] {
