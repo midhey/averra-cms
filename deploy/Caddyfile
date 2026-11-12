@@ -1,8 +1,9 @@
 # Caddy установки Averra. Значения — из окружения контейнера (deploy/.env через
-# compose.yaml): SITE_DOMAIN, ADMIN_DOMAIN, ACME_EMAIL.
+# compose.yaml): SITE_DOMAIN, ADMIN_DOMAIN, REDIRECT_DOMAINS, ACME_EMAIL.
 #
 # Сертификаты Let's Encrypt Caddy выпускает и продлевает сам (тома caddy_data и caddy_config).
-# Для этого DNS обоих доменов должен указывать на сервер, а порты 80 и 443 — быть открыты.
+# Для этого DNS всех доменов (сайта, админки и дополнительных) должен указывать на сервер, а
+# порты 80 и 443 — быть открыты.
 
 {
 	email {$ACME_EMAIL}
@@ -111,4 +112,15 @@
 			rewrite /api/site/fallback{http.request.uri.path}
 		}
 	}
+}
+
+# ── Дополнительные домены: постоянный редирект на сайт ───────────────────────────────────────
+# www.<домен сайта> и старые адреса клиента (install.sh --redirect-domain, REDIRECT_DOMAINS через
+# пробел). Адресов в блоке несколько — Caddy выпустит сертификат на каждый. Редирект 301 сохраняет
+# путь и строку запроса ({uri}), поэтому старые ссылки и метки utm_* не теряются. Список пуст —
+# compose.yaml подставляет адрес-заглушку redirect-none.invalid по HTTP: сертификата для неё нет,
+# и никто её не запрашивает
+{$REDIRECT_DOMAINS:http://redirect-none.invalid} {
+	import security
+	redir https://{$SITE_DOMAIN}{uri} permanent
 }

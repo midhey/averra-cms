@@ -93,6 +93,9 @@ services:
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      # Дополнительные домены (install.sh --redirect-domain) через пробел: Caddy ведёт их на сайт
+      # постоянным редиректом. Пусто — адрес-заглушка: блок Caddyfile без адреса не принимается
+      REDIRECT_DOMAINS: ${REDIRECT_DOMAINS:-http://redirect-none.invalid}
       ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}
     # Caddy в образе не от root (USER caddy). Ему нужно только занять порты 80 и 443: порты ниже
     # 1024 открыты непривилегированным внутри контейнера, а capability оставлена для бинарника с

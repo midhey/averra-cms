@@ -116,6 +116,7 @@ sidebar:
 | `AVERRA_VERSION`, `AVERRA_PREVIOUS_VERSION` | версия образов и прежняя (после обновления) |
 | `AVERRA_API_IMAGE`, `AVERRA_WEB_IMAGE` | образы без тега, по умолчанию `ghcr.io/midhey/averra-api` и `averra-web` |
 | `SITE_DOMAIN`, `ADMIN_DOMAIN`, `ACME_EMAIL` | домены и почта для Let's Encrypt |
+| `REDIRECT_DOMAINS` | дополнительные домены через пробел (`install.sh --redirect-domain`): Caddy ведёт их на сайт редиректом 301. Пусто — нет |
 | `OWNER_EMAIL` | владелец, которого создал установщик |
 | `SITE_NAME` | название сайта для первого запуска API (`--site-name`, по умолчанию домен сайта). Потом название живёт в базе. `SITE_ID` прежних версий не ведётся и не нужен, но остаётся в `.env`: его читает прежний Caddyfile при откате обновления |
 | `POSTGRES_PASSWORD`, `AUTH_SECRET`, `MAIL_ENCRYPTION_KEY`, `BACKUP_PASSPHRASE` | секреты; при повторном запуске не меняются. У внешней базы `POSTGRES_PASSWORD` нет |

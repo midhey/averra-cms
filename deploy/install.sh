@@ -32,6 +32,11 @@ usage() {
 
 Необязательные:
   --admin-domain <домен>  поддомен админки, по умолчанию admin.<домен сайта>
+  --redirect-domain <домен>
+                          дополнительный домен, который постоянно (301) ведёт на сайт с тем же
+                          путём и параметрами: www.<домен сайта>, старые адреса. Флаг можно
+                          повторить. Повторный запуск с флагом заменяет весь список
+  --no-redirect-domains   убрать все дополнительные домены (список в .env станет пустым)
   --owner-name <имя>      имя владельца в админке, по умолчанию «Владелец»
   --site-name <название>  название сайта при первом запуске, по умолчанию домен сайта
   --dir <папка>           папка установки, по умолчанию /opt/averra
@@ -75,6 +80,8 @@ fail() {
 
 SITE_DOMAIN_ARG=''
 ADMIN_DOMAIN_ARG=''
+REDIRECT_ARGS=''
+NO_REDIRECTS=0
 EMAIL_ARG=''
 VERSION_ARG=''
 OWNER_NAME='Владелец'
@@ -101,6 +108,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --site-domain) need_value "$@"; SITE_DOMAIN_ARG="$2"; shift 2 ;;
     --admin-domain) need_value "$@"; ADMIN_DOMAIN_ARG="$2"; shift 2 ;;
+    --redirect-domain) need_value "$@"; REDIRECT_ARGS+="$2"$'\n'; shift 2 ;;
+    --no-redirect-domains) NO_REDIRECTS=1; shift ;;
     --email) need_value "$@"; EMAIL_ARG="$2"; shift 2 ;;
     --version) need_value "$@"; VERSION_ARG="$2"; shift 2 ;;
     --owner-name) need_value "$@"; OWNER_NAME="$2"; shift 2 ;;
@@ -141,8 +150,8 @@ env_get() {
 
 # Ключи, которые ведёт установщик. Остальные строки .env (свои добавки) переносятся как есть
 MANAGED_KEYS=(
-  AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN ACME_EMAIL
-  SITE_NAME OWNER_EMAIL POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
+  AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN REDIRECT_DOMAINS
+  ACME_EMAIL SITE_NAME OWNER_EMAIL POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
 )
 # Внешняя база (--external-db): режим, адрес и образ клиента PostgreSQL вместо пароля своей базы.
 # У своей базы этих ключей нет: .env прежних установок не меняется
@@ -196,6 +205,35 @@ for pair in "SITE_DOMAIN:$SITE_DOMAIN" "ADMIN_DOMAIN:$ADMIN_DOMAIN"; do
     fail "$name «$value» — не домен. Нужен вид example.ru, латиницей или в punycode (xn--…), строчными"
 done
 [[ "$SITE_DOMAIN" != "$ADMIN_DOMAIN" ]] || fail 'домен сайта и админки должны различаться'
+
+# Дополнительные домены (www, старые адреса): Caddy выпускает на них сертификаты и отвечает
+# постоянным редиректом на сайт. Флаги заменяют список целиком, --no-redirect-domains очищает его,
+# без них список берётся из .env (там он через пробел). Имена попадают в Caddyfile и .env, поэтому
+# проверяются так же строго, как домены сайта и админки
+[[ -z "$REDIRECT_ARGS" || $NO_REDIRECTS -eq 0 ]] ||
+  fail '--redirect-domain и --no-redirect-domains вместе — непонятно, что оставить'
+if [[ -n "$REDIRECT_ARGS" ]]; then
+  REDIRECT_SOURCE="$(tr '\n' ' ' <<<"$REDIRECT_ARGS")"
+elif [[ $NO_REDIRECTS -eq 1 ]]; then
+  REDIRECT_SOURCE=''
+else
+  REDIRECT_SOURCE="$(env_get REDIRECT_DOMAINS)"
+fi
+REDIRECT_DOMAINS=''
+REDIRECT_MAX=10
+REDIRECT_COUNT=0
+for domain in $REDIRECT_SOURCE; do
+  [[ "$domain" =~ $DOMAIN_RE ]] ||
+    fail "дополнительный домен «$domain» — не домен. Нужен вид www.example.ru: без http://, пути, порта и пробелов, латиницей или в punycode (xn--…), строчными"
+  [[ "$domain" != "$SITE_DOMAIN" && "$domain" != "$ADMIN_DOMAIN" ]] ||
+    fail "дополнительный домен $domain совпадает с доменом сайта или админки: редирект на самого себя зациклился бы"
+  # Повтор молча сворачивается: тот же домен дважды Caddy не принял бы
+  [[ " $REDIRECT_DOMAINS " != *" $domain "* ]] || continue
+  REDIRECT_DOMAINS="${REDIRECT_DOMAINS:+$REDIRECT_DOMAINS }$domain"
+  REDIRECT_COUNT=$((REDIRECT_COUNT + 1))
+done
+[[ $REDIRECT_COUNT -le $REDIRECT_MAX ]] ||
+  fail "дополнительных доменов $REDIRECT_COUNT, а можно до $REDIRECT_MAX: у Let's Encrypt есть лимит выпуска сертификатов"
 [[ "$ACME_EMAIL" =~ ^[^[:space:]@\"\']+@[^[:space:]@\"\']+\.[^[:space:]@\"\']+$ ]] ||
   fail "почта «$ACME_EMAIL» — не адрес почты"
 [[ "$AVERRA_VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] ||
@@ -548,7 +586,7 @@ check_dns() {
     problem 'не удалось узнать адрес сервера: задайте --public-ip'
     return 1
   fi
-  for domain in "$SITE_DOMAIN" "$ADMIN_DOMAIN"; do
+  for domain in "$SITE_DOMAIN" "$ADMIN_DOMAIN" $REDIRECT_DOMAINS; do
     resolved="$(dns_addresses "$domain")"
     if [[ -z "$resolved" ]]; then
       problem "домен $domain не находится в DNS. Добавьте A-запись на адрес сервера и подождите, пока она разойдётся (или --skip-dns-check)" || true
@@ -666,6 +704,11 @@ if [[ $DRY_RUN -eq 1 ]]; then
   say "Папка установки:   $INSTALL_DIR"
   say "Сайт:              https://$SITE_DOMAIN"
   say "Админка:           https://$ADMIN_DOMAIN"
+  if [[ -n "$REDIRECT_DOMAINS" ]]; then
+    say "Редиректы:         ${REDIRECT_DOMAINS// /, } → https://$SITE_DOMAIN (301, с путём и параметрами)"
+  else
+    say 'Редиректы:         нет'
+  fi
   say "Почта:             $ACME_EMAIL"
   say "Образы:            $AVERRA_API_IMAGE:$AVERRA_VERSION, $AVERRA_WEB_IMAGE:$AVERRA_VERSION"
   if [[ ${#NEW_SECRETS[@]} -gt 0 ]]; then
@@ -913,6 +956,7 @@ compose up -d
 step 'Готово'
 say "Админка: https://$ADMIN_DOMAIN (вход: $OWNER_EMAIL)"
 say "Сайт:    https://$SITE_DOMAIN — появится после первой публикации в админке"
+[[ -z "$REDIRECT_DOMAINS" ]] || say "Редиректы: ${REDIRECT_DOMAINS// /, } → https://$SITE_DOMAIN"
 say 'Дальше: задайте SMTP на странице «Почта» в админке и проверьте подключение.'
 say "Сохраните BACKUP_PASSPHRASE из $ENV_FILE в менеджер паролей студии: без него копии бэкапов"
 say 'во внешнем хранилище не расшифровать, если сервер пропадёт вместе с .env.'

@@ -677,6 +677,214 @@ describe('полная установка (подделки docker и сети)'
   })
 })
 
+describe('дополнительные домены-редиректы (--redirect-domain)', () => {
+  const dnsWww = { ...dnsOk, 'www.example.ru': '203.0.113.5', 'old.example.net': '203.0.113.5' }
+  const redirects = ['--redirect-domain', 'www.example.ru', '--redirect-domain', 'old.example.net']
+
+  it('повторяемый флаг: список в .env через пробел, план в сухом прогоне', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...required, ...redirects, '--dir', posix(dir), '--env-only'])
+    expect(run.status, run.output).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru old.example.net')
+
+    const dry = install([...required, ...redirects, '--dir', posix(dir), '--dry-run'], {
+      fakes: { dns: dnsWww },
+    })
+    expect(dry.status, dry.output).toBe(0)
+    expect(dry.stdout).toContain(
+      'Редиректы:         www.example.ru, old.example.net → https://example.ru',
+    )
+    // Без флагов список пуст: ключ в .env есть, значения нет
+    const plain = join(tempDir(), 'plain')
+    expect(install([...required, '--dir', posix(plain), '--env-only']).status).toBe(0)
+    expect(readEnv(plain).REDIRECT_DOMAINS).toBe('')
+    const planPlain = install([...required, '--dir', posix(plain), '--dry-run', '--skip-dns-check'])
+    expect(planPlain.stdout).toContain('Редиректы:         нет')
+  })
+
+  it('имя со схемой, путём, портом, пробелом, заглавными, как сайт или админка — отказ', () => {
+    const dir = posix(join(tempDir(), 'inst'))
+    const cases: [string[], string][] = [
+      [
+        ['--redirect-domain', 'https://www.example.ru'],
+        'дополнительный домен «https://www.example.ru» — не домен',
+      ],
+      [['--redirect-domain', 'www.example.ru/path'], 'не домен'],
+      [['--redirect-domain', 'www.example.ru:8443'], 'не домен'],
+      [['--redirect-domain', 'www.example.ru {'], 'не домен'],
+      [['--redirect-domain', 'WWW.example.ru'], 'не домен'],
+      [['--redirect-domain', '*.example.ru'], 'не домен'],
+      [['--redirect-domain', 'localhost'], 'не домен'],
+      [['--redirect-domain', 'example.ru'], 'совпадает с доменом сайта или админки'],
+      [['--redirect-domain', 'admin.example.ru'], 'совпадает с доменом сайта или админки'],
+      [['--redirect-domain', 'www.example.ru', '--no-redirect-domains'], 'непонятно, что оставить'],
+      [['--redirect-domain'], 'у флага --redirect-domain нет значения'],
+    ]
+    for (const [override, message] of cases) {
+      const run = install([...required, ...override, '--dir', dir, '--dry-run'])
+      expect(run.status, override.join(' ')).toBe(1)
+      expect(run.stderr, override.join(' ')).toContain(message)
+    }
+    expect(existsSync(dir)).toBe(false)
+  })
+
+  it('повтор имени сворачивается, больше десяти доменов — отказ', () => {
+    const dir = join(tempDir(), 'inst')
+    const twice = install([
+      ...required,
+      '--redirect-domain',
+      'www.example.ru',
+      '--redirect-domain',
+      'www.example.ru',
+      '--dir',
+      posix(dir),
+      '--env-only',
+    ])
+    expect(twice.status, twice.output).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru')
+
+    const many = Array.from({ length: 11 }, (_, i) => ['--redirect-domain', `old${i}.example.net`])
+    const run = install([...required, ...many.flat(), '--dir', posix(dir), '--env-only'])
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('дополнительных доменов 11, а можно до 10')
+  })
+
+  it('DNS дополнительных доменов проверяется как основных; --skip-dns-check и --public-ip действуют', () => {
+    const dir = posix(join(tempDir(), 'inst'))
+    const badWww = { ...dnsOk, 'www.example.ru': '198.51.100.7' }
+    const wrong = install([...required, ...redirects, '--dir', dir, '--dry-run'], {
+      fakes: { dns: badWww },
+    })
+    expect(wrong.status).toBe(1)
+    expect(wrong.stdout).toContain('не пройдёт: домен www.example.ru указывает на 198.51.100.7')
+    expect(wrong.stdout).toContain('не пройдёт: домен old.example.net не находится в DNS')
+    expect(wrong.stdout).toContain('Проблем: 2')
+
+    // Настоящая установка останавливается до записи и запуска
+    const real = install([...required, ...redirects, '--dir', dir, '--yes'], {
+      fakes: { dns: badWww },
+    })
+    expect(real.status).toBe(1)
+    expect(real.stderr).toContain('домен www.example.ru указывает на 198.51.100.7')
+    expect(real.calls()).not.toContain('compose pull')
+
+    const skipped = install(
+      [...required, ...redirects, '--dir', dir, '--dry-run', '--skip-dns-check'],
+      { fakes: { dns: dnsOk } },
+    )
+    expect(skipped.status, skipped.output).toBe(0)
+    const natDns = Object.fromEntries(Object.keys(dnsWww).map((name) => [name, '198.51.100.7']))
+    const nat = install(
+      [...required, ...redirects, '--dir', dir, '--dry-run', '--public-ip', '198.51.100.7'],
+      { fakes: { dns: natDns } },
+    )
+    expect(nat.status, nat.output).toBe(0)
+  })
+
+  it('повторный запуск: без флагов список остаётся, с флагами заменяется, --no-redirect-domains очищает', () => {
+    const dir = join(tempDir(), 'inst')
+    const args = ['--dir', posix(dir), '--env-only', '--yes']
+    expect(install([...required, ...redirects, ...args]).status).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru old.example.net')
+
+    expect(install(args).status).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru old.example.net')
+
+    // Один домен убран, другой добавлен: прежний список заменён целиком
+    const changed = install([
+      ...args,
+      '--redirect-domain',
+      'www.example.ru',
+      '--redirect-domain',
+      'new.example.org',
+    ])
+    expect(changed.status, changed.output).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru new.example.org')
+
+    const cleared = install([...args, '--no-redirect-domains'])
+    expect(cleared.status, cleared.output).toBe(0)
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('')
+    expect(readEnv(dir)).toMatchObject({
+      SITE_DOMAIN: 'example.ru',
+      ADMIN_DOMAIN: 'admin.example.ru',
+    })
+    const text = readFileSync(join(dir, '.env'), 'utf8')
+    expect(text.match(/^REDIRECT_DOMAINS=/gm)).toHaveLength(1)
+  })
+
+  it('значение, правленное в .env руками, проверяется так же: кривое — отказ', () => {
+    const dir = join(tempDir(), 'inst')
+    expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
+    const text = readFileSync(join(dir, '.env'), 'utf8')
+    writeFileSync(
+      join(dir, '.env'),
+      text.replace('REDIRECT_DOMAINS=', 'REDIRECT_DOMAINS=www.example.ru } evil.ru'),
+    )
+    const run = install(['--dir', posix(dir), '--env-only', '--yes'])
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('дополнительный домен «}» — не домен')
+  })
+
+  it('полная установка: DNS всех доменов проверен, список в .env', () => {
+    const dir = posix(join(tempDir(), 'inst'))
+    const run = install([...required, ...redirects, '--dir', dir, '--yes'], {
+      fakes: { dns: dnsWww },
+      env: { AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+    })
+    expect(run.status, run.output).toBe(0)
+    expect(run.stdout).toContain('Редиректы: www.example.ru, old.example.net → https://example.ru')
+    expect(readEnv(dir).REDIRECT_DOMAINS).toBe('www.example.ru old.example.net')
+  })
+
+  describe('Caddyfile и compose', () => {
+    // Caddy в образе и тестах не запускается: Caddyfile разбирается как текст
+    const caddyfile = readFileSync(fileURLToPath(new URL('../Caddyfile', import.meta.url)), 'utf8')
+    const text = caddyfile
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    const start = text.indexOf('{$REDIRECT_DOMAINS')
+    const block = text.slice(start, text.indexOf('\n}', start))
+
+    it('блок: адреса из REDIRECT_DOMAINS, постоянный редирект на сайт с путём и запросом', () => {
+      expect(block).toContain('{$REDIRECT_DOMAINS:http://redirect-none.invalid} {')
+      expect(block).toContain('redir https://{$SITE_DOMAIN}{uri} permanent')
+      expect(block).toContain('import security')
+      // Только редирект: сайт, админка и API с этих доменов не отдаются
+      expect(block).not.toMatch(/file_server|reverse_proxy|handle/)
+    })
+
+    it('скобки Caddyfile сбалансированы, блоков сайта три: админка, сайт, редиректы', () => {
+      let depth = 0
+      // Подстановки {$ИМЯ}, {uri}, {file.…} — не блоки
+      for (const ch of text.replace(/\{[$a-z_][^{}\s]*\}/gi, '')) {
+        if (ch === '{') depth++
+        if (ch === '}') depth--
+        expect(depth).toBeGreaterThanOrEqual(0)
+      }
+      expect(depth).toBe(0)
+      const sites = [...text.matchAll(/^\{\$(\w+)[^}\s]*\} \{$/gm)].map((match) => match[1])
+      expect(sites).toEqual(['ADMIN_DOMAIN', 'SITE_DOMAIN', 'REDIRECT_DOMAINS'])
+    })
+
+    it('подстановка списка даёт адреса через пробел; пустой список — заглушка из compose', () => {
+      // Caddy подставляет {$…} до разбора: адреса блока — то, что получилось после замены
+      const header = block
+        .split('\n')[0]
+        ?.replace(
+          '{$REDIRECT_DOMAINS:http://redirect-none.invalid}',
+          'www.example.ru old.example.net',
+        )
+      expect(header).toBe('www.example.ru old.example.net {')
+      for (const file of [composeFile, externalComposeFile]) {
+        expect(readFileSync(file, 'utf8'), file).toContain(
+          `REDIRECT_DOMAINS: \${REDIRECT_DOMAINS:-http://redirect-none.invalid}`,
+        )
+      }
+    })
+  })
+})
+
 describe('образ и compose не включают учебный режим', () => {
   const dockerfile = readFileSync(fileURLToPath(new URL('../Dockerfile', import.meta.url)), 'utf8')
   const compose = readFileSync(composeFile, 'utf8')
