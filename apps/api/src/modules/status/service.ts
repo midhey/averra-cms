@@ -6,6 +6,7 @@ import {
   isNewerVersion,
   NO_RELEASE_STATE,
   type ReleaseState,
+  type RestoreRun,
   SERVICE_DATABASE,
   type SiteBuildStatus,
   statusProblems,
@@ -43,6 +44,13 @@ export const NO_HOST_RELEASE: HostRelease = {
   unreadable: false,
 }
 
+/**
+ * База установки с точки зрения сервера: внешняя (install.sh --external-db) или своя,
+ * страховочные дампы, которые оставили восстановление или откат внешней базы, и итог её последнего
+ * восстановления
+ */
+export type HostDatabase = { external: boolean; keptDumps: string[]; restore: RestoreRun | null }
+
 /** Положили ли заявку: exists — уже лежит, no-dir — папки заявок нет или писать в неё нельзя */
 export type RequestResult = 'written' | 'exists' | 'no-dir'
 
@@ -54,6 +62,7 @@ export type HostStatus = {
   backup(): Promise<BackupState>
   update(): Promise<UpdateState>
   disk(): Promise<DiskSpace[]>
+  database(): Promise<HostDatabase>
   release(): Promise<HostRelease>
   requestUpdate(
     file: UpdateRequestFile,
@@ -66,6 +75,7 @@ export const noHostStatus: HostStatus = {
   backup: async () => ({ enabled: false, unreadable: false, last: null, lastOk: null }),
   update: async () => ({ last: null, unreadable: false }),
   disk: async () => [],
+  database: async () => ({ external: false, keptDumps: [], restore: null }),
   release: async () => NO_HOST_RELEASE,
   requestUpdate: async () => 'no-dir',
 }
@@ -172,12 +182,13 @@ export async function collectStatus(
   sources: StatusSources,
   now = new Date(),
 ): Promise<InstallationStatus> {
-  const [fromDb, backup, update, disk, release] = await Promise.all([
+  const [fromDb, backup, update, disk, release, database] = await Promise.all([
     dbFacts(db, now),
     sources.host.backup(),
     sources.host.update(),
     sources.host.disk(),
     sources.host.release(),
+    sources.host.database(),
   ])
   const facts: InstallationFacts = {
     version: sources.version,
@@ -186,6 +197,9 @@ export async function collectStatus(
       up: fromDb.up,
       migrations: fromDb.up ? fromDb.migrations : null,
       serviceDatabases: fromDb.up ? fromDb.serviceDatabases : [],
+      external: database.external,
+      keptDumps: database.keptDumps,
+      restore: database.restore,
     },
     backup,
     update: update.last,

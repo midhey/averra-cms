@@ -2,6 +2,7 @@ import {
   formatGigabytes,
   type InstallationStatus,
   mailStuck,
+  restoreResultText,
   SITE_BUILD_STATUS_LABELS,
   updateResultText,
 } from '@averra/schema'
@@ -16,7 +17,7 @@ export function statusLines(status: InstallationStatus) {
   const { backup, update, publish, mail } = status
   const lines = [
     `Версия:      ${status.version}`,
-    `База:        ${status.db.up ? `работает, миграций ${status.db.migrations}` : 'не отвечает'}`,
+    `База:        ${status.db.external ? 'внешняя, ' : ''}${status.db.up ? `работает, миграций ${status.db.migrations}` : 'не отвечает'}`,
   ]
   if (backup.enabled) {
     const last = backup.last
@@ -42,7 +43,8 @@ export function statusLines(status: InstallationStatus) {
   if (update) {
     lines.push(
       `Обновление:  ${update.from} → ${update.to}, ${updateResultText(update)}, ${at(update.finishedAt ?? update.startedAt)}` +
-        (update.keptDatabase ? `; данные после бэкапа — в базе ${update.keptDatabase}` : ''),
+        (update.keptDatabase ? `; данные после бэкапа — в базе ${update.keptDatabase}` : '') +
+        (update.keptDump ? `; данные после бэкапа — в дампе ${update.keptDump}` : ''),
     )
   } else if (status.updateUnreadable) {
     lines.push('Обновление:  файл состояния не читается')
@@ -54,8 +56,20 @@ export function statusLines(status: InstallationStatus) {
       : 'Сборки:      публикация на сервере выключена',
     `Почта:       ${!mail.enabled ? `выключена — ${mail.reason}` : mailStuck(mail, new Date(status.checkedAt)) ? 'письма не уходят' : 'включена'}; не ушло за неделю: ${mail.failedRecent}, ждут: ${mail.pending}, из них с ошибкой: ${mail.failing}`,
   )
+  const restore = status.db.restore
+  if (restore) {
+    lines.push(
+      `Восстановление: из ${restore.source}, ${restoreResultText(restore)}, ${at(restore.finishedAt ?? restore.startedAt)}` +
+        (restore.safetyDump && restore.result !== 'ok'
+          ? `; прежняя база — в дампе ${restore.safetyDump}`
+          : ''),
+    )
+  }
   if (status.db.serviceDatabases.length > 0) {
     lines.push(`Служебные базы: ${status.db.serviceDatabases.join(', ')}`)
+  }
+  if ((status.db.keptDumps ?? []).length > 0) {
+    lines.push(`Страховочные дампы: ${(status.db.keptDumps ?? []).join(', ')}`)
   }
   for (const disk of status.disk) {
     lines.push(

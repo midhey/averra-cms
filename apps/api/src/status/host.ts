@@ -6,13 +6,15 @@ import {
   type AdminUpdateMode,
   BackupRun,
   type DiskSpace,
+  KEPT_DUMP,
   ReleaseCheck,
   ReleaseLatest,
+  RestoreRun,
   UpdateRequestDecision,
   UpdateRequestFile,
   UpdateRun,
 } from '@averra/schema'
-import type { z } from 'zod'
+import { z } from 'zod'
 import { type HostStatus, NO_HOST_RELEASE } from '../modules/status/service'
 
 // Сведения с сервера для состояния установки (modules/status): файлы, которые пишет
@@ -26,7 +28,12 @@ export const STATE_FILES = {
   releaseCheck: 'release-check.json',
   releaseLatest: 'release-latest.json',
   updateRequest: 'update-request.json',
+  keptDumps: 'kept-dumps.json',
+  restoreLast: 'restore-last.json',
 } as const
+
+/** Страховочные дампы внешней базы в папке бэкапов: их имена пишет averra.sh (write_kept_dumps) */
+const KeptDumps = z.object({ files: z.array(z.string().regex(KEPT_DUMP)).max(100) })
 
 /** Заявка на обновление в папке заявок — то же имя, что REQUEST_FILE в deploy/averra.sh */
 export const REQUEST_FILE = 'update.json'
@@ -69,13 +76,29 @@ export function hostStatus({
   stateDir,
   requestsDir,
   disks,
+  dbExternal = false,
 }: {
   stateDir?: string
   /** Папка заявок на обновление (REQUESTS_DIR): не задана — обновления из админки нет */
   requestsDir?: string | undefined
   disks: readonly DiskTarget[]
+  /** База на другом сервере (DATABASE_EXTERNAL из compose.external.yaml) */
+  dbExternal?: boolean
 }): HostStatus {
   return {
+    async database() {
+      if (!stateDir) return { external: dbExternal, keptDumps: [], restore: null }
+      const [kept, restore] = await Promise.all([
+        readState(join(stateDir, STATE_FILES.keptDumps), KeptDumps),
+        readState(join(stateDir, STATE_FILES.restoreLast), RestoreRun),
+      ])
+      return {
+        external: dbExternal,
+        keptDumps: kept.value?.files ?? [],
+        restore: restore.value,
+      }
+    },
+
     async backup() {
       if (!stateDir) return { enabled: false, unreadable: false, last: null, lastOk: null }
       const [last, lastOk] = await Promise.all([

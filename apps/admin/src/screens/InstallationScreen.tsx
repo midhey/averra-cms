@@ -4,7 +4,13 @@ import { RelativeTime } from '../pages/PagesTable'
 import { formatDateTime } from '../pages-format'
 import { buildStatusLabels } from '../publish/build-format'
 import { statusQuery } from '../queries'
-import { describeBackup, describeDisk, describeMail, describeUpdate } from '../status/status-format'
+import {
+  describeBackup,
+  describeDisk,
+  describeMail,
+  describeRestore,
+  describeUpdate,
+} from '../status/status-format'
 import { UpdateSection } from '../status/UpdateSection'
 import { shouldPoll } from '../status/update-format'
 import { Button } from '../ui/Button'
@@ -107,7 +113,7 @@ export function InstallationScreen() {
             ['Версия', <span className={styles.version}>{data.version}</span>],
             [
               'База',
-              data.db.up ? `работает, миграций применено: ${data.db.migrations}` : 'не отвечает',
+              `${data.db.external ? 'внешняя (на сервере провайдера), ' : ''}${data.db.up ? `работает, миграций применено: ${data.db.migrations}` : 'не отвечает'}`,
             ],
             [
               'Бэкап',
@@ -126,6 +132,9 @@ export function InstallationScreen() {
               </>,
             ],
             ...(data.update ? [['Обновление', describeUpdate(data.update)] as const] : []),
+            ...(data.db.restore
+              ? [['Восстановление базы', describeRestore(data.db.restore)] as const]
+              : []),
             [
               'Публикация',
               !data.publish.enabled

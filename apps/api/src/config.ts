@@ -274,6 +274,9 @@ const envSchema = (options: ConfigOptions) =>
           error: 'DATABASE_URL — адрес вида postgres://пользователь:пароль@хост:5432/база',
         })
         .optional(),
+      // База на другом сервере (установка с install.sh --external-db, compose.external.yaml):
+      // «Состояние» пишет, что база внешняя. На подключение не влияет — его задаёт DATABASE_URL
+      DATABASE_EXTERNAL: z.stringbool().default(false),
       // Папка встроенного Postgres (PGlite) для разработки, когда DATABASE_URL не задан
       PGLITE_DIR: z.string().min(1).default('.data/pglite'),
       // Публикация на сервере: папка, где лежат собранные сайты — <id сайта>/releases/…

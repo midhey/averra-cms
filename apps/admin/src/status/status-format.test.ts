@@ -4,6 +4,7 @@ import {
   describeBackup,
   describeDisk,
   describeMail,
+  describeRestore,
   describeUpdate,
   formatSize,
 } from './status-format'
@@ -72,6 +73,25 @@ describe('состояние установки словами', () => {
         error: null,
       }),
     ).toContain('сохранены в базе averra_rolled_back_20261016_033000')
+  })
+
+  it('восстановление внешней базы: итог и дамп прежней базы, пока он нужен', () => {
+    const restore = {
+      kind: 'backup' as const,
+      source: '20261015-030000-scheduled',
+      startedAt: run.startedAt,
+      finishedAt: null,
+      result: 'in-progress' as const,
+      dbRestored: false,
+      safetyDump: 'before-restore-20261016-100000.dump',
+      error: null,
+    }
+    expect(describeRestore(restore)).toMatch(
+      /^из 20261015-030000-scheduled, .+: не закончилось \(идёт или оборвалось\); прежняя база — в дампе before-restore-20261016-100000\.dump$/,
+    )
+    expect(
+      describeRestore({ ...restore, result: 'ok', dbRestored: true, safetyDump: null }),
+    ).toMatch(/: восстановлено$/)
   })
 
   it('размеры и диск', () => {

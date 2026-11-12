@@ -6,6 +6,7 @@ import {
   NO_RELEASE_STATE,
   pendingStale,
   ReleaseLatest,
+  RestoreRun,
   statusProblems,
   UPDATE_START_TIMEOUT_MS,
   UpdateRequestDecision,
@@ -286,6 +287,150 @@ describe('statusProblems', () => {
         facts({ disk: [{ label: 'x', freeBytes: 15 * 1024 ** 3, totalBytes: 100 * 1024 ** 3 }] }),
       ),
     ).toEqual([])
+  })
+})
+
+describe('statusProblems: внешняя база', () => {
+  it('не отвечает — сообщение про сервер провайдера, а не просто «база»', () => {
+    const [problem] = statusProblems(
+      facts({ db: { up: false, migrations: null, serviceDatabases: [], external: true } }),
+      now,
+    )
+    expect(problem).toMatchObject({ code: 'db_down' })
+    expect(problem?.message).toContain('Внешняя база не отвечает')
+  })
+
+  it('откат сохранил данные в страховочном дампе — проблема с его именем, без повтора в списке дампов', () => {
+    const kept = 'rolled-back-20261016-100000.dump'
+    const update = UpdateRun.parse({
+      from: '0.6.0',
+      to: '0.7.0',
+      startedAt: hoursBefore(2),
+      finishedAt: hoursBefore(2),
+      result: 'rolled-back',
+      dbRestored: true,
+      keptDump: kept,
+      error: 'версия 0.7.0 не прошла проверку готовности',
+    })
+    const problems = statusProblems(
+      facts({ update, db: { up: true, migrations: 15, serviceDatabases: [], keptDumps: [kept] } }),
+      now,
+    )
+    expect(problems.map((p) => p.code)).toEqual(['update_rolled_back', 'update_kept_database'])
+    expect(problems[1]?.message).toContain(`страховочном дампе ${kept}`)
+  })
+
+  it('страховочный дамп прерванного восстановления — напоминание и что делать', () => {
+    const problems = statusProblems(
+      facts({
+        db: {
+          up: true,
+          migrations: 15,
+          serviceDatabases: [],
+          keptDumps: ['before-restore-20261016-100000.dump'],
+        },
+      }),
+      now,
+    )
+    expect(problems).toEqual([
+      expect.objectContaining({
+        code: 'db_service_databases',
+        message: expect.stringContaining('averra.sh restore-dump'),
+      }),
+    ])
+  })
+
+  describe('восстановление внешней базы', () => {
+    const safety = 'before-restore-20261016-100000.dump'
+    const run = (patch: Partial<RestoreRun>) =>
+      RestoreRun.parse({
+        kind: 'backup',
+        source: '20261015-030000-scheduled',
+        startedAt: hoursBefore(3),
+        finishedAt: hoursBefore(3),
+        result: 'ok',
+        dbRestored: true,
+        safetyDump: null,
+        error: null,
+        ...patch,
+      })
+    const problemsOf = (restore: RestoreRun, keptDumps: string[] = []) =>
+      statusProblems(
+        facts({ db: { up: true, migrations: 15, serviceDatabases: [], keptDumps, restore } }),
+        now,
+      )
+
+    it('оборвалось — проблема с источником и страховочным дампом, без повтора в списке дампов', () => {
+      const problems = problemsOf(
+        run({ result: 'in-progress', finishedAt: null, dbRestored: false, safetyDump: safety }),
+        [safety],
+      )
+      expect(problems.map((p) => p.code)).toEqual(['restore_interrupted'])
+      expect(problems[0]?.message).toContain('20261015-030000-scheduled не закончилось')
+      expect(problems[0]?.message).toContain(`страховочном дампе ${safety}`)
+      expect(problems[0]?.message).toContain('averra.sh restore-dump,')
+      expect(problems[0]?.message).toContain('оставить как есть — averra.sh restore-dump --dismiss')
+    })
+
+    it('оборвалось, а страховочный дамп удалён сроком хранения — не зовёт вернуть несуществующий', () => {
+      const problems = problemsOf(
+        run({ result: 'in-progress', finishedAt: null, dbRestored: true, safetyDump: safety }),
+        [],
+      )
+      expect(problems.map((p) => p.code)).toEqual(['restore_interrupted'])
+      expect(problems[0]?.message).not.toContain('Прежняя база — в страховочном дампе')
+      expect(problems[0]?.message).toContain(`страховочного дампа ${safety} уже нет`)
+      expect(problems[0]?.message).toContain('averra.sh restore-dump --dismiss')
+      const failed = problemsOf(
+        run({ result: 'failed', dbRestored: true, safetyDump: safety, error: 'x' }),
+        [],
+      )
+      expect(failed[0]?.message).toBe(
+        'Восстановление базы из 20261015-030000-scheduled не удалось: x.',
+      )
+    })
+
+    it('не удалось — причина; база прежняя — про дамп не говорит, заменена — говорит', () => {
+      const same = problemsOf(
+        run({
+          result: 'failed',
+          dbRestored: false,
+          safetyDump: safety,
+          error: 'API не поднялся на восстановленной базе — прежние база и медиатека на месте',
+        }),
+        [safety],
+      )
+      expect(same.map((p) => p.code)).toEqual(['restore_failed'])
+      expect(same[0]?.message).toBe(
+        'Восстановление базы из 20261015-030000-scheduled не удалось: API не поднялся на восстановленной базе — прежние база и медиатека на месте.',
+      )
+      const replaced = problemsOf(
+        run({ result: 'failed', dbRestored: true, safetyDump: safety, error: 'x' }),
+        [safety],
+      )
+      expect(replaced[0]?.message).toContain(`страховочном дампе ${safety}`)
+    })
+
+    it('удачное и давнее неудачное — не проблема', () => {
+      expect(problemsOf(run({}))).toEqual([])
+      const old = new Date(now.getTime() - 8 * 24 * 3_600_000).toISOString()
+      expect(
+        problemsOf(run({ result: 'failed', dbRestored: false, finishedAt: old, startedAt: old })),
+      ).toEqual([])
+    })
+
+    it('чужие значения не проходят схему', () => {
+      expect(RestoreRun.safeParse({ ...run({}), safetyDump: '../x.dump' }).success).toBe(false)
+      expect(RestoreRun.safeParse({ ...run({}), result: 'done' }).success).toBe(false)
+    })
+  })
+
+  it('чужие имена дампов не проходят схему', () => {
+    const db = { up: true, migrations: 1, serviceDatabases: [] }
+    expect(
+      InstallationFacts.shape.db.safeParse({ ...db, keptDumps: ['../etc/passwd'] }).success,
+    ).toBe(false)
+    expect(InstallationFacts.shape.db.parse(db).external).toBeUndefined()
   })
 })
 

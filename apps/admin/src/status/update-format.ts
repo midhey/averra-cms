@@ -107,7 +107,9 @@ export type UpdateOutcome = {
 export function updateOutcome(run: UpdateRun, retryExplained = false): UpdateOutcome | null {
   const kept = run.keptDatabase
     ? ` Данные, принятые после бэкапа (заявки), сохранены в базе ${run.keptDatabase}: студия перенесёт нужное.`
-    : ''
+    : run.keptDump
+      ? ` Данные, принятые после бэкапа (заявки), сохранены в страховочном дампе ${run.keptDump}: студия перенесёт нужное.`
+      : ''
   switch (run.result) {
     case 'updated':
       return {

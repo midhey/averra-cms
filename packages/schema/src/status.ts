@@ -73,6 +73,38 @@ export const UPDATE_RESULT_LABELS: Record<UpdateResult, string> = {
 export const UpdateStep = z.enum(['pull', 'backup', 'migrate', 'verify', 'rollback'])
 export type UpdateStep = z.infer<typeof UpdateStep>
 
+/**
+ * Страховочный дамп внешней базы в папке бэкапов (deploy/averra.sh): перед восстановлением
+ * (before-restore) и откатом обновления (rolled-back). Удаляется вместе со старыми бэкапами
+ */
+export const KEPT_DUMP = /^(before-restore|rolled-back)-[0-9]{8}-[0-9]{6}\.dump$/
+
+/**
+ * Восстановление внешней базы (averra.sh restore и restore-dump): state/restore-last.json. Своя база
+ * этого файла не пишет. in-progress — идёт или оборвалось (API на это время остановлен, так что
+ * в «Состоянии» это обычно обрыв); dbRestored — база уже заменена (из бэкапа или дампа);
+ * safetyDump — страховочный дамп прежней базы, пока он путь назад
+ */
+export const RestoreRun = z.object({
+  kind: z.enum(['backup', 'dump']),
+  /** Имя бэкапа или файла дампа */
+  source: z.string().min(1).max(256),
+  startedAt: IsoTime,
+  finishedAt: IsoTime.nullable(),
+  result: z.enum(['in-progress', 'ok', 'failed']),
+  dbRestored: z.boolean(),
+  safetyDump: z.string().regex(KEPT_DUMP).nullable(),
+  error: RunError,
+})
+export type RestoreRun = z.infer<typeof RestoreRun>
+
+/** Итог восстановления словами — одни для админки и команды status.js */
+export function restoreResultText(run: RestoreRun) {
+  if (run.result === 'ok') return 'восстановлено'
+  if (run.result === 'in-progress') return 'не закончилось (идёт или оборвалось)'
+  return `не удалось${run.error ? `: ${run.error}` : ''}`
+}
+
 /** Последнее обновление: файл state/update-last.json */
 export const UpdateRun = z.object({
   from: z.string().min(1).max(128),
@@ -104,6 +136,11 @@ export const UpdateRun = z.object({
     .regex(/^averra_rolled_back_[0-9]{8}_[0-9]{6}$/)
     .nullable()
     .default(null),
+  /**
+   * То же у внешней базы (install.sh --external-db): баз на её сервере не создать, поэтому данные,
+   * принятые после бэкапа, — в страховочном дампе в папке бэкапов. Нет — файл прежнего averra.sh
+   */
+  keptDump: z.string().regex(KEPT_DUMP).nullable().optional(),
   error: RunError,
 })
 export type UpdateRun = z.infer<typeof UpdateRun>
@@ -338,6 +375,8 @@ export const StatusProblemCode = z.enum([
   'update_kept_database',
   'update_interrupted',
   'update_unreadable',
+  'restore_interrupted',
+  'restore_failed',
   'db_service_databases',
   'mail_disabled',
   'mail_failed',
@@ -367,6 +406,12 @@ export const InstallationFacts = z.object({
     migrations: z.number().int().nonnegative().nullable(),
     /** Служебные базы с копиями данных (SERVICE_DATABASE): персональные данные вне рабочей базы */
     serviceDatabases: z.array(z.string().regex(SERVICE_DATABASE)).default([]),
+    /** База на другом сервере (install.sh --external-db). Нет — ответ прежней версии: своя */
+    external: z.boolean().optional(),
+    /** Страховочные дампы внешней базы (KEPT_DUMP): копии данных вне рабочей базы */
+    keptDumps: z.array(z.string().regex(KEPT_DUMP)).optional(),
+    /** Последнее восстановление внешней базы. Нет — не было или ответ прежней версии */
+    restore: RestoreRun.nullable().optional(),
   }),
   backup: z.object({
     /** Установка ведёт бэкапы (есть папка состояния): в разработке их нет, и это не проблема */
@@ -457,7 +502,14 @@ export function statusProblems(facts: InstallationFacts, now: Date): StatusProbl
   const problems: StatusProblem[] = []
   const add = (code: StatusProblem['code'], message: string) => problems.push({ code, message })
 
-  if (!facts.db.up) add('db_down', 'База не отвечает')
+  if (!facts.db.up) {
+    add(
+      'db_down',
+      facts.db.external
+        ? 'Внешняя база не отвечает: проверьте сервер базы у провайдера и доступ к нему с этого сервера'
+        : 'База не отвечает',
+    )
+  }
 
   const { update } = facts
   if (facts.updateUnreadable) {
@@ -498,6 +550,52 @@ export function statusProblems(facts: InstallationFacts, now: Date): StatusProbl
     add(
       'update_kept_database',
       `После отката обновления до ${update.to} данные, принятые после бэкапа, сохранены в базе ${update.keptDatabase}: перенесите нужное (заявки) — база удалится вместе со старыми бэкапами`,
+    )
+  }
+  if (recentUpdate && update.keptDump) {
+    add(
+      'update_kept_database',
+      `После отката обновления до ${update.to} данные, принятые после бэкапа, сохранены в страховочном дампе ${update.keptDump}: перенесите нужное (заявки) — дамп удалится вместе со старыми бэкапами`,
+    )
+  }
+  // Восстановление внешней базы: незаконченное — всегда, не удавшееся — неделю, как откат
+  const restore = facts.db.restore ?? null
+  // Страховочный дамп называем, пока он лежит: срок хранения бэкапов удаляет и его. Списка нет
+  // (прежний averra.sh) — не знаем, считаем, что лежит
+  const safetyDump = restore?.safetyDump ?? null
+  const dumpKept =
+    safetyDump !== null &&
+    (facts.db.keptDumps === undefined || facts.db.keptDumps.includes(safetyDump))
+  const restoreDump = dumpKept ? ` Прежняя база — в страховочном дампе ${safetyDump}.` : ''
+  if (restore?.result === 'in-progress') {
+    const way = dumpKept
+      ? 'вернуть прежнюю базу — averra.sh restore-dump, оставить как есть — averra.sh restore-dump --dismiss'
+      : safetyDump !== null
+        ? `страховочного дампа ${safetyDump} уже нет, прежнюю базу вернёт только бэкап (averra.sh restore); оставить как есть — averra.sh restore-dump --dismiss`
+        : 'оставить как есть — averra.sh restore-dump --dismiss'
+    add(
+      'restore_interrupted',
+      `Восстановление базы из ${restore.source} не закончилось — похоже, оборвалось.${restoreDump} Что сделать, покажет averra.sh status на сервере: ${way}.`,
+    )
+  } else if (
+    restore?.result === 'failed' &&
+    restore.finishedAt !== null &&
+    now.getTime() - Date.parse(restore.finishedAt) < STATUS_LIMITS.updateNoticeMs
+  ) {
+    add(
+      'restore_failed',
+      `Восстановление базы из ${restore.source} не удалось: ${restore.error ?? 'причина неизвестна'}.${restore.dbRestored ? restoreDump : ''}`,
+    )
+  }
+  // Дамп, о котором уже сказали откат или восстановление, — не повторять
+  const restoreNamed = restore && restore.result !== 'ok' ? restore.safetyDump : null
+  const dumps = (facts.db.keptDumps ?? []).filter(
+    (name) => !(recentUpdate && name === update.keptDump) && name !== restoreNamed,
+  )
+  if (dumps.length > 0) {
+    add(
+      'db_service_databases',
+      `В папке бэкапов лежат страховочные дампы с копиями данных: ${dumps.join(', ')}. Если восстановление или откат прервались, вернуть базу из дампа — averra.sh restore-dump; иначе они удалятся вместе со старыми бэкапами.`,
     )
   }
 

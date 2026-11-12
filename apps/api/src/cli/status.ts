@@ -26,6 +26,7 @@ await run(async () => {
         stateDir: config.STATE_DIR,
         requestsDir: config.REQUESTS_DIR,
         disks: diskTargets(config),
+        dbExternal: config.DATABASE_EXTERNAL,
       }),
       publishEnabled: config.PUBLISH_DIR !== undefined,
       mail:

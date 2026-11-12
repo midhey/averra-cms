@@ -242,6 +242,7 @@ const host = hostStatus({
   stateDir: config.STATE_DIR,
   requestsDir: config.REQUESTS_DIR,
   disks: diskTargets(config),
+  dbExternal: config.DATABASE_EXTERNAL,
 })
 const serviceWatch = startServiceWatch({
   db,

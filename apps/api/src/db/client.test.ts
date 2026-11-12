@@ -1,3 +1,8 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type tls from 'node:tls'
+import pg from 'pg'
 import { describe, expect, it } from 'vitest'
 import { parseConfig } from '../config'
 import { createDb, dbTargetOf } from './client'
@@ -46,5 +51,65 @@ describe('выбор базы по DATABASE_URL', () => {
     const postgres = createDb({ kind: 'postgres', url: 'postgres://u:p@127.0.0.1:1/db' })
     expect(postgres.kind).toBe('postgres')
     await postgres.close()
+  })
+})
+
+describe('внешняя база (install.sh --external-db): адрес из .env доходит до драйвера как есть', () => {
+  // Пароль со знаками, которые ломают адреса: в адресе — percent-encoded, $ — как есть
+  const password = 'p@ss:w/r#d?%$HOME1'
+  const url = (params: string) =>
+    `postgres://averra_app:p%40ss%3Aw%2Fr%23d%3F%25$HOME1@db.example.test:6432/averra_site?${params}`
+  /** Настройки соединения так, как их соберёт пул pg из DATABASE_URL */
+  const settings = (connectionString: string) => {
+    const client = new pg.Client({ connectionString })
+    return client as unknown as {
+      user: string
+      password: string
+      host: string
+      port: number
+      database: string
+      ssl: false | (tls.ConnectionOptions & Record<string, unknown>)
+    }
+  }
+
+  it('sslmode=verify-full — TLS с проверкой сертификата и имени, пароль раскодирован', () => {
+    const client = settings(url('sslmode=verify-full'))
+    expect(client).toMatchObject({
+      user: 'averra_app',
+      password,
+      host: 'db.example.test',
+      port: 6432,
+      database: 'averra_site',
+    })
+    expect(client.ssl).toBeTypeOf('object')
+    const ssl = client.ssl as tls.ConnectionOptions
+    // Проверка не выключена: Node сверяет цепочку с корнями и имя хоста с сертификатом
+    expect(ssl.rejectUnauthorized).not.toBe(false)
+    expect(ssl.checkServerIdentity).toBeUndefined()
+  })
+
+  it('sslrootcert — CA провайдера читается из файла (папка db-tls в контейнере)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'averra-ca-'))
+    try {
+      const ca = join(dir, 'ca.pem')
+      writeFileSync(ca, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n')
+      const client = settings(url(`sslmode=verify-full&sslrootcert=${ca}`))
+      const ssl = client.ssl as tls.ConnectionOptions
+      expect(ssl.ca).toBe(readFileSync(ca, 'utf8'))
+      expect(ssl.rejectUnauthorized).not.toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('DATABASE_EXTERNAL из compose.external.yaml — признак для «Состояния», по умолчанию нет', () => {
+    const external = parseConfig({
+      ...prodEnv,
+      DATABASE_URL: url('sslmode=verify-full'),
+      DATABASE_EXTERNAL: 'true',
+    })
+    expect(external.data?.DATABASE_EXTERNAL).toBe(true)
+    expect(external.data?.DATABASE_URL).toBe(url('sslmode=verify-full'))
+    expect(parseConfig(prodEnv).data?.DATABASE_EXTERNAL).toBe(false)
   })
 })

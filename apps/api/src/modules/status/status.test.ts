@@ -209,6 +209,56 @@ describe('GET /api/status: содержимое', () => {
     expect(body.problems.map((p) => p.code)).not.toContain('db_service_databases')
   })
 
+  it('внешняя база: признак и страховочные дампы из файла состояния; чужие имена — не читаются', async () => {
+    const dir = join(tmpdir(), `averra-state-${randomUUID()}`)
+    mkdirSync(dir, { recursive: true })
+    const external = await createTestApi({
+      host: hostStatus({ stateDir: dir, disks: [], dbExternal: true }),
+    })
+    try {
+      const { headers } = await external.loginAs('owner')
+      const dump = 'before-restore-20261016-100000.dump'
+      writeFileSync(join(dir, STATE_FILES.keptDumps), JSON.stringify({ files: [dump] }))
+      let body = (await (
+        await external.app.request('/api/status', { headers })
+      ).json()) as InstallationStatus
+      expect(body.db).toMatchObject({ external: true, keptDumps: [dump] })
+      expect(body.problems.map((p) => p.code)).toContain('db_service_databases')
+      writeFileSync(join(dir, STATE_FILES.keptDumps), JSON.stringify({ files: ['../x.dump'] }))
+      body = (await (
+        await external.app.request('/api/status', { headers })
+      ).json()) as InstallationStatus
+      expect(body.db.keptDumps).toEqual([])
+      // Итог восстановления внешней базы — из restore-last.json; битый файл — не 500, а «нет»
+      writeFileSync(
+        join(dir, STATE_FILES.restoreLast),
+        JSON.stringify({
+          kind: 'backup',
+          source: '20261015-030000-scheduled',
+          startedAt: '2026-10-16T10:00:00Z',
+          finishedAt: null,
+          result: 'in-progress',
+          dbRestored: false,
+          safetyDump: dump,
+          error: null,
+        }),
+      )
+      body = (await (
+        await external.app.request('/api/status', { headers })
+      ).json()) as InstallationStatus
+      expect(body.db.restore).toMatchObject({ result: 'in-progress', safetyDump: dump })
+      expect(body.problems.map((p) => p.code)).toContain('restore_interrupted')
+      writeFileSync(join(dir, STATE_FILES.restoreLast), '{"result":')
+      body = (await (
+        await external.app.request('/api/status', { headers })
+      ).json()) as InstallationStatus
+      expect(body.db.restore).toBeNull()
+    } finally {
+      await external.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('в ответе нет секретов, путей и адресов', async () => {
     const { headers } = await api.loginAs('owner')
     const { body } = await status(headers)

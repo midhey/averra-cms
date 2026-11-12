@@ -3,6 +3,8 @@ import {
   formatGigabytes,
   type InstallationStatus,
   mailStuck,
+  type RestoreRun,
+  restoreResultText,
   type UpdateRun,
   updateResultText,
 } from '@averra/schema'
@@ -36,10 +38,19 @@ export function describeBackup(run: BackupRun) {
   return `${when} — ${run.verified ? 'проверен восстановлением' : 'не проверен'}, ${formatSize(size)}${remote}`
 }
 
+/** Восстановление внешней базы одной строкой: откуда, когда, чем кончилось */
+export function describeRestore(run: RestoreRun) {
+  const kept =
+    run.safetyDump && run.result !== 'ok' ? `; прежняя база — в дампе ${run.safetyDump}` : ''
+  return `из ${run.source}, ${formatDateTime(run.finishedAt ?? run.startedAt)}: ${restoreResultText(run)}${kept}`
+}
+
 export function describeUpdate(run: UpdateRun) {
   const kept = run.keptDatabase
     ? `; данные, принятые после бэкапа, сохранены в базе ${run.keptDatabase}`
-    : ''
+    : run.keptDump
+      ? `; данные, принятые после бэкапа, сохранены в дампе ${run.keptDump}`
+      : ''
   const when = formatDateTime(run.finishedAt ?? run.startedAt)
   return `${run.from} → ${run.to}, ${when}: ${updateResultText(run)}${run.dbRestored ? ' (база восстановлена из бэкапа)' : ''}${kept}`
 }

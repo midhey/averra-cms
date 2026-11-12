@@ -148,6 +148,49 @@ describe('statusLines', () => {
     expect(text(mail(20))).toMatch(/Почта:\s+письма не уходят;/)
   })
 
+  it('внешняя база и её страховочные дампы видны', () => {
+    const value = text(
+      status({
+        db: {
+          up: true,
+          migrations: 15,
+          serviceDatabases: [],
+          external: true,
+          keptDumps: ['rolled-back-20261016-100000.dump'],
+        },
+      }),
+    )
+    expect(value).toContain('База:        внешняя, работает, миграций 15')
+    expect(value).toContain('Страховочные дампы: rolled-back-20261016-100000.dump')
+  })
+
+  it('итог восстановления внешней базы виден, с дампом прежней базы, пока он путь назад', () => {
+    const value = text(
+      status({
+        db: {
+          up: true,
+          migrations: 15,
+          serviceDatabases: [],
+          external: true,
+          restore: {
+            kind: 'backup',
+            source: '20261015-030000-scheduled',
+            startedAt: '2026-10-16T10:00:00Z',
+            finishedAt: '2026-10-16T10:05:00Z',
+            result: 'failed',
+            dbRestored: false,
+            safetyDump: 'before-restore-20261016-100000.dump',
+            error:
+              'база не восстановилась — транзакция откатилась, рабочие база и медиатека прежние',
+          },
+        },
+      }),
+    )
+    expect(value).toContain(
+      'Восстановление: из 20261015-030000-scheduled, не удалось: база не восстановилась — транзакция откатилась, рабочие база и медиатека прежние, 2026-10-16 10:05:00 UTC; прежняя база — в дампе before-restore-20261016-100000.dump',
+    )
+  })
+
   it('служебные базы с копиями данных видны', () => {
     expect(
       text(
