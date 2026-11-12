@@ -1,0 +1,101 @@
+# Установка Averra с ВНЕШНЕЙ PostgreSQL (install.sh --external-db): API и Caddy, своей базы нет.
+# install.sh кладёт этот файл в папку установки под именем compose.yaml, averra.sh update берёт его
+# из образа новой версии. Отличия от compose.yaml — только база: нет сервиса postgres и его тома,
+# DATABASE_URL — из .env (адрес внешнего сервера, TLS с проверкой сертификата). Остальное держит
+# одинаковым тест deploy/tests/install.test.ts.
+# Значения — из .env рядом (его создаёт install.sh, права 600). Запуск — из папки установки:
+#   docker compose up -d
+# API наружу не открыт: в него ходит только Caddy по внутренней сети.
+
+name: averra
+
+services:
+  api:
+    image: ${AVERRA_API_IMAGE:-ghcr.io/midhey/averra-api}:${AVERRA_VERSION:?задайте AVERRA_VERSION в .env}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # Внешняя база: адрес с sslmode=verify-full (и sslrootcert — CA провайдера из db-tls).
+      # В .env он в одинарных кавычках: Compose не подставляет в нём $ из пароля
+      DATABASE_URL: ${DATABASE_URL:?задайте DATABASE_URL в .env (install.sh --external-db)}
+      # База на другом сервере: «Состояние» так и пишет
+      DATABASE_EXTERNAL: 'true'
+      AUTH_SECRET: ${AUTH_SECRET:?задайте AUTH_SECRET в .env (install.sh)}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?задайте MAIL_ENCRYPTION_KEY в .env (install.sh)}
+      # Админка и API — один источник (Caddyfile): cookie без CORS
+      ADMIN_URL: https://${ADMIN_DOMAIN:?задайте ADMIN_DOMAIN в .env}
+      API_URL: https://${ADMIN_DOMAIN}
+      # Одна установка — один сайт: при первом запуске API создаёт его сам с названием SITE_NAME
+      # (без него — домен сайта). SITE_URL — адрес сайта: его домен админка показывает в панели,
+      # и он же — адрес для canonical и sitemap.xml, пока в разделе «SEO» не задан свой
+      SITE_URL: https://${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
+      SITE_NAME: ${SITE_NAME:-}
+      # Перед API только Caddy, и X-Forwarded-For ставит он сам
+      TRUST_PROXY: 'true'
+      PUBLISH_DIR: /data/sites
+      MEDIA_DIR: /data/media
+      # Итоги бэкапов и обновлений от averra.sh — для «Состояния» в админке
+      STATE_DIR: /data/state
+      # Заявка на обновление из админки: API кладёт файл, обновляет хост (averra.sh update-request)
+      REQUESTS_DIR: /data/requests
+      # Свой адрес Bot API Telegram (локальный сервер Bot API, зеркало), если api.telegram.org
+      # недоступен с VPS. Пусто — настоящий Telegram (https://midhey.github.io/averra-cms/install/telegram/)
+      TELEGRAM_API_URL: ${TELEGRAM_API_URL:-}
+      # SMTP задают в админке (страница «Почта»): пароль шифруется MAIL_ENCRYPTION_KEY.
+      # SMTP из окружения — через compose.override.yaml
+      # (см. https://midhey.github.io/averra-cms/install/server/)
+    volumes:
+      - sites:/data/sites
+      - media:/data/media
+      # Папка состояния установки (/opt/averra/state): пишет её только averra.sh на хосте,
+      # API читает. Бэкапы (/opt/averra/backups) в контейнер не попадают
+      - ./state:/data/state:ro
+      # Папка заявок (/opt/averra/requests, владелец — node, права 700): единственное, что API
+      # пишет на хосте. Ни Docker, ни команд хоста у API нет — заявку разбирает и решает averra.sh
+      - ./requests:/data/requests
+      # CA провайдера базы (install.sh --db-ca-file), только чтение. Пустая папка — корни Node
+      - ./db-tls:/run/averra-db:ro
+    # Node — PID 1 и запускает сборщик сайта, у которого свои потомки (esbuild): init (tini)
+    # пожинает осиротевших после таймаута сборки, зомби не копятся
+    init: true
+    # Не root (USER node в образе), ни одной capability и без повышения прав через setuid:
+    # API нужны только тома: код, и рендерер тоже, в образе только для чтения
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    networks: [internal]
+
+  caddy:
+    image: ${AVERRA_WEB_IMAGE:-ghcr.io/midhey/averra-web}:${AVERRA_VERSION}
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?задайте SITE_DOMAIN в .env}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?задайте ACME_EMAIL в .env}
+    # Caddy в образе не от root (USER caddy). Ему нужно только занять порты 80 и 443: порты ниже
+    # 1024 открыты непривилегированным внутри контейнера, а capability оставлена для бинарника с
+    # file capability (без неё в ограничивающем наборе exec падает). no-new-privileges здесь нет:
+    # он отключил бы эту file capability
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      # Собранные сайты — только чтение: менять их может только API
+      - sites:/srv/sites:ro
+    networks: [internal]
+
+volumes:
+  sites:
+  media:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:

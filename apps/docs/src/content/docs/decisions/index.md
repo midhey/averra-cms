@@ -60,6 +60,7 @@ sidebar:
 
 - [Образы в GHCR, а не сборка на месте](/averra-cms/decisions/ghcr-images/)
 - [Бэкап проверяется восстановлением](/averra-cms/decisions/verified-backups/)
+- [Внешняя база: проверка в контейнере, восстановление в ту же базу](/averra-cms/decisions/external-db/)
 - [Миграции только совместимые вперёд](/averra-cms/decisions/forward-migrations/)
 - [Обновление отвязано от SSH](/averra-cms/decisions/detached-update/)
 - [Состояние для студии — по SSH](/averra-cms/decisions/status-over-ssh/)

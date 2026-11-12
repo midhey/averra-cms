@@ -42,6 +42,7 @@ sidebar:
 | Переменная | По умолчанию | Что задаёт |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL: `postgres://пользователь:пароль@хост:5432/база`, пул 5 соединений |
+| `DATABASE_EXTERNAL` | `false` | база на другом сервере (`compose.external.yaml`, `install.sh --external-db`): «Состояние» пишет, что база внешняя (только признак: страховочные дампы и итог восстановления оно показывает по файлам состояния при любом значении). На подключение не влияет |
 | `PGLITE_DIR` | `.data/pglite` | папка встроенного PGlite, если `DATABASE_URL` не задан |
 
 ### Медиатека и публикация
@@ -117,7 +118,10 @@ sidebar:
 | `SITE_DOMAIN`, `ADMIN_DOMAIN`, `ACME_EMAIL` | домены и почта для Let's Encrypt |
 | `OWNER_EMAIL` | владелец, которого создал установщик |
 | `SITE_NAME` | название сайта для первого запуска API (`--site-name`, по умолчанию домен сайта). Потом название живёт в базе. `SITE_ID` прежних версий не ведётся и не нужен, но остаётся в `.env`: его читает прежний Caddyfile при откате обновления |
-| `POSTGRES_PASSWORD`, `AUTH_SECRET`, `MAIL_ENCRYPTION_KEY`, `BACKUP_PASSPHRASE` | секреты; при повторном запуске не меняются |
+| `POSTGRES_PASSWORD`, `AUTH_SECRET`, `MAIL_ENCRYPTION_KEY`, `BACKUP_PASSPHRASE` | секреты; при повторном запуске не меняются. У внешней базы `POSTGRES_PASSWORD` нет |
+| `AVERRA_DB_MODE` | `external` — [внешняя база](/averra-cms/install/server/#внешняя-база) (`--external-db`); нет строки — своя. Повторный запуск режим не меняет |
+| `DATABASE_URL` | только у внешней базы: адрес в одинарных кавычках (Compose не подставляет `$` из пароля), с `sslmode=verify-full` и, если задан `--db-ca-file`, `sslrootcert=/run/averra-db/ca.pem` |
+| `AVERRA_PG_IMAGE` | только у внешней базы: образ клиента PostgreSQL той же мажорной версии, что сервер (`postgres:18.6-alpine3.24`); его выбирает установщик |
 | `BACKUP_KEEP` | сколько бэкапов хранить и не старше скольких дней, по умолчанию 7, от 1 до 365 |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | внешнее хранилище бэкапов |
 | `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_PREFIX` | по умолчанию `https://storage.yandexcloud.net`, `ru-central1`, `averra/<домен сайта>` |
@@ -130,6 +134,7 @@ sidebar:
 |---|---|---|
 | `GHCR_TOKEN`, `GHCR_USER` | `install.sh` | вход в ghcr.io без вопроса |
 | `AVERRA_OWNER_PASSWORD` | `install.sh` | пароль владельца без вопроса |
+| `AVERRA_DATABASE_URL` | `install.sh --external-db` | адрес внешней базы без вопроса: `postgres://пользователь:пароль@хост:5432/база`, пароль percent-encoded |
 | `AVERRA_READY_TIMEOUT` | `averra.sh update`, `restore` | сколько ждать готовности API, по умолчанию 180 секунд |
 | `AVERRA_SYSTEMD_DIR` | `averra.sh install-units` | куда писать юниты systemd, по умолчанию `/etc/systemd/system` (свою папку задают тесты) |
 | `AVERRA_SERVERS` | `pnpm fleet` | путь к списку серверов вместо `~/.config/averra/servers.txt` |

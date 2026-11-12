@@ -6,6 +6,9 @@
 #   sudo /opt/averra/averra.sh backups              список бэкапов
 #   sudo /opt/averra/averra.sh verify <бэкап>       проверить бэкап ещё раз
 #   sudo /opt/averra/averra.sh restore <бэкап>      восстановить (--from-s3 — из внешнего хранилища)
+#   sudo /opt/averra/averra.sh restore-dump <файл>  внешняя база: вернуть страховочный дамп
+#   sudo /opt/averra/averra.sh restore-dump --dismiss  внешняя база: оставить базу после
+#                                                   оборванного восстановления как есть
 #   sudo /opt/averra/averra.sh update --version X   обновить: бэкап → образ → миграции → проверка
 #                                                   (не прошла — откат)
 #   sudo /opt/averra/averra.sh status [--json]      состояние установки (так его берёт pnpm fleet)
@@ -54,9 +57,14 @@ usage() {
                                                копия во внешнее хранилище (если задано в .env)
   averra.sh backups                            список бэкапов
   averra.sh verify <бэкап>                     проверить бэкап: контрольные суммы и восстановление
-                                               дампа во временную базу
+                                               дампа во временную базу (внешняя база — во
+                                               временный контейнер PostgreSQL)
   averra.sh restore <бэкап> [--yes]            восстановить базу и медиа из бэкапа
   averra.sh restore --from-s3 <бэкап> [--yes]  то же из внешнего хранилища
+  averra.sh restore-dump <файл.dump> [--yes]   внешняя база: вернуть страховочный дамп
+                                               прерванного восстановления или отката
+  averra.sh restore-dump --dismiss             внешняя база: оборванное восстановление —
+                                               оставить базу как есть и поднять API
   averra.sh update --version <версия> [--yes]  обновить: бэкап → новая версия → миграции →
                                                проверка → при сбое откат
   averra.sh status [--json]                    состояние установки
@@ -97,7 +105,10 @@ kv_get() {
   local file="$1" key="$2" line
   [[ -f "$file" ]] || return 0
   line="$(grep -E "^${key}=" "$file" | tail -n 1 || true)"
-  printf '%s' "${line#*=}"
+  line="${line#*=}"
+  # Значение в одинарных кавычках (адрес внешней базы) Compose берёт буквально — и мы так же
+  if [[ ${#line} -ge 2 && "$line" == \'*\' ]]; then line="${line:1:${#line}-2}"; fi
+  printf '%s' "$line"
 }
 
 kv_set() {
@@ -164,7 +175,12 @@ write_state() {
 # ── База ───────────────────────────────────────────────────────────────────────────────────
 
 psql_value() {
-  # psql_value <база> <запрос> — одно значение без пробелов
+  # psql_value <база> <запрос> — одно значение без пробелов. Внешняя база — одна (рабочая): имя
+  # базы там не выбирается
+  if db_external; then
+    pg_client psql -X -tAc "$2" </dev/null | tr -d '[:space:]'
+    return
+  fi
   compose exec -T postgres psql -U averra -d "$1" -tAc "$2" | tr -d '[:space:]'
 }
 
@@ -173,6 +189,370 @@ count_migrations() { psql_value "$1" 'select count(*) from drizzle.__drizzle_mig
 db_exists() { psql_value postgres "select count(*) from pg_database where datname = '$1'"; }
 count_tables() {
   psql_value "$1" "select count(*) from information_schema.tables where table_schema = 'public'"
+}
+
+# ── Внешняя база (install.sh --external-db) ─────────────────────────────────────────────────
+# База на другом сервере: своего контейнера postgres нет, CREATEDB и суперпользователя — тоже.
+# Клиент PostgreSQL — контейнер образа AVERRA_PG_IMAGE (той же мажорной версии, что сервер, её
+# узнаёт install.sh). Адрес из DATABASE_URL разбирается в переменные libpq, и в контейнер они
+# уходят через -e без значения: ни адреса, ни пароля нет в аргументах docker и списке процессов.
+# Проверка бэкапа — во временном локальном контейнере postgres, восстановление и откат — в ту же
+# базу одной транзакцией (решение: https://midhey.github.io/averra-cms/decisions/external-db/)
+
+db_external() { [[ "$(env_get AVERRA_DB_MODE)" == external ]]; }
+
+# Где CA провайдера внутри контейнеров: папка db-tls установки (install.sh --db-ca-file)
+DB_CA_MOUNT='/run/averra-db'
+
+# ── Общее у install.sh и averra.sh: тест сверяет, что текст одинаковый ──
+# Образ клиента PostgreSQL той же мажорной версии, что сервер: pg_dump не бывает старше сервера.
+# Теги точные, как у своей базы в compose.yaml
+pg_image_for_major() {
+  case "$1" in
+    16) printf 'postgres:16.15-alpine3.24' ;;
+    17) printf 'postgres:17.11-alpine3.24' ;;
+    18) printf 'postgres:18.6-alpine3.24' ;;
+    *) return 1 ;;
+  esac
+}
+
+# Раскодировать percent-encoding. Обратной косой черты в адресе нет (db_url_parse не пускает),
+# поэтому printf %b видит только наши \xHH
+pct_decode() { printf '%b' "${1//%/\\x}"; }
+
+# Разбор адреса postgres://пользователь:пароль@хост:порт/база?параметры. Итог — в DBU_* (USER и
+# PASSWORD раскодированы), адрес в каноническом виде — DBU_URL (sslmode=verify-full, sslrootcert —
+# наш CA, если второй аргумент 1). Код 1 и DBU_ERROR — что не так, по-русски. Сам адрес в
+# сообщения не попадает: в нём пароль
+db_url_parse() {
+  local url="$1" ca="${2:-0}" rest authority after userinfo hostport path query param key value
+  local user pass sslmode='' encoded extra host_in_url
+  local params=() kept=()
+  local LC_ALL=C
+  local hint='знаки @ : / # ? % пробел и кавычки в пароле и имени пользователя записывают percent-encoded: @ → %40, : → %3A, / → %2F, # → %23, ? → %3F, % → %25'
+  DBU_ERROR=''
+  if [[ ! "$url" =~ ^postgres(ql)?:// ]]; then
+    DBU_ERROR='адрес базы должен начинаться с postgres:// (вид postgres://пользователь:пароль@хост:5432/база)'
+    return 1
+  fi
+  if [[ "$url" == *[[:space:]\'\"\\\#]* ]]; then
+    DBU_ERROR="в адресе базы пробел, кавычка, \\ или #: $hint"
+    return 1
+  fi
+  if [[ "$url" =~ %($|[^0-9A-Fa-f]|[0-9A-Fa-f]($|[^0-9A-Fa-f])) ]]; then
+    DBU_ERROR="в адресе базы % не перед двумя шестнадцатеричными цифрами: $hint"
+    return 1
+  fi
+  # %00 — нулевой байт: bash его отбросит, а API (decodeURIComponent) оставит, и пароль у клиента
+  # бэкапов и у API разошёлся бы
+  if [[ "$url" == *%00* ]]; then
+    DBU_ERROR="в адресе базы %00 (нулевой байт): такой пароль или имя не передать клиенту PostgreSQL"
+    return 1
+  fi
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  after="${rest:${#authority}}"
+  if [[ "$authority" != *@* ]]; then
+    DBU_ERROR="в адресе базы нет «пользователь:пароль@» (или в пароле / без кодирования): $hint"
+    return 1
+  fi
+  userinfo="${authority%@*}"
+  hostport="${authority##*@}"
+  user="${userinfo%%:*}"
+  pass=''
+  [[ "$userinfo" != *:* ]] || pass="${userinfo#*:}"
+  encoded='^([A-Za-z0-9._~!$&()*+,;=-]|%[0-9A-Fa-f]{2})+$'
+  if [[ ! "$user" =~ $encoded || ! "$pass" =~ $encoded ]]; then
+    DBU_ERROR="в адресе базы не разобрать пользователя и пароль (нужны оба): $hint"
+    return 1
+  fi
+  if [[ "$hostport" =~ ^\[([0-9A-Fa-f:.]+)\](:([0-9]+))?$ ]]; then
+    DBU_HOST="${BASH_REMATCH[1]}"
+    DBU_PORT="${BASH_REMATCH[3]}"
+  elif [[ "$hostport" =~ ^([A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?)(:([0-9]+))?$ ]]; then
+    DBU_HOST="${BASH_REMATCH[1]}"
+    DBU_PORT="${BASH_REMATCH[4]}"
+  else
+    DBU_ERROR='в адресе базы не разобрать хост и порт: нужен вид хост:5432 (один хост, без запятых)'
+    return 1
+  fi
+  [[ -n "$DBU_PORT" ]] || DBU_PORT=5432
+  if [[ ! "$DBU_PORT" =~ ^[0-9]{1,5}$ ]] || ((10#$DBU_PORT < 1 || 10#$DBU_PORT > 65535)); then
+    DBU_ERROR="порт базы $DBU_PORT — не порт (1–65535)"
+    return 1
+  fi
+  path="${after%%\?*}"
+  query=''
+  [[ "$after" != *\?* ]] || query="${after#*\?}"
+  DBU_NAME="${path#/}"
+  if [[ "$path" != /* || ! "$DBU_NAME" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}$ ]]; then
+    DBU_ERROR='в адресе базы нет имени базы после хоста (…@хост:5432/база): латиница, цифры, _ . -'
+    return 1
+  fi
+  [[ -z "$query" ]] || IFS='&' read -r -a params <<<"$query"
+  for param in "${params[@]}"; do
+    [[ -n "$param" ]] || continue
+    key="${param%%=*}"
+    value="${param#*=}"
+    case "$key" in
+      sslmode) sslmode="$value" ;;
+      # Свой CA задаёт --db-ca-file: путь внутри контейнеров знает только установка
+      sslrootcert)
+        if [[ "$value" != "$DB_CA_MOUNT/ca.pem" ]]; then
+          DBU_ERROR='sslrootcert в адресе базы не задают: корневой сертификат провайдера передайте флагом --db-ca-file <файл>'
+          return 1
+        fi
+        ;;
+      connect_timeout | application_name)
+        if [[ ! "$value" =~ ^[A-Za-z0-9_.-]{1,64}$ ]]; then
+          DBU_ERROR="параметр $key в адресе базы: латиница, цифры, _ . -"
+          return 1
+        fi
+        kept+=("$key=$value")
+        ;;
+      *)
+        DBU_ERROR="параметр «$key» в адресе базы не поддерживается: годятся sslmode, connect_timeout, application_name"
+        return 1
+        ;;
+    esac
+  done
+  case "$sslmode" in
+    '' | verify-full) ;;
+    disable | allow | prefer)
+      DBU_ERROR="sslmode=$sslmode — соединение без обязательного TLS: пароль и персональные данные пошли бы по сети открыто. Уберите sslmode (установщик поставит verify-full) или задайте sslmode=verify-full"
+      return 1
+      ;;
+    require | verify-ca)
+      DBU_ERROR="sslmode=$sslmode не проверяет имя сервера в сертификате: нужен verify-full. Сертификат провайдера не из публичных — передайте его корневой сертификат флагом --db-ca-file"
+      return 1
+      ;;
+    *)
+      DBU_ERROR="sslmode=$sslmode — непонятное значение: нужен verify-full"
+      return 1
+      ;;
+  esac
+  DBU_USER="$(pct_decode "$user")"
+  DBU_PASSWORD="$(pct_decode "$pass")"
+  if [[ -z "$DBU_USER" || -z "$DBU_PASSWORD" || "$DBU_USER$DBU_PASSWORD" == *[$'\n\r']* ]]; then
+    DBU_ERROR='в адресе базы пустые или многострочные пользователь или пароль'
+    return 1
+  fi
+  # Раскодированные имя и пароль — текст UTF-8: иначе (%FF и т. п.) клиент бэкапов войдёт, а API
+  # (decodeURIComponent) адрес не разберёт и не поднимется — с непонятной причиной уже после записи
+  for value in "$DBU_USER" "$DBU_PASSWORD"; do
+    if ! printf '%s' "$value" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+      DBU_ERROR='в адресе базы пользователь или пароль после раскодирования %XX — не текст UTF-8 (например, %FF): API такой адрес не разберёт. Знак не из латиницы кодируют всеми байтами UTF-8 (я → %D1%8F), а проще — пароль из латиницы и цифр'
+      return 1
+    fi
+  done
+  host_in_url="$DBU_HOST"
+  [[ "$DBU_HOST" != *:* ]] || host_in_url="[$DBU_HOST]"
+  DBU_URL="postgres://$user:$pass@$host_in_url:$DBU_PORT/$DBU_NAME?sslmode=verify-full"
+  [[ "$ca" != 1 ]] || DBU_URL+="&sslrootcert=$DB_CA_MOUNT/ca.pem"
+  for extra in "${kept[@]}"; do DBU_URL+="&$extra"; done
+}
+# ── Конец общего у install.sh и averra.sh ──
+
+# Переменные libpq из DATABASE_URL — в окружение текущего (под)процесса. Код 1 — адрес или образ
+# в .env не годятся
+db_client_env() {
+  local url ca=0
+  url="$(env_get DATABASE_URL)"
+  [[ "$url" != *"sslrootcert=$DB_CA_MOUNT/ca.pem"* ]] || ca=1
+  db_url_parse "$url" "$ca" || return 1
+  PG_IMAGE="$(env_get AVERRA_PG_IMAGE)"
+  [[ "$PG_IMAGE" =~ ^postgres:[0-9]+\.[0-9]+-alpine[0-9.]+$ ]] || return 1
+  export PGHOST="$DBU_HOST" PGPORT="$DBU_PORT" PGUSER="$DBU_USER" PGPASSWORD="$DBU_PASSWORD"
+  export PGDATABASE="$DBU_NAME" PGSSLMODE=verify-full PGCONNECT_TIMEOUT=15 PGSSLROOTCERT=system
+  [[ $ca -eq 0 ]] || PGSSLROOTCERT="$DB_CA_MOUNT/ca.pem"
+}
+
+# pg_client <команда клиента PostgreSQL и аргументы>: во внешней базе, в контейнере клиента.
+# Переменные — только в подпроцессе: остальным командам скрипта пароль не достаётся
+pg_client() {
+  (
+    if ! db_client_env; then
+      printf 'Адрес внешней базы (DATABASE_URL) или образ клиента (AVERRA_PG_IMAGE) в .env не годятся: повторите install.sh --external-db\n' >&2
+      exit 97
+    fi
+    docker run --rm -i --cap-drop ALL --security-opt no-new-privileges:true \
+      -v "$AVERRA_DIR/db-tls:$DB_CA_MOUNT:ro" \
+      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGSSLROOTCERT \
+      -e PGCONNECT_TIMEOUT "$PG_IMAGE" "$@"
+  )
+}
+
+# Внешняя база отвечает: 0 — да
+external_db_up() { [[ "$(pg_client psql -X -tAc 'select 1' </dev/null 2>/dev/null | tr -d '[:space:]')" == 1 ]]; }
+
+# Страховочный дамп текущей базы перед восстановлением или откатом: во временный файл, потом на
+# место — оборванный дамп не выдаёт себя за целый. Код 1 — не снялся (база не тронута)
+save_safety_dump() {
+  local file="$1"
+  (umask 077 && mkdir -p "$BACKUP_DIR")
+  if (umask 077 && pg_client pg_dump -Fc </dev/null >"$file.tmp" 2>/dev/null) && [[ -s "$file.tmp" ]] &&
+    mv -f "$file.tmp" "$file"; then
+    write_kept_dumps
+    return 0
+  fi
+  rm -f "$file.tmp"
+  return 1
+}
+
+# Загрузка дампа в ту же базу ОДНОЙ транзакцией: сначала схема drizzle и объекты public удаляются
+# (таблицы новой версии, которых нет в дампе, тоже — pg_restore --clean их бы оставил), потом SQL
+# из дампа. Сбой или обрыв посередине — транзакция откатывается, база остаётся прежней. Владельцы и
+# права из дампа не переносятся: на внешнем сервере всё принадлежит пользователю установки
+LOAD_DUMP_SCRIPT="$(
+  cat <<'SCRIPT'
+set -e
+cat >/tmp/averra.dump
+pg_restore --no-owner --no-privileges -f /tmp/averra.sql /tmp/averra.dump
+cat >/tmp/averra-clean.sql <<'SQL'
+DROP SCHEMA IF EXISTS drizzle CASCADE;
+DO $clean$
+DECLARE
+  item record;
+BEGIN
+  FOR item IN
+    SELECT format('%I.%I', n.nspname, c.relname) AS name, c.relkind
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'f', 'v', 'm', 'S')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+      -- Последовательность столбца serial (a) или IDENTITY (i) уходит вместе с таблицей, а свой
+      -- DROP у IDENTITY падает («column … requires it») — и откатывал бы всю загрузку
+      AND NOT (c.relkind = 'S' AND EXISTS (
+        SELECT 1 FROM pg_depend d
+        WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid
+          AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')))
+    ORDER BY c.relkind = 'S', c.oid
+  LOOP
+    EXECUTE format('DROP %s IF EXISTS %s CASCADE',
+      CASE item.relkind WHEN 'v' THEN 'VIEW' WHEN 'm' THEN 'MATERIALIZED VIEW'
+        WHEN 'S' THEN 'SEQUENCE' WHEN 'f' THEN 'FOREIGN TABLE' ELSE 'TABLE' END,
+      item.name);
+  END LOOP;
+  FOR item IN
+    SELECT format('%I.%I', n.nspname, t.typname) AS name
+    FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd', 'r', 'c')
+      AND (t.typrelid = 0 OR (SELECT c.relkind FROM pg_class c WHERE c.oid = t.typrelid) = 'c')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = t.oid AND d.deptype = 'e')
+  LOOP
+    EXECUTE format('DROP TYPE IF EXISTS %s CASCADE', item.name);
+  END LOOP;
+  FOR item IN
+    SELECT p.oid::regprocedure::text AS name
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+  LOOP
+    EXECUTE format('DROP ROUTINE IF EXISTS %s CASCADE', item.name);
+  END LOOP;
+END
+$clean$;
+SQL
+exec psql -X -q -v ON_ERROR_STOP=1 --single-transaction -f /tmp/averra-clean.sql -f /tmp/averra.sql
+SCRIPT
+)"
+
+# Сбой загрузки — строки ошибок клиента в вывод (не в состояние): проверка во временном контейнере
+# идёт от суперпользователя, а загрузка — от пользователя установки, и «там прошло, тут нет» (права,
+# расширения провайдера) без причины не разобрать. Только строки ERROR/FATAL: в CONTEXT и LINE
+# бывают строки данных
+load_dump() {
+  local err code=0
+  err="$(mktemp)"
+  pg_client sh -c "$LOAD_DUMP_SCRIPT" <"$1" >/dev/null 2>"$err" || code=$?
+  if [[ $code -ne 0 ]]; then
+    printf 'Загрузка дампа не прошла. Ответ клиента PostgreSQL:
+' >&2
+    grep -E '(ERROR|FATAL|error):' "$err" | tail -n 10 | cut -c1-300 >&2 || true
+  fi
+  rm -f "$err"
+  return $code
+}
+
+# Мажорная версия сервера внешней базы новее клиента бэкапов (провайдер обновил сервер): pg_dump
+# старее сервера отказывает. Печатает причину для состояния; пусто — не в этом дело или версию не
+# узнать
+external_version_problem() {
+  local num server client
+  num="$(pg_client psql -X -tAc 'show server_version_num' </dev/null 2>/dev/null | tr -d '[:space:]' || true)"
+  [[ "$num" =~ ^[0-9]+$ ]] || return 0
+  server=$((10#$num / 10000))
+  client="$(env_get AVERRA_PG_IMAGE)"
+  client="${client#postgres:}"
+  client="${client%%.*}"
+  [[ "$client" =~ ^[0-9]+$ ]] && ((server > 10#$client)) || return 0
+  printf 'pg_dump не прошёл: сервер базы — PostgreSQL %s, а клиент бэкапов — %s. Запустите install.sh ещё раз: он возьмёт клиент версии сервера' "$server" "$client"
+}
+
+# Временный контейнер проверки: метка, по которой убираются и брошенные (kill -9 посреди проверки).
+# Удаляется всегда с -v: образ postgres объявляет VOLUME, и под данные создаётся анонимный том с
+# полной копией рабочей базы (персональные данные). --rm удаляет его, только если контейнер
+# остановился сам; docker rm -f без -v (наш trap успевает раньше) оставил бы том навсегда
+VERIFY_LABEL='averra.verify=1'
+
+drop_verify_containers() {
+  local ids
+  ids="$(docker ps -aq --filter "label=$VERIFY_LABEL" 2>/dev/null || true)"
+  [[ -z "$ids" ]] || docker rm -fv $ids >/dev/null 2>&1 || true
+}
+
+# Проверка дампа внешней базы без CREATEDB на её сервере: восстановить во временный локальный
+# контейнер postgres той же версии (без сети) и сверить число миграций и таблиц. Ожидаемые числа
+# пусты — проверяется только, что дамп восстанавливается. Контейнер удаляется в любом исходе вместе
+# с анонимным томом данных (docker rm -fv), брошенный обрывом — в начале следующей проверки
+verify_dump_local() {
+  local dump="$1" migrations="$2" tables="$3" image name ok=0 i ready=0
+  image="$(env_get AVERRA_PG_IMAGE)"
+  [[ "$image" =~ ^postgres:[0-9]+\.[0-9]+-alpine[0-9.]+$ ]] || return 1
+  drop_verify_containers
+  name="averra-verify-$(stamp)-$$"
+  (
+    trap 'docker rm -fv "$name" >/dev/null 2>&1 || true' EXIT
+    docker run -d --rm --name "$name" --label "$VERIFY_LABEL" --network none \
+      -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=averra_verify "$image" \
+      postgres -c fsync=off -c shared_buffers=32MB -c max_connections=10 >/dev/null 2>&1 || exit 1
+    # Готов — когда слушает TCP: на время initdb образ поднимает сервер только на сокете
+    for ((i = 0; i < 60; i++)); do
+      if docker exec "$name" pg_isready -h 127.0.0.1 -U postgres -d averra_verify >/dev/null 2>&1; then
+        ready=1
+        break
+      fi
+      sleep 1
+    done
+    [[ $ready -eq 1 ]] || exit 1
+    docker exec -i "$name" pg_restore -h 127.0.0.1 -U postgres -d averra_verify --no-owner \
+      --no-privileges --exit-on-error <"$dump" >/dev/null 2>&1 || exit 1
+    local value
+    value="$(docker exec "$name" psql -X -h 127.0.0.1 -U postgres -d averra_verify -tAc 'select count(*) from drizzle.__drizzle_migrations' 2>/dev/null | tr -d '[:space:]')"
+    [[ -z "$migrations" || "$value" == "$migrations" ]] || exit 1
+    value="$(docker exec "$name" psql -X -h 127.0.0.1 -U postgres -d averra_verify -tAc "select count(*) from information_schema.tables where table_schema = 'public'" 2>/dev/null | tr -d '[:space:]')"
+    [[ -z "$tables" || "$value" == "$tables" ]] || exit 1
+  ) && ok=1
+  [[ $ok -eq 1 ]]
+}
+
+# Страховочные дампы (before-restore-*, rolled-back-*): копии данных вне рабочей базы, как
+# служебные базы у своей. Их имена — в состояние: «Состояние» напомнит разобрать, а срок хранения
+# бэкапов их удалит
+KEPT_DUMP_RE='^(before-restore|rolled-back)-[0-9]{8}-[0-9]{6}\.dump$'
+
+kept_dumps() {
+  find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.dump' -printf '%f\n' 2>/dev/null |
+    grep -E "$KEPT_DUMP_RE" | sort || true
+}
+
+write_kept_dumps() {
+  local name list=''
+  while read -r name; do
+    [[ -n "$name" ]] || continue
+    [[ -z "$list" ]] || list+=','
+    list+="$(json_str "$name")"
+  done < <(kept_dumps)
+  write_state kept-dumps.json "{\"files\":[$list]}" || true
 }
 
 wait_ready() {
@@ -202,6 +582,11 @@ services_running() {
 # а не только что он записан. Совпасть должны число миграций и таблиц
 verify_dump() {
   local dump="$1" migrations="$2" tables="$3" ok=0
+  # Внешняя база: CREATEDB на её сервере нет — проверка во временном локальном контейнере
+  if db_external; then
+    verify_dump_local "$dump" "$migrations" "$tables"
+    return
+  fi
   compose exec -T postgres dropdb -U averra --if-exists averra_verify >/dev/null 2>&1 || return 1
   compose exec -T postgres createdb -U averra averra_verify >/dev/null 2>&1 || return 1
   if compose exec -T postgres pg_restore -U averra -d averra_verify --no-owner --exit-on-error \
@@ -337,6 +722,25 @@ rotate_backups() {
     rm -rf "${BACKUP_DIR:?}/$name"
   done < <(expired_names "$all" "$total" "$others" "$cutoff")
   find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '.tmp-*' -exec rm -rf {} + 2>/dev/null || true
+  # Страховочные дампы внешней базы (восстановление, откат): копии данных — тот же срок. Дамп
+  # незавершённого обновления не трогаем: из него повтор отката
+  local dump pending_dump=''
+  [[ ! -f "$UPDATE_RUN" ]] || pending_dump="$(run_get KEPT_DUMP)"
+  while read -r dump; do
+    [[ -n "$dump" && "$dump" != "$pending_dump" ]] || continue
+    name="${dump%.dump}"
+    name="${name: -15}"
+    if [[ "$name" < "$cutoff" ]]; then
+      rm -f "${BACKUP_DIR:?}/$dump"
+      say "Удалён страховочный дамп $dump: срок хранения ($keep дн.) вышел"
+    fi
+  done < <(kept_dumps)
+  rm -f "$BACKUP_DIR"/*.dump.tmp 2>/dev/null || true
+  # Служебных баз у внешней базы нет: создавать базы на её сервере установке нельзя
+  if db_external; then
+    write_kept_dumps
+    return 0
+  fi
   # Базы averra нет — рабочие данные, возможно, лежат под служебным именем: откат обновления
   # оборвался между переименованиями и кончился rollback-failed, отметки .update-run уже нет.
   # Тогда служебные базы по сроку не удаляются, пока человек не вернёт рабочую на место: удалить
@@ -380,6 +784,15 @@ cleanup_remote_only() {
   fi
 }
 
+# Дамп рабочей базы в формате pg_dump -Fc — в stdout
+dump_db() {
+  if db_external; then
+    pg_client pg_dump -Fc </dev/null
+  else
+    compose exec -T postgres pg_dump -U averra -d averra -Fc
+  fi
+}
+
 # Делает бэкап; имя — в BACKUP_NAME. Код 1 — бэкап не удался (состояние записано).
 # defer=1 — без внешней копии, ротации и состояния: их делает finish_backup позже (обновление
 # выгружает копию, когда сервис снова работает, а не держит его остановленным)
@@ -410,9 +823,14 @@ do_backup() {
   step "Бэкап $name"
   # Файлы с персональными данными (заявки) — только root
   umask 077
-  if ! compose exec -T postgres pg_dump -U averra -d averra -Fc >"$tmp/db.dump" 2>/dev/null ||
-    [[ ! -s "$tmp/db.dump" ]]; then
+  if ! dump_db >"$tmp/db.dump" 2>/dev/null || [[ ! -s "$tmp/db.dump" ]]; then
     error='pg_dump не прошёл: база не ответила'
+    # Внешняя база: частая причина, кроме сети, — провайдер поднял мажорную версию сервера, а
+    # pg_dump клиента старее сервера и отказывает
+    if db_external; then
+      error="$(external_version_problem)"
+      [[ -n "$error" ]] || error='pg_dump не прошёл: база не ответила'
+    fi
   fi
   if [[ -z "$error" ]]; then
     migrations="$(count_migrations averra 2>/dev/null || true)"
@@ -429,7 +847,11 @@ do_backup() {
     error='архив медиатеки не записался'
   fi
   if [[ -z "$error" ]]; then
-    say 'Проверяю: дамп восстанавливается во временную базу, архив медиа читается'
+    if db_external; then
+      say 'Проверяю: дамп восстанавливается во временный контейнер PostgreSQL, архив медиа читается'
+    else
+      say 'Проверяю: дамп восстанавливается во временную базу, архив медиа читается'
+    fi
     if ! verify_dump "$tmp/db.dump" "$migrations" "$tables"; then
       error='дамп не восстановился во временную базу'
     elif ! verify_media "$tmp/media.tar.gz"; then
@@ -703,6 +1125,10 @@ cmd_restore() {
     drop_media_stage
     fail 'медиатека из бэкапа не распаковалась, ничего не менялось'
   fi
+  if db_external; then
+    restore_external "$dir" "$name"
+    return
+  fi
   step 'Восстанавливаю базу (сначала во временную)'
   restore_database "$dir" averra_before_restore || code=$?
   if [[ $code -ne 0 ]]; then
@@ -759,6 +1185,213 @@ cmd_restore() {
   say "Готово: восстановлено из $name. Опубликованные сайты собираются заново из восстановленных базы и медиатеки — итог сборки на экране сайта в админке"
 }
 
+# Итог восстановления внешней базы (restore и restore-dump) — state/restore-last.json для
+# «Состояния» и averra.sh status без API. Пишется перед остановкой API (in-progress: пока идёт
+# проверка дампа, API работает, и тревожить «Состояние» незачем), после загрузки
+# (dbRestored: база уже из бэкапа) и в конце: оборвалось посередине — видно, что и где страховочный
+# дамп. Причины — фиксированный текст без путей: его видит владелец в админке. Своя база этого файла
+# не пишет: её прежние данные — служебные базы, их «Состояние» показывает и так
+RESTORE_KIND=''
+RESTORE_SOURCE=''
+RESTORE_STARTED=''
+RESTORE_SAFETY=''
+
+restore_begin() {
+  RESTORE_KIND="$1"
+  RESTORE_SOURCE="${2:0:200}"
+  RESTORE_STARTED="$(now_iso)"
+  RESTORE_SAFETY=''
+}
+
+restore_state() {
+  # restore_state <in-progress|ok|failed> <база заменена: true|false> [<причина>]
+  local finished='null'
+  [[ "$1" == in-progress ]] || finished="$(json_str "$(now_iso)")"
+  write_state restore-last.json "$(printf '{"kind":%s,"source":%s,"startedAt":%s,"finishedAt":%s,"result":%s,"dbRestored":%s,"safetyDump":%s,"error":%s}' \
+    "$(json_str "$RESTORE_KIND")" "$(json_str "$RESTORE_SOURCE")" "$(json_str "$RESTORE_STARTED")" \
+    "$finished" "$(json_str "$1")" "$2" "$(json_or_null "${RESTORE_SAFETY##*/}")" \
+    "$(json_or_null "${3:-}")")" || true
+}
+
+# restore_fail <база заменена> <причина для состояния> <сообщение человеку>
+restore_fail() {
+  restore_state failed "$1" "$2"
+  fail "$3"
+}
+
+# Восстановление во внешнюю базу: без новой базы и переименований (CREATEDB нет). Дамп сначала
+# проверяется во временном контейнере, потом API останавливается, снимается страховочный дамп
+# текущей базы, и дамп бэкапа грузится в ту же базу одной транзакцией. Не прошло — база прежняя;
+# API не поднялся — страховочный дамп возвращается той же транзакцией. Медиатека — как у своей
+# базы. Страховочный дамп удаляется только после успеха: до него он — путь назад
+restore_external() {
+  local dir="$1" name="$2" safety code=0
+  restore_begin backup "$name"
+  step 'Проверяю дамп: восстанавливаю во временный контейнер PostgreSQL (рабочая база не тронута)'
+  if ! verify_dump "$dir/db.dump" "$(manifest_number "$dir" migrations)" "$(manifest_number "$dir" tables)"; then
+    drop_media_stage
+    restore_fail false 'дамп бэкапа не восстановился во временный контейнер: ничего не менялось' \
+      'дамп не восстановился во временный контейнер: рабочие база и медиатека не тронуты'
+  fi
+  step 'Останавливаю API и снимаю страховочный дамп текущей базы'
+  restore_state in-progress false
+  if ! compose stop api; then
+    drop_media_stage
+    compose up -d api >/dev/null 2>&1 || true
+    restore_fail false 'API не остановился: ничего не менялось' 'API не остановился: ничего не менялось'
+  fi
+  safety="$BACKUP_DIR/before-restore-$(stamp).dump"
+  if ! save_safety_dump "$safety"; then
+    drop_media_stage
+    compose up -d api >/dev/null 2>&1 || true
+    restore_fail false 'страховочный дамп текущей базы не снялся: ничего не менялось' \
+      'страховочный дамп текущей базы не снялся (база не ответила?): ничего не менялось'
+  fi
+  RESTORE_SAFETY="$safety"
+  restore_state in-progress false
+  say "Страховочный дамп текущей базы: $safety"
+  say "Восстановление идёт одной транзакцией: оборвётся — база останется прежней. Вернуть прежнюю базу из страховочного дампа: $AVERRA_DIR/averra.sh restore-dump $safety --yes, потом docker compose --project-directory $AVERRA_DIR up -d"
+  step 'Восстанавливаю базу из бэкапа (одной транзакцией)'
+  if ! load_dump "$dir/db.dump"; then
+    drop_media_stage
+    compose up -d api >/dev/null 2>&1 || true
+    restore_fail false 'база не восстановилась — транзакция откатилась, рабочие база и медиатека прежние' \
+      "база не восстановилась — транзакция откатилась, рабочие база и медиатека прежние. Страховочный дамп: $safety (удалится со старыми бэкапами)"
+  fi
+  # База уже из бэкапа: оборвётся дальше — «Состояние» скажет, что прежняя — в страховочном дампе
+  restore_state in-progress true
+  step 'Подменяю медиатеку восстановленной (прежняя — рядом, пока API не поднимется)'
+  swap_media || code=$?
+  if [[ $code -ne 0 ]]; then
+    [[ $code -ne 5 ]] ||
+      restore_fail true 'медиатека не подменилась и разделена: база из бэкапа, прежняя — в страховочном дампе, API остановлен — нужен человек на сервере' \
+        "медиатека не подменилась: прежние картинки не перенеслись целиком и не вернулись — часть в томе медиатеки на месте, часть в папке $MEDIA_BEFORE. Ничего не удалено: верните содержимое $MEDIA_BEFORE в /data/media. База восстановлена из бэкапа, прежняя — в страховочном дампе $safety, API остановлен: разберитесь руками"
+    if [[ $code -ne 4 ]] && ! unswap_media; then
+      restore_fail true 'медиатека не подменилась, и прежнюю вернуть не вышло: база из бэкапа, прежняя — в страховочном дампе, API остановлен — нужен человек на сервере' \
+        "медиатека не подменилась и прежнюю вернуть не вышло: прежние картинки — в томе медиатеки, папка $MEDIA_BEFORE. База восстановлена из бэкапа, прежняя — в страховочном дампе $safety, API остановлен: разберитесь руками"
+    fi
+    load_dump "$safety" ||
+      restore_fail true 'медиатека не подменилась (прежняя на месте), а прежнюю базу вернуть не вышло: она в страховочном дампе, API остановлен' \
+        "медиатека не подменилась (прежняя на месте), и прежнюю базу вернуть не вышло: база — из бэкапа $name, прежняя — в страховочном дампе $safety (averra.sh restore-dump $safety). API остановлен"
+    compose up -d
+    restore_fail false 'медиатека не подменилась — прежние база и медиатека на месте' \
+      "медиатека не подменилась — прежние база и медиатека на месте. Страховочный дамп: $safety (удалится со старыми бэкапами)"
+  fi
+  step 'Очищаю собранные сайты: API соберёт их заново из восстановленных базы и медиатеки'
+  clear_sites
+  compose up -d
+  if ! wait_ready; then
+    compose stop api || true
+    load_dump "$safety" ||
+      restore_fail true 'API не поднялся на восстановленной базе, а прежнюю базу вернуть не вышло: она в страховочном дампе, API остановлен' \
+        "API не поднялся, и прежнюю базу вернуть не вышло: база — из бэкапа $name, прежняя — в страховочном дампе $safety (averra.sh restore-dump $safety). Прежние картинки — в томе медиатеки, папка $MEDIA_BEFORE"
+    if ! unswap_media; then
+      compose up -d
+      restore_fail false 'API не поднялся на восстановленной базе: база прежняя, а прежнюю медиатеку вернуть не вышло — нужен человек на сервере' \
+        "API не поднялся на восстановленной базе. Прежняя база на месте, а прежнюю медиатеку вернуть не вышло: она в томе медиатеки, папка $MEDIA_BEFORE — верните руками"
+    fi
+    clear_sites
+    compose up -d
+    restore_fail false 'API не поднялся на восстановленной базе — прежние база и медиатека на месте' \
+      "API не поднялся на восстановленной базе — прежние база и медиатека на месте. Страховочный дамп: $safety (удалится со старыми бэкапами)"
+  fi
+  drop_media_before ||
+    say "Прежняя медиатека не удалилась: она в томе медиатеки, папка $MEDIA_BEFORE (в бэкапы не попадает). Удалите её, иначе следующее восстановление откажет"
+  rm -f "$safety"
+  write_kept_dumps
+  RESTORE_SAFETY=''
+  restore_state ok true
+  say "Готово: восстановлено из $name. Опубликованные сайты собираются заново из восстановленных базы и медиатеки — итог сборки на экране сайта в админке"
+}
+
+# Оборванное восстановление — «оставить как есть»: итог in-progress иначе висел бы в «Состоянии»
+# навсегда. Итог становится failed с этой причиной (неделю видно, как прочие неудачи), страховочный
+# дамп из итога уходит в общий список страховочных дампов — его удалит срок хранения. База и
+# медиатека не трогаются, API поднимается
+restore_dismiss() {
+  local restore db_restored=false
+  restore="$(cat "$STATE_DIR/restore-last.json" 2>/dev/null || true)"
+  [[ "$restore" == *'"result":"in-progress"'* ]] ||
+    fail 'незаконченного восстановления нет: оставлять как есть нечего (averra.sh status)'
+  [[ "$restore" != *'"dbRestored":true'* ]] || db_restored=true
+  RESTORE_KIND="$(json_field "$restore" kind)"
+  RESTORE_SOURCE="$(json_field "$restore" source)"
+  RESTORE_STARTED="$(json_field "$restore" startedAt)"
+  RESTORE_SAFETY=''
+  [[ "$RESTORE_KIND" == backup || "$RESTORE_KIND" == dump ]] || RESTORE_KIND=backup
+  [[ -n "$RESTORE_SOURCE" ]] || RESTORE_SOURCE='неизвестно'
+  [[ -n "$RESTORE_STARTED" ]] || RESTORE_STARTED="$(now_iso)"
+  restore_state failed "$db_restored" 'оборвалось; на сервере решено оставить базу как есть'
+  write_kept_dumps
+  compose up -d
+  say 'Оборванное восстановление закрыто: база оставлена как есть, API запущен. Страховочные дампы в папке backups удалятся вместе со старыми бэкапами'
+}
+
+# Вернуть во внешнюю базу дамп-файл (страховочный дамп прерванного восстановления или отката):
+# тоже со своим страховочным дампом и одной транзакцией. Только база: медиатека не меняется
+cmd_restore_dump() {
+  local file='' yes=0 answer safety dismiss=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes | -y) yes=1; shift ;;
+      --dismiss) dismiss=1; shift ;;
+      -*) fail "непонятный аргумент: $1" ;;
+      *) file="$1"; shift ;;
+    esac
+  done
+  db_external ||
+    fail 'restore-dump — для внешней базы. У своей базы прежние данные лежат служебными базами, бэкап восстанавливает averra.sh restore'
+  if [[ $dismiss -eq 1 ]]; then
+    [[ -z "$file" ]] || fail 'restore-dump --dismiss — без файла: он оставляет базу как есть'
+    take_lock
+    restore_dismiss
+    return
+  fi
+  [[ -n "$file" ]] || fail 'нужен файл дампа: averra.sh restore-dump <файл.dump> (страховочные дампы — в папке backups)'
+  [[ -f "$file" && -s "$file" ]] || fail "нет файла дампа $file"
+  take_lock
+  if [[ $yes -eq 0 ]]; then
+    [[ -t 0 ]] || fail 'нет терминала для подтверждения: добавьте --yes'
+    read -r -p "База заменится содержимым $file. Продолжить? [да/нет] " answer
+    [[ "$answer" == 'да' ]] || fail 'отменено'
+  fi
+  restore_begin dump "$(basename -- "$file")"
+  step 'Проверяю дамп во временном контейнере PostgreSQL'
+  verify_dump "$file" '' '' ||
+    restore_fail false 'дамп не восстановился во временный контейнер: база не тронута' \
+      'дамп не восстановился во временный контейнер: база не тронута'
+  restore_state in-progress false
+  compose stop api ||
+    restore_fail false 'API не остановился: база не тронута' 'API не остановился: база не тронута'
+  safety="$BACKUP_DIR/before-restore-$(stamp).dump"
+  if ! save_safety_dump "$safety"; then
+    compose up -d >/dev/null 2>&1 || true
+    restore_fail false 'страховочный дамп текущей базы не снялся: база не тронута' \
+      'страховочный дамп текущей базы не снялся: база не тронута'
+  fi
+  RESTORE_SAFETY="$safety"
+  restore_state in-progress false
+  say "Страховочный дамп текущей базы: $safety"
+  step 'Загружаю дамп в базу (одной транзакцией)'
+  if ! load_dump "$file"; then
+    compose up -d >/dev/null 2>&1 || true
+    restore_fail false 'дамп не загрузился — транзакция откатилась, база прежняя' \
+      "дамп не загрузился — транзакция откатилась, база прежняя. Страховочный дамп: $safety"
+  fi
+  restore_state in-progress true
+  compose up -d
+  wait_ready ||
+    restore_fail true 'база заменена дампом, но API не поднялся: прежняя база — в страховочном дампе' \
+      "база заменена дампом $file, но API не поднялся. Прежняя база — в страховочном дампе $safety. Лог: docker compose --project-directory $AVERRA_DIR logs api"
+  # Медиатека бэкапа, распакованная прерванным восстановлением, больше не нужна
+  drop_media_stage
+  rm -f "$safety"
+  write_kept_dumps
+  RESTORE_SAFETY=''
+  restore_state ok true
+  say "Готово: база — из $file, API работает. Сам файл не удалён: он удалится вместе со старыми бэкапами"
+}
+
 # ── Обновление ─────────────────────────────────────────────────────────────────────────────
 # Обновление идёт отдельным процессом, отвязанным от терминала и SSH (update-worker): обрыв SSH,
 # Ctrl+C у студии или закрытый терминал не бросают установку на полпути. Команда update запускает
@@ -771,15 +1404,15 @@ run_get() { kv_get "$UPDATE_RUN" "$1"; }
 run_set() { kv_set "$UPDATE_RUN" "$1" "$2"; }
 
 update_state() {
-  # update_state <итог> <база восстановлена> <причина> [<отложенная база>]; с, на, начало и шаг —
-  # из отметки. Итог in-progress — обновление идёт, времени конца нет
+  # update_state <итог> <база восстановлена> <причина> [<отложенная база>] [<страховочный дамп>];
+  # с, на, начало и шаг — из отметки. Итог in-progress — обновление идёт, времени конца нет
   local finished=null
   [[ "$1" == in-progress ]] || finished="$(json_str "$(now_iso)")"
-  write_state update-last.json "$(printf '{"from":%s,"to":%s,"startedAt":%s,"finishedAt":%s,"result":%s,"step":%s,"failedStep":%s,"dbRestored":%s,"keptDatabase":%s,"error":%s}' \
+  write_state update-last.json "$(printf '{"from":%s,"to":%s,"startedAt":%s,"finishedAt":%s,"result":%s,"step":%s,"failedStep":%s,"dbRestored":%s,"keptDatabase":%s,"keptDump":%s,"error":%s}' \
     "$(json_str "$(run_get FROM)")" "$(json_str "$(run_get TO)")" "$(json_str "$(run_get STARTED)")" \
     "$finished" "$(json_str "$1")" "$(json_or_null "$(run_get STEP)")" \
     "$(json_or_null "$(run_get FAILED_STEP)")" "$2" "$(json_or_null "${4:-}")" \
-    "$(json_or_null "$3")")"
+    "$(json_or_null "${5:-}")" "$(json_or_null "$3")")"
 }
 
 # Шаг обновления для админки (схема UpdateStep в API): pull, backup, migrate, verify, rollback.
@@ -800,7 +1433,7 @@ resume_backup() {
 # Итог: состояние для API, внешняя копия бэкапа перед обновлением, отметка снята. Оборвётся на
 # выгрузке — следующий update доделает только её (шаг finishing)
 update_finish() {
-  # update_finish <итог> <база восстановлена> <причина> [<отложенная база>]
+  # update_finish <итог> <база восстановлена> <причина> [<отложенная база>] [<страховочный дамп>]
   run_set PHASE finishing
   run_set RESULT "$1"
   update_state "$@"
@@ -849,7 +1482,7 @@ complete_update() {
 # Рабочая база при этом не удаляется: новая версия могла успеть принять заявки. Выходит из
 # процесса: 1 — откат удался, 2 — нет (нужен человек)
 rollback_update() {
-  local from to backup before after kept db_restored=false code=0
+  local from to backup before after kept kept_dump='' db_restored=false code=0
   from="$(run_get FROM)"
   to="$(run_get TO)"
   backup="$(run_get BACKUP)"
@@ -871,9 +1504,11 @@ rollback_update() {
   # вернул бы конфигурацию позапрошлой версии
   [[ "$(run_get PREV_SAVED)" != 1 || ! -f "$AVERRA_DIR/compose.yaml.prev" ]] ||
     cp -p "$AVERRA_DIR/compose.yaml.prev" "$AVERRA_DIR/compose.yaml"
+  if db_external; then
+    rollback_external_db
   # Откат повторяемый: прошлый мог оборваться посреди восстановления базы. Отложенная база есть —
   # значит, первое переименование (averra → kept) прошло
-  if [[ -n "$kept" && "$(db_exists "$kept" 2>/dev/null || true)" == 1 ]]; then
+  elif [[ -n "$kept" && "$(db_exists "$kept" 2>/dev/null || true)" == 1 ]]; then
     if [[ "$(db_exists averra 2>/dev/null || true)" == 0 ]]; then
       # Оборвался между переименованиями: рабочая база — под именем kept. Сначала вернуть её, потом
       # восстановление заново
@@ -890,7 +1525,7 @@ rollback_update() {
     fi
   fi
   after="$(count_migrations averra 2>/dev/null || true)"
-  if [[ "$db_restored" != true ]] && [[ ! "$before" =~ ^[0-9]+$ || "$after" != "$before" ]]; then
+  if ! db_external && [[ "$db_restored" != true ]] && [[ ! "$before" =~ ^[0-9]+$ || "$after" != "$before" ]]; then
     if [[ -z "$kept" ]]; then
       kept="${ROLLED_BACK_PREFIX}$(date -u +%Y%m%d_%H%M%S)"
       run_set KEPT "$kept"
@@ -912,16 +1547,55 @@ rollback_update() {
     run_set RESTORED 1
     say "Данные, которые новая версия успела принять после бэкапа $backup (заявки, правки), — в базе $kept. Она удалится вместе со старыми бэкапами (BACKUP_KEEP дней); посмотреть: docker compose --project-directory $AVERRA_DIR exec postgres psql -U averra -d $kept"
   fi
-  [[ "$db_restored" == true ]] || kept=''
+  [[ "$db_restored" == true ]] || { kept=''; kept_dump=''; }
   rm -rf "$AVERRA_DIR/.next"
   if compose up -d && wait_ready && services_running; then
-    update_finish rolled-back "$db_restored" "версия $to не прошла проверку готовности" "$kept"
+    update_finish rolled-back "$db_restored" "версия $to не прошла проверку готовности" "$kept" "$kept_dump"
     printf 'Ошибка: обновление до %s не прошло проверку — работает прежняя версия %s. Лог новой версии: docker compose logs api caddy\n' "$to" "$from" >&2
     exit 1
   fi
-  update_finish rollback-failed "$db_restored" 'прежняя версия тоже не прошла проверку готовности' "$kept"
+  update_finish rollback-failed "$db_restored" 'прежняя версия тоже не прошла проверку готовности' "$kept" "$kept_dump"
   printf 'Ошибка: откат не удался — прежняя версия %s не отвечает. Бэкап перед обновлением: %s. Лог: docker compose --project-directory %s logs api\n' "$from" "$backup" "$AVERRA_DIR" >&2
   exit 2
+}
+
+# Откат внешней базы (часть rollback_update, её переменные): миграции новой версии прошли — база
+# возвращается из бэкапа перед обновлением в ту же базу одной транзакцией. Перед этим снимается
+# страховочный дамп (данные, принятые новой версией после бэкапа). Повторяемо: оборвался прошлый
+# откат — транзакция откатилась (база на новой схеме) или уже прошла (миграций снова before)
+rollback_external_db() {
+  kept_dump="$(run_get KEPT_DUMP)"
+  [[ "$(run_get RESTORED)" != 1 ]] || db_restored=true
+  after="$(count_migrations averra 2>/dev/null || true)"
+  if [[ "$db_restored" != true && -n "$kept_dump" && -s "$BACKUP_DIR/$kept_dump" &&
+    "$before" =~ ^[0-9]+$ && "$after" == "$before" ]]; then
+    # Страховочный дамп снят при миграциях новой версии, а сейчас их снова прежнее число: загрузка
+    # бэкапа прошла, обрыв был после неё
+    db_restored=true
+    run_set RESTORED 1
+  fi
+  [[ "$db_restored" != true ]] || return 0
+  [[ ! "$before" =~ ^[0-9]+$ || "$after" != "$before" ]] || return 0
+  if [[ -z "$kept_dump" ]]; then
+    kept_dump="rolled-back-$(stamp).dump"
+    run_set KEPT_DUMP "$kept_dump"
+  fi
+  say "Миграции новой версии успели примениться ($before → ${after:-?}): восстанавливаю базу из $backup в ту же базу одной транзакцией"
+  if [[ ! -s "$BACKUP_DIR/$kept_dump" ]] && ! save_safety_dump "$BACKUP_DIR/$kept_dump"; then
+    rm -rf "$AVERRA_DIR/.next"
+    update_finish rollback-failed false 'не снялся страховочный дамп базы: она не восстановлена из бэкапа'
+    printf 'Ошибка: откат не удался — не снялся страховочный дамп текущей базы (база не ответила?), поэтому база не восстанавливалась из бэкапа и осталась на миграциях новой версии. Бэкап: %s. Когда база ответит: averra.sh restore %s\n' "$BACKUP_DIR/$backup" "$backup" >&2
+    exit 2
+  fi
+  say "Данные, которые новая версия успела принять после бэкапа $backup (заявки, правки), — в страховочном дампе $BACKUP_DIR/$kept_dump. Он удалится вместе со старыми бэкапами (BACKUP_KEEP дней). Оборвётся откат — база останется прежней (одна транзакция), повтор averra.sh update доведёт откат; вернуть базу из дампа руками: averra.sh restore-dump $BACKUP_DIR/$kept_dump --yes"
+  if ! load_dump "$BACKUP_DIR/$backup/db.dump"; then
+    rm -rf "$AVERRA_DIR/.next"
+    update_finish rollback-failed false 'база не восстановилась из бэкапа перед обновлением (транзакция откатилась)' '' "$kept_dump"
+    printf 'Ошибка: откат не удался — база не восстановилась из бэкапа: транзакция откатилась, база на миграциях новой версии. Бэкап: %s. Восстановите руками: averra.sh restore %s\n' "$BACKUP_DIR/$backup" "$backup" >&2
+    exit 2
+  fi
+  db_restored=true
+  run_set RESTORED 1
 }
 
 # Прошлое обновление оборвалось (есть отметка, а процесса нет — замок наш): довести его до конца.
@@ -1010,12 +1684,15 @@ update_run() {
   next="$AVERRA_DIR/.next"
   rm -rf "$next"
   (umask 077 && mkdir -p "$next")
-  if ! docker run --rm --entrypoint cat "$api_image:$target" /app/deploy/compose.yaml >"$next/compose.yaml" ||
+  # Внешняя база — свой файл Compose без сервиса postgres (в папке установки он — compose.yaml)
+  local compose_source=compose.yaml
+  ! db_external || compose_source=compose.external.yaml
+  if ! docker run --rm --entrypoint cat "$api_image:$target" "/app/deploy/$compose_source" >"$next/compose.yaml" ||
     ! docker run --rm --entrypoint cat "$api_image:$target" /app/deploy/averra.sh >"$next/averra.sh" ||
     [[ ! -s "$next/compose.yaml" || ! -s "$next/averra.sh" ]]; then
     rm -rf "$next"
-    update_finish failed false 'в образе нет compose.yaml или averra.sh'
-    fail 'не удалось взять compose.yaml и averra.sh из образа новой версии, ничего не менялось'
+    update_finish failed false "в образе нет $compose_source или averra.sh"
+    fail "не удалось взять $compose_source и averra.sh из образа новой версии, ничего не менялось"
   fi
 
   # 3. API останавливается до бэкапа: с этой минуты заявки и правки не принимаются, и бэкап —
@@ -1347,6 +2024,8 @@ admin_update_enabled() { [[ "$(env_get ADMIN_UPDATE)" != off ]]; }
 ensure_dirs() {
   (umask 077 && mkdir -p "$BACKUP_DIR")
   (umask 022 && mkdir -p "$STATE_DIR")
+  # CA провайдера внешней базы (может быть пустой): её монтирует compose.external.yaml
+  ! db_external || (umask 022 && mkdir -p "$AVERRA_DIR/db-tls")
   if [[ -L "$REQUESTS_DIR" ]]; then
     say "$REQUESTS_DIR — ссылка, а не папка: заявки из админки не принимаются, разберитесь руками"
     return 1
@@ -1756,6 +2435,13 @@ update_note() {
   fi
 }
 
+# Строковое поле из нашего файла состояния (значения без кавычек внутри): json_field <json> <ключ>
+json_field() {
+  local re="\"$2\":\"([^\"]*)\""
+  [[ "$1" =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
+  return 0
+}
+
 cmd_status() {
   local json=0 last update note
   while [[ $# -gt 0 ]]; do
@@ -1772,11 +2458,61 @@ cmd_status() {
   last="$(cat "$STATE_DIR/backup-last.json" 2>/dev/null || true)"
   update="$(cat "$STATE_DIR/update-last.json" 2>/dev/null || true)"
   note="$(update_note)"
+  # Внешняя база живёт без API и без этого сервера: отвечает ли она — частая причина, что API лёг
+  local database=own db_up=null
+  if db_external; then
+    database=external
+    if external_db_up; then db_up=true; else db_up=false; fi
+  fi
+  # Восстановление внешней базы останавливает API: прерванное (kill -9, перезагрузка) видно только
+  # здесь — итог in-progress, а замок свободен
+  local restore kept restore_note=none safety source
+  restore="$(cat "$STATE_DIR/restore-last.json" 2>/dev/null || true)"
+  kept="$(cat "$STATE_DIR/kept-dumps.json" 2>/dev/null || true)"
+  if [[ "$restore" == *'"result":"in-progress"'* ]]; then
+    if (exec 8>"$LOCK_FILE" && flock -n 8); then restore_note=interrupted; else restore_note=running; fi
+  elif [[ "$restore" == *'"result":"failed"'* ]]; then
+    restore_note=failed
+  fi
   if [[ $json -eq 1 ]]; then
-    printf '{"apiDown":true,"configuredVersion":%s,"backupLast":%s,"updateLast":%s,"update":%s}\n' \
-      "$(json_or_null "$(env_get AVERRA_VERSION)")" "${last:-null}" "${update:-null}" "$(json_str "$note")"
+    printf '{"apiDown":true,"configuredVersion":%s,"backupLast":%s,"updateLast":%s,"update":%s,"database":%s,"dbUp":%s,"restoreLast":%s,"restore":%s,"keptDumps":%s}\n' \
+      "$(json_or_null "$(env_get AVERRA_VERSION)")" "${last:-null}" "${update:-null}" "$(json_str "$note")" \
+      "$(json_str "$database")" "$db_up" "${restore:-null}" "$(json_str "$restore_note")" "${kept:-null}"
   else
     say "API не отвечает. Версия в .env: $(env_get AVERRA_VERSION)"
+    case "$db_up" in
+      true) say 'База: внешняя, отвечает' ;;
+      false) say 'База: внешняя, НЕ отвечает — проверьте сервер базы, сеть и доступ с этого сервера' ;;
+    esac
+    source="$(json_field "$restore" source)"
+    safety="$(json_field "$restore" safetyDump)"
+    case "$restore_note" in
+      running) say "Идёт восстановление базы из $source: API остановлен на его время" ;;
+      interrupted)
+        # Загрузка — одна транзакция, но обрыв мог прийти и после её COMMIT, до записи итога:
+        # тогда честно — «либо, либо», а путь назад один и тот же
+        if [[ "$restore" == *'"dbRestored":true'* ]]; then
+          say "Восстановление базы из $source оборвалось после загрузки: база уже из него, медиатека и API — нет."
+        elif [[ -n "$safety" ]]; then
+          say "Восстановление базы из $source оборвалось во время загрузки: база либо прежняя (транзакция откатилась), либо уже из него (транзакция успела закончиться)."
+        else
+          say "Восстановление базы из $source оборвалось до загрузки."
+        fi
+        if [[ -n "$safety" ]]; then
+          if [[ -f "$BACKUP_DIR/$safety" ]]; then
+            say "Прежняя база — в страховочном дампе $BACKUP_DIR/$safety. Вернуть её: $AVERRA_DIR/averra.sh restore-dump $BACKUP_DIR/$safety --yes; оставить как есть — $AVERRA_DIR/averra.sh restore-dump --dismiss"
+          else
+            say "Страховочного дампа $safety уже нет (удалён сроком хранения или руками): вернуть прежнюю базу можно только из бэкапа (averra.sh restore). Оставить как есть — $AVERRA_DIR/averra.sh restore-dump --dismiss"
+          fi
+        else
+          say "Страховочный дамп не успел сняться — база не менялась: $AVERRA_DIR/averra.sh restore-dump --dismiss (поднимет API)"
+        fi
+        ;;
+      failed) say "Восстановление базы из $source не удалось: $(json_field "$restore" error)" ;;
+    esac
+    if [[ "$kept" =~ \"files\":\[\"(.+)\"\] ]]; then
+      say "Страховочные дампы в $BACKUP_DIR: ${BASH_REMATCH[1]//\",\"/, }"
+    fi
     case "$note" in
       running) say "Идёт обновление до $(run_get TO): API остановлен на его время. Лог — $UPDATE_LOG" ;;
       interrupted) say "Обновление до $(run_get TO) оборвалось на полпути: повторите averra.sh update --version $(run_get TO) — он доведёт или откатит прерванное" ;;
@@ -1797,6 +2533,7 @@ case "$command" in
   backups) cmd_backups "$@" ;;
   verify) cmd_verify "$@" ;;
   restore) cmd_restore "$@" ;;
+  restore-dump) cmd_restore_dump "$@" ;;
   update) cmd_update "$@" ;;
   # Служебные: процесс обновления, который запускает update (см. start_worker), и доведение
   # прерванного обновления после перезагрузки (служба averra-update-resume)

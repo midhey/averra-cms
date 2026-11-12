@@ -20,6 +20,7 @@ import { bash, pathEntry, posix, tempDir } from './bash'
 
 const script = fileURLToPath(new URL('../install.sh', import.meta.url))
 const composeFile = fileURLToPath(new URL('../compose.yaml', import.meta.url))
+const externalComposeFile = fileURLToPath(new URL('../compose.external.yaml', import.meta.url))
 
 type Fakes = {
   /** Что отвечает getent ahosts: адреса доменов */
@@ -36,6 +37,15 @@ type Fakes = {
   failEnvMove?: boolean
   /** docker compose pull падает с этим ответом реестра */
   pullError?: string
+  /**
+   * Ответ внешней базы на проверку установщика: версия|CREATE на базе|CREATE на public|таблиц в
+   * public|есть миграции Averra. По умолчанию — PostgreSQL 18, права есть, база пустая
+   */
+  dbFacts?: string
+  /** Клиент PostgreSQL не вошёл во внешнюю базу: что он напечатал */
+  dbError?: string
+  /** docker pull образа клиента бэкапов (postgres) падает */
+  clientPullFails?: boolean
 }
 
 /** Папка с подделками команд: каждая пишет свой вызов (и окружение docker) в журнал */
@@ -96,11 +106,16 @@ function fakeBin(root: string, fakes: Fakes) {
   write(
     'docker',
     `printf 'docker %s | CMS_USER_PASSWORD=%s\\n' "$*" "\${CMS_USER_PASSWORD:-}" >> "${posix(log)}"
+[[ -z "\${AVERRA_DATABASE_URL:-}" ]] || printf '%s\\n' "$*" >> "${posix(join(root, 'db-url-env.log'))}"
 case "$*" in
+  *" postgres:"*" psql "*)
+    printf 'host=%s port=%s user=%s password=%s db=%s sslmode=%s rootcert=%s\\n' "$PGHOST" "$PGPORT" "$PGUSER" "$PGPASSWORD" "$PGDATABASE" "$PGSSLMODE" "$PGSSLROOTCERT" >> "${posix(join(root, 'pg-env.log'))}"
+    ${fakes.dbError ? `echo '${fakes.dbError}' >&2; exit 2` : `echo '${fakes.dbFacts ?? '180006|t|t|0|f'}'`} ;;
   "info") ${fakes.dockerDenied ? 'exit 1' : 'exit 0'} ;;
   "compose version") exit 0 ;;
   *" ps --status running -q caddy") ${fakes.caddyRunning ? 'echo abc123' : 'true'} ;;
   *" pull") ${fakes.pullError ? `echo '${fakes.pullError}' >&2; exit 1` : 'exit 0'} ;;
+  "pull postgres:"*) ${fakes.clientPullFails ? "echo 'Error response from daemon: Get https://registry-1.docker.io/v2/: timeout' >&2; exit 1" : 'exit 0'} ;;
   *"user-create.js"*) echo "Создан владелец" ;;
   *) exit 0 ;;
 esac`,
@@ -110,7 +125,10 @@ esac`,
 
 type Run = { status: number | null; stdout: string; stderr: string; output: string }
 
-function install(args: string[], options: { fakes?: Fakes; env?: Record<string, string> } = {}) {
+function install(
+  args: string[],
+  options: { fakes?: Fakes; env?: Record<string, string>; cwd?: string } = {},
+) {
   const root = tempDir()
   const { bin, log, chmodLog } = fakeBin(root, options.fakes ?? {})
   const systemd = join(root, 'systemd')
@@ -128,6 +146,7 @@ function install(args: string[], options: { fakes?: Fakes; env?: Record<string, 
     },
     // Без терминала: установщик ничего не спрашивает
     stdio: ['ignore', 'pipe', 'pipe'],
+    ...(options.cwd ? { cwd: options.cwd } : {}),
   })
   const run: Run = {
     status: result.status,
@@ -141,7 +160,14 @@ function install(args: string[], options: { fakes?: Fakes; env?: Record<string, 
     existsSync(join(root, 'systemctl.log')) ? readFileSync(join(root, 'systemctl.log'), 'utf8') : ''
   const chowns = () =>
     existsSync(join(root, 'chown.log')) ? readFileSync(join(root, 'chown.log'), 'utf8') : ''
-  return { ...run, calls, chmods, chowns, systemd, systemctl }
+  const pgEnv = () =>
+    existsSync(join(root, 'pg-env.log')) ? readFileSync(join(root, 'pg-env.log'), 'utf8') : ''
+  /** Вызовы docker, которые унаследовали AVERRA_DATABASE_URL (адрес с паролем) */
+  const dbUrlEnv = () =>
+    existsSync(join(root, 'db-url-env.log'))
+      ? readFileSync(join(root, 'db-url-env.log'), 'utf8')
+      : ''
+  return { ...run, calls, chmods, chowns, systemd, systemctl, pgEnv, dbUrlEnv }
 }
 
 const required = [
@@ -745,7 +771,7 @@ describe('контейнеры не от root и без лишних прав', 
       'install.sh',
       ...new Set([...installer.matchAll(/"\$SCRIPT_DIR\/([\w.]+)"/g)].map((m) => m[1])),
     ].sort()
-    expect(needed).toEqual(['averra.sh', 'compose.yaml', 'install.sh'])
+    expect(needed).toEqual(['averra.sh', 'compose.external.yaml', 'compose.yaml', 'install.sh'])
     // Команду копирования студия берёт со страницы установки в документации
     const docsPage = fileURLToPath(
       new URL('../../apps/docs/src/content/docs/install/server.md', import.meta.url),
@@ -784,7 +810,7 @@ describe('контейнеры не от root и без лишних прав', 
     expect(api).toMatch(/AVERRA_VERSION=\$\{AVERRA_VERSION\}/)
     // averra.sh update берёт compose.yaml и себя из образа новой версии
     expect(stage('runtime-tree')).toMatch(
-      /^COPY deploy\/compose\.yaml deploy\/averra\.sh deploy\/$/m,
+      /^COPY deploy\/compose\.yaml deploy\/compose\.external\.yaml deploy\/averra\.sh deploy\/$/m,
     )
     expect(service('api')).toContain('- ./state:/data/state:ro')
     expect(service('api')).toContain('STATE_DIR: /data/state')
@@ -916,5 +942,382 @@ describe('Caddyfile: кеш', () => {
     expect(errors).toMatch(/^\t\timport site_csp$/m)
     // Админке — нет: у неё своя модель (предпросмотр, Vite), CSP сайта ей не подходит
     expect(siteBlock('{$ADMIN_DOMAIN}')).not.toContain('site_csp')
+  })
+})
+
+describe('внешняя база (--external-db)', () => {
+  /** Пароль со знаками, которые ломают адреса и .env: @ : / # ? % $ */
+  const password = 'p@ss:w/r#d?%$HOME1'
+  // В адресе — percent-encoded, кроме $: он в адресе законен и проверяет кавычки в .env
+  const encoded = 'p%40ss%3Aw%2Fr%23d%3F%25$HOME1'
+  const url = `postgres://averra_app:${encoded}@db.example.test:6432/averra_site`
+  const external = [...required, '--external-db', '--yes']
+
+  /** Значение из .env так, как его прочтёт Compose: '…' — буквально, иначе $VAR подставляется */
+  function composeValue(dir: string, key: string) {
+    const line = readFileSync(join(dir, '.env'), 'utf8')
+      .split('\n')
+      .find((item) => item.startsWith(`${key}=`))
+    const raw = (line ?? '').slice(key.length + 1)
+    if (/^'.*'$/.test(raw)) return raw.slice(1, -1)
+    return raw.replace(/\$\{?([A-Z_]+)\}?/g, '')
+  }
+
+  it('установка: адрес из окружения, TLS verify-full, проверка прав клиентом той же версии, без своей базы', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...external, '--dir', posix(dir)], {
+      fakes: { dns: dnsOk },
+      env: { AVERRA_DATABASE_URL: url, AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+    })
+    expect(run.status, run.output).toBe(0)
+    const env = readEnv(dir)
+    expect(env).toMatchObject({
+      AVERRA_DB_MODE: 'external',
+      AVERRA_PG_IMAGE: 'postgres:18.6-alpine3.24',
+    })
+    // Своей базы нет — нет и её пароля
+    expect(env).not.toHaveProperty('POSTGRES_PASSWORD')
+    // В .env — в одинарных кавычках, с verify-full: Compose отдаст API адрес как есть, с $
+    const text = readFileSync(join(dir, '.env'), 'utf8')
+    expect(text).toContain(`DATABASE_URL='${url}?sslmode=verify-full'\n`)
+    const forApi = new URL(composeValue(dir, 'DATABASE_URL'))
+    expect(decodeURIComponent(forApi.password)).toBe(password)
+    expect(forApi.searchParams.get('sslmode')).toBe('verify-full')
+    // Без кавычек Compose съел бы $HOME — тест бы это поймал
+    expect(composeValue(dir, 'DATABASE_URL')).toContain('$HOME1')
+    // Своя база не нужна: compose.yaml — внешний, поднимается только API
+    expect(readFileSync(join(dir, 'compose.yaml'), 'utf8')).toBe(
+      readFileSync(externalComposeFile, 'utf8'),
+    )
+    const steps = run
+      .calls()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => line.replace(/ \| .*$/, '').replace(/--project-directory \S+ /, ''))
+    expect(steps).toContain('docker compose up -d api')
+    expect(steps.join('\n')).not.toContain('up -d postgres')
+    const probe = steps.find((line) => line.includes(' psql '))
+    expect(probe).toMatch(
+      /^docker run --rm --cap-drop ALL --security-opt no-new-privileges:true -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGSSLROOTCERT -e PGCONNECT_TIMEOUT postgres:17\.11-alpine3\.24 psql /,
+    )
+    // Проверка — до записи .env и до pull
+    expect(steps.indexOf(probe ?? '')).toBeLessThan(steps.indexOf('docker compose pull'))
+    // Клиент бэкапов той же версии, что сервер, скачан при установке — сразу после проверки, а не
+    // впервые ночью
+    const clientPull = steps.indexOf('docker pull postgres:18.6-alpine3.24')
+    expect(clientPull).toBeGreaterThan(steps.indexOf(probe ?? ''))
+    expect(clientPull).toBeLessThan(steps.indexOf('docker compose pull'))
+    // Пароль дошёл до клиента раскодированным — переменной, не аргументом и не в выводе
+    expect(run.pgEnv()).toBe(
+      `host=db.example.test port=6432 user=averra_app password=${password} db=averra_site sslmode=verify-full rootcert=system\n`,
+    )
+    for (const secret of [password, encoded, 'p%40ss']) {
+      expect(run.calls()).not.toContain(secret)
+      expect(run.output).not.toContain(secret)
+    }
+    expect(run.stdout).toContain('внешняя база: PostgreSQL 18')
+    expect(existsSync(join(dir, 'db-tls'))).toBe(true)
+    // Адрес из окружения после разбора убран: docker и остальные команды его не наследуют
+    expect(run.dbUrlEnv()).toBe('')
+  })
+
+  it('повторный запуск без флага остаётся на внешней базе, адрес — из .env', () => {
+    const dir = join(tempDir(), 'inst')
+    const first = install([...external, '--dir', posix(dir), '--env-only'], {
+      env: { AVERRA_DATABASE_URL: url },
+    })
+    expect(first.status, first.output).toBe(0)
+    expect(first.stdout).toContain('Внешняя база не проверялась (--env-only)')
+    const before = readFileSync(join(dir, '.env'), 'utf8')
+    const again = install(['--dir', posix(dir), '--yes', '--dry-run'], { fakes: { dns: dnsOk } })
+    expect(again.status, again.output).toBe(0)
+    expect(again.stdout).toContain(
+      'База:              внешняя — averra_app@db.example.test:6432/averra_site',
+    )
+    expect(again.pgEnv()).toContain(`password=${password} `)
+    const envOnly = install(['--dir', posix(dir), '--yes', '--env-only'])
+    expect(envOnly.status, envOnly.output).toBe(0)
+    expect(readFileSync(join(dir, '.env'), 'utf8')).toBe(before)
+  })
+
+  it('своя база с владельцем на внешнюю не переводится; --db-ca-file без внешней — отказ', () => {
+    const dir = join(tempDir(), 'inst')
+    expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
+    writeFileSync(
+      join(dir, '.env'),
+      readFileSync(join(dir, '.env'), 'utf8').replace(/^OWNER_EMAIL=$/m, 'OWNER_EMAIL=a@b.ru'),
+    )
+    const before = readFileSync(join(dir, '.env'), 'utf8')
+    const run = install([...external, '--dir', posix(dir), '--env-only'], {
+      env: { AVERRA_DATABASE_URL: url },
+    })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('установка уже работает со своей базой, в ней данные')
+    expect(readFileSync(join(dir, '.env'), 'utf8')).toBe(before)
+    const ca = install([...required, '--dir', posix(dir), '--env-only', '--db-ca-file', 'x.pem'])
+    expect(ca.status).toBe(1)
+    expect(ca.stderr).toContain('--db-ca-file — только для внешней базы')
+  })
+
+  it('адрес без TLS, с непонятным sslmode или кривой — отказ с объяснением, без записи и Docker', () => {
+    const cases: [string, string][] = [
+      [`${url}?sslmode=disable`, 'sslmode=disable — соединение без обязательного TLS'],
+      [`${url}?sslmode=prefer`, 'без обязательного TLS'],
+      [`${url}?sslmode=require`, 'нужен verify-full'],
+      [`${url}?sslrootcert=/etc/ca.pem`, '--db-ca-file'],
+      [`${url}?target_session_attrs=any`, 'не поддерживается'],
+      ['postgres://averra_app:p@ss@db.example.test/averra_site', '@ → %40'],
+      ['postgres://averra_app:pa ss@db.example.test/averra_site', 'пробел'],
+      ['postgres://averra_app:p%zz@db.example.test/averra_site', '% не перед двумя'],
+      ['postgres://averra_app:p%00x@db.example.test/averra_site', '%00 (нулевой байт)'],
+      // Байты не UTF-8: API (decodeURIComponent) такой адрес не разберёт
+      ['postgres://averra_app:p%FF%FEx@db.example.test/averra_site', 'не текст UTF-8'],
+      ['postgres://us%C3er:x@db.example.test/averra_site', 'не текст UTF-8'],
+      ['postgres://averra_app@db.example.test/averra_site', 'пользователя и пароль'],
+      ['postgres://averra_app:x@db.example.test:5432', 'нет имени базы'],
+      ['postgres://averra_app:x@db.example.test:99999/db', 'не порт'],
+      ['postgres://averra_app:x@a.test,b.test/db', 'один хост'],
+      ['mysql://averra_app:x@db.example.test/db', 'postgres://'],
+    ]
+    for (const [address, error] of cases) {
+      const dir = join(tempDir(), 'inst')
+      const run = install([...external, '--dir', posix(dir)], {
+        fakes: { dns: dnsOk },
+        env: { AVERRA_DATABASE_URL: address },
+      })
+      expect(run.status, address).toBe(1)
+      expect(run.stderr, address).toContain(error)
+      expect(run.stderr, address).not.toContain(address)
+      expect(existsSync(dir), address).toBe(false)
+      expect(run.calls(), address).toBe('')
+    }
+  })
+
+  it('пароль кириллицей (UTF-8 percent-encoded) принимается и доходит до клиента', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...external, '--dir', posix(dir), '--dry-run'], {
+      fakes: { dns: dnsOk },
+      env: { AVERRA_DATABASE_URL: url.replace(encoded, '%D0%BF%D0%B0%D1%80%D0%BE%D0%BB%D1%8C1') },
+    })
+    expect(run.status, run.output).toBe(0)
+    expect(run.pgEnv()).toContain(' password=пароль1 ')
+  })
+
+  it('образ клиента бэкапов не скачался — отказ при установке, .env не записан', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...external, '--dir', posix(dir)], {
+      fakes: { dns: dnsOk, clientPullFails: true },
+      env: { AVERRA_DATABASE_URL: url },
+    })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('образ postgres:18.6-alpine3.24 не скачался')
+    expect(run.stderr).toContain('Docker Hub')
+    expect(existsSync(join(dir, '.env'))).toBe(false)
+    expect(run.calls()).not.toContain('compose pull')
+  })
+
+  it('повтор с адресом другой базы (миграций нет, владелец есть) — отказ, ничего не меняется', () => {
+    const dir = join(tempDir(), 'inst')
+    expect(
+      install([...external, '--dir', posix(dir), '--env-only'], {
+        env: { AVERRA_DATABASE_URL: url },
+      }).status,
+    ).toBe(0)
+    writeFileSync(
+      join(dir, '.env'),
+      readFileSync(join(dir, '.env'), 'utf8').replace(/^OWNER_EMAIL=$/m, 'OWNER_EMAIL=a@b.ru'),
+    )
+    const before = readFileSync(join(dir, '.env'), 'utf8')
+    const other = url.replace('/averra_site', '/averra_other')
+    const run = install(['--dir', posix(dir), '--yes'], {
+      fakes: { dns: dnsOk, dbFacts: '180006|t|t|0|f' },
+      env: { AVERRA_DATABASE_URL: other },
+    })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain(
+      'во внешней базе averra_other нет миграций Averra, а владелец у установки уже создан: это не база этой установки',
+    )
+    expect(readFileSync(join(dir, '.env'), 'utf8')).toBe(before)
+    expect(run.calls()).not.toMatch(/pull|up -d/)
+    // Та же база с миграциями — повтор проходит
+    const same = install(['--dir', posix(dir), '--yes'], {
+      fakes: { dns: dnsOk, dbFacts: '180006|t|t|30|t' },
+    })
+    expect(same.status, same.output).toBe(0)
+  })
+
+  it('своя база без владельца (установка оборвалась) на внешнюю — контейнер postgres убирается', () => {
+    const dir = join(tempDir(), 'inst')
+    expect(install([...required, '--dir', posix(dir), '--env-only']).status).toBe(0)
+    const run = install([...external, '--dir', posix(dir)], {
+      fakes: { dns: dnsOk },
+      env: { AVERRA_DATABASE_URL: url, AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+    })
+    expect(run.status, run.output).toBe(0)
+    const steps = run
+      .calls()
+      .split('\n')
+      .map((line) => line.replace(/ \| .*$/, '').replace(/--project-directory \S+ /, ''))
+    // Пока на месте прежний compose.yaml: иначе Compose о postgres уже не знал бы
+    expect(steps).toContain('docker compose rm -sf postgres')
+    expect(steps.indexOf('docker compose rm -sf postgres')).toBeLessThan(
+      steps.indexOf('docker compose pull'),
+    )
+    expect(readEnv(dir)).toMatchObject({ AVERRA_DB_MODE: 'external' })
+    // Повтор на внешней базе — уже ничего не убирает
+    const again = install(['--dir', posix(dir), '--yes'], {
+      fakes: { dns: dnsOk, dbFacts: '180006|t|t|30|t' },
+    })
+    expect(again.status, again.output).toBe(0)
+    expect(again.calls()).not.toContain('rm -sf postgres')
+  })
+
+  it('без адреса и без терминала — отказ: адрес только переменной окружения', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...external, '--dir', posix(dir)], { fakes: { dns: dnsOk } })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('AVERRA_DATABASE_URL')
+    expect(existsSync(dir)).toBe(false)
+  })
+
+  it('нет прав CREATE, чужие таблицы, старая версия, не входит — понятная ошибка и что выдать', () => {
+    const cases: [Fakes, string][] = [
+      [
+        { dbFacts: '180006|f|t|0|f' },
+        'нет права CREATE на базе averra_site: оно нужно миграциям (схема drizzle). Владелец базы выдаёт его так: GRANT CREATE ON DATABASE "averra_site" TO "averra_app";',
+      ],
+      [{ dbFacts: '180006|t|f|0|f' }, 'ALTER SCHEMA public OWNER TO "averra_app";'],
+      [{ dbFacts: '150010|t|t|0|f' }, 'PostgreSQL 15: поддерживаются 16, 17 и 18'],
+      [{ dbFacts: '180006|t|t|4|f' }, 'уже есть таблицы (4), а миграций Averra нет'],
+      [
+        {
+          dbError:
+            'psql: error: connection failed: FATAL:  no pg_hba.conf entry for host "203.0.113.5"',
+        },
+        'разрешите его IP (203.0.113.5 10.0.0.2 ) в pg_hba.conf',
+      ],
+      [{ dbError: 'psql: error: SSL error: certificate verify failed' }, '--db-ca-file'],
+    ]
+    for (const [fakes, error] of cases) {
+      const dir = join(tempDir(), 'inst')
+      const run = install([...external, '--dir', posix(dir)], {
+        fakes: { dns: dnsOk, ...fakes },
+        env: { AVERRA_DATABASE_URL: url, AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+      })
+      expect(run.status, error).toBe(1)
+      expect(run.stderr, error).toContain(error)
+      expect(run.output).not.toContain(password)
+      // До записи .env и запуска чего-либо
+      expect(existsSync(join(dir, '.env')), error).toBe(false)
+      expect(run.calls(), error).not.toMatch(/pull|up -d/)
+    }
+  })
+
+  it('сухой прогон: план с базой и проверки, ничего не пишет; проблема базы — в списке', () => {
+    const dir = join(tempDir(), 'inst')
+    const run = install([...external, '--dir', posix(dir), '--dry-run'], {
+      fakes: { dns: dnsOk, dbFacts: '180006|f|t|0|f' },
+      env: { AVERRA_DATABASE_URL: url },
+    })
+    expect(run.status).toBe(1)
+    expect(run.stdout).toContain(
+      'База:              внешняя — averra_app@db.example.test:6432/averra_site, TLS verify-full',
+    )
+    expect(run.stdout).toContain('не пройдёт: у пользователя averra_app нет права CREATE')
+    expect(run.stdout).toContain(
+      'Новые секреты:     AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE',
+    )
+    expect(existsSync(dir)).toBe(false)
+  })
+
+  it('--db-ca-file: CA провайдера — в db-tls, в адресе sslrootcert, проверка по нему', () => {
+    const root = tempDir()
+    const dir = join(root, 'inst')
+    const ca = join(root, 'provider-ca.pem')
+    writeFileSync(ca, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n')
+    const run = install([...external, '--dir', posix(dir), '--db-ca-file', posix(ca)], {
+      fakes: { dns: dnsOk },
+      env: { AVERRA_DATABASE_URL: url, AVERRA_OWNER_PASSWORD: 'пароль-владельца' },
+    })
+    expect(run.status, run.output).toBe(0)
+    expect(readFileSync(join(dir, 'db-tls', 'ca.pem'), 'utf8')).toBe(readFileSync(ca, 'utf8'))
+    expect(readEnv(dir).DATABASE_URL).toBe(
+      `'${url}?sslmode=verify-full&sslrootcert=/run/averra-db/ca.pem'`,
+    )
+    expect(run.calls()).toMatch(/ -v \/\S*\/provider-ca\.pem:\/run\/averra-db\/ca\.pem:ro /)
+    expect(run.pgEnv()).toContain('rootcert=/run/averra-db/ca.pem')
+    // Повтор без флага: CA уже в папке установки, адрес из .env его помнит
+    const again = install(['--dir', posix(dir), '--yes', '--env-only'])
+    expect(again.status, again.output).toBe(0)
+    expect(readEnv(dir).DATABASE_URL).toContain('sslrootcert=/run/averra-db/ca.pem')
+    const notPem = join(root, 'x.pem')
+    writeFileSync(notPem, 'мусор')
+    const bad = install(
+      [...external, '--dir', posix(join(root, 'b')), '--db-ca-file', posix(notPem)],
+      {
+        env: { AVERRA_DATABASE_URL: url },
+      },
+    )
+    expect(bad.status).toBe(1)
+    expect(bad.stderr).toContain('не сертификат PEM')
+  })
+
+  it('--db-ca-file с относительным путём — в docker уходит абсолютный (иначе это имя тома)', () => {
+    const root = tempDir()
+    const dir = join(root, 'inst')
+    writeFileSync(
+      join(root, 'provider-ca.pem'),
+      '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
+    )
+    for (const path of ['provider-ca.pem', './provider-ca.pem']) {
+      const run = install([...external, '--dir', posix(dir), '--dry-run', '--db-ca-file', path], {
+        fakes: { dns: dnsOk },
+        env: { AVERRA_DATABASE_URL: url },
+        cwd: root,
+      })
+      expect(run.status, run.output).toBe(0)
+      expect(run.calls(), path).toMatch(/ -v \/\S*\/provider-ca\.pem:\/run\/averra-db\/ca\.pem:ro /)
+      expect(run.calls(), path).not.toMatch(/\/\.\/provider-ca/)
+    }
+  })
+
+  it('compose.external.yaml: тот же compose.yaml, но без своей базы, DATABASE_URL из .env', () => {
+    const own = readFileSync(composeFile, 'utf8')
+    const ext = readFileSync(externalComposeFile, 'utf8')
+    expect(ext).not.toMatch(/^ {2}postgres:/m)
+    expect(ext).not.toContain('depends_on:\n      postgres')
+    expect(ext).toMatch(/DATABASE_URL: \$\{DATABASE_URL:\?/)
+    expect(ext).toContain("DATABASE_EXTERNAL: 'true'")
+    expect(ext).toContain('- ./db-tls:/run/averra-db:ro')
+    // Остальное совпадает: caddy, тома и сеть, сервис api без строк базы
+    const section = (text: string, from: string, to: string) =>
+      text.slice(text.indexOf(from), to ? text.indexOf(to) : undefined)
+    expect(section(ext, '  caddy:', '')).toBe(
+      section(own, '  caddy:', '').replace('volumes:\n  postgres:\n', 'volumes:\n'),
+    )
+    const api = (text: string) =>
+      code(section(text, '  api:', '  caddy:'))
+        .split('\n')
+        .filter(
+          (line) => !/DATABASE_|db-tls|depends_on|postgres|condition: service_healthy/.test(line),
+        )
+        .join('\n')
+    expect(api(ext)).toBe(api(own))
+    // Образ клиента у проверки установщика — тот же, что у своей базы
+    const installer = readFileSync(script, 'utf8')
+    const image = /image: (postgres:\S+)/.exec(own)?.[1]
+    expect(installer).toContain(`PG_PROBE_IMAGE='${image}'`)
+    expect(installer).toContain(`17) printf '${image}'`)
+  })
+
+  it('разбор адреса и таблица образов — одним текстом в install.sh и averra.sh', () => {
+    const shared = (file: string) => {
+      const text = readFileSync(file, 'utf8')
+      const start = text.indexOf('# ── Общее у install.sh и averra.sh')
+      const end = text.indexOf('# ── Конец общего у install.sh и averra.sh')
+      expect(start).toBeGreaterThan(0)
+      return text.slice(start, end)
+    }
+    expect(shared(script)).toBe(shared(fileURLToPath(new URL('../averra.sh', import.meta.url))))
   })
 })

@@ -86,9 +86,10 @@ COPY apps/api/drizzle apps/api/drizzle
 COPY --from=build /repo/apps/api/dist apps/api/dist
 # Манифесты, которые нужны только сборке, в итоговом образе не нужны
 RUN rm -rf apps/admin apps/mcp apps/docs e2e deploy
-# Конфигурация установки этой версии: averra.sh update берёт compose.yaml и сам averra.sh отсюда,
+# Конфигурация установки этой версии: averra.sh update берёт compose.yaml (или compose.external.yaml
+# у внешней базы) и сам averra.sh отсюда,
 # поэтому они меняются вместе с версией, а не отдельной ручной правкой на сервере
-COPY deploy/compose.yaml deploy/averra.sh deploy/
+COPY deploy/compose.yaml deploy/compose.external.yaml deploy/averra.sh deploy/
 
 # ── API ─────────────────────────────────────────────────────────────────────────────────────
 FROM ${NODE_IMAGE} AS api

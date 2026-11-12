@@ -226,3 +226,41 @@ Object Storage и два релиза подряд (например, `0.2.0` и
     отправляется. Скрипт своего блока — `/_scripts/block-…js` с `cache-control: … immutable`.
 67. «Выполнять скрипт» в предпросмотре своего блока: скрипт с `document.cookie`, `localStorage` и
     `fetch('/api/auth/get-session')` получает SecurityError и отказ, админка остаётся на месте.
+
+## Внешняя база
+
+Тесты подделывают Docker и PostgreSQL: настоящий Compose, libpq и PostgreSQL 18 в режиме
+[`--external-db`](/averra-cms/install/server/#внешняя-база) проверяются только здесь. «Внешняя»
+база — третий VPS (или контейнер на нём) с `postgres:18` и TLS: сертификат на имя хоста
+(`db.example.test` в `/etc/hosts` сервера установки), свой CA, `hostssl` в `pg_hba.conf` только для
+IP сервера установки, пользователь по SQL со страницы
+[Требования](/averra-cms/install/requirements/) — без `CREATEDB` и суперпользователя.
+
+68. Пароль пользователя базы с `@ $ # % :` (в адресе — percent-encoded, кроме `$`).
+    `AVERRA_DATABASE_URL=… install.sh --external-db --db-ca-file ca.pem --dry-run` — план и
+    проверка «PostgreSQL 18, вход по TLS…». Настоящая установка: в `.env` строка
+    `DATABASE_URL='…'` в одинарных кавычках, права 600; `docker compose config` показывает адрес
+    с `$` как есть; контейнера `postgres` нет (`docker ps`), API поднялся, «Состояние» — «База:
+    внешняя». Образ `postgres:18.6-alpine3.24` уже скачан (`docker images`).
+69. Без `--db-ca-file` с самоподписанным CA — понятный отказ про сертификат; с адресом
+    `sslmode=require` — отказ до Docker. С CA из публичных (если есть провайдер) — без
+    `--db-ca-file`: проверяет и API (корни Node), и `pg_dump` (`sslrootcert=system` в alpine).
+70. Отнять `CREATE` на базе (`REVOKE CREATE ON DATABASE …`) — повторный `install.sh` объясняет,
+    что выдать. Вернуть права.
+71. `averra.sh backup` — во время `pg_dump` в соседнем терминале `ps auxww | grep -E 'pg_dump|docker'`:
+    ни адреса, ни пароля. После бэкапа `docker ps -a --filter label=averra.verify=1` пуст и
+    `docker volume ls -qf dangling=true` пуст — временный контейнер проверки и его том с копией
+    базы удалены. То же после `averra.sh verify <бэкап>`.
+72. `averra.sh restore <бэкап> --yes` — база из бэкапа, страховочный дамп удалён, «Состояние» —
+    «восстановлено». Таблица, созданная руками в `public` после бэкапа, после восстановления
+    исчезла.
+73. `kill -9` процесса `averra.sh` посреди загрузки восстановления (большая база или `pg_sleep` в
+    дампе) — база не пустая (прежняя), `averra.sh status` — «оборвалось во время загрузки» и
+    команда `restore-dump`. `restore-dump <дамп> --yes` — база прежняя, API работает. Повторить
+    обрыв и закрыть `averra.sh restore-dump --dismiss` — API поднят, в «Состоянии» неудача
+    «оставлено как есть».
+74. Обновление на релиз с миграцией, который не проходит проверку (как в «Обновление и откат»), —
+    откат в ту же базу, `rolled-back-*.dump` с правами 600 (`ls -l /opt/averra/backups`), в
+    «Состоянии» — данные после бэкапа в страховочном дампе.
+75. Остановить внешнюю базу — `averra.sh status` без API: «База: внешняя, НЕ отвечает»; ночной
+    бэкап — неудача с причиной, а не зависание.

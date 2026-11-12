@@ -66,6 +66,8 @@ sidebar:
 | `averra.sh backups` | сервер | список бэкапов |
 | `averra.sh verify <бэкап>` | сервер | проверить бэкап ещё раз |
 | `averra.sh restore [--from-s3] <бэкап> [--yes]` | сервер | восстановить |
+| `averra.sh restore-dump <файл.dump> [--yes]` | сервер | внешняя база: вернуть страховочный дамп прерванного восстановления или отката — [Бэкапы](/averra-cms/install/backups/#внешняя-база) |
+| `averra.sh restore-dump --dismiss` | сервер | внешняя база: оборванное восстановление — оставить базу как есть, поднять API и закрыть итог |
 | `averra.sh update --version X [--yes]` | сервер | обновить с откатом — [Обновления](/averra-cms/install/updates/) |
 | `averra.sh status [--json]` | сервер | состояние установки |
 | `averra.sh check-update` | сервер | есть ли новая версия: итог — в «Состоянии» ([Обновления](/averra-cms/install/updates/#обновить-из-админки)) |

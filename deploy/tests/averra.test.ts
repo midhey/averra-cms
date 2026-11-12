@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
@@ -87,6 +88,23 @@ type Fakes = {
   systemdRunFails?: boolean
   /** Образов этой версии ещё нет в реестре (docker manifest inspect) */
   noManifest?: string
+  /** Внешняя база не отвечает (клиент PostgreSQL не соединяется) */
+  extDown?: boolean
+  /** Загрузка дампа во внешнюю базу (одна транзакция) падает — база не меняется */
+  loadFails?: boolean
+  /**
+   * Сам averra.sh убивается (kill -9, как перезагрузка) на первом вызове docker под это регулярное
+   * выражение: для команд, которые идут не процессом обновления (восстановление)
+   */
+  killSelfOn?: string
+  /**
+   * То же, но вызов выполняется целиком (транзакция загрузки зафиксирована), а обрыв — сразу после
+   * него: процесса обновления (killAfterOn) или самого averra.sh (killSelfAfterOn)
+   */
+  killAfterOn?: string
+  killSelfAfterOn?: string
+  /** Что внешняя база отвечает на show server_version_num (по умолчанию PostgreSQL 18) */
+  extServerVersion?: string
 }
 
 /** curl: запоминает аргументы и кладёт в файл из -o ответ GitHub о последнем релизе */
@@ -171,7 +189,19 @@ const BASE_ENV = [
 ]
 
 /** Папка установки, как её оставляет install.sh: averra.sh, compose.yaml, .env, состояние */
-function server(options: { env?: string[]; migrations?: number } = {}) {
+/** Пароль внешней базы со знаками, которые ломают адреса и .env: @ $ # % : */
+const EXT_PASSWORD = 'p@ss$w#rd%:1'
+/** Адрес внешней базы, как его пишет install.sh: пароль percent-encoded, в одинарных кавычках */
+// $ — без кодирования: в адресе он законен, и его держат одинарные кавычки в .env
+const EXT_URL =
+  'postgres://averra_app:p%40ss$w%23rd%25%3A1@db.example.test:6432/averra_site?sslmode=verify-full'
+const EXT_ENV = [
+  'AVERRA_DB_MODE=external',
+  `DATABASE_URL='${EXT_URL}'`,
+  'AVERRA_PG_IMAGE=postgres:18.6-alpine3.24',
+]
+
+function server(options: { env?: string[]; migrations?: number; external?: boolean } = {}) {
   const root = tempDir('averra-server')
   const dir = join(root, 'averra')
   const fake = join(root, 'fake')
@@ -185,8 +215,15 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
   }
   copyFileSync(script, join(dir, 'averra.sh'))
   writeFileSync(join(dir, 'compose.yaml'), '# compose прежний\n')
-  writeFileSync(join(dir, '.env'), `${[...BASE_ENV, ...(options.env ?? [])].join('\n')}\n`)
-  writeFileSync(join(fake, 'db-averra'), `${options.migrations ?? 15}\n`)
+  writeFileSync(
+    join(dir, '.env'),
+    `${[...BASE_ENV, ...(options.external ? EXT_ENV : []), ...(options.env ?? [])].join('\n')}\n`,
+  )
+  // Своя база — файл db-averra; внешняя — db-ext (база на другом сервере)
+  writeFileSync(
+    join(fake, options.external ? 'db-ext' : 'db-averra'),
+    `${options.migrations ?? 15}\n`,
+  )
   writeFileSync(join(fake, 'running'), '0.6.0\n')
   writeFileSync(join(fake, 'data', 'media', 'site', 'original.jpg'), 'картинка')
   const write = (name: string, body: string) => {
@@ -249,6 +286,12 @@ function server(options: { env?: string[]; migrations?: number } = {}) {
     if (fakes.shFailsOn) env.FAKE_SH_FAILS_ON = fakes.shFailsOn
     if (fakes.mvFailsOn) env.FAKE_MV_FAILS_ON = fakes.mvFailsOn
     if (fakes.mvBackFailsOn) env.FAKE_MV_BACK_FAILS_ON = fakes.mvBackFailsOn
+    if (fakes.extDown) env.FAKE_EXT_DOWN = '1'
+    if (fakes.loadFails) env.FAKE_LOAD_FAILS = '1'
+    if (fakes.killSelfOn) env.FAKE_KILL_SELF_ON = fakes.killSelfOn
+    if (fakes.killAfterOn) env.FAKE_KILL_AFTER_ON = fakes.killAfterOn
+    if (fakes.killSelfAfterOn) env.FAKE_KILL_SELF_AFTER_ON = fakes.killSelfAfterOn
+    if (fakes.extServerVersion) env.FAKE_EXT_SERVER_VERSION = fakes.extServerVersion
     // Запуск не от терминала: скрипт ничего не спрашивает
     const result = spawnSync(bash, ['-c', inBash, 'bash', posix(join(dir, 'averra.sh')), ...args], {
       encoding: 'utf8',
@@ -2158,5 +2201,622 @@ describe('службы systemd и папки (install-units)', () => {
     }
     expect(srv.log('chown.log')).toMatch(/^1000:1000 \S+\/averra\/requests\n$/)
     expect(srv.run(['ensure-dirs', 'лишнее']).status).toBe(1)
+  })
+})
+
+describe('внешняя база (install.sh --external-db)', () => {
+  /**
+   * Временные контейнеры проверки, которые ещё «живы» у подделки, и их анонимные тома (в них копия
+   * рабочей базы): ни того, ни другого после проверки остаться не должно
+   */
+  const containers = (srv: ReturnType<typeof server>) =>
+    readdirSync(srv.fake).filter(
+      (name) => name.startsWith('container-') || name.startsWith('volume-'),
+    )
+  const keptDumps = (srv: ReturnType<typeof server>) =>
+    existsSync(join(srv.dir, 'backups'))
+      ? readdirSync(join(srv.dir, 'backups')).filter((name) => name.endsWith('.dump'))
+      : []
+  const dumpFile = (srv: ReturnType<typeof server>, name: string) =>
+    readFileSync(join(srv.dir, 'backups', name), 'utf8').trim()
+  /** Пароль внешней базы — ни в аргументах docker, ни в выводе: ни как есть, ни закодированным */
+  function expectNoPassword(srv: ReturnType<typeof server>, output: string) {
+    const calls = srv.calls().join('\n')
+    for (const secret of [EXT_PASSWORD, 'p%40ss', EXT_URL]) {
+      expect(calls).not.toContain(secret)
+      expect(output).not.toContain(secret)
+    }
+  }
+
+  it('бэкап: pg_dump с внешней базы, проверка во временном контейнере без сети, он удаляется', () => {
+    const srv = server({ external: true })
+    const run = srv.run(['backup'])
+    expect(run.status, run.output).toBe(0)
+    const [name] = srv.backups()
+    expect(name).toMatch(BACKUP_NAME)
+    const manifest = JSON.parse(
+      readFileSync(join(srv.dir, 'backups', name ?? '', 'manifest.json'), 'utf8'),
+    )
+    expect(manifest).toMatchObject({ migrations: 15, tables: 12, verified: true })
+    expect(readFileSync(join(srv.dir, 'backups', name ?? '', 'db.dump'), 'utf8')).toBe('DUMP 15\n')
+    const calls = srv.calls()
+    const client = calls.filter((line) => line.includes('/run/averra-db:ro'))
+    // Клиент той же версии, что сервер, переменные libpq — без значений, CA — из папки установки
+    for (const line of client) {
+      expect(line).toMatch(
+        /^docker run --rm -i --cap-drop ALL --security-opt no-new-privileges:true -v \S+\/averra\/db-tls:\/run\/averra-db:ro -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGSSLROOTCERT -e PGCONNECT_TIMEOUT postgres:18\.6-alpine3\.24 /,
+      )
+    }
+    expect(client.map((line) => line.replace(/^.*alpine3\.24 /, ''))).toEqual([
+      'pg_dump -Fc',
+      'psql -X -tAc select count(*) from drizzle.__drizzle_migrations',
+      "psql -X -tAc select count(*) from information_schema.tables where table_schema = 'public'",
+    ])
+    const verify = calls.filter(
+      (line) => line.includes('averra-verify-') || line.includes('label='),
+    )
+    expect(verify.map((line) => line.replace(/averra-verify-[\d-]+/g, 'NAME'))).toEqual([
+      'docker ps -aq --filter label=averra.verify=1',
+      'docker run -d --rm --name NAME --label averra.verify=1 --network none -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=averra_verify postgres:18.6-alpine3.24 postgres -c fsync=off -c shared_buffers=32MB -c max_connections=10',
+      'docker exec NAME pg_isready -h 127.0.0.1 -U postgres -d averra_verify',
+      'docker exec -i NAME pg_restore -h 127.0.0.1 -U postgres -d averra_verify --no-owner --no-privileges --exit-on-error',
+      'docker exec NAME psql -X -h 127.0.0.1 -U postgres -d averra_verify -tAc select count(*) from drizzle.__drizzle_migrations',
+      "docker exec NAME psql -X -h 127.0.0.1 -U postgres -d averra_verify -tAc select count(*) from information_schema.tables where table_schema = 'public'",
+      'docker rm -fv NAME',
+    ])
+    expect(containers(srv)).toEqual([])
+    // Своей базы нет: ни compose exec postgres, ни служебных баз и их поиска
+    expect(calls.join('\n')).not.toMatch(/exec -T postgres|createdb|dropdb|pg_database/)
+    // Пароль со знаками @ $ # % : дошёл до клиента раскодированным — переменной окружения
+    expect(srv.log('pg-env.log').split('\n').filter(Boolean)).toEqual(
+      Array(3).fill(
+        `host=db.example.test port=6432 user=averra_app password=${EXT_PASSWORD} db=averra_site sslmode=verify-full rootcert=system`,
+      ),
+    )
+    expectNoPassword(srv, run.output)
+    expect(srv.state('backup-last.json')).toMatchObject({ ok: true, verified: true })
+  })
+
+  it('CA провайдера в адресе — клиент проверяет сертификат по нему', () => {
+    const url = EXT_URL.replace('verify-full', 'verify-full&sslrootcert=/run/averra-db/ca.pem')
+    const srv = server({ external: true, env: [`DATABASE_URL='${url}'`] })
+    expect(srv.run(['backup']).status).toBe(0)
+    expect(srv.log('pg-env.log')).toContain('rootcert=/run/averra-db/ca.pem\n')
+    expect(srv.log('pg-env.log')).not.toContain('rootcert=system')
+  })
+
+  it('дамп не встал во временный контейнер — бэкап не удался, контейнер всё равно удалён', () => {
+    const srv = server({ external: true })
+    // Брошенный прошлой проверкой (kill -9) контейнер убирается перед новой
+    writeFileSync(join(srv.fake, 'container-averra-verify-old'), '')
+    writeFileSync(join(srv.fake, 'volume-averra-verify-old'), '')
+    const run = srv.run(['backup'], { restoreFailsInto: 'verify-container' })
+    expect(run.status).toBe(1)
+    expect(srv.state('backup-last.json')).toMatchObject({
+      ok: false,
+      error: 'дамп не восстановился во временную базу',
+    })
+    expect(containers(srv)).toEqual([])
+    expect(srv.backups()).toEqual([])
+  })
+
+  it('внешняя база не отвечает — бэкап не удался, причина в состоянии', () => {
+    const srv = server({ external: true })
+    const run = srv.run(['backup'], { extDown: true })
+    expect(run.status).toBe(1)
+    expect(srv.state('backup-last.json')).toMatchObject({
+      ok: false,
+      error: 'pg_dump не прошёл: база не ответила',
+    })
+  })
+
+  it('восстановление: проверка во временном контейнере, страховочный дамп, одна транзакция в ту же базу', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    writeFileSync(join(srv.fake, 'data', 'media', 'site', 'after-backup.jpg'), 'новая')
+    srv.clearCalls()
+    const run = srv.run(['restore', name ?? '', '--yes'])
+    expect(run.status, run.output).toBe(0)
+    expect(srv.migrations('ext')).toBe('15')
+    const steps = srv.calls()
+    const index = (needle: string) => steps.findIndex((line) => line.includes(needle))
+    // Дамп проверен до остановки API; страховочный дамп — после остановки, до загрузки
+    expect(index('exec -i averra-verify-')).toBeLessThan(index('stop api'))
+    expect(index('stop api')).toBeLessThan(index('pg_dump -Fc'))
+    expect(index('pg_dump -Fc')).toBeLessThan(index('--single-transaction'))
+    expect(index('--single-transaction')).toBeLessThan(index('mkdir .averra-before-restore'))
+    expect(index('mkdir .averra-before-restore')).toBeLessThan(
+      steps.findLastIndex((l) => l.endsWith('up -d')),
+    )
+    // Без новых баз и переименований
+    expect(steps.join('\n')).not.toMatch(/RENAME|createdb|dropdb|exec -T postgres/)
+    // Загрузка — одной транзакцией: сначала очистка drizzle и public, потом SQL дампа
+    const load = steps.join('\n')
+    expect(load).toContain('DROP SCHEMA IF EXISTS drizzle CASCADE')
+    expect(load).toContain(
+      'pg_restore --no-owner --no-privileges -f /tmp/averra.sql /tmp/averra.dump',
+    )
+    expect(load).toContain(
+      'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -f /tmp/averra-clean.sql -f /tmp/averra.sql',
+    )
+    expect(srv.media()).toEqual(['site/original.jpg'])
+    expect(containers(srv)).toEqual([])
+    // Удачно — страховочный дамп удалён: восстановление человек подтвердил
+    expect(keptDumps(srv)).toEqual([])
+    expect(srv.state('kept-dumps.json')).toEqual({ files: [] })
+    expect(srv.running()).toBe('0.6.0')
+    expect(srv.state('restore-last.json')).toMatchObject({
+      kind: 'backup',
+      source: name,
+      result: 'ok',
+      dbRestored: true,
+      safetyDump: null,
+      error: null,
+    })
+    expect(srv.state('restore-last.json').finishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expectNoPassword(srv, run.output)
+  })
+
+  it('загрузка не прошла — транзакция откатилась: база и медиатека прежние, API снова запущен', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    const run = srv.run(['restore', name ?? '', '--yes'], { loadFails: true })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('транзакция откатилась, рабочие база и медиатека прежние')
+    expect(srv.migrations('ext')).toBe('17')
+    expect(srv.running()).toBe('0.6.0')
+    expect(srv.media()).toEqual(['site/original.jpg'])
+    const [safety] = keptDumps(srv)
+    expect(safety).toMatch(/^before-restore-\d{8}-\d{6}\.dump$/)
+    expect(dumpFile(srv, safety ?? '')).toBe('DUMP 17')
+    expect(srv.state('kept-dumps.json')).toEqual({ files: [safety] })
+    // Причина сбоя — строки ошибок клиента в выводе; строки данных (CONTEXT) — нет
+    expect(run.stderr).toContain('permission denied to create extension "pg_trgm"')
+    expect(run.stderr).not.toContain('Иван')
+    expect(srv.state('restore-last.json')).toMatchObject({
+      result: 'failed',
+      dbRestored: false,
+      safetyDump: safety,
+      error: 'база не восстановилась — транзакция откатилась, рабочие база и медиатека прежние',
+    })
+    // В состоянии — фиксированный текст, не вывод клиента
+    expect(JSON.stringify(srv.state('restore-last.json'))).not.toContain('pg_trgm')
+  })
+
+  it('дамп бэкапа битый — отказ до остановки API, ничего не менялось', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    srv.clearCalls()
+    const run = srv.run(['restore', name ?? '', '--yes'], { restoreFailsInto: 'verify-container' })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('рабочие база и медиатека не тронуты')
+    expect(srv.calls().join('\n')).not.toContain('stop api')
+    expect(srv.migrations('ext')).toBe('17')
+    expect(keptDumps(srv)).toEqual([])
+  })
+
+  it('API не поднялся на восстановленной базе — страховочный дамп возвращается той же транзакцией', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    rmSync(join(srv.fake, 'data', 'media', 'site', 'original.jpg'))
+    writeFileSync(join(srv.fake, 'data', 'media', 'site', 'after-backup.jpg'), 'новая')
+    const run = srv.run(['restore', name ?? '', '--yes'], { unhealthy: ['0.6.0'] })
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('прежние база и медиатека на месте')
+    expect(srv.migrations('ext')).toBe('17')
+    expect(srv.media()).toEqual(['site/after-backup.jpg'])
+    const loads = srv.calls().filter((line) => line.includes('--single-transaction'))
+    expect(loads).toHaveLength(2)
+    expect(keptDumps(srv)).toHaveLength(1)
+    expect(srv.state('restore-last.json')).toMatchObject({
+      result: 'failed',
+      dbRestored: false,
+      error: 'API не поднялся на восстановленной базе — прежние база и медиатека на месте',
+    })
+  })
+
+  it('восстановление убито посреди загрузки — база не пустая, страховочный дамп и команда в выводе', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    const run = srv.run(['restore', name ?? '', '--yes'], { killSelfOn: '--single-transaction' })
+    expect(run.status).not.toBe(0)
+    // Транзакция не дошла до конца — база прежняя, а не пустая и не наполовину
+    expect(srv.migrations('ext')).toBe('17')
+    const [safety] = keptDumps(srv)
+    expect(safety).toMatch(/^before-restore-\d{8}-\d{6}\.dump$/)
+    expect(dumpFile(srv, safety ?? '')).toBe('DUMP 17')
+    // Путь назад напечатан до загрузки
+    expect(run.stdout).toMatch(
+      new RegExp(String.raw`averra\.sh restore-dump \S+/averra/backups/${safety} --yes`),
+    )
+    expect(srv.running()).toBe('stopped')
+    expect(srv.state('restore-last.json')).toMatchObject({
+      kind: 'backup',
+      source: name,
+      result: 'in-progress',
+      finishedAt: null,
+      dbRestored: false,
+      safetyDump: safety,
+    })
+    // API лежит: status без него говорит, что восстановление оборвалось и как вернуть базу
+    const json = JSON.parse(srv.run(['status', '--json']).stdout)
+    expect(json).toMatchObject({
+      apiDown: true,
+      restore: 'interrupted',
+      restoreLast: { result: 'in-progress', safetyDump: safety },
+      keptDumps: { files: [safety] },
+    })
+    const text = srv.run(['status']).stdout
+    expect(text).toContain(`Восстановление базы из ${name} оборвалось во время загрузки`)
+    expect(text).toMatch(
+      new RegExp(String.raw`averra\.sh restore-dump \S+/averra/backups/${safety} --yes`),
+    )
+    expect(text).toContain(`Страховочные дампы в `)
+    // Замок занят — восстановление ещё идёт, а не оборвалось
+    expect(JSON.parse(srv.run(['status', '--json'], { lockHeld: true }).stdout)).toMatchObject({
+      restore: 'running',
+    })
+
+    // Человек возвращает страховочный дамп: база из него, API работает, дамп-файл цел
+    writeFileSync(join(srv.fake, 'db-ext'), '0\n')
+    const back = srv.run(['restore-dump', join(srv.dir, 'backups', safety ?? ''), '--yes'])
+    expect(back.status, back.output).toBe(0)
+    expect(srv.migrations('ext')).toBe('17')
+    expect(srv.running()).toBe('0.6.0')
+    expect(keptDumps(srv)).toEqual([safety])
+    expect(srv.state('restore-last.json')).toMatchObject({
+      kind: 'dump',
+      source: safety,
+      result: 'ok',
+      dbRestored: true,
+    })
+  })
+
+  it('восстановление убито сразу после загрузки — база из бэкапа, медиатека прежняя, путь назад есть', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    writeFileSync(join(srv.fake, 'data', 'media', 'site', 'after-backup.jpg'), 'новая')
+    const run = srv.run(['restore', name ?? '', '--yes'], {
+      killSelfAfterOn: '--single-transaction',
+    })
+    expect(run.status).not.toBe(0)
+    // Транзакция зафиксирована до обрыва: база из бэкапа, медиатека не подменена, API остановлен
+    expect(srv.migrations('ext')).toBe('15')
+    // Распакованная медиатека бэкапа — во временной папке тома, рабочая не тронута
+    expect(srv.media()).toEqual([
+      '.averra-restore/media/site/original.jpg',
+      'site/after-backup.jpg',
+      'site/original.jpg',
+    ])
+    expect(srv.running()).toBe('stopped')
+    const [safety] = keptDumps(srv)
+    expect(dumpFile(srv, safety ?? '')).toBe('DUMP 17')
+    // Обрыв пришёл после COMMIT, но до записи итога: состояние честно не знает, чем кончилась
+    // загрузка, и путь назад тот же — страховочный дамп
+    expect(srv.state('restore-last.json')).toMatchObject({
+      result: 'in-progress',
+      dbRestored: false,
+      safetyDump: safety,
+    })
+    const text = srv.run(['status']).stdout
+    expect(text).toContain(`Восстановление базы из ${name} оборвалось во время загрузки`)
+    expect(text).toMatch(new RegExp(String.raw`restore-dump \S+/averra/backups/${safety} --yes`))
+
+    // Вернуть прежнюю базу — страховочный дамп; медиатека и так прежняя, временная папка убрана
+    const back = srv.run(['restore-dump', join(srv.dir, 'backups', safety ?? ''), '--yes'])
+    expect(back.status, back.output).toBe(0)
+    expect(srv.migrations('ext')).toBe('17')
+    expect(srv.media()).toEqual(['site/after-backup.jpg', 'site/original.jpg'])
+    expect(srv.running()).toBe('0.6.0')
+  })
+
+  it('восстановление убито при подмене медиатеки — состояние: база уже из бэкапа', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    const run = srv.run(['restore', name ?? '', '--yes'], {
+      killSelfOn: 'mkdir .averra-before-restore',
+    })
+    expect(run.status).not.toBe(0)
+    expect(srv.migrations('ext')).toBe('15')
+    expect(srv.state('restore-last.json')).toMatchObject({
+      result: 'in-progress',
+      dbRestored: true,
+    })
+    const text = srv.run(['status']).stdout
+    expect(text).toContain(
+      `Восстановление базы из ${name} оборвалось после загрузки: база уже из него`,
+    )
+    expect(text).toContain('restore-dump')
+  })
+
+  it('restore-dump — только для внешней базы и только с подтверждением', () => {
+    const own = server()
+    const dump = join(own.dir, 'x.dump')
+    writeFileSync(dump, 'DUMP 15\n')
+    const refused = own.run(['restore-dump', dump, '--yes'])
+    expect(refused.status).toBe(1)
+    expect(refused.stderr).toContain('restore-dump — для внешней базы')
+    const srv = server({ external: true })
+    writeFileSync(join(srv.dir, 'x.dump'), 'DUMP 15\n')
+    const noYes = srv.run(['restore-dump', join(srv.dir, 'x.dump')])
+    expect(noYes.status).toBe(1)
+    expect(noYes.stderr).toContain('добавьте --yes')
+  })
+
+  it('обновление: compose.external.yaml из образа новой версии', () => {
+    const srv = server({ external: true })
+    const run = srv.run(['update', '--version', '0.7.0', '--yes'])
+    expect(run.status, run.output).toBe(0)
+    expect(srv.calls().join('\n')).toContain('/app/deploy/compose.external.yaml')
+    expect(readFileSync(join(srv.dir, 'compose.yaml'), 'utf8')).toBe(
+      '# compose external ghcr.io/midhey/averra-api:0.7.0\n',
+    )
+  })
+
+  it('откат после миграций — база из бэкапа в ту же базу, данные новой версии — в страховочном дампе', () => {
+    const srv = server({ external: true })
+    const run = srv.run(['update', '--version', '0.7.0', '--yes'], {
+      unhealthy: ['0.7.0'],
+      migratesOn: '0.7.0',
+    })
+    expect(run.status, run.output).toBe(1)
+    expect(run.output).toContain('работает прежняя версия 0.6.0')
+    expect(srv.migrations('ext')).toBe('15')
+    const [kept] = keptDumps(srv)
+    expect(kept).toMatch(/^rolled-back-\d{8}-\d{6}\.dump$/)
+    expect(dumpFile(srv, kept ?? '')).toBe('DUMP 16')
+    expect(srv.calls().join('\n')).not.toMatch(/RENAME|createdb|exec -T postgres/)
+    expect(srv.state('update-last.json')).toMatchObject({
+      result: 'rolled-back',
+      dbRestored: true,
+      keptDatabase: null,
+      keptDump: kept,
+    })
+    expect(srv.state('kept-dumps.json')).toEqual({ files: [kept] })
+    expectNoPassword(srv, run.output)
+  })
+
+  it('откат убит посреди загрузки — повтор не снимает страховочный дамп заново и доводит откат', () => {
+    const srv = server({ external: true })
+    const first = srv.run(['update', '--version', '0.7.0', '--yes'], {
+      unhealthy: ['0.7.0'],
+      migratesOn: '0.7.0',
+      killOn: '--single-transaction',
+    })
+    expect(first.status, first.output).toBe(3)
+    // Транзакция не прошла: база на миграциях новой версии, не пустая
+    expect(srv.migrations('ext')).toBe('16')
+    const [kept] = keptDumps(srv)
+    expect(dumpFile(srv, kept ?? '')).toBe('DUMP 16')
+    const dumps = () => srv.calls().filter((line) => line.endsWith('pg_dump -Fc')).length
+    const before = dumps()
+    const again = srv.run(['update', '--version', '0.7.0', '--yes'], { unhealthy: ['0.7.0'] })
+    expect(again.status, again.output).toBe(1)
+    expect(srv.migrations('ext')).toBe('15')
+    expect(dumps()).toBe(before)
+    expect(keptDumps(srv)).toEqual([kept])
+    expect(srv.state('update-last.json')).toMatchObject({
+      result: 'rolled-back',
+      dbRestored: true,
+      keptDump: kept,
+    })
+  })
+
+  it('откат убит сразу после загрузки — повтор видит, что база уже из бэкапа, и не грузит её снова', () => {
+    const srv = server({ external: true })
+    const first = srv.run(['update', '--version', '0.7.0', '--yes'], {
+      unhealthy: ['0.7.0'],
+      migratesOn: '0.7.0',
+      killAfterOn: '--single-transaction',
+    })
+    expect(first.status, first.output).toBe(3)
+    // Транзакция прошла до обрыва: база снова на миграциях бэкапа
+    expect(srv.migrations('ext')).toBe('15')
+    const [kept] = keptDumps(srv)
+    expect(dumpFile(srv, kept ?? '')).toBe('DUMP 16')
+    const count = (needle: string) => srv.calls().filter((line) => line.includes(needle)).length
+    const dumps = count('pg_dump -Fc')
+    const loads = count('--single-transaction')
+    const again = srv.run(['update', '--version', '0.7.0', '--yes'], { unhealthy: ['0.7.0'] })
+    expect(again.status, again.output).toBe(1)
+    expect(srv.migrations('ext')).toBe('15')
+    // Ни нового страховочного дампа (он затёр бы данные новой версии), ни второй загрузки
+    expect(count('pg_dump -Fc')).toBe(dumps)
+    expect(count('--single-transaction')).toBe(loads)
+    expect(keptDumps(srv)).toEqual([kept])
+    expect(srv.state('update-last.json')).toMatchObject({
+      result: 'rolled-back',
+      dbRestored: true,
+      keptDump: kept,
+    })
+  })
+
+  it('провайдер поднял версию сервера — бэкап не удался с понятной причиной', () => {
+    const srv = server({ external: true })
+    const run = srv.run(['backup'], { dumpFails: true, extServerVersion: '190002' })
+    expect(run.status).toBe(1)
+    expect(srv.state('backup-last.json')).toMatchObject({
+      ok: false,
+      error:
+        'pg_dump не прошёл: сервер базы — PostgreSQL 19, а клиент бэкапов — 18. Запустите install.sh ещё раз: он возьмёт клиент версии сервера',
+    })
+    // Версия та же — причина прежняя
+    const same = srv.run(['backup'], { dumpFails: true })
+    expect(same.status).toBe(1)
+    expect(srv.state('backup-last.json')).toMatchObject({
+      error: 'pg_dump не прошёл: база не ответила',
+    })
+  })
+
+  it('срок хранения удаляет старые страховочные дампы, свежие остаются', () => {
+    const srv = server({ external: true, env: ['BACKUP_KEEP=3'] })
+    mkdirSync(join(srv.dir, 'backups'), { recursive: true })
+    const old = `before-restore-${stampAgo(5)}.dump`
+    const fresh = `rolled-back-${stampAgo(1)}.dump`
+    for (const file of [old, fresh]) writeFileSync(join(srv.dir, 'backups', file), 'DUMP 1\n')
+    const run = srv.run(['backup'])
+    expect(run.status, run.output).toBe(0)
+    expect(keptDumps(srv)).toEqual([fresh])
+    expect(srv.state('kept-dumps.json')).toEqual({ files: [fresh] })
+  })
+
+  it('страховочные дампы восстановления и отката — с правами 600 (umask 077)', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    rmSync(join(srv.fake, 'dump-umask.log'))
+    const restore = srv.run(['restore', name ?? '', '--yes'], {
+      killSelfOn: '--single-transaction',
+    })
+    expect(restore.status).not.toBe(0)
+    expect(keptDumps(srv)).toHaveLength(1)
+    expect(srv.log('dump-umask.log')).toBe('0077\n')
+    const rollback = server({ external: true })
+    const update = rollback.run(['update', '--version', '0.7.0', '--yes'], {
+      unhealthy: ['0.7.0'],
+      migratesOn: '0.7.0',
+    })
+    expect(update.status, update.output).toBe(1)
+    expect(keptDumps(rollback).some((file) => file.startsWith('rolled-back-'))).toBe(true)
+    // Бэкап перед обновлением и страховочный дамп отката
+    expect(rollback.log('dump-umask.log').split('\n').filter(Boolean)).toEqual(['0077', '0077'])
+  })
+
+  it('срок хранения не удаляет страховочный дамп незавершённого обновления: из него доводится откат', () => {
+    const srv = server({ external: true, env: ['BACKUP_KEEP=3'] })
+    mkdirSync(join(srv.dir, 'backups'), { recursive: true })
+    const pending = `rolled-back-${stampAgo(5)}.dump`
+    const other = `before-restore-${stampAgo(5)}.dump`
+    for (const file of [pending, other]) writeFileSync(join(srv.dir, 'backups', file), 'DUMP 16\n')
+    writeFileSync(
+      join(srv.dir, '.update-run'),
+      `FROM=0.6.0\nTO=0.7.0\nPHASE=rollback\nBEFORE=15\nKEPT_DUMP=${pending}\n`,
+    )
+    const run = srv.run(['backup', '--kind', 'scheduled'])
+    expect(run.status, run.output).toBe(0)
+    expect(keptDumps(srv)).toEqual([pending])
+    // Обновление доведено — дальше срок хранения как обычно
+    rmSync(join(srv.dir, '.update-run'))
+    expect(srv.run(['backup']).status).toBe(0)
+    expect(keptDumps(srv)).toEqual([])
+  })
+
+  it('verify: дамп — во временный контейнер без сети, сверка с манифестом, контейнер и том удалены', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    srv.clearCalls()
+    const run = srv.run(['verify', name ?? ''])
+    expect(run.status, run.output).toBe(0)
+    expect(run.stdout).toContain(`Бэкап ${name} в порядке`)
+    const calls = srv.calls().join('\n')
+    expect(calls).toMatch(
+      /docker run -d --rm --name averra-verify-\S+ --label averra\.verify=1 --network none /,
+    )
+    expect(calls).toMatch(/docker rm -fv averra-verify-/)
+    // Рабочая база не тронута: ни загрузки, ни дампа, ни своей базы
+    expect(calls).not.toMatch(/--single-transaction|exec -T postgres|pg_dump/)
+    expect(containers(srv)).toEqual([])
+    // В дампе не то число миграций, что в манифесте (суммы при этом сходятся) — проверка не
+    // прошла, контейнер и том всё равно удалены
+    const dir = join(srv.dir, 'backups', name ?? '')
+    writeFileSync(join(dir, 'db.dump'), 'DUMP 14\n')
+    const digest = createHash('sha256').update('DUMP 14\n').digest('hex')
+    writeFileSync(
+      join(dir, 'SHA256SUMS'),
+      readFileSync(join(dir, 'SHA256SUMS'), 'utf8').replace(
+        /^\S+(\s+\*?db\.dump)$/m,
+        `${digest}$1`,
+      ),
+    )
+    const wrong = srv.run(['verify', name ?? ''])
+    expect(wrong.status).toBe(1)
+    expect(wrong.stderr).toContain('дамп не восстановился во временную базу')
+    expect(containers(srv)).toEqual([])
+  })
+
+  it('оборванное восстановление можно оставить как есть: restore-dump --dismiss', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    writeFileSync(join(srv.fake, 'db-ext'), '17\n')
+    // Закрывать нечего — отказ
+    const nothing = srv.run(['restore-dump', '--dismiss'])
+    expect(nothing.status).toBe(1)
+    expect(nothing.stderr).toContain('незаконченного восстановления нет')
+    const run = srv.run(['restore', name ?? '', '--yes'], { killSelfOn: '--single-transaction' })
+    expect(run.status).not.toBe(0)
+    const [safety] = keptDumps(srv)
+    expect(srv.run(['status']).stdout).toMatch(
+      /оставить как есть — \S+\/averra\.sh restore-dump --dismiss/,
+    )
+    expect(srv.run(['restore-dump', 'x.dump', '--dismiss']).status).toBe(1)
+    // Пока восстановление идёт (замок занят), закрыть его нельзя
+    expect(srv.run(['restore-dump', '--dismiss'], { lockHeld: true }).status).not.toBe(0)
+    expect(srv.state('restore-last.json')).toMatchObject({ result: 'in-progress' })
+
+    const dismiss = srv.run(['restore-dump', '--dismiss'])
+    expect(dismiss.status, dismiss.output).toBe(0)
+    // База как есть, API поднят, страховочный дамп остался — его удалит срок хранения
+    expect(srv.migrations('ext')).toBe('17')
+    expect(srv.running()).toBe('0.6.0')
+    expect(keptDumps(srv)).toEqual([safety])
+    expect(srv.state('kept-dumps.json')).toEqual({ files: [safety] })
+    expect(srv.state('restore-last.json')).toMatchObject({
+      kind: 'backup',
+      source: name,
+      result: 'failed',
+      dbRestored: false,
+      safetyDump: null,
+      error: 'оборвалось; на сервере решено оставить базу как есть',
+    })
+    expect(srv.state('restore-last.json').finishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    // Повторно — закрывать уже нечего
+    expect(srv.run(['restore-dump', '--dismiss']).status).toBe(1)
+  })
+
+  it('оборванное восстановление, а страховочного дампа уже нет — status не зовёт вернуть его', () => {
+    const srv = server({ external: true })
+    expect(srv.run(['backup']).status).toBe(0)
+    const [name] = srv.backups()
+    expect(
+      srv.run(['restore', name ?? '', '--yes'], { killSelfOn: '--single-transaction' }).status,
+    ).not.toBe(0)
+    const [safety] = keptDumps(srv)
+    rmSync(join(srv.dir, 'backups', safety ?? ''))
+    const text = srv.run(['status']).stdout
+    expect(text).toContain(`Страховочного дампа ${safety} уже нет`)
+    expect(text).not.toMatch(/restore-dump \S+\.dump --yes/)
+    expect(text).toContain('restore-dump --dismiss')
+  })
+
+  it('состояние без API: база внешняя и отвечает ли она', () => {
+    const srv = server({ external: true })
+    writeFileSync(join(srv.fake, 'running'), 'stopped\n')
+    const up = srv.run(['status', '--json'])
+    expect(up.status).toBe(1)
+    expect(JSON.parse(up.stdout)).toMatchObject({ apiDown: true, database: 'external', dbUp: true })
+    const down = srv.run(['status'], { extDown: true })
+    expect(down.stdout).toContain('База: внешняя, НЕ отвечает')
+    const own = server()
+    writeFileSync(join(own.fake, 'running'), 'stopped\n')
+    expect(JSON.parse(own.run(['status', '--json']).stdout)).toMatchObject({
+      database: 'own',
+      dbUp: null,
+    })
   })
 })

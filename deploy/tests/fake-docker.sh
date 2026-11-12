@@ -4,7 +4,12 @@
 # data/ — тома media и sites: tar и sh из «контейнера» API выполняются по-настоящему над ними
 # (/data → FAKE_STATE/data). Запуск API «собирает» сайт: в builds.log — какие картинки были в
 # медиатеке в эту минуту. Каждый вызов пишется в calls.log. Поведение задают переменные FAKE_*
-# (см. Fakes в тесте)
+# (см. Fakes в тесте).
+# Внешняя база (AVERRA_DB_MODE=external): db-ext — её число миграций; клиент PostgreSQL — docker run
+# образа postgres с переменными libpq (их значения — в pg-env.log, не в calls.log); временный
+# контейнер проверки — файл container-<имя> с числом миграций восстановленного дампа и его анонимный
+# том данных (VOLUME образа postgres) — файл volume-<имя>: docker rm -f удаляет только контейнер,
+# том — лишь rm -fv
 S="$FAKE_STATE"
 args="$*"
 printf 'docker %s\n' "$args" >> "$S/calls.log"
@@ -15,19 +20,113 @@ version() {
   grep -E '^AVERRA_VERSION=' "$project/.env" | tail -n 1 | cut -d= -f2
 }
 db() { printf '%s/db-%s' "$S" "$1"; }
-# Обрыв процесса обновления: на первом вызове, подходящем под это регулярное выражение bash,
-# процесс update-worker убивается (kill -9 — как перезагрузка: ни trap, ни итога), а сам вызов
-# не выполняется
+# Обрыв процесса обновления (kill -9 — как перезагрузка: ни trap, ни итога) и обрыв самого
+# averra.sh (восстановление идёт не процессом обновления: kill -9 всех предков, которые выполняют
+# averra.sh, — и подоболочки, и главного процесса)
+kill_worker() {
+  # Без --project-directory (docker run клиента базы) — папка установки рядом с папкой подделки
+  kill -9 "$(cat "${project:-$S/../averra}/.update-pid")" 2>/dev/null
+}
+kill_self() {
+  parent_of() {
+    if [[ -r "/proc/$1/ppid" ]]; then cat "/proc/$1/ppid"; else awk '/^PPid:/ {print $2}' "/proc/$1/status"; fi
+  }
+  local victims=() pid=$PPID
+  while [[ "$pid" =~ ^[0-9]+$ && "$pid" -gt 1 ]] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q 'averra\.sh'; do
+    victims+=("$pid")
+    pid="$(parent_of "$pid")"
+  done
+  kill -9 "${victims[@]}" 2>/dev/null
+}
+# FAKE_KILL_ON / FAKE_KILL_SELF_ON: на первом вызове под это регулярное выражение bash обрыв до
+# вызова — сам вызов не выполняется (транзакция не дошла до COMMIT)
 if [[ -n "${FAKE_KILL_ON:-}" && "$args" =~ $FAKE_KILL_ON && ! -e "$S/killed" ]]; then
   : > "$S/killed"
-  kill -9 "$(cat "$project/.update-pid")" 2>/dev/null
+  kill_worker
   exit 1
+fi
+if [[ -n "${FAKE_KILL_SELF_ON:-}" && "$args" =~ $FAKE_KILL_SELF_ON && ! -e "$S/killed" ]]; then
+  : > "$S/killed"
+  kill_self
+  exit 1
+fi
+# FAKE_KILL_AFTER_ON / FAKE_KILL_SELF_AFTER_ON: вызов выполняется целиком (транзакция зафиксирована),
+# обрыв — сразу после него
+if [[ -n "${FAKE_KILL_AFTER_ON:-}" && "$args" =~ $FAKE_KILL_AFTER_ON && ! -e "$S/killed" ]]; then
+  : > "$S/killed"
+  trap kill_worker EXIT
+fi
+if [[ -n "${FAKE_KILL_SELF_AFTER_ON:-}" && "$args" =~ $FAKE_KILL_SELF_AFTER_ON && ! -e "$S/killed" ]]; then
+  : > "$S/killed"
+  trap kill_self EXIT
 fi
 opt() { # значение после флага: opt -d
   local flag="$1"; shift
   while [[ $# -gt 0 ]]; do [[ "$1" == "$flag" ]] && { printf '%s' "$2"; return; }; shift; done
 }
 case "$args" in
+  "run --rm -i --cap-drop ALL --security-opt no-new-privileges:true -v "*":/run/averra-db:ro "*)
+    # Клиент внешней базы: что он получил переменными окружения (пароль — только здесь)
+    printf 'host=%s port=%s user=%s password=%s db=%s sslmode=%s rootcert=%s\n' "${PGHOST:-}" \
+      "${PGPORT:-}" "${PGUSER:-}" "${PGPASSWORD:-}" "${PGDATABASE:-}" "${PGSSLMODE:-}" \
+      "${PGSSLROOTCERT:-}" >> "$S/pg-env.log"
+    if [[ -n "${FAKE_EXT_DOWN:-}" ]]; then
+      echo 'psql: error: connection to server failed: Connection timed out' >&2
+      exit 2
+    fi
+    case "$args" in
+      *" pg_dump -Fc"*)
+        [[ -z "${FAKE_DUMP_FAILS:-}" ]] || exit 1
+        # umask процесса, в чей stdout пишется дамп: файл дампа создан с ним (на Windows права
+        # файла не видны — видно, с какой маской его создавали)
+        umask >> "$S/dump-umask.log"
+        printf 'DUMP %s\n' "$(cat "$(db ext)")" ;;
+      *"--single-transaction"*)
+        dump="$(cat)"
+        if [[ -n "${FAKE_LOAD_FAILS:-}" ]]; then
+          echo 'pg_restore: connecting to database' >&2
+          echo 'psql:/tmp/averra.sql:42: ERROR:  permission denied to create extension "pg_trgm"' >&2
+          echo 'CONTEXT:  COPY leads, line 1: "Иван ivan@example.test"' >&2
+          exit 3
+        fi
+        printf '%s\n' "${dump#DUMP }" > "$(db ext)" ;;
+      *" psql "*)
+        query="${*: -1}"
+        case "$query" in
+          *drizzle*) cat "$(db ext)" ;;
+          'select 1') echo 1 ;;
+          *server_version_num*) echo "${FAKE_EXT_SERVER_VERSION:-180006}" ;;
+          *) echo 12 ;;
+        esac ;;
+    esac
+    exit 0 ;;
+  "run -d --rm --name averra-verify-"*)
+    name="$(opt --name "$@")"
+    : > "$S/container-$name"
+    : > "$S/volume-$name"
+    echo "id-$name" ;;
+  "ps -aq --filter label=averra.verify=1")
+    for file in "$S"/container-*; do [[ -e "$file" ]] && printf '%s\n' "${file##*/container-}"; done
+    exit 0 ;;
+  "rm -f "* | "rm -fv "*)
+    volumes="$2"
+    shift 2
+    for name in "$@"; do
+      rm -f "$S/container-$name"
+      [[ "$volumes" != -fv ]] || rm -f "$S/volume-$name"
+    done ;;
+  "exec "*"averra-verify-"*)
+    name="$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /^averra-verify-/) print $i}' <<<"$args")"
+    [[ -f "$S/container-$name" ]] || exit 1
+    case "$args" in
+      *pg_isready*) exit 0 ;;
+      *pg_restore*)
+        dump="$(cat)"
+        [[ "${FAKE_RESTORE_FAILS_INTO:-}" != verify-container ]] || exit 1
+        printf '%s\n' "${dump#DUMP }" > "$S/container-$name" ;;
+      *drizzle*) cat "$S/container-$name" ;;
+      *) echo 12 ;;
+    esac ;;
   *"compose version"*|"info") exit 0 ;;
   *" pull "*) [[ -z "${FAKE_PULL_FAILS:-}" ]] || exit 1; exit 0 ;;
   *"exec -T postgres pg_dump"*)
@@ -96,8 +195,10 @@ case "$args" in
     # API при старте собирает опубликованные сайты из медиатеки — какая она в эту минуту
     printf 'build %s: %s\n' "$v" "$(cd "$S/data/media" && find . -path './.averra-*' -prune -o -type f -printf '%P\n' | sort | tr '\n' ' ')" >> "$S/builds.log"
     # Миграция применяется один раз на базу, как у настоящего мигратора
-    if [[ "$v" == "${FAKE_MIGRATES_ON:-}" && -f "$(db averra)" && "$(cat "$(db averra)")" == 15 ]]; then
-      echo $(( $(cat "$(db averra)") + 1 )) > "$(db averra)"
+    working=averra
+    [[ ! -f "$(db ext)" ]] || working=ext
+    if [[ "$v" == "${FAKE_MIGRATES_ON:-}" && -f "$(db $working)" && "$(cat "$(db $working)")" == 15 ]]; then
+      echo $(( $(cat "$(db $working)") + 1 )) > "$(db $working)"
     fi ;;
   *" run --rm --no-deps -T --entrypoint sh api -c "*)
     # Скрипт — последним аргументом, над папками томов подделки. FAKE_SH_FAILS_ON: скрипт с этой
@@ -110,6 +211,7 @@ case "$args" in
     [[ -z "${FAKE_NO_DEPLOY_FILES:-}" ]] || exit 0
     image="$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /averra-api:/) print $i}' <<<"$args")"
     case "$args" in
+      *compose.external.yaml) echo "# compose external $image" ;;
       *compose.yaml) echo "# compose $image" ;;
       # averra.sh новой версии: запоминает, с какими командами его позвали (передача управления),
       # сколько раз к этой минуте поднимали сервисы и из какой папки его запустили

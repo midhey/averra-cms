@@ -5,7 +5,7 @@
 #
 # Что делает: проверяет окружение (Docker, свободные порты 80 и 443, DNS доменов указывает на этот
 # сервер), пишет папку установки (compose.yaml и .env с секретами, права 600), поднимает
-# PostgreSQL и API, ждёт /api/health/ready, создаёт владельца, поднимает Caddy (SSL сам). Сайт
+# PostgreSQL (свою или — с --external-db — проверяет внешнюю) и API, ждёт /api/health/ready, создаёт владельца, поднимает Caddy (SSL сам). Сайт
 # установки (одна установка — один сайт) API создаёт сам при первом запуске: название — SITE_NAME.
 #
 # Повторный запуск безопасен: секреты из .env не перегенерируются, владелец не создаётся второй
@@ -44,6 +44,9 @@ usage() {
   --skip-dns-check        не проверять, что домены указывают на сервер
   --skip-port-check       не проверять, что порты 80 и 443 свободны
   --install-docker        поставить Docker из пакетов Ubuntu (docker.io, docker-compose-v2)
+  --external-db           внешняя PostgreSQL 16–18 вместо своей: адрес — переменной
+                          AVERRA_DATABASE_URL или скрытым вводом, только с TLS (sslmode=verify-full)
+  --db-ca-file <файл>     корневой сертификат провайдера базы (PEM), если он не из публичных
   --env-only              только записать папку установки и .env, Docker не трогать
   --dry-run               показать план и пройти проверки (Docker, порты, DNS), ничего не меняя
   --yes                   ничего не спрашивать: всё из флагов и .env
@@ -55,6 +58,9 @@ usage() {
   AVERRA_OWNER_PASSWORD   пароль владельца без вопроса (иначе его спросят скрыто)
   GHCR_TOKEN              токен ghcr.io для --ghcr-user (только read:packages), иначе спросят скрыто
   GHCR_USER               то же, что --ghcr-user
+  AVERRA_DATABASE_URL     адрес внешней базы для --external-db:
+                          postgres://пользователь:пароль@хост:5432/база. Знаки @ : / # ? % и
+                          кавычки в пароле — percent-encoded (@ → %40, # → %23, % → %25)
 EOF
 }
 
@@ -81,6 +87,8 @@ GHCR_USER="${GHCR_USER:-}"
 SKIP_DNS=0
 SKIP_PORTS=0
 INSTALL_DOCKER=0
+EXTERNAL_DB=0
+DB_CA_FILE_ARG=''
 ENV_ONLY=0
 DRY_RUN=0
 ASSUME_YES=0
@@ -105,6 +113,9 @@ while [[ $# -gt 0 ]]; do
     --skip-dns-check) SKIP_DNS=1; shift ;;
     --skip-port-check) SKIP_PORTS=1; shift ;;
     --install-docker) INSTALL_DOCKER=1; shift ;;
+    # Адрес внешней базы — не значением флага: в нём пароль (история команд, список процессов)
+    --external-db) EXTERNAL_DB=1; shift ;;
+    --db-ca-file) need_value "$@"; DB_CA_FILE_ARG="$2"; shift 2 ;;
     --env-only) ENV_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes | -y) ASSUME_YES=1; shift ;;
@@ -122,7 +133,10 @@ env_get() {
   local key="$1" line
   [[ -f "$ENV_FILE" ]] || return 0
   line="$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 || true)"
-  printf '%s' "${line#*=}"
+  line="${line#*=}"
+  # Значение в одинарных кавычках (адрес внешней базы) Compose берёт буквально — и мы так же
+  if [[ ${#line} -ge 2 && "$line" == \'*\' ]]; then line="${line:1:${#line}-2}"; fi
+  printf '%s' "$line"
 }
 
 # Ключи, которые ведёт установщик. Остальные строки .env (свои добавки) переносятся как есть
@@ -130,6 +144,8 @@ MANAGED_KEYS=(
   AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN ACME_EMAIL
   SITE_NAME OWNER_EMAIL POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
 )
+# Внешняя база (--external-db): режим, адрес и образ клиента PostgreSQL вместо пароля своей базы.
+# У своей базы этих ключей нет: .env прежних установок не меняется
 # SITE_ID в .env прежних версий не ведётся: Caddy берёт сайт по ссылке main, которую ставит API.
 # Строка остаётся как своя — она нужна прежнему Caddyfile, если обновление откатят
 
@@ -192,6 +208,225 @@ done
 [[ "$SITE_NAME" != *[$'\n\r'\"\'\$#\\]* ]] ||
   fail "название сайта «$SITE_NAME» — одной строкой, без кавычек и знаков \$ # \\"
 
+# ── База: своя или внешняя ─────────────────────────────────────────────────────────────────
+# Своя — контейнер postgres из compose.yaml (по умолчанию). Внешняя — управляемая PostgreSQL на
+# другом сервере (--external-db): адрес только из AVERRA_DATABASE_URL или скрытого ввода, TLS с
+# проверкой сертификата. Режим живёт в .env (AVERRA_DB_MODE): повторный запуск его не меняет
+
+# Клиент PostgreSQL для проверки внешней базы, пока её версия не известна: тот же образ, что у
+# своей базы в compose.yaml. psql 17 говорит и с сервером 18
+PG_PROBE_IMAGE='postgres:17.11-alpine3.24'
+# Где CA провайдера внутри контейнеров (API и клиент PostgreSQL): папка db-tls установки
+DB_CA_MOUNT='/run/averra-db'
+
+# ── Общее у install.sh и averra.sh: тест сверяет, что текст одинаковый ──
+# Образ клиента PostgreSQL той же мажорной версии, что сервер: pg_dump не бывает старше сервера.
+# Теги точные, как у своей базы в compose.yaml
+pg_image_for_major() {
+  case "$1" in
+    16) printf 'postgres:16.15-alpine3.24' ;;
+    17) printf 'postgres:17.11-alpine3.24' ;;
+    18) printf 'postgres:18.6-alpine3.24' ;;
+    *) return 1 ;;
+  esac
+}
+
+# Раскодировать percent-encoding. Обратной косой черты в адресе нет (db_url_parse не пускает),
+# поэтому printf %b видит только наши \xHH
+pct_decode() { printf '%b' "${1//%/\\x}"; }
+
+# Разбор адреса postgres://пользователь:пароль@хост:порт/база?параметры. Итог — в DBU_* (USER и
+# PASSWORD раскодированы), адрес в каноническом виде — DBU_URL (sslmode=verify-full, sslrootcert —
+# наш CA, если второй аргумент 1). Код 1 и DBU_ERROR — что не так, по-русски. Сам адрес в
+# сообщения не попадает: в нём пароль
+db_url_parse() {
+  local url="$1" ca="${2:-0}" rest authority after userinfo hostport path query param key value
+  local user pass sslmode='' encoded extra host_in_url
+  local params=() kept=()
+  local LC_ALL=C
+  local hint='знаки @ : / # ? % пробел и кавычки в пароле и имени пользователя записывают percent-encoded: @ → %40, : → %3A, / → %2F, # → %23, ? → %3F, % → %25'
+  DBU_ERROR=''
+  if [[ ! "$url" =~ ^postgres(ql)?:// ]]; then
+    DBU_ERROR='адрес базы должен начинаться с postgres:// (вид postgres://пользователь:пароль@хост:5432/база)'
+    return 1
+  fi
+  if [[ "$url" == *[[:space:]\'\"\\\#]* ]]; then
+    DBU_ERROR="в адресе базы пробел, кавычка, \\ или #: $hint"
+    return 1
+  fi
+  if [[ "$url" =~ %($|[^0-9A-Fa-f]|[0-9A-Fa-f]($|[^0-9A-Fa-f])) ]]; then
+    DBU_ERROR="в адресе базы % не перед двумя шестнадцатеричными цифрами: $hint"
+    return 1
+  fi
+  # %00 — нулевой байт: bash его отбросит, а API (decodeURIComponent) оставит, и пароль у клиента
+  # бэкапов и у API разошёлся бы
+  if [[ "$url" == *%00* ]]; then
+    DBU_ERROR="в адресе базы %00 (нулевой байт): такой пароль или имя не передать клиенту PostgreSQL"
+    return 1
+  fi
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  after="${rest:${#authority}}"
+  if [[ "$authority" != *@* ]]; then
+    DBU_ERROR="в адресе базы нет «пользователь:пароль@» (или в пароле / без кодирования): $hint"
+    return 1
+  fi
+  userinfo="${authority%@*}"
+  hostport="${authority##*@}"
+  user="${userinfo%%:*}"
+  pass=''
+  [[ "$userinfo" != *:* ]] || pass="${userinfo#*:}"
+  encoded='^([A-Za-z0-9._~!$&()*+,;=-]|%[0-9A-Fa-f]{2})+$'
+  if [[ ! "$user" =~ $encoded || ! "$pass" =~ $encoded ]]; then
+    DBU_ERROR="в адресе базы не разобрать пользователя и пароль (нужны оба): $hint"
+    return 1
+  fi
+  if [[ "$hostport" =~ ^\[([0-9A-Fa-f:.]+)\](:([0-9]+))?$ ]]; then
+    DBU_HOST="${BASH_REMATCH[1]}"
+    DBU_PORT="${BASH_REMATCH[3]}"
+  elif [[ "$hostport" =~ ^([A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?)(:([0-9]+))?$ ]]; then
+    DBU_HOST="${BASH_REMATCH[1]}"
+    DBU_PORT="${BASH_REMATCH[4]}"
+  else
+    DBU_ERROR='в адресе базы не разобрать хост и порт: нужен вид хост:5432 (один хост, без запятых)'
+    return 1
+  fi
+  [[ -n "$DBU_PORT" ]] || DBU_PORT=5432
+  if [[ ! "$DBU_PORT" =~ ^[0-9]{1,5}$ ]] || ((10#$DBU_PORT < 1 || 10#$DBU_PORT > 65535)); then
+    DBU_ERROR="порт базы $DBU_PORT — не порт (1–65535)"
+    return 1
+  fi
+  path="${after%%\?*}"
+  query=''
+  [[ "$after" != *\?* ]] || query="${after#*\?}"
+  DBU_NAME="${path#/}"
+  if [[ "$path" != /* || ! "$DBU_NAME" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}$ ]]; then
+    DBU_ERROR='в адресе базы нет имени базы после хоста (…@хост:5432/база): латиница, цифры, _ . -'
+    return 1
+  fi
+  [[ -z "$query" ]] || IFS='&' read -r -a params <<<"$query"
+  for param in "${params[@]}"; do
+    [[ -n "$param" ]] || continue
+    key="${param%%=*}"
+    value="${param#*=}"
+    case "$key" in
+      sslmode) sslmode="$value" ;;
+      # Свой CA задаёт --db-ca-file: путь внутри контейнеров знает только установка
+      sslrootcert)
+        if [[ "$value" != "$DB_CA_MOUNT/ca.pem" ]]; then
+          DBU_ERROR='sslrootcert в адресе базы не задают: корневой сертификат провайдера передайте флагом --db-ca-file <файл>'
+          return 1
+        fi
+        ;;
+      connect_timeout | application_name)
+        if [[ ! "$value" =~ ^[A-Za-z0-9_.-]{1,64}$ ]]; then
+          DBU_ERROR="параметр $key в адресе базы: латиница, цифры, _ . -"
+          return 1
+        fi
+        kept+=("$key=$value")
+        ;;
+      *)
+        DBU_ERROR="параметр «$key» в адресе базы не поддерживается: годятся sslmode, connect_timeout, application_name"
+        return 1
+        ;;
+    esac
+  done
+  case "$sslmode" in
+    '' | verify-full) ;;
+    disable | allow | prefer)
+      DBU_ERROR="sslmode=$sslmode — соединение без обязательного TLS: пароль и персональные данные пошли бы по сети открыто. Уберите sslmode (установщик поставит verify-full) или задайте sslmode=verify-full"
+      return 1
+      ;;
+    require | verify-ca)
+      DBU_ERROR="sslmode=$sslmode не проверяет имя сервера в сертификате: нужен verify-full. Сертификат провайдера не из публичных — передайте его корневой сертификат флагом --db-ca-file"
+      return 1
+      ;;
+    *)
+      DBU_ERROR="sslmode=$sslmode — непонятное значение: нужен verify-full"
+      return 1
+      ;;
+  esac
+  DBU_USER="$(pct_decode "$user")"
+  DBU_PASSWORD="$(pct_decode "$pass")"
+  if [[ -z "$DBU_USER" || -z "$DBU_PASSWORD" || "$DBU_USER$DBU_PASSWORD" == *[$'\n\r']* ]]; then
+    DBU_ERROR='в адресе базы пустые или многострочные пользователь или пароль'
+    return 1
+  fi
+  # Раскодированные имя и пароль — текст UTF-8: иначе (%FF и т. п.) клиент бэкапов войдёт, а API
+  # (decodeURIComponent) адрес не разберёт и не поднимется — с непонятной причиной уже после записи
+  for value in "$DBU_USER" "$DBU_PASSWORD"; do
+    if ! printf '%s' "$value" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+      DBU_ERROR='в адресе базы пользователь или пароль после раскодирования %XX — не текст UTF-8 (например, %FF): API такой адрес не разберёт. Знак не из латиницы кодируют всеми байтами UTF-8 (я → %D1%8F), а проще — пароль из латиницы и цифр'
+      return 1
+    fi
+  done
+  host_in_url="$DBU_HOST"
+  [[ "$DBU_HOST" != *:* ]] || host_in_url="[$DBU_HOST]"
+  DBU_URL="postgres://$user:$pass@$host_in_url:$DBU_PORT/$DBU_NAME?sslmode=verify-full"
+  [[ "$ca" != 1 ]] || DBU_URL+="&sslrootcert=$DB_CA_MOUNT/ca.pem"
+  for extra in "${kept[@]}"; do DBU_URL+="&$extra"; done
+}
+# ── Конец общего у install.sh и averra.sh ──
+
+DB_MODE_BEFORE="$(env_get AVERRA_DB_MODE)"
+[[ -n "$DB_MODE_BEFORE" ]] || DB_MODE_BEFORE='own'
+[[ "$DB_MODE_BEFORE" =~ ^(own|external)$ ]] ||
+  fail "AVERRA_DB_MODE=$DB_MODE_BEFORE в $ENV_FILE — непонятный режим базы (own или external)"
+DB_MODE="$DB_MODE_BEFORE"
+[[ $EXTERNAL_DB -eq 0 ]] || DB_MODE='external'
+# Смена режима на установке, где уже есть владелец (а значит, данные в своей базе): данные
+# остались бы в томе postgres, а API поднялся бы на пустой внешней. Переезд — бэкапом
+if [[ "$DB_MODE" != "$DB_MODE_BEFORE" && -n "$OWNER_EMAIL" ]]; then
+  fail 'установка уже работает со своей базой, в ней данные: перевести её на внешнюю базу установщик не может. Переезд — бэкапом: новая установка с --external-db и averra.sh restore (https://midhey.github.io/averra-cms/install/backups/)'
+fi
+[[ -z "$DB_CA_FILE_ARG" || "$DB_MODE" == external ]] ||
+  fail '--db-ca-file — только для внешней базы (--external-db)'
+
+DATABASE_URL=''
+AVERRA_PG_IMAGE=''
+AVERRA_DB_MODE=''
+DB_CA_HOST=''
+if [[ "$DB_MODE" == external ]]; then
+  AVERRA_DB_MODE='external'
+  # CA провайдера: новый из флага или уже лежащий в папке установки
+  # Путь — абсолютный: относительный Docker в -v принял бы за имя тома (создал бы пустой том и
+  # смонтировал бы папку вместо файла), а ./ — отверг бы
+  if [[ -n "$DB_CA_FILE_ARG" && "$DB_CA_FILE_ARG" != /* && -d "$(dirname -- "$DB_CA_FILE_ARG")" ]]; then
+    DB_CA_FILE_ARG="$(cd "$(dirname -- "$DB_CA_FILE_ARG")" && pwd)/$(basename -- "$DB_CA_FILE_ARG")"
+  fi
+  if [[ -n "$DB_CA_FILE_ARG" ]]; then
+    [[ -f "$DB_CA_FILE_ARG" && -r "$DB_CA_FILE_ARG" ]] ||
+      fail "нет файла сертификата $DB_CA_FILE_ARG (--db-ca-file)"
+    grep -q -- '-----BEGIN CERTIFICATE-----' "$DB_CA_FILE_ARG" ||
+      fail "$DB_CA_FILE_ARG — не сертификат PEM (нужна строка -----BEGIN CERTIFICATE-----)"
+    DB_CA_HOST="$DB_CA_FILE_ARG"
+  elif [[ -f "$INSTALL_DIR/db-tls/ca.pem" ]]; then
+    DB_CA_HOST="$INSTALL_DIR/db-tls/ca.pem"
+  fi
+  db_url_raw="${AVERRA_DATABASE_URL:-}"
+  [[ -n "$db_url_raw" ]] || db_url_raw="$(env_get DATABASE_URL)"
+  if [[ -z "$db_url_raw" ]]; then
+    if [[ $ASSUME_YES -eq 1 || ! -t 0 ]]; then
+      fail 'не задан адрес внешней базы: передайте его переменной окружения AVERRA_DATABASE_URL, не флагом (read -rs AVERRA_DATABASE_URL && export AVERRA_DATABASE_URL && sudo -E bash install.sh … --external-db)'
+    fi
+    read -rs -p 'Адрес внешней базы postgres://пользователь:пароль@хост:5432/база (не показывается): ' db_url_raw
+    printf '\n'
+  fi
+  db_ca=0
+  [[ -z "$DB_CA_HOST" ]] || db_ca=1
+  db_url_parse "$db_url_raw" "$db_ca" || fail "$DBU_ERROR"
+  # Адрес с паролем больше не нужен в окружении: его унаследовали бы docker, curl и остальные
+  unset db_url_raw AVERRA_DATABASE_URL
+  DATABASE_URL="$DBU_URL"
+  AVERRA_PG_IMAGE="$(env_get AVERRA_PG_IMAGE)"
+  # Своей базы нет: её пароль не создаётся и не ведётся (строка прежнего .env остаётся своей)
+  managed=()
+  for key in "${MANAGED_KEYS[@]}"; do
+    [[ "$key" == POSTGRES_PASSWORD ]] || managed+=("$key")
+  done
+  MANAGED_KEYS=("${managed[@]}" AVERRA_DB_MODE DATABASE_URL AVERRA_PG_IMAGE)
+fi
+
 # ── Секреты ────────────────────────────────────────────────────────────────────────────────
 # Из /dev/urandom, без openssl. Пароль Postgres — hex: он стоит в DATABASE_URL, и знаки
 # base64 (/ + =) сломали бы адрес. Уже записанные секреты не меняются никогда: новый
@@ -209,6 +444,7 @@ secret_or_new() {
 
 NEW_SECRETS=()
 for key in POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE; do
+  [[ "$key" != POSTGRES_PASSWORD || "$DB_MODE" == own ]] || continue
   [[ -n "$(env_get "$key")" ]] || NEW_SECRETS+=("$key")
 done
 
@@ -333,6 +569,83 @@ check_dns() {
   done
 }
 
+# Проверка внешней базы тем же клиентом PostgreSQL, что потом снимает бэкапы: вход по TLS с
+# проверкой сертификата, версия сервера и права. Итог — AVERRA_PG_IMAGE (клиент той же версии,
+# что сервер). Пароль уходит в контейнер переменной окружения (-e PGPASSWORD без значения), не
+# аргументом: его не видно в списке процессов
+DB_PROBE_SQL="select current_setting('server_version_num'), has_database_privilege(current_database(), 'CREATE'), case when exists (select 1 from pg_namespace where nspname = 'public') then has_schema_privilege('public', 'CREATE') else false end, (select count(*) from information_schema.tables where table_schema = 'public'), to_regclass('drizzle.__drizzle_migrations') is not null"
+
+check_external_db() {
+  local mount=() out err code=0 rootcert='system' facts major has_db has_schema tables migrated
+  local sql_user sql_db
+  if [[ -n "$DB_CA_HOST" ]]; then
+    mount=(-v "$DB_CA_HOST:$DB_CA_MOUNT/ca.pem:ro")
+    rootcert="$DB_CA_MOUNT/ca.pem"
+  fi
+  err="$(mktemp)"
+  out="$(PGHOST="$DBU_HOST" PGPORT="$DBU_PORT" PGUSER="$DBU_USER" PGPASSWORD="$DBU_PASSWORD" \
+    PGDATABASE="$DBU_NAME" PGSSLMODE=verify-full PGSSLROOTCERT="$rootcert" PGCONNECT_TIMEOUT=15 \
+    docker run --rm --cap-drop ALL --security-opt no-new-privileges:true "${mount[@]}" \
+    -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGSSLROOTCERT \
+    -e PGCONNECT_TIMEOUT "$PG_PROBE_IMAGE" psql -X -q -tA -F '|' -c "$DB_PROBE_SQL" 2>"$err")" ||
+    code=$?
+  if [[ $code -ne 0 ]]; then
+    local reason hint
+    # Сообщение libpq: хост, причина — пароля в нём нет
+    reason="$(tr '\n' ' ' <"$err" | sed -E 's/[[:space:]]+/ /g; s/ $//' | cut -c1-400)"
+    rm -f "$err"
+    case "$reason" in
+      *pg_hba* | *'no encryption'*)
+        hint="сервер базы не пускает этот сервер: разрешите его IP ($(server_ips | tr '\n' ' ')) в pg_hba.conf или в списке доступа панели провайдера, с hostssl" ;;
+      *certificate* | *SSL* | *ssl*)
+        hint='сертификат базы не проверился: имя хоста в адресе должно совпадать с сертификатом, а корневой сертификат провайдера не из публичных передают флагом --db-ca-file' ;;
+      *password* | *authentication*)
+        hint='база не приняла пользователя или пароль: проверьте их (знаки @ : / # ? % в пароле — percent-encoded)' ;;
+      *'does not exist'*)
+        hint='такой базы или пользователя на сервере нет' ;;
+      *)
+        hint='сервер базы не ответил: проверьте хост и порт, файрвол провайдера и что исходящие соединения с этого сервера на порт базы открыты' ;;
+    esac
+    problem "не удалось войти во внешнюю базу $DBU_USER@$DBU_HOST:$DBU_PORT/$DBU_NAME по TLS: $hint. Ответ клиента: ${reason:-нет}"
+    return 1
+  fi
+  rm -f "$err"
+  facts="$(printf '%s' "$out" | tr -d '[:space:]')"
+  IFS='|' read -r major has_db has_schema tables migrated <<<"$facts"
+  if [[ ! "$major" =~ ^[0-9]+$ ]]; then
+    problem 'внешняя база ответила непонятно на проверку версии и прав'
+    return 1
+  fi
+  major=$((10#$major / 10000))
+  sql_user="\"${DBU_USER//\"/\"\"}\""
+  sql_db="\"${DBU_NAME//\"/\"\"}\""
+  if ! AVERRA_PG_IMAGE="$(pg_image_for_major "$major")"; then
+    problem "внешняя база — PostgreSQL $major: поддерживаются 16, 17 и 18"
+    return 1
+  fi
+  if [[ "$has_db" != t ]]; then
+    problem "у пользователя $DBU_USER нет права CREATE на базе $DBU_NAME: оно нужно миграциям (схема drizzle). Владелец базы выдаёт его так: GRANT CREATE ON DATABASE $sql_db TO $sql_user;"
+    return 1
+  fi
+  if [[ "$has_schema" != t ]]; then
+    problem "у пользователя $DBU_USER нет права CREATE на схеме public базы $DBU_NAME: в ней таблицы Averra. Владелец базы выдаёт его так: ALTER SCHEMA public OWNER TO $sql_user; (или GRANT USAGE, CREATE ON SCHEMA public TO $sql_user;)"
+    return 1
+  fi
+  # Первая установка — только на пустую базу или базу Averra: чужие таблицы в public перемешались
+  # бы с нашими, а восстановление из бэкапа их удалило бы
+  if [[ -z "$OWNER_EMAIL" && "$migrated" != t && "$tables" =~ ^[0-9]+$ && $tables -gt 0 ]]; then
+    problem "во внешней базе $DBU_NAME уже есть таблицы ($tables), а миграций Averra нет: нужна отдельная пустая база"
+    return 1
+  fi
+  # Владелец уже создан, а миграций в базе нет: адрес ведёт не в базу этой установки (опечатка,
+  # другая база у провайдера). API поднялся бы на пустой базе без владельца — войти было бы некому
+  if [[ -n "$OWNER_EMAIL" && "$migrated" != t ]]; then
+    problem "во внешней базе $DBU_NAME нет миграций Averra, а владелец у установки уже создан: это не база этой установки. Проверьте адрес; переезд на другую базу — бэкапом (averra.sh restore)"
+    return 1
+  fi
+  say "  внешняя база: PostgreSQL $major, вход по TLS с проверкой сертификата, права CREATE есть; клиент бэкапов — $AVERRA_PG_IMAGE"
+}
+
 # Можно ли писать в папку установки (или создать её): иначе — понятный отказ «нужен sudo»,
 # а не «Permission denied» из mkdir посреди установки
 can_write_install_dir() {
@@ -362,15 +675,26 @@ if [[ $DRY_RUN -eq 1 ]]; then
   fi
   [[ -n "$OWNER_EMAIL" ]] && say "Владелец:          уже создан ($OWNER_EMAIL)" || say "Владелец:          будет создан ($ACME_EMAIL)"
   say "Сайт в админке:    «$SITE_NAME» (API создаст его при первом запуске, если сайта ещё нет)"
+  if [[ "$DB_MODE" == external ]]; then
+    say "База:              внешняя — $DBU_USER@$DBU_HOST:$DBU_PORT/$DBU_NAME, TLS verify-full$([[ -z "$DB_CA_HOST" ]] || printf ', CA провайдера: %s' "$DB_CA_HOST")"
+  else
+    say 'База:              своя (контейнер postgres)'
+  fi
   [[ -n "$GHCR_USER" ]] && say "Вход в ghcr.io:    $GHCR_USER" || say 'Вход в ghcr.io:    нет (образы публичные или вход уже есть)'
   # Проверки только читают: Docker, порты и DNS — те же, что перед настоящей установкой
   say ''
   say 'Проверки:'
   can_write_install_dir || problem "нет прав на запись в $INSTALL_DIR: запустите через sudo" || true
   if [[ $ENV_ONLY -eq 0 ]]; then
-    check_docker || true
+    docker_ok=0
+    if check_docker; then docker_ok=1; fi
     if [[ $SKIP_PORTS -eq 1 ]]; then say '  порты: не проверяются (--skip-port-check)'; else check_ports || true; fi
     if [[ $SKIP_DNS -eq 1 ]]; then say '  DNS: не проверяется (--skip-dns-check)'; else check_dns || true; fi
+    if [[ "$DB_MODE" == external && $docker_ok -eq 1 ]]; then
+      check_external_db || true
+    elif [[ "$DB_MODE" == external ]]; then
+      say '  внешняя база: не проверяется без Docker'
+    fi
   fi
   if [[ $PROBLEMS -eq 0 ]]; then
     say '  всё в порядке'
@@ -390,6 +714,17 @@ if [[ $ENV_ONLY -eq 0 ]]; then
   [[ $SKIP_PORTS -eq 1 ]] || check_ports
   [[ $SKIP_DNS -eq 1 ]] || check_dns
   say 'Docker, порты и DNS в порядке'
+  if [[ "$DB_MODE" == external ]]; then
+    step 'Проверяю внешнюю базу'
+    check_external_db
+    # Клиент бэкапов нужен ночью, при проверке, восстановлении и откате: не скачается тогда — сбой
+    # выглядел бы как «база не ответила». Скачиваем сейчас, пока человек у терминала
+    step "Скачиваю клиент PostgreSQL для бэкапов ($AVERRA_PG_IMAGE)"
+    docker pull "$AVERRA_PG_IMAGE" >/dev/null ||
+      fail "образ $AVERRA_PG_IMAGE не скачался: без него не снять и не проверить бэкап внешней базы. Причина — в ответе Docker выше: проверьте доступ этого сервера к Docker Hub (registry-1.docker.io) и повторите установку"
+  fi
+elif [[ "$DB_MODE" == external ]]; then
+  say 'Внешняя база не проверялась (--env-only): проверит повторный запуск без --env-only'
 fi
 
 # ── Папка установки и .env ─────────────────────────────────────────────────────────────────
@@ -423,7 +758,13 @@ write_env() {
         BACKUP_PASSPHRASE) value="$(secret_or_new BACKUP_PASSPHRASE random_base64 32)" ;;
         *) value="${!key}" ;;
       esac
-      printf '%s=%s\n' "$key" "$value"
+      if [[ "$key" == DATABASE_URL ]]; then
+        # Одинарные кавычки: Compose берёт значение буквально, $ из пароля не подставляется.
+        # Кавычек в адресе нет — их не пускает db_url_parse
+        printf "%s='%s'\n" "$key" "$value"
+      else
+        printf '%s=%s\n' "$key" "$value"
+      fi
     done
     # Свои строки из прежнего .env (например, переменные для compose.override.yaml)
     if [[ -f "$ENV_FILE" ]]; then
@@ -438,10 +779,23 @@ write_env() {
   trap - EXIT INT TERM HUP
 }
 
+# Своя база сменилась на внешнюю до создания владельца (прошлая установка оборвалась): контейнер
+# postgres прежнего compose.yaml остался бы сиротой и держал бы память — убрать его, пока прежний
+# compose.yaml на месте. Том с данными не трогается
+if [[ $ENV_ONLY -eq 0 && "$DB_MODE_BEFORE" == own && "$DB_MODE" == external && -f "$ENV_FILE" &&
+  -f "$INSTALL_DIR/compose.yaml" ]]; then
+  compose rm -sf postgres >/dev/null 2>&1 || true
+fi
+
 step "Пишу $INSTALL_DIR"
 if [[ "$SCRIPT_DIR" != "$(cd "$INSTALL_DIR" 2>/dev/null && pwd || true)" ]]; then
   mkdir -p "$INSTALL_DIR"
-  cp "$SCRIPT_DIR/compose.yaml" "$INSTALL_DIR/compose.yaml"
+  # Внешняя база — свой файл Compose без сервиса postgres (в папке установки он — compose.yaml)
+  if [[ "$DB_MODE" == external ]]; then
+    cp "$SCRIPT_DIR/compose.external.yaml" "$INSTALL_DIR/compose.yaml"
+  else
+    cp "$SCRIPT_DIR/compose.yaml" "$INSTALL_DIR/compose.yaml"
+  fi
   # Скрипт управления установкой: бэкапы, восстановление, обновление, состояние. Только root
   install -m 700 "$SCRIPT_DIR/averra.sh" "$INSTALL_DIR/averra.sh"
 fi
@@ -451,6 +805,15 @@ fi
 (umask 077 && mkdir -p "$INSTALL_DIR/backups")
 (umask 022 && mkdir -p "$INSTALL_DIR/state")
 (umask 077 && mkdir -p "$INSTALL_DIR/requests")
+# CA провайдера внешней базы: не секрет, его читают API и клиент PostgreSQL в контейнерах
+if [[ "$DB_MODE" == external ]]; then
+  (umask 022 && mkdir -p "$INSTALL_DIR/db-tls")
+  if [[ -n "$DB_CA_FILE_ARG" && "$DB_CA_HOST" != "$INSTALL_DIR/db-tls/ca.pem" ]]; then
+    cp "$DB_CA_FILE_ARG" "$INSTALL_DIR/db-tls/ca.pem.new"
+    chmod 644 "$INSTALL_DIR/db-tls/ca.pem.new"
+    mv -f "$INSTALL_DIR/db-tls/ca.pem.new" "$INSTALL_DIR/db-tls/ca.pem"
+  fi
+fi
 chmod 700 "$INSTALL_DIR/requests"
 chown 1000:1000 "$INSTALL_DIR/requests" ||
   say 'Не удалось отдать папку заявок пользователю API (uid 1000): кнопка «Обновить» в админке не сработает'
@@ -489,8 +852,13 @@ compose pull || fail "образы $AVERRA_VERSION не скачались." \
   '--ghcr-user и токен read:packages) или опечатка в имени образа (--api-image, --web-image).' \
   'Ответ manifest unknown — такой версии нет, проверьте --version'
 
-step 'Поднимаю PostgreSQL и API'
-compose up -d postgres api
+if [[ "$DB_MODE" == external ]]; then
+  step 'Поднимаю API (база — внешняя)'
+  compose up -d api
+else
+  step 'Поднимаю PostgreSQL и API'
+  compose up -d postgres api
+fi
 
 step 'Жду, пока API ответит /api/health/ready'
 ready=0
