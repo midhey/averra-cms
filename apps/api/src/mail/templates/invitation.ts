@@ -14,6 +14,28 @@ export const invitationTemplate = defineMailTemplate({
   id: 'invitation',
   title: 'Приглашение на сайт',
   description: 'Уходит участнику, которого пригласили на сайт: по ссылке он принимает приглашение',
+  scope: 'installation',
+  vars: {
+    inviterName: { label: 'Кто пригласил', value: ({ inviterName }) => inviterName },
+    siteName: { label: 'Название сайта', value: ({ siteName }) => siteName },
+    role: { label: 'Роль участника', value: ({ role }) => roles[role] },
+    expires: { label: 'Срок приглашения', value: ({ expiresInDays }) => formatDays(expiresInDays) },
+  },
+  blocks: {
+    button: {
+      label: 'Ссылка приглашения',
+      required: true,
+      render: ({ url }) => ({
+        html: button('Принять приглашение', url),
+        text: `Принять приглашение: ${url}`,
+      }),
+    },
+  },
+  defaultText: {
+    subject: 'Приглашение на сайт «{siteName}» в Averra CMS',
+    preheader: '{inviterName} приглашает вас на сайт «{siteName}»',
+    body: '{inviterName} приглашает вас работать с сайтом «{siteName}» в Averra CMS.\n\nВаша роль — {role}.\n\nЧтобы принять приглашение, откройте ссылку:\n\n{button}\n\n> Если входа в админку у вас ещё нет, по ссылке вы зададите имя и пароль. Если вход уже есть, войдите своим паролем и подтвердите доступ.\n\n> Ссылка действует {expires} и только один раз.\n\n> Если вы не ждали приглашения, просто удалите письмо.',
+  },
   schema: z.strictObject({
     inviterName: MailLine(100),
     siteName: MailLine(80),

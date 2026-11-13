@@ -13,6 +13,7 @@ import { describeMailer } from '../../mail/mailer'
 import { outboxRepo } from '../../mail/outbox'
 import type { MailRuntime } from '../../mail/runtime'
 import { mailSettingsFieldLabels, mailSettingsRepo } from '../../mail/settings'
+import { publishedMailText } from '../../mail/template-store'
 import { MailTemplateId, mailTemplateList, previewMail, renderMail } from '../../mail/templates'
 import { toMailLine } from '../../mail/templates/line'
 import type { OutboxSettings } from '../../mail/worker'
@@ -27,6 +28,7 @@ import {
   smtpLockOf,
   smtpView,
 } from './smtp-service'
+import { mailTemplateRoutes } from './template-routes'
 
 /**
  * Почта в зависимостях API: почта процесса (состояние меняется без перезапуска — настройки SMTP
@@ -130,11 +132,15 @@ export function mailRoutes({
           )
         }
         const shape = shapeOfInput(input)
-        const rendered = renderMail('mail-test', {
-          sentAt: new Date().toISOString(),
-          provider: toMailLine(describeMailer(smtpInfoOf(shape)), 300, 'SMTP'),
-          via: 'admin',
-        })
+        const rendered = renderMail(
+          'mail-test',
+          {
+            sentAt: new Date().toISOString(),
+            provider: toMailLine(describeMailer(smtpInfoOf(shape)), 300, 'SMTP'),
+            via: 'admin',
+          },
+          await publishedMailText(db, 'mail-test'),
+        )
         const diagnosis = await runtime.diagnose(
           {
             host: shape.host,
@@ -219,14 +225,19 @@ export function mailRoutes({
         const { template } = c.req.valid('param')
         // Одна установка — один сайт: в примере стоит его название
         const [site] = await db
-          .select({ name: sites.name })
+          .select({ id: sites.id, name: sites.name })
           .from(sites)
           .orderBy(sites.createdAt)
           .limit(1)
         return c.json(
-          previewMail(template, site ? toMailLine(site.name, 80, 'сайт') : undefined),
+          previewMail(
+            template,
+            site ? toMailLine(site.name, 80, 'сайт') : undefined,
+            await publishedMailText(db, template, site?.id),
+          ),
           200,
         )
       })
+      .route('/templates', mailTemplateRoutes(db, 'installation'))
   )
 }

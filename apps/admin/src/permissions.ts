@@ -18,6 +18,8 @@ export const siteRights = {
   'media.delete': everyone,
   'members.invite': ownerAndAdmin,
   'leads.read': ownerAndAdmin,
+  'mail.templates': ownerAndAdmin,
+  'mail.templates.draft': ownerAndAdmin,
   'site.export': ownerAndAdmin,
   'site.settings': ownerAndAdmin,
   'header.edit': ownerAndAdmin,
@@ -123,3 +125,5 @@ export const canExportData = allowed('site.export')
  * опубликованные свои блоки на страницах
  */
 export const canDefineBlocks = allowed('blocks.define')
+
+export const canEditMailTemplates = allowed('mail.templates.draft')

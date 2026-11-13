@@ -33,6 +33,45 @@ export const leadNewTemplate = defineMailTemplate({
   title: 'Новая заявка',
   description:
     'Уходит на адреса уведомлений сайта (по умолчанию — владельцам), когда посетитель отправил форму',
+  scope: 'site',
+  vars: {
+    siteName: { label: 'Название сайта', value: ({ siteName }) => siteName },
+    formTitle: { label: 'Название формы', value: ({ formTitle }) => formTitle },
+    pagePath: { label: 'Страница', value: ({ pagePath }) => pagePath },
+    when: {
+      label: 'Время заявки',
+      value: ({ createdAt }) => `${createdAtFormat.format(new Date(createdAt))} по Москве`,
+    },
+    reply: {
+      label: 'Как ответить посетителю',
+      value: ({ replyTo }) =>
+        replyTo
+          ? `Посетитель оставил почту ${replyTo}: «Ответить» в почте напишет ему.`
+          : 'Почту посетитель не оставил: ответить можно по контактам из заявки.',
+    },
+  },
+  blocks: {
+    fields: {
+      label: 'Поля заявки',
+      required: true,
+      render: ({ fields }) => ({
+        html: fieldTable(fields.map(({ label, value }) => [label, value || '—'])),
+        text: fields.map(({ label, value }) => `${label}: ${value || '—'}`).join('\n'),
+      }),
+    },
+    button: {
+      label: 'Ссылка на заявку',
+      render: ({ url }) => ({
+        html: button('Открыть заявку в админке', url),
+        text: `Заявка в админке: ${url}`,
+      }),
+    },
+  },
+  defaultText: {
+    subject: 'Новая заявка с сайта «{siteName}»',
+    preheader: 'Форма «{formTitle}», {when}',
+    body: 'Новая заявка с сайта «{siteName}»: форма «{formTitle}» на странице {pagePath}.\n\n> Когда: {when}\n\n{fields}\n\n{reply}\n\n{button}',
+  },
   schema: z.strictObject({
     siteName: MailLine(80),
     formTitle: MailLine(LEAD_FORM_TITLE_MAX),

@@ -20,6 +20,7 @@ import { invitationsRoutes, siteInvitationsRoutes } from './modules/invitations/
 import { formsRoutes, type LeadLimits } from './modules/leads/public-routes'
 import { leadsRoutes } from './modules/leads/routes'
 import { type MailDeps, mailRoutes } from './modules/mail/routes'
+import { mailTemplateRoutes } from './modules/mail/template-routes'
 import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { membersRoutes } from './modules/members/routes'
 import { notificationsRoutes, siteNotificationsRoutes } from './modules/notifications/routes'
@@ -200,6 +201,7 @@ export function createApp(deps: AppDeps) {
     .route('/invitations', invitationsRoutes({ db, auth }))
     // Участники сайта: роль, отключение, передача владения (modules/members)
     .route('/sites/:siteId/members', membersRoutes({ db }))
+    .route('/sites/:siteId/mail-templates', mailTemplateRoutes(db, 'site'))
     .route('/mail', mailRoutes({ db, mail, passwords, log, adminUrl }))
     // Токены API для MCP: выпуск, права, отзыв — только владельцу (modules/tokens)
     .route('/tokens', tokensRoutes({ db }))

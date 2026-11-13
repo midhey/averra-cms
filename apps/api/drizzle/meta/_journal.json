@@ -183,6 +183,13 @@
       "when": 1793946493198,
       "tag": "0025_custom_scripts",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794573938769,
+      "tag": "0026_jittery_kingpin",
+      "breakpoints": true
     }
   ]
 }

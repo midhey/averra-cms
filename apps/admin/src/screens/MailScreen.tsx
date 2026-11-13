@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tansta
 import { useState } from 'react'
 import { api } from '../api'
 import { apiRequestError, messageOf } from '../errors'
+import { MailTemplatesSection } from '../mail/MailTemplatesSection'
 import {
   attemptsLabel,
   daysLabel,
@@ -11,13 +12,7 @@ import {
 } from '../mail/mail-format'
 import { SmtpSettingsSection } from '../mail/SmtpSettingsSection'
 import { formatDateTime } from '../pages-format'
-import {
-  type MailTemplateId,
-  mailOutboxQuery,
-  mailPreviewQuery,
-  mailQuery,
-  queryKeys,
-} from '../queries'
+import { mailOutboxQuery, mailQuery, queryKeys } from '../queries'
 import { UnsavedChangesGuard } from '../seo/unsaved'
 import { Button, Spinner } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
@@ -64,9 +59,9 @@ export function MailScreen() {
       <MailState mail={mail} />
       <UnsavedChangesGuard>
         <SmtpSettingsSection />
+        <MailTemplatesSection />
       </UnsavedChangesGuard>
       <Outbox titles={titles} />
-      <Templates templates={mail.templates} />
     </Screen>
   )
 }
@@ -296,81 +291,5 @@ function MailWhen({ mail }: { mail: OutboxMail }) {
     <>
       создано <time dateTime={mail.createdAt}>{formatDateTime(mail.createdAt)}</time>
     </>
-  )
-}
-
-type TemplateInfo = { id: MailTemplateId; title: string; description: string }
-
-function Templates({ templates }: { templates: readonly TemplateInfo[] }) {
-  return (
-    <Section
-      title="Шаблоны писем"
-      description="Как выглядят письма — на примерных данных. Настоящие письма собираются из тех же шаблонов."
-    >
-      <div className={styles.templates}>
-        {templates.map((template) => (
-          <TemplatePreview key={template.id} template={template} />
-        ))}
-      </div>
-    </Section>
-  )
-}
-
-function TemplatePreview({ template }: { template: TemplateInfo }) {
-  // Письмо собирается и грузится, только когда его раскрыли: восемь предпросмотров подряд — это
-  // экран на 7800 px и восемь запросов, которых никто не просил
-  const [open, setOpen] = useState(false)
-  const preview = useQuery({ ...mailPreviewQuery(template.id), enabled: open })
-  const headingId = `template-${template.id}`
-  return (
-    <article aria-labelledby={headingId} className={cardClassName()}>
-      {/* Заголовок — над раскрывашкой, а не внутри summary: у summary роль кнопки, и часть
-          экранных дикторов теряет внутри неё уровень заголовка (навигация по заголовкам) */}
-      <div className={styles.templateHead}>
-        <h3 id={headingId} className={styles.templateTitle}>
-          {template.title}
-        </h3>
-        <p className={mutedClassName}>{template.description}</p>
-      </div>
-      <details
-        className={styles.templateBox}
-        onToggle={(event) => setOpen(event.currentTarget.open)}
-      >
-        {/* Восемь одинаковых «Показать письмо» диктору ни о чём не говорят: название письма —
-            в имени раскрывашки, скрытым текстом. В раскрытом виде подпись зовёт свернуть:
-            «Показать» у уже показанного письма вводила бы в заблуждение */}
-        <summary className={styles.templateSummary}>
-          {open ? 'Скрыть письмо' : 'Показать письмо'}
-          <span className="visually-hidden"> «{template.title}»</span>
-        </summary>
-        {!open ? null : preview.isPending ? (
-          <p className={styles.loading} role="status">
-            <Spinner />
-            Собираю письмо…
-          </p>
-        ) : preview.isError ? (
-          <InlineAlert tone="danger">
-            Предпросмотр не собрался: {messageOf(preview.error)}
-          </InlineAlert>
-        ) : (
-          <>
-            <p>
-              <span className={mutedClassName}>Тема:</span> {preview.data.subject}
-            </p>
-            {/* sandbox без разрешений: в письме нет скриптов, iframe не получает доступ к админке */}
-            <iframe
-              className={styles.frame}
-              title={`Предпросмотр письма «${template.title}»`}
-              sandbox=""
-              srcDoc={preview.data.html}
-            />
-            <details className={styles.details}>
-              <summary>Текстовая версия</summary>
-              <pre className={styles.text}>{preview.data.text}</pre>
-            </details>
-          </>
-        )}
-      </details>
-    </article>
   )
 }

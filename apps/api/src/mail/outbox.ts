@@ -3,6 +3,7 @@ import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } 
 import type { Db } from '../db/client'
 import { mailOutbox } from '../db/schema'
 import { mailboxKey } from './mailbox-key'
+import { publishedMailText } from './template-store'
 import {
   MailDataError,
   type MailTemplateData,
@@ -69,12 +70,23 @@ export async function enqueueMail<T extends MailTemplateId>(
     )
   }
   const data = parseMailData(mail.template, mail.data)
-  renderMail(mail.template, data)
+  let custom = await publishedMailText(db, mail.template, mail.siteId)
+  if (custom !== undefined) {
+    // Свой текст не должен ронять действие (приём заявки, сброс пароля): если с этими данными он
+    // не собирается (например, тема вышла длиннее предела), письмо уйдёт стандартным текстом
+    try {
+      renderMail(mail.template, data, custom)
+    } catch {
+      custom = undefined
+    }
+  }
+  renderMail(mail.template, data, custom)
   const [row] = await db
     .insert(mailOutbox)
     .values({
       template: mail.template,
       data,
+      custom: custom ?? null,
       recipient: to.data,
       recipientKey: mailboxKey(to.data),
       siteId: mail.siteId,
@@ -94,6 +106,7 @@ export type ClaimedMail = {
   claimId: string
   template: string
   data: unknown
+  custom?: unknown
   recipient: string
   attempts: number
   /** Срок одноразовой ссылки в письме: позже письмо не отправляется */
@@ -155,6 +168,7 @@ export function outboxRepo(db: Db) {
           id: mailOutbox.id,
           template: mailOutbox.template,
           data: mailOutbox.data,
+          custom: mailOutbox.custom,
           recipient: mailOutbox.recipient,
           attempts: mailOutbox.attempts,
           expiresAt: mailOutbox.expiresAt,

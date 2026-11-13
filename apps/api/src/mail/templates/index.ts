@@ -1,6 +1,7 @@
-import { MailAddress, MailSubject } from '@averra/schema'
+import { MailAddress, MailSubject, type MailTemplateText } from '@averra/schema'
 import { z } from 'zod'
 import { MAIL_FOOTER, mailLayout } from '../layout'
+import { type EditableTemplate, renderTemplateText } from '../template-text'
 import { invitationTemplate } from './invitation'
 import { leadNewTemplate } from './lead-new'
 import { leadReceivedTemplate } from './lead-received'
@@ -72,13 +73,20 @@ function header(template: string, name: string, schema: z.ZodType<string>, value
  * добавляется подвал. Тема и Reply-To проверяются схемами заголовков: перевод строки из данных
  * не дойдёт до заголовка письма, даже если шаблон соберёт тему из них
  */
-export function renderMail(template: MailTemplateId, data: unknown): RenderedMail {
+export function renderMail(
+  template: MailTemplateId,
+  data: unknown,
+  custom?: MailTemplateText,
+): RenderedMail {
   const definition = mailTemplates[template]
   const parsed = parseMailData(template, data)
   // Схема у каждого шаблона своя, а реестр общий: TypeScript не свяжет их сам
-  const content = (definition.render as (value: unknown) => ReturnType<typeof definition.render>)(
+  const original = (definition.render as (value: unknown) => ReturnType<typeof definition.render>)(
     parsed,
   )
+  const content = custom
+    ? { ...original, ...renderTemplateText(definition as EditableTemplate, parsed, custom) }
+    : original
   const subject = header(template, 'subject', MailSubject, content.subject)
   return {
     subject,
@@ -121,9 +129,13 @@ export const mailTemplateList = () =>
   }))
 
 /** Предпросмотр шаблона на примерных данных */
-export function previewMail(template: MailTemplateId, siteName?: string) {
+export function previewMail(
+  template: MailTemplateId,
+  siteName?: string,
+  custom?: MailTemplateText,
+) {
   const example: Record<string, unknown> = { ...mailTemplates[template].example }
   // Примерное письмо — про сайт этой установки, а не про вымышленный «Ремонт квартир»
   if (siteName !== undefined && 'siteName' in example) example.siteName = siteName
-  return renderMail(template, example)
+  return renderMail(template, example, custom)
 }

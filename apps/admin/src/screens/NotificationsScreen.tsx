@@ -1,12 +1,13 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { messageOf } from '../errors'
+import { MailTemplatesSection } from '../mail/MailTemplatesSection'
 import { ChannelsSection } from '../notifications/ChannelsSection'
 import { LeadRecipientsSection } from '../notifications/LeadRecipientsSection'
 import styles from '../notifications/Notifications.module.scss'
 import { outboxStatusLabel } from '../notifications/notifications-format'
 import { ServiceRecipientsSection } from '../notifications/ServiceRecipientsSection'
 import { formatDateTime } from '../pages-format'
-import { canManageChannels, canSeeNotifications } from '../permissions'
+import { canEditMailTemplates, canManageChannels, canSeeNotifications } from '../permissions'
 import { notificationOutboxQuery, siteQuery } from '../queries'
 import { UnsavedChangesGuard } from '../seo/unsaved'
 import { Button } from '../ui/Button'
@@ -36,6 +37,7 @@ export function NotificationsScreen() {
         {canSeeNotifications(site.access) && (
           <LeadRecipientsSection siteId={siteId} channelsAbove={owner} />
         )}
+        {canEditMailTemplates(site.access) && <MailTemplatesSection siteId={siteId} />}
         {owner && <ServiceRecipientsSection />}
         {owner && <RecentMessages />}
       </UnsavedChangesGuard>

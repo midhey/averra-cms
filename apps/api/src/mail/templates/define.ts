@@ -1,4 +1,4 @@
-import { pluralRu } from '@averra/schema'
+import { type MailTemplateText, pluralRu } from '@averra/schema'
 import type { z } from 'zod'
 import type { SafeHtml } from '../html'
 
@@ -30,6 +30,17 @@ export type MailTemplate<S extends z.ZodType = z.ZodType> = {
   title: string
   /** Когда уходит это письмо */
   description: string
+  scope: 'site' | 'installation'
+  vars: Record<string, { label: string; value: (data: z.output<S>) => string }>
+  blocks: Record<
+    string,
+    {
+      label: string
+      required?: boolean
+      render: (data: z.output<S>) => { html: SafeHtml; text: string }
+    }
+  >
+  defaultText: MailTemplateText
   schema: S
   /** Примерные данные: на них админка показывает предпросмотр */
   example: z.input<S>

@@ -17,12 +17,6 @@ const templates = [
     footer: AUTO,
   },
   {
-    title: 'Новая заявка',
-    text: 'Открыть заявку в админке',
-    footer: '«Ответить» напишет посетителю',
-  },
-  { title: 'Заявка получена', text: 'Мы получили вашу заявку', footer: AUTO },
-  {
     title: 'Получатели уведомлений о заявках изменены',
     text: 'изменили, куда приходят уведомления о новых заявках',
     footer: AUTO,
@@ -69,10 +63,9 @@ test('владелец открывает «Почту» из панели: со
     await expect(article.getByRole('heading', { level: 3, name: title })).toBeVisible()
     // Раскрывашка называет письмо: в списке кнопок диктор не слышит восемь одинаковых имён
     const summary = article.locator('summary').first()
-    await expect(summary).toHaveAccessibleName(`Показать письмо «${title}»`)
+    await expect(summary).toHaveAccessibleName(`Редактировать письмо «${title}»`)
     await summary.click()
-    // Раскрытая — зовёт свернуть, с тем же названием письма
-    await expect(summary).toHaveAccessibleName(`Скрыть письмо «${title}»`)
+    await article.getByRole('button', { name: 'Обновить предпросмотр' }).click()
     // Письмо в iframe без скриптов: его содержимое — HTML шаблона на примерных данных
     const frame = article.frameLocator(`iframe[title="Предпросмотр письма «${title}»"]`)
     await expect(frame.locator('body')).toContainText(text)

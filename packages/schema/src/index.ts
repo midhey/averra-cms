@@ -295,6 +295,7 @@ export {
   SmtpUser,
   smtpModes,
 } from './mail-settings'
+export { MailTemplateText } from './mail-templates'
 export {
   collectMediaRefs,
   fileSizeLimitHint,
@@ -464,8 +465,10 @@ export {
   mailStuck,
   NO_RELEASE_STATE,
   pendingStale,
+  RELEASE_CHECK_INTERVAL_MS,
   RELEASE_NOTES_MAX,
   ReleaseCheck,
+  ReleaseCheckRequest,
   ReleaseLatest,
   ReleaseState,
   ReleaseVersion,

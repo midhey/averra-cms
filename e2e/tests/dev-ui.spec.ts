@@ -64,7 +64,10 @@ test.describe('витрина компонентов', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('#content')).toBeFocused()
 
-    const publish = page.getByRole('button', { name: 'Опубликовать', exact: true })
+    // «Опубликовать» есть и у редактора письма на витрине: берём кнопку из раздела кнопок
+    const publish = page
+      .locator('#buttons')
+      .getByRole('button', { name: 'Опубликовать', exact: true })
     await publish.focus()
     await page.keyboard.press('Shift+Tab')
     await page.keyboard.press('Tab')

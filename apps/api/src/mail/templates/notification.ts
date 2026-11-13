@@ -28,6 +28,46 @@ export const notificationTemplate = defineMailTemplate({
   title: 'Уведомление',
   description:
     'Служебные уведомления установки (бэкап, диск, сборка) и проверка канала из раздела «Уведомления»',
+  scope: 'installation',
+  vars: {
+    title: { label: 'Заголовок события', value: ({ title }) => title },
+    preview: {
+      label: 'Краткое описание события',
+      value: ({ lines, title }) => (lines[0] ?? title).replace(/\s+/g, ' ').slice(0, 200),
+    },
+  },
+  blocks: {
+    lines: {
+      label: 'Текст события',
+      render: ({ lines, title }) => ({
+        html: html`${lines.map((line) => paragraph(line))}`,
+        text: lines.join('\n\n') || title,
+      }),
+    },
+    fields: {
+      label: 'Поля события',
+      required: true,
+      render: ({ fields }) => ({
+        html: fields.length
+          ? fieldTable(fields.map(({ label, value }) => [label, value || '—']))
+          : html``,
+        text: fields.map(({ label, value }) => `${label}: ${value || '—'}`).join('\n'),
+      }),
+    },
+    link: {
+      label: 'Ссылка события',
+      required: true,
+      render: ({ link }) => ({
+        html: link ? button(link.label, link.url) : html``,
+        text: link ? `${link.label}: ${link.url}` : '',
+      }),
+    },
+  },
+  defaultText: {
+    subject: '{title}',
+    preheader: '{preview}',
+    body: '{lines}\n\n{fields}\n\n{link}',
+  },
   schema: z.strictObject({
     title: MailLine(NOTIFICATION_LIMITS.title),
     lines: z.array(z.string().min(1).max(NOTIFICATION_LIMITS.line)).max(NOTIFICATION_LIMITS.lines),

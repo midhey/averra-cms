@@ -20,6 +20,52 @@ export const mailSettingsChangedTemplate = defineMailTemplate({
   title: 'Настройки почты изменены',
   description:
     'Уходит всем владельцам, когда настройки SMTP сохраняют или удаляют на странице «Почта»',
+  scope: 'installation',
+  vars: {
+    intro: {
+      label: 'Что произошло',
+      value: ({ action }) =>
+        action === 'saved'
+          ? 'Настройки почты в админке Averra CMS изменены.'
+          : 'Настройки SMTP удалены из админки Averra CMS.',
+    },
+    preview: {
+      label: 'Краткое описание',
+      value: ({ action }) =>
+        action === 'saved'
+          ? 'Настройки SMTP изменены в админке'
+          : 'Настройки SMTP удалены из админки',
+    },
+  },
+  blocks: {
+    details: {
+      label: 'Сведения об изменении',
+      render: ({ changedBy, changedByEmail, changedAt, action, fields, provider, verified }) => {
+        const rows: [string, string][] = [
+          ['Кто', `${changedBy} (${changedByEmail})`],
+          ['Когда', `${changedAtFormat.format(new Date(changedAt))} по Москве`],
+        ]
+        if (action === 'saved')
+          rows.push(
+            ['Что изменено', fields.length ? fields.join(', ') : 'ничего'],
+            [
+              'Проверка подключения',
+              verified ? 'пройдена перед сохранением' : 'не делалась: сохранено без проверки',
+            ],
+          )
+        rows.push(['Теперь письма уходят', provider])
+        return {
+          html: details(rows),
+          text: rows.map(([label, value]) => `${label}: ${value}`).join('\n'),
+        }
+      },
+    },
+  },
+  defaultText: {
+    subject: 'Настройки почты Averra CMS изменены',
+    preheader: '{preview}',
+    body: '{intro}\n\n{details}\n\n> Если это были не вы, сразу смените пароль от админки и проверьте настройки на странице «Почта»: через почту уходят ссылки сброса пароля.',
+  },
   schema: z.strictObject({
     changedBy: MailLine(100),
     changedByEmail: MailAddress,

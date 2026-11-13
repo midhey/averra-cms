@@ -647,3 +647,39 @@ describe('свои шапка и подвал через MCP', () => {
     expect(footer.html).toMatch(/<div data-legal-footer="">.*Политика конфиденциальности/s)
   })
 })
+
+describe('письма сайта через MCP', () => {
+  it('список и черновик без публикации; предпросмотр только с примером', async () => {
+    const rows = z
+      .array(
+        z.object({
+          id: z.string(),
+          defaultText: z.object({ subject: z.string(), preheader: z.string(), body: z.string() }),
+        }),
+      )
+      .parse(await tools.listMailTemplates())
+    expect(rows.map((row) => row.id)).toEqual(['lead-new', 'lead-received'])
+    const input = {
+      template: 'lead-received' as const,
+      subject: 'Спасибо, {siteName}',
+      preheader: 'Заявка получена',
+      body: 'Мы скоро свяжемся с вами.',
+    }
+    const result = await tools.saveMailTemplateDraft(input)
+    expect(result.who).toContain('Публикует человек')
+    const saved = z
+      .array(z.object({ id: z.string(), draft: z.unknown(), published: z.unknown() }))
+      .parse(await tools.listMailTemplates())
+    expect(saved.find((row) => row.id === input.template)).toMatchObject({
+      draft: { subject: input.subject, preheader: input.preheader, body: input.body },
+      published: null,
+    })
+    expect(await tools.previewMailTemplate(input)).toMatchObject({
+      subject: expect.stringContaining('Спасибо'),
+      html: expect.stringContaining('Мы скоро свяжемся'),
+    })
+    await expect(tools.previewMailTemplate({ ...input, body: '{неизвестно}' })).rejects.toThrow(
+      'Неизвестная подстановка',
+    )
+  })
+})

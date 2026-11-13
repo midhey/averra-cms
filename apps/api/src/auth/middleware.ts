@@ -13,6 +13,7 @@ import {
   TOKEN_PERSONAL_DATA_MESSAGE,
   tokenDenied,
   tokenGrants,
+  tokenOpen,
 } from './access'
 import type { Auth } from './auth'
 
@@ -140,7 +141,7 @@ export function requireSite(db: Db, permission: Permission) {
     if (actor.kind === 'token' && grant) {
       // Право выдано токену отдельно от роли: есть — пускаем, нет — подсказка, как его включить
       if (!actor.rights[grant.grant]) return c.json(forbidden(grant.message), 403)
-    } else if (!can(role, permission)) {
+    } else if (!(actor.kind === 'token' && tokenOpen.has(permission)) && !can(role, permission)) {
       return c.json(forbidden(forbiddenMessages[permission]), 403)
     }
     c.set('siteRole', role)

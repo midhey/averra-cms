@@ -25,6 +25,7 @@ import {
 } from '../editor/catalog'
 import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
 import { roleHints, roleLabels } from '../invitations/invitation-format'
+import { MailTemplateEditor } from '../mail/MailTemplateEditor'
 import { MediaCard } from '../media/MediaCard'
 import { MediaUsage } from '../media/MediaLibrary'
 import { deleteBlockedText, type MediaUse } from '../media/media-format'
@@ -447,6 +448,41 @@ export function UiShowcase() {
           </div>
         </Section>
 
+        <Section id="mail-template" title="Редактор письма: черновик от ИИ">
+          <MailTemplateEditor
+            template={{
+              id: 'lead-received',
+              title: 'Заявка получена',
+              description: 'Пример редактора',
+              vars: [{ name: 'siteName', label: 'Название сайта' }],
+              blocks: [],
+              defaultText: {
+                subject: 'Заявка — {siteName}',
+                preheader: 'Спасибо',
+                body: 'Здравствуйте!\n\nВаша заявка получена.',
+              },
+              draft: {
+                subject: 'Заявка — {siteName}',
+                preheader: 'Спасибо',
+                body: 'Здравствуйте!\n\nВаша заявка получена.',
+              },
+              draftUpdatedBy: 'токен «Помощник»',
+              draftUpdatedAt: '2026-11-01T09:00:00.000Z',
+              published: null,
+              publishedAt: null,
+              publishedBy: null,
+            }}
+            onAction={async (action, text) => {
+              if (action === 'preview')
+                return {
+                  subject: text.subject,
+                  html: '<p>Ваша заявка получена.</p>',
+                  text: text.body,
+                }
+              return null
+            }}
+          />
+        </Section>
         <Section id="fields" title="Поля">
           <div className={styles.grid}>
             <TextArea

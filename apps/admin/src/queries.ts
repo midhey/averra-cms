@@ -1,4 +1,4 @@
-import type { LeadStatus } from '@averra/schema'
+import type { LeadStatus, MailTemplateText } from '@averra/schema'
 import { type QueryClient, queryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import { apiRequestError } from './errors'
@@ -485,7 +485,7 @@ export type MailTemplateId = Parameters<
   (typeof api.mail.templates)[':template']['preview']['$get']
 >[0]['param']['template']
 
-/** Шаблон письма на примерных данных. Шаблоны живут в коде и между выкладками не меняются */
+/** Опубликованный шаблон на примерных данных */
 export const mailPreviewQuery = (template: MailTemplateId) =>
   queryOptions({
     queryKey: queryKeys.mailPreview(template),
@@ -496,7 +496,6 @@ export const mailPreviewQuery = (template: MailTemplateId) =>
       if (res.status !== 200) throw await apiRequestError(res)
       return res.json()
     },
-    staleTime: Number.POSITIVE_INFINITY,
   })
 
 /**
@@ -525,4 +524,47 @@ export async function switchUser(queryClient: QueryClient, signedIn: boolean) {
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] })
   if (signedIn) await queryClient.resetQueries({ queryKey: queryKeys.me })
   else queryClient.setQueryData(queryKeys.me, null)
+}
+
+export const mailTemplatesQuery = (siteId?: string) =>
+  queryOptions({
+    queryKey: siteId ? ['sites', siteId, 'mail-templates'] : ['mail', 'editable-templates'],
+    queryFn: async () => {
+      const res = siteId
+        ? await api.sites[':siteId']['mail-templates'].$get({ param: { siteId } })
+        : await api.mail.templates.$get()
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+export type EditableMailTemplate = import('hono/client').InferResponseType<
+  typeof api.mail.templates.$get,
+  200
+>[number]
+
+export async function changeMailTemplate(
+  siteId: string | undefined,
+  template: string,
+  action: 'draft' | 'publish' | 'discard' | 'reset' | 'preview',
+  text: MailTemplateText,
+) {
+  const endpoint = siteId
+    ? api.sites[':siteId']['mail-templates'][':template']
+    : api.mail.templates[':template']
+  const input = { param: { siteId: siteId ?? '', template }, json: text }
+  if (action === 'preview') {
+    const res = await endpoint.preview.$post(input)
+    if (res.status !== 200) throw await apiRequestError(res)
+    return res.json()
+  }
+  const res =
+    action === 'draft'
+      ? await endpoint.draft.$put(input)
+      : action === 'publish'
+        ? await endpoint.publish.$post(input)
+        : action === 'discard'
+          ? await endpoint.draft.$delete(input)
+          : await endpoint.$delete(input)
+  if (res.status !== 200) throw await apiRequestError(res)
+  return null
 }

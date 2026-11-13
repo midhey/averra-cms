@@ -14,6 +14,7 @@ import {
   headerLinkHref,
   isCustomBlockType,
   isPageBlockDefinition,
+  MailTemplateText,
   opensNewTab,
   PageContent,
   PageSlug,
@@ -333,6 +334,9 @@ export function cmsTools(client: Api | undefined) {
       saveCustomBlockDraft: fail,
       checkCustomBlock: fail,
       getSiteScript: fail,
+      listMailTemplates: fail,
+      saveMailTemplateDraft: fail,
+      previewMailTemplate: fail,
       saveSiteScriptDraft: fail,
     }
   }
@@ -633,6 +637,26 @@ export function cmsTools(client: Api | undefined) {
       }
     },
 
+    listMailTemplates: async () => {
+      const param = { siteId: await siteOf(undefined) }
+      return unwrap(() => sites[':siteId']['mail-templates'].$get({ param }))
+    },
+    saveMailTemplateDraft: async ({ template, ...text }: z.infer<typeof MailTemplateInput>) => {
+      const param = { siteId: await siteOf(undefined), template }
+      await unwrap(() =>
+        sites[':siteId']['mail-templates'][':template'].draft.$put({ param, json: text }),
+      )
+      return {
+        result: 'Черновик сохранён',
+        who: 'Проверьте и опубликуйте письмо в админке: Уведомления → Письма. Публикует человек.',
+      }
+    },
+    previewMailTemplate: async ({ template, ...text }: z.infer<typeof MailTemplateInput>) => {
+      const param = { siteId: await siteOf(undefined), template }
+      return unwrap(() =>
+        sites[':siteId']['mail-templates'][':template'].preview.$post({ param, json: text }),
+      )
+    },
     publishPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
       return unwrap(() => page.publish.$post({ param }))
@@ -640,12 +664,48 @@ export function cmsTools(client: Api | undefined) {
   }
 }
 
+const MailTemplateInput = MailTemplateText.extend({
+  template: z.enum(['lead-new', 'lead-received']),
+})
+
 const asText = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 })
 
 export function registerTools(server: McpServer, api: Api | undefined) {
   const tools = cmsTools(api)
+  server.registerTool(
+    'list_mail_templates',
+    {
+      title: 'Шаблоны писем сайта',
+      description:
+        'Переменные, блоки, стандартный текст, черновик и опубликованный текст писем сайта. Публикует человек в админке (Уведомления → Письма). Данных заявок нет. Перед правкой прочитай актуальный черновик: сохранение заменяет его целиком.',
+      annotations: { readOnlyHint: true },
+    },
+    async () => asText(await tools.listMailTemplates()),
+  )
+  server.registerTool(
+    'save_mail_template_draft',
+    {
+      title: 'Сохранить черновик письма',
+      description:
+        'Сохраняет черновик темы, строки-превью и текста письма сайта. Подстановки {имя}; пустая строка — абзац, > в начале — примечание. Обязательные блоки вставляй отдельным абзацем. HTML нет. Черновик заменяется целиком; публикует человек в админке.',
+      inputSchema: MailTemplateInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => asText(await tools.saveMailTemplateDraft(args)),
+  )
+  server.registerTool(
+    'preview_mail_template',
+    {
+      title: 'Предпросмотр письма',
+      description:
+        'Собирает письмо сайта только на примерных данных шаблона: реальные заявки и персональные данные недоступны. Возвращает тему, HTML и текст, ничего не сохраняет. Публикует человек в админке.',
+      inputSchema: MailTemplateInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.previewMailTemplate(args)),
+  )
 
   server.registerTool(
     'list_blocks',

@@ -9,6 +9,29 @@ export const passwordResetTemplate = defineMailTemplate({
   id: 'password-reset',
   title: 'Сброс пароля',
   description: 'Уходит пользователю админки, который нажал «Забыли пароль?»',
+  scope: 'installation',
+  vars: {
+    name: { label: 'Имя пользователя', value: ({ name }) => name },
+    expires: {
+      label: 'Срок ссылки',
+      value: ({ expiresInMinutes }) => formatMinutes(expiresInMinutes),
+    },
+  },
+  blocks: {
+    button: {
+      label: 'Ссылка сброса пароля',
+      required: true,
+      render: ({ url }) => ({
+        html: button('Задать новый пароль', url),
+        text: `Задать новый пароль: ${url}`,
+      }),
+    },
+  },
+  defaultText: {
+    subject: 'Сброс пароля в Averra CMS',
+    preheader: 'Ссылка, чтобы задать новый пароль',
+    body: 'Здравствуйте, {name}!\n\nКто-то (надеемся, вы) попросил сбросить пароль от админки Averra CMS. Чтобы задать новый пароль, откройте ссылку:\n\n{button}\n\n> Ссылка работает {expires} и только один раз.\n\n> Если вы не просили сброс, просто удалите письмо: пароль останется прежним.',
+  },
   schema: z.strictObject({
     name: MailLine(100),
     url: MailUrl,

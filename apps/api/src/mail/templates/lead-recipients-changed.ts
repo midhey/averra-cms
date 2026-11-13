@@ -21,6 +21,30 @@ export const leadRecipientsChangedTemplate = defineMailTemplate({
   title: 'Получатели уведомлений о заявках изменены',
   description:
     'Уходит владельцам и прежним получателям, когда у сайта меняют адреса или чаты уведомлений о заявках',
+  scope: 'installation',
+  vars: { siteName: { label: 'Название сайта', value: ({ siteName }) => siteName } },
+  blocks: {
+    details: {
+      label: 'Сведения об изменении',
+      render: ({ changedBy, changedByEmail, changedAt, recipients, targets }) => {
+        const where = targets ?? recipients ?? []
+        const rows: [string, string][] = [
+          ['Кто', `${changedBy} (${changedByEmail})`],
+          ['Когда', `${changedAtFormat.format(new Date(changedAt))} по Москве`],
+          ['Теперь заявки приходят', where.length ? where.join(', ') : 'владельцам админки'],
+        ]
+        return {
+          html: details(rows),
+          text: rows.map(([label, value]) => `${label}: ${value}`).join('\n'),
+        }
+      },
+    },
+  },
+  defaultText: {
+    subject: 'Получатели уведомлений о заявках изменены — {siteName}',
+    preheader: 'Уведомления о заявках теперь уходят другим получателям',
+    body: 'У сайта «{siteName}» изменили, куда приходят уведомления о новых заявках.\n\n{details}\n\n> Если смену никто не согласовывал, верните получателей в разделе «Уведомления» и смените пароль учётной записи, с которой это сделали: в письмах о заявках — персональные данные посетителей.',
+  },
   schema: z.strictObject({
     siteName: MailLine(80),
     changedBy: MailLine(100),

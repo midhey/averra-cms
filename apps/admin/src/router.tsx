@@ -25,6 +25,7 @@ import {
   mailOutboxQuery,
   mailQuery,
   mailSmtpQuery,
+  mailTemplatesQuery,
   mediaQuery,
   membersQuery,
   meQuery,
@@ -378,6 +379,7 @@ const notificationsRoute = createRoute({
     const { siteId, site } = await loadSite(queryClient)
     await Promise.all([
       queryClient.ensureQueryData(siteNotificationsQuery(siteId)),
+      Promise.allSettled([queryClient.fetchQuery(mailTemplatesQuery(siteId))]),
       canManageChannels(site.access) && queryClient.ensureQueryData(notificationsQuery()),
       canManageChannels(site.access) &&
         Promise.allSettled([queryClient.ensureQueryData(notificationOutboxQuery())]),
@@ -449,6 +451,7 @@ const mailRoute = createRoute({
     Promise.all([
       queryClient.ensureQueryData(mailQuery()),
       queryClient.ensureQueryData(mailSmtpQuery()),
+      Promise.allSettled([queryClient.fetchQuery(mailTemplatesQuery())]),
       queryClient.ensureQueryData(mailOutboxQuery()),
     ]),
   component: MailScreen,

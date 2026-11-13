@@ -22,6 +22,21 @@ export const mailTestTemplate = defineMailTemplate({
   title: 'Проверка почты',
   description:
     'Уходит по кнопке «Проверить подключение» (и по команде на сервере), чтобы убедиться, что письма доходят',
+  scope: 'installation',
+  vars: {
+    sender: { label: 'Кто отправил проверку', value: ({ via }) => senders[via] },
+    when: {
+      label: 'Время отправки',
+      value: ({ sentAt }) => `${sentAtFormat.format(new Date(sentAt))} по Москве`,
+    },
+    provider: { label: 'Провайдер почты', value: ({ provider }) => provider },
+  },
+  blocks: {},
+  defaultText: {
+    subject: 'Проверка почты Averra CMS',
+    preheader: 'Почта работает: письма из Averra CMS доходят',
+    body: 'Почта работает. Это проверочное письмо: его отправила {sender}, чтобы убедиться, что письма из Averra CMS доходят.\n\nОтправлено: {when}\nЧерез: {provider}\n\n> Если письмо попало в спам, проверьте SPF, DKIM и DMARC домена отправителя — инструкция — https://midhey.github.io/averra-cms/install/mail/',
+  },
   schema: z.strictObject({
     sentAt: z.iso.datetime({ offset: true }),
     // Провайдер без секретов: «SMTP smtp.yandex.ru:465 (TLS)…»

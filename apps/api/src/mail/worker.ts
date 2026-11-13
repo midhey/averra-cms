@@ -1,7 +1,9 @@
+import type { MailTemplateText } from '@averra/schema'
 import type { Db } from '../db/client'
 import { type Mailer, MailSendError, type MailStep } from './mailer'
 import { type ClaimedMail, outboxRepo, retryDelayMs } from './outbox'
-import { MailDataError, MailTemplateId, renderMail } from './templates'
+import { type EditableTemplate, validateTemplateText } from './template-text'
+import { MailDataError, MailTemplateId, mailTemplates, renderMail } from './templates'
 
 export type OutboxSettings = {
   /** Сколько раз пробовать отправить письмо */
@@ -163,7 +165,23 @@ export async function processOutbox({
       if (!template.success) {
         throw new MailSendError(`Шаблона «${mail.template}» больше нет`, true)
       }
-      const rendered = renderMail(template.data, mail.data)
+      let custom: MailTemplateText | undefined
+      if (mail.custom != null) {
+        try {
+          custom = validateTemplateText(
+            mailTemplates[template.data] as EditableTemplate,
+            mail.custom,
+          )
+          renderMail(template.data, mail.data, custom)
+        } catch {
+          custom = undefined
+          // Содержимое снимка не логируем: текст мог быть испорчен внешней записью в базу.
+          log(
+            `Письмо ${mail.id}: снимок текста не прошёл проверку, используется стандартный шаблон`,
+          )
+        }
+      }
+      const rendered = renderMail(template.data, mail.data, custom)
       ;({ messageId } = await sender.send({ to: mail.recipient, ...rendered }))
     } catch (error) {
       if (isSenderRejection(error)) {

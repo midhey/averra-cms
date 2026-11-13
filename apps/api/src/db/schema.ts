@@ -477,6 +477,7 @@ export const mailOutbox = pgTable(
     template: text().notNull(),
     // Данные шаблона. null — стёрты: письмо отправлено или в нём была одноразовая ссылка
     data: jsonb().$type<unknown>(),
+    custom: jsonb().$type<unknown>(),
     recipient: text().notNull(),
     // Ящик, куда ведёт адрес (mailboxKey: нижний регистр, без метки «+», gmail без точек) —
     // по нему лимит «подтверждение не чаще раза в сутки на адрес» не обходится vasya+1@…
@@ -827,5 +828,26 @@ export const customBlockRevisions = pgTable(
     uniqueIndex('custom_block_revisions_block_version_unique').on(table.blockId, table.version),
     index('custom_block_revisions_site_id_idx').on(table.siteId),
     check('custom_block_revisions_version_positive', sql`${table.version} > 0`),
+  ],
+)
+
+/** Текст без данных письма: NULL site_id — служебные шаблоны всей установки */
+export const mailTemplateTexts = pgTable(
+  'mail_templates',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid().references(() => sites.id, { onDelete: 'cascade' }),
+    template: text().notNull(),
+    draft: jsonb().$type<import('@averra/schema').MailTemplateText>(),
+    draftUpdatedAt: timestamp({ withTimezone: true }),
+    draftUpdatedBy: text(),
+    published: jsonb().$type<import('@averra/schema').MailTemplateText>(),
+    publishedAt: timestamp({ withTimezone: true }),
+    publishedBy: text(),
+  },
+  (table) => [
+    unique('mail_templates_scope_template_unique')
+      .on(table.siteId, table.template)
+      .nullsNotDistinct(),
   ],
 )
