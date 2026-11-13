@@ -1948,6 +1948,8 @@ describe('заявка из админки', () => {
     if (process.platform !== 'win32') {
       const other = checked()
       const target = join(other.dir, '.env')
+      // Папку заявок создаёт админка, у свежей установки её ещё нет
+      mkdirSync(join(other.dir, 'requests'), { recursive: true })
       symlinkSync(target, join(other.dir, 'requests', 'update.json'))
       expectRejected(other, 'заявка — не обычный файл')
       expect(existsSync(target)).toBe(true)
