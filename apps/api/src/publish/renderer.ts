@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readlink, rm, symlink } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BuildFailure } from './queue'
 
@@ -70,6 +70,21 @@ function peakFrom(stdout: string) {
 }
 
 /**
+ * Ссылка cacheDir/node_modules → node_modules рендерера. Пререндер Astro лежит в .astro, а в образе
+ * это ссылка в cacheDir на томе сайтов: на том же диске, что и папка релиза, иначе Astro не
+ * перенесёт файлы rename'ом. Node ищет пакеты от настоящего пути модуля, вверх от cacheDir, и без
+ * этой ссылки не находил react. Junction — чтобы на Windows ссылка ставилась без прав админа
+ */
+async function linkRendererModules(options: Pick<RenderOptions, 'cacheDir' | 'rendererDir'>) {
+  const link = join(options.cacheDir, 'node_modules')
+  const target = join(options.rendererDir, 'node_modules')
+  const current = await readlink(link).catch(() => undefined)
+  if (current !== undefined && resolve(current) === resolve(target)) return
+  await rm(link, { recursive: true, force: true })
+  await symlink(target, link, 'junction')
+}
+
+/**
  * Сборка сайта отдельным процессом Node: scripts/build-release.mjs рендерера. Отдельный процесс —
  * чтобы память сборки освобождалась целиком, зависшая сборка убивалась по времени, а сбой
  * сборщика не ронял API. Ненулевой код, сигнал или таймаут — BuildFailure с хвостом вывода
@@ -78,6 +93,7 @@ export function rendererProcess(options: RenderOptions): Render {
   return async ({ siteId, outDir, signal }) => {
     try {
       await mkdir(join(options.cacheDir, DOT_ASTRO_CACHE), { recursive: true })
+      await linkRendererModules(options)
     } catch (error) {
       throw new BuildFailure(`Не удалось подготовить кеш сборки: ${(error as Error).message}`)
     }

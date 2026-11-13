@@ -82,6 +82,36 @@ describe('процесс сборщика', () => {
     expect(JSON.parse(await readFile(join(out, 'cache.json'), 'utf8'))).toEqual({ ready: true })
   })
 
+  it('модули из кеша вне рендерера находят его пакеты: .astro в образе — ссылка в кеш', async () => {
+    // Как в образе: Astro пишет пререндер в .astro, а это ссылка в cacheDir на томе сайтов. Node
+    // ищет пакеты от настоящего пути модуля — без ссылки на node_modules рендерера рядом с кешем
+    // сборка падала с «Cannot find package 'react'»
+    const dir = await fakeRenderer(`
+      import { mkdirSync, writeFileSync } from 'node:fs'
+      import { join } from 'node:path'
+      import { pathToFileURL } from 'node:url'
+      const chunk = join(process.env.AVERRA_CACHE_DIR, '${DOT_ASTRO_CACHE}', '.prerender', 'entry.mjs')
+      mkdirSync(join(chunk, '..'), { recursive: true })
+      writeFileSync(chunk, "export { answer } from 'fake-react'")
+      const { answer } = await import(pathToFileURL(chunk).href)
+      writeFileSync(join(process.env.AVERRA_OUT_DIR, 'answer.json'), JSON.stringify({ answer }))
+    `)
+    const pkg = join(dir, 'node_modules', 'fake-react')
+    await mkdir(pkg, { recursive: true })
+    await writeFile(
+      join(pkg, 'package.json'),
+      '{"name":"fake-react","type":"module","main":"index.js"}',
+    )
+    await writeFile(join(pkg, 'index.js'), 'export const answer = 42')
+    const cacheDir = await outDir()
+    const out = await outDir()
+    const render = rendererProcess({ ...options(dir), cacheDir })
+    await render({ siteId: 's', outDir: out })
+    // Второй запуск: ссылка уже есть — не ошибка
+    await render({ siteId: 's', outDir: out })
+    expect(JSON.parse(await readFile(join(out, 'answer.json'), 'utf8'))).toEqual({ answer: 42 })
+  })
+
   it('ненулевой код — BuildFailure с хвостом вывода без цветов терминала', async () => {
     const dir = await fakeRenderer(`
       console.log(JSON.stringify({ peakRssBytes: 1 }))

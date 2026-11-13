@@ -112,7 +112,9 @@ COPY --from=runtime-tree /app /app
 # может поменять ни свой код, ни код сборщика, который запускает при каждой публикации.
 # Сборщик пишет кеши Astro и Vite в PUBLISH_DIR/.cache (scripts/build-release.mjs), а папку .astro
 # Astro берёт всегда из корня проекта — она ссылка в тот же кеш. Папку, куда ведёт ссылка, API
-# создаёт перед каждой сборкой (DOT_ASTRO_CACHE в apps/api/src/publish/renderer.ts)
+# создаёт перед каждой сборкой (DOT_ASTRO_CACHE в apps/api/src/publish/renderer.ts). Там же он
+# ставит ссылку кеш/node_modules на пакеты рендерера: Node ищет их от настоящего пути модуля
+# пререндера, то есть от тома, а не от /app
 RUN mkdir -p /data/sites /data/media \
   && chown -R node:node /data \
   && rm -rf /app/apps/renderer/.astro \
