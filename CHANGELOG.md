@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/midhey/averra-cms/compare/v0.1.0...v0.1.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **publish:** resolve renderer packages from the build cache in the image ([0e8a95a](https://github.com/midhey/averra-cms/commit/0e8a95a1733d2b0272abf972f7fa8f8bb2af8d07))
+
 ## 0.1.0 (2026-11-13)
 
 
