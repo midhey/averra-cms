@@ -22,6 +22,10 @@
   --color-border-strong: var(--palette-neutral-500);
   --color-border-subtle: var(--palette-neutral-200);
 
+  /* Полоса прокрутки: ползунок в покое и под курсором, дорожки нет */
+  --color-scrollbar-thumb: var(--palette-neutral-300);
+  --color-scrollbar-thumb-hover: var(--palette-neutral-500);
+
   /*
    * Органы управления (кнопки, флажки, переключатели): рамка в покое не меньше 3:1 к фону
    * (WCAG 1.4.11), наведение меняет и заливку, и рамку, нажатие темнее наведения

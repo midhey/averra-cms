@@ -34,6 +34,12 @@ describe('стили на Sass', () => {
     expect(compileFile(resolve(uiSrc, 'themes/_averra.scss'))).toContain('--color-text:')
   })
 
+  it('полосы прокрутки — в цветах темы, и в Safari тоже', () => {
+    const css = compileFile(resolve(uiSrc, 'foundation/preset.scss'))
+    expect(css).toContain('scrollbar-color: var(--color-scrollbar-thumb) transparent')
+    expect(css).toMatch(/::-webkit-scrollbar-thumb\s*\{[^}]*var\(--color-scrollbar-thumb\)/u)
+  })
+
   it('breakpoint-down — та же граница, что у breakpoint, но «уже неё»', () => {
     const css = compileString(
       '@use "@averra/ui" as ui; @include ui.breakpoint(medium) { a { b: c } } @include ui.breakpoint-down(medium) { a { b: d } }',

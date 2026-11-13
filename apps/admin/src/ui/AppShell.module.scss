@@ -46,6 +46,16 @@
     overflow-y: auto;
     border-right: ui.rem(1) solid var(--color-border);
     border-bottom: 0;
+
+    // Ползунок панели виден, когда с ней работают: под курсором или с фокусом внутри. В покое
+    // меню не перечёркнуто полосой, а место под неё занято всегда — пункты не прыгают
+    scrollbar-color: transparent transparent;
+    scrollbar-gutter: stable;
+
+    &:hover,
+    &:focus-within {
+      scrollbar-color: var(--color-scrollbar-thumb) transparent;
+    }
   }
 }
 

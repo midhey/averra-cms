@@ -55,6 +55,10 @@
   --color-border-strong: var(--palette-sand-600);
   --color-border-subtle: var(--palette-sand-350);
 
+  /* Полоса прокрутки: светлее рамки полей, под курсором — как рамка */
+  --color-scrollbar-thumb: var(--palette-sand-400);
+  --color-scrollbar-thumb-hover: var(--palette-sand-600);
+
   /* Органы управления: рамка 3,45:1, наведение темнее и рамкой, и заливкой */
   --color-control-border: var(--palette-sand-600);
   --color-control-border-hover: var(--palette-ink-800);
