@@ -23,6 +23,48 @@ test('владелец видит состояние установки с ве�
   await expect(section).toContainText('Почта')
 })
 
+test('«Проверить снова» ждёт свежую проверку новых версий', async ({ page }) => {
+  let requestedAt: string | null = null
+  let polls = 0
+  await page.route(/\/api\/status\/check-update$/, async (route) => {
+    requestedAt = new Date().toISOString()
+    await route.fulfill({ status: 202, json: { requestedAt, message: 'Проверяю новые версии…' } })
+  })
+  await page.route(/\/api\/status$/, async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    if (requestedAt) polls += 1
+    const finished = requestedAt && polls > 1
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        release: {
+          ...body.release,
+          checkAvailable: true,
+          checkPending: finished ? null : requestedAt,
+          check: {
+            checkedAt: finished
+              ? new Date(Date.parse(requestedAt ?? '') + 1000).toISOString()
+              : '2026-01-01T00:00:00.000Z',
+            current: e2eVersion,
+            ok: true,
+            error: null,
+            adminUpdate: true,
+            requestsWatched: true,
+            checksWatched: true,
+          },
+        },
+      },
+    })
+  })
+  await page.goto('/status')
+  await page.getByRole('button', { name: 'Проверить снова' }).click()
+  await expect(page.getByText('Проверяю новые версии…', { exact: true })).toBeVisible()
+  await expect(page.getByText('Проверка новых версий завершена.', { exact: true })).toBeVisible()
+  expect(polls).toBeGreaterThan(1)
+})
+
 test('участнику блока нет: API ему его не отдаст', async ({ page, demoSite }) => {
   await page.route(/\/api\/me$/, async (route) => {
     const response = await route.fetch()

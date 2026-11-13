@@ -1665,6 +1665,20 @@ const requestLine = (version = '0.7.0') =>
   `{"version":"${version}","requestedAt":"2026-10-27T10:00:00.000Z","requestedBy":"0b3f2c4e-1d2a-4c5b-8e9f-0a1b2c3d4e5f"}\n`
 
 describe('проверка новой версии', () => {
+  it('повтор до пяти минут не обращается к источнику; после интервала проверяет снова', () => {
+    const srv = server()
+    expect(srv.run(['check-update']).status).toBe(0)
+    const first = srv.log('curl.log')
+    expect(srv.run(['check-update']).status).toBe(0)
+    expect(srv.log('curl.log')).toBe(first)
+    writeFileSync(
+      join(srv.dir, 'state', '.check-update-at'),
+      `${Math.floor(Date.now() / 1000) - 301}\n`,
+    )
+    expect(srv.run(['check-update']).status).toBe(0)
+    expect(srv.log('curl.log').length).toBeGreaterThan(first.length)
+    expect(srv.log('flock.log')).toContain('-n 8')
+  })
   it('ответ источника разбирается в образе без сети, итог и релиз — в состоянии', () => {
     const srv = server()
     const run = srv.run(['check-update'])
@@ -1726,7 +1740,8 @@ describe('проверка новой версии', () => {
         'образы версии 0.7.0 в реестре не найдены или реестр не ответил: релиз только что вышел, его сборка не прошла или нет связи с реестром',
     })
     expect(srv.state('release-latest.json').version).toBe('0.6.5')
-    // Образы собрались — следующая проверка находит версию
+    // Через пять минут образы собрались — следующая проверка находит версию.
+    writeFileSync(join(srv.dir, 'state', '.check-update-at'), '0\n')
     expect(srv.run(['check-update']).status).toBe(0)
     expect(srv.state('release-latest.json').version).toBe('0.7.0')
     // Версия не новее установленной — реестр не спрашивается
@@ -1745,6 +1760,7 @@ describe('проверка новой версии', () => {
   it('сеть недоступна — «не удалось проверить», найденный раньше релиз не стирается', () => {
     const srv = server()
     expect(srv.run(['check-update']).status).toBe(0)
+    writeFileSync(join(srv.dir, 'state', '.check-update-at'), '0\n')
     const run = srv.run(['check-update'], { curlFails: true })
     expect(run.status).toBe(1)
     expect(run.stdout).toContain('Не удалось проверить новую версию')
@@ -2143,6 +2159,13 @@ describe('службы systemd и папки (install-units)', () => {
     // Проверка версии — заодно с ночным бэкапом и с «-»: без сети бэкап всё равно идёт
     expect(unit('averra-backup.service')).toContain(`ExecStartPre=-${dir}/averra.sh check-update`)
     expect(unit('averra-backup.timer')).toContain('Persistent=true')
+    expect(unit('averra-check-update.path')).toContain(
+      `PathExists=${dir}/requests/check-update.json`,
+    )
+    expect(unit('averra-check-update.service')).toContain(`ExecStart=${dir}/averra.sh check-update`)
+    expect(unit('averra-check-update.service')).toContain(
+      `ExecStopPost=/bin/rm -f ${dir}/requests/check-update.json`,
+    )
     expect(unit('averra-update-request.path')).toContain(`PathExists=${dir}/requests/update.json`)
     expect(unit('averra-update-request.service')).toContain(
       `ExecStart=${dir}/averra.sh update-request`,
@@ -2162,7 +2185,7 @@ describe('службы systemd и папки (install-units)', () => {
     // Раньше пропущенного ночного бэкапа: он не возьмёт замок первым
     expect(unit('averra-update-resume.service')).toContain('Before=averra-backup.service')
     expect(srv.log('systemctl.log')).toBe(
-      'daemon-reload\nenable --now averra-backup.timer\nenable averra-update-resume.service\nenable --now averra-update-request.path\n',
+      'daemon-reload\nenable --now averra-backup.timer\nenable --now averra-check-update.path\nenable averra-update-resume.service\nenable --now averra-update-request.path\n',
     )
     expect(srv.log('chown.log')).toBe(`1000:1000 ${dir}/requests\n`)
     expect(existsSync(join(srv.dir, 'state'))).toBe(true)
@@ -2172,6 +2195,8 @@ describe('службы systemd и папки (install-units)', () => {
     expect(readdirSync(srv.systemd).sort()).toEqual([
       'averra-backup.service',
       'averra-backup.timer',
+      'averra-check-update.path',
+      'averra-check-update.service',
       'averra-update-request.path',
       'averra-update-request.service',
       'averra-update-resume.service',

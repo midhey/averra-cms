@@ -1,6 +1,7 @@
 import {
   type AdminUpdateMode,
   pendingStale,
+  RELEASE_CHECK_INTERVAL_MS,
   UpdateRequestInput,
   updateActivity,
   updateBlock,
@@ -13,6 +14,7 @@ import { toMailLine } from '../../mail/templates/line'
 import { type NotificationDeps, notifyDepsOf } from '../../notifications/deps'
 import { notify } from '../../notifications/notify'
 import { installationLabel } from '../../notifications/watch'
+import { createRateLimiter } from '../../rate-limit'
 import { validate } from '../../validate'
 import type { MailDeps } from '../mail/routes'
 import { sitesRepo } from '../sites/repo'
@@ -68,6 +70,7 @@ export function statusRoutes({
   adminUrl,
   siteUrl,
 }: StatusDeps) {
+  const releaseChecks = createRateLimiter({ max: 1, windowMs: RELEASE_CHECK_INTERVAL_MS })
   return new Hono<AuthEnv>()
     .get('/', requireOwner('Состояние установки видит только владелец'), async (c) => {
       const state = mail.runtime.status()
@@ -80,6 +83,64 @@ export function statusRoutes({
       // Состояние меняется (бэкап, сборка), а в нём ничего, что стоит держать в чужом кеше
       c.header('Cache-Control', 'no-store')
       return c.json(status)
+    })
+    .post('/check-update', requireInstallation(db, 'installation.update'), async (c) => {
+      const release = await host.release()
+      if (!release.checkAvailable || !host.requestReleaseCheck) {
+        return c.json(
+          {
+            requestedAt: null,
+            message:
+              'Сервер проверяет новые версии раз в сутки. Проверка по кнопке на этой установке недоступна.',
+          },
+          200,
+        )
+      }
+      if (
+        release.checkPending &&
+        Date.now() - Date.parse(release.checkPending) < RELEASE_CHECK_INTERVAL_MS
+      ) {
+        return c.json({ requestedAt: release.checkPending, message: 'Проверяю новые версии…' }, 202)
+      }
+      if (release.checkPending) {
+        return c.json(
+          conflict('Сервер не забрал прошлую заявку на проверку версий: обратитесь к студии'),
+          409,
+        )
+      }
+      const last = release.check?.checkedAt
+      if (
+        (last && Date.now() - Date.parse(last) < RELEASE_CHECK_INTERVAL_MS) ||
+        !releaseChecks.take('installation').allowed
+      ) {
+        return c.json(
+          {
+            requestedAt: null,
+            message: 'Новые версии уже проверялись. Повторная проверка доступна раз в 5 минут.',
+          },
+          200,
+        )
+      }
+      const actor = c.var.actor
+      if (actor.kind !== 'user') return c.json(forbidden('Нужен вход владельца'), 403)
+      const requestedAt = new Date().toISOString()
+      const result = await host.requestReleaseCheck({ requestedAt, requestedBy: actor.user.id })
+      if (result === 'no-dir')
+        return c.json(
+          {
+            requestedAt: null,
+            message: 'Сервер проверяет новые версии раз в сутки: папка заявок недоступна.',
+          },
+          200,
+        )
+      if (result === 'exists') {
+        const pending = (await host.release()).checkPending
+        return c.json(
+          { requestedAt: pending ?? requestedAt, message: 'Проверяю новые версии…' },
+          202,
+        )
+      }
+      return c.json({ requestedAt, message: 'Проверяю новые версии…' }, 202)
     })
     .post(
       '/update',

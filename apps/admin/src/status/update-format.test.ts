@@ -6,7 +6,14 @@ import {
   type UpdateRun,
 } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
-import { checkTurnedOff, shouldPoll, updateOutcome, updateSteps, updateView } from './update-format'
+import {
+  checkTurnedOff,
+  releaseCheckProgress,
+  shouldPoll,
+  updateOutcome,
+  updateSteps,
+  updateView,
+} from './update-format'
 
 const now = new Date('2026-10-27T12:00:00.000Z')
 const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
@@ -339,5 +346,37 @@ describe('updateView', () => {
     for (const mode of ['no-host', 'disabled', 'no-watcher', 'no-requests'] as const) {
       expect(updateView(status({ release: { ...ready, mode } }), now).canUpdate).toBeNull()
     }
+  })
+})
+
+describe('ожидание проверки новых версий', () => {
+  const requestedAt = now.toISOString()
+  it('свежий ответ состояния не завершает проверку, пока время релиза старое', () => {
+    expect(releaseCheckProgress(status(), requestedAt)).toBe('waiting')
+    expect(
+      releaseCheckProgress(
+        status({ checkedAt: new Date(now.getTime() + 10_000).toISOString() }),
+        requestedAt,
+      ),
+    ).toBe('waiting')
+  })
+  it('проверка с новым временем завершает ожидание даже при неудаче сети', () => {
+    const previous = ready.check
+    if (!previous) throw new Error('Нет проверки')
+    const release = {
+      ...ready,
+      check: { ...previous, checkedAt: new Date(now.getTime() + 1000).toISOString(), ok: false },
+    }
+    expect(releaseCheckProgress(status({ release }), requestedAt)).toBe('finished')
+  })
+  it('заявку после перезагрузки берёт из состояния; без ответа — тайм-аут через 5 минут', () => {
+    const release = { ...ready, checkPending: requestedAt }
+    expect(releaseCheckProgress(status({ release }))).toBe('waiting')
+    expect(
+      releaseCheckProgress(
+        status({ release, checkedAt: new Date(now.getTime() + 300_000).toISOString() }),
+      ),
+    ).toBe('timeout')
+    expect(releaseCheckProgress(status())).toBe('idle')
   })
 })

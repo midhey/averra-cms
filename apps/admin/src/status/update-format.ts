@@ -2,6 +2,7 @@ import {
   type AdminUpdateMode,
   type InstallationStatus,
   pendingStale,
+  RELEASE_CHECK_INTERVAL_MS,
   type ReleaseCheck,
   STATUS_LIMITS,
   type UpdateRun,
@@ -10,6 +11,19 @@ import {
   updateBlock,
 } from '@averra/schema'
 import type { StepItem } from '../ui/Steps'
+
+/** Ждём именно свежую проверку релизов, а не просто новый ответ GET /status */
+export function releaseCheckProgress(
+  status: Pick<InstallationStatus, 'checkedAt' | 'release'>,
+  requestedAt?: string | null,
+) {
+  const requested = requestedAt ?? status.release.checkPending
+  if (!requested) return 'idle'
+  if (Date.parse(status.release.check?.checkedAt ?? '') > Date.parse(requested)) return 'finished'
+  if (Date.parse(status.checkedAt) - Date.parse(requested) >= RELEASE_CHECK_INTERVAL_MS)
+    return 'timeout'
+  return 'waiting'
+}
 
 // Обновление из админки словами: что показать в разделе «Обновление» экрана «Состояние
 // установки». Что можно и что идёт, решает схема (updateActivity) — здесь слова и шаги

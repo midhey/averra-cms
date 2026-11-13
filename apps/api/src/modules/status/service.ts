@@ -5,6 +5,7 @@ import {
   type InstallationStatus,
   isNewerVersion,
   NO_RELEASE_STATE,
+  type ReleaseCheckRequest,
   type ReleaseState,
   type RestoreRun,
   SERVICE_DATABASE,
@@ -64,6 +65,7 @@ export type HostStatus = {
   disk(): Promise<DiskSpace[]>
   database(): Promise<HostDatabase>
   release(): Promise<HostRelease>
+  requestReleaseCheck?(file: ReleaseCheckRequest): Promise<RequestResult>
   requestUpdate(
     file: UpdateRequestFile,
     options?: { replaceStale?: boolean },

@@ -92,7 +92,9 @@ export function UpdateSection({ status, now, loadedVersion, offline }: UpdateSec
               {latest && release.available && ' Ниже — что сервер нашёл раньше.'}
             </>
           )}{' '}
-          Сервер проверяет раз в сутки.
+          {release.checkAvailable
+            ? '«Проверить снова» также проверяет новые версии (раз в 5 минут).'
+            : 'Сервер проверяет раз в сутки.'}
         </p>
       )}
 

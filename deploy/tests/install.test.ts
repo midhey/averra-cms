@@ -504,8 +504,11 @@ describe('полная установка (подделки docker и сети)'
     expect(readFileSync(join(run.systemd, 'averra-update-request.path'), 'utf8')).toMatch(
       /^PathExists=\S*\/inst\/requests\/update\.json$/m,
     )
+    expect(readFileSync(join(run.systemd, 'averra-check-update.path'), 'utf8')).toMatch(
+      /^PathExists=\S*\/inst\/requests\/check-update\.json$/m,
+    )
     expect(run.systemctl()).toBe(
-      'daemon-reload\nenable --now averra-backup.timer\nenable averra-update-resume.service\nenable --now averra-update-request.path\n',
+      'daemon-reload\nenable --now averra-backup.timer\nenable --now averra-check-update.path\nenable averra-update-resume.service\nenable --now averra-update-request.path\n',
     )
     // Сети нет — проверка версии «не удалась», это видно админке, а установка прошла
     expect(

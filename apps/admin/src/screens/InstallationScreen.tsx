@@ -1,5 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from '../api'
+import { apiRequestError, messageOf } from '../errors'
 import { RelativeTime } from '../pages/PagesTable'
 import { formatDateTime } from '../pages-format'
 import { buildStatusLabels } from '../publish/build-format'
@@ -12,7 +14,7 @@ import {
   describeUpdate,
 } from '../status/status-format'
 import { UpdateSection } from '../status/UpdateSection'
-import { shouldPoll } from '../status/update-format'
+import { releaseCheckProgress, shouldPoll } from '../status/update-format'
 import { Button } from '../ui/Button'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
@@ -36,6 +38,9 @@ const UPDATE_POLL_MS = 3000
  * место на диске и что требует внимания. Что считать проблемой, решает API (statusProblems)
  */
 export function InstallationScreen() {
+  const [checkRequestedAt, setCheckRequestedAt] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [checkNotice, setCheckNotice] = useState<string>()
   // Данные загрузил маршрут (fetchQuery). Обновить — по кнопке; сам экран опрашивает, только пока
   // идёт заявка или обновление. Сбой повторной проверки не прячет прошлую: она остаётся на экране.
   // Посреди обновления API перезапускается — опрос продолжается по прошлым данным, пока он не
@@ -45,13 +50,47 @@ export function InstallationScreen() {
     // Время — проверки API, а не часов браузера: «идёт ли» решают те же часы, что записали ход
     refetchInterval: (query) => {
       const data = query.state.data
-      return data && shouldPoll(data, new Date(data.checkedAt)) ? UPDATE_POLL_MS : false
+      return data &&
+        (releaseCheckProgress(data, checkRequestedAt) === 'waiting' ||
+          shouldPoll(data, new Date(data.checkedAt)))
+        ? UPDATE_POLL_MS
+        : false
     },
     refetchIntervalInBackground: true,
   })
   usePageTitle('Состояние установки')
   const data = status.data
   const [firstVersion] = useState(data.version)
+  const progress = releaseCheckProgress(data, checkRequestedAt)
+  const checkFinished = progress === 'finished'
+  const checkTimedOut = progress === 'timeout'
+  const waitingCheck = progress === 'waiting'
+  useEffect(() => {
+    if (checkFinished || checkTimedOut) {
+      setCheckRequestedAt(null)
+      setCheckNotice(
+        checkTimedOut
+          ? 'Сервер не закончил проверку версий за 5 минут. Повторите позже или обратитесь к студии.'
+          : 'Проверка новых версий завершена.',
+      )
+    }
+  }, [checkFinished, checkTimedOut])
+  async function recheck() {
+    setChecking(true)
+    setCheckNotice(undefined)
+    try {
+      const res = await api.status['check-update'].$post()
+      if (res.status !== 200 && res.status !== 202) throw await apiRequestError(res)
+      const result = await res.json()
+      setCheckRequestedAt(result.requestedAt)
+      if (!result.requestedAt) setCheckNotice(result.message)
+    } catch (error) {
+      setCheckNotice(messageOf(error))
+    } finally {
+      await status.refetch()
+      setChecking(false)
+    }
+  }
   const loadedVersion = ADMIN_BUILD_VERSION ?? firstVersion
   const updating = shouldPoll(data, new Date(data.checkedAt))
 
@@ -78,12 +117,23 @@ export function InstallationScreen() {
           </>
         }
         actions={
-          <Button icon="history" loading={status.isFetching} onClick={() => status.refetch()}>
+          <Button
+            icon="history"
+            loading={checking || status.isFetching}
+            disabled={waitingCheck}
+            onClick={() => void recheck()}
+          >
             Проверить снова
           </Button>
         }
       />
 
+      {waitingCheck && <p role="status">Проверяю новые версии…</p>}
+      {checkNotice && (
+        <InlineAlert tone="info" live>
+          {checkNotice}
+        </InlineAlert>
+      )}
       {status.isRefetchError && !updating && (
         <InlineAlert tone="danger">
           Не удалось обновить состояние: {status.error.message}. Ниже — прошлая проверка.

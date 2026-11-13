@@ -200,6 +200,7 @@ export const ReleaseCheck = z.object({
    * пролежала бы вечно — кнопки нет
    */
   requestsWatched: z.boolean(),
+  checksWatched: z.boolean().optional(),
 })
 export type ReleaseCheck = z.infer<typeof ReleaseCheck>
 
@@ -264,6 +265,8 @@ export type AdminUpdateMode = z.infer<typeof AdminUpdateMode>
 
 export const ReleaseState = z.object({
   mode: AdminUpdateMode,
+  checkAvailable: z.boolean().optional(),
+  checkPending: IsoTime.nullable().optional(),
   check: ReleaseCheck.nullable(),
   latest: ReleaseLatest.nullable(),
   /** Версия новее установленной, если есть: на неё — кнопка «Обновить» */
@@ -675,3 +678,8 @@ export function statusProblems(facts: InstallationFacts, now: Date): StatusProbl
 export function formatGigabytes(bytes: number) {
   return `${(bytes / 1024 ** 3).toFixed(1).replace('.', ',')} ГБ`
 }
+
+/** Заявка только на проверку релизов, без команды или версии из запроса */
+export const ReleaseCheckRequest = z.strictObject({ requestedAt: IsoTime, requestedBy: Uuid() })
+export type ReleaseCheckRequest = z.infer<typeof ReleaseCheckRequest>
+export const RELEASE_CHECK_INTERVAL_MS = 5 * 60 * 1000

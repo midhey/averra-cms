@@ -87,3 +87,13 @@ pnpm e2e --shuffle              # в случайном порядке
 pnpm e2e tests/editor.spec.ts   # один файл
 pnpm e2e --headed               # с окном браузера
 ```
+
+
+### Проверка версий из админки
+
+`averra.sh check-update` ограничивает обращения к источнику релизов интервалом 5 минут и держит
+отдельный замок `.check-update.lock`. `averra.sh install-units` также ставит
+`averra-check-update.path` → `averra-check-update.service`: `requests/check-update.json` запускает
+`averra.sh check-update`, `ExecStopPost` удаляет заявку. Новые юниты ставятся и обновлением из
+нового образа. API не выполняет команд хоста: владелец через `POST /api/status/check-update`
+пишет только заявку `{ requestedAt, requestedBy }`; токену отказ (`installation.update`).

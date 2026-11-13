@@ -56,6 +56,8 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `GET /api/status` | состояние установки — только владелец, `Cache-Control: no-store`. См. [Состояние](/averra-cms/install/status/) |
 | `POST /api/status/update` | «Обновить до X»: вход `{ version }` (`UpdateRequestInput`), кладёт файл-заявку для хоста — 202 `{ version, requestedAt }`. Только владелец (`installation.update`): администратору сайта, редактору и токену API — 403. 409 `conflict` — заявка уже лежит или идёт обновление, версия не та, что доступна; 409 `update_unavailable` — обновлять из админки нельзя (нет хостовой части, выключено, некому забирать заявки, нет папки заявок, ломающий релиз, неудачный откат, обновление до этой версии уже откатилось). См. [Обновление](/averra-cms/install/updates/) |
 
+| `POST /api/status/check-update` | Владелец запрашивает проверку релизов (`installation.update`, токену отказ). 202 — заявка или уже ожидающая заявка с requestedAt; 200 с requestedAt: null — проверка недавно была или хост недоступен. Не чаще раза в 5 минут. |
+
 ## Вход, пароль, кто я
 
 | Запрос | Что делает |
@@ -313,3 +315,28 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 `POST /api/invitations/lookup`, `POST /api/invitations/register`,
 `POST /api/forms/:siteId/:slug/:blockId`. Список живёт в `src/auth/middleware.ts`: открыть новый
 маршрут — значит осознанно вписать его туда ([Доступ и секреты](/averra-cms/dev/security/)).
+
+
+## Редактор писем
+
+| Маршрут | Что |
+|---|---|
+| `GET /api/sites/:siteId/mail-templates` | Два шаблона сайта: описание, vars и blocks с подписями, defaultText, draft и published с авторами и временем |
+| `PUT /api/sites/:siteId/mail-templates/:template/draft` | Сохранить черновик (`MailTemplateText`) |
+| `DELETE /api/sites/:siteId/mail-templates/:template/draft` | Отменить черновик |
+| `POST /api/sites/:siteId/mail-templates/:template/publish` | Опубликовать переданный текст и стереть черновик, только человек |
+| `DELETE /api/sites/:siteId/mail-templates/:template` | Вернуть стандартный текст, только человек |
+| `POST /api/sites/:siteId/mail-templates/:template/preview` | `{ subject, html, text }` только на example, с названием сайта |
+| `GET /api/mail/templates` | Шесть служебных шаблонов, только владелец |
+| `PUT /api/mail/templates/:template/draft` | Сохранить служебный черновик, только владелец |
+| `DELETE /api/mail/templates/:template/draft` | Отменить служебный черновик, только владелец |
+| `POST /api/mail/templates/:template/publish` | Опубликовать служебный текст, только владелец |
+| `DELETE /api/mail/templates/:template` | Вернуть стандартный служебный текст, только владелец |
+| `POST /api/mail/templates/:template/preview` | Предпросмотр переданного служебного текста на example, только владелец |
+
+Тела PUT/POST — `{ subject, preheader, body }` (`MailTemplateText` из `@averra/schema`). Тема и
+превью — одна строка до 200 символов, текст — до 5000; конкретные переменные и обязательные блоки
+проверяет API. Ошибки — 400 с путём поля. Шаблон не того уровня или неизвестный — 404.
+`mail.templates.draft` — владельцу и администратору сайта, а токену открыто независимо от роли;
+`mail.templates` (публикация и сброс) — тем же людям, токену отказ. Служебные — requireOwner.
+Прежний GET предпросмотра показывает опубликованный текст установки или первого сайта.

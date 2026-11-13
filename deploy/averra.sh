@@ -43,6 +43,7 @@ READY_TIMEOUT="${AVERRA_READY_TIMEOUT:-180}"
 # 1000), права 700. Хост забирает заявку себе и решает сам (cmd_update_request)
 REQUESTS_DIR="$AVERRA_DIR/requests"
 REQUEST_FILE="$REQUESTS_DIR/update.json"
+CHECK_REQUEST_FILE="$REQUESTS_DIR/check-update.json"
 API_UID=1000
 # Юниты systemd (install-units). Свою папку задают только тесты
 SYSTEMD_DIR="${AVERRA_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -1472,7 +1473,7 @@ complete_update() {
   update_finish updated false ''
   if [[ $handover -eq 1 ]]; then
     step 'Новый averra.sh ставит свои службы systemd и проверяет версию'
-    # Замок этого процесса новый скрипт не берёт: install-units и check-update без замка
+    # Замок обновления новый скрипт не берёт: у проверки версии свой отдельный замок
     "$BASH" "$AVERRA_DIR/averra.sh" install-units ||
       say "Службы systemd новой версии не встали — обновление при этом прошло. Повторите: $AVERRA_DIR/averra.sh install-units"
   fi
@@ -2083,12 +2084,15 @@ release_images_published() {
 # из админки. Найденный релиз — отдельно (release-latest.json) и при сбое сети не стирается
 release_check_state() {
   # release_check_state <ok> <причина>
-  local admin=false watched=false
+  local admin=false watched=false checks=false
   ! admin_update_enabled || admin=true
   ! requests_watched || watched=true
-  write_state release-check.json "$(printf '{"checkedAt":%s,"current":%s,"ok":%s,"error":%s,"adminUpdate":%s,"requestsWatched":%s}' \
-    "$(json_str "$(now_iso)")" "$(json_or_null "$(env_get AVERRA_VERSION)")" "$1" \
-    "$(json_or_null "$2")" "$admin" "$watched")"
+  if command -v systemctl >/dev/null 2>&1 &&
+    systemctl is-enabled --quiet averra-check-update.path 2>/dev/null &&
+    systemctl is-active --quiet averra-check-update.path 2>/dev/null; then checks=true; fi
+  write_state release-check.json "$(printf '{"checkedAt":%s,"current":%s,"ok":%s,"error":%s,"adminUpdate":%s,"requestsWatched":%s,"checksWatched":%s}' \
+    "$(json_str "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)")" "$(json_or_null "$(env_get AVERRA_VERSION)")" "$1" \
+    "$(json_or_null "$2")" "$admin" "$watched" "$checks")"
 }
 
 # Заявки есть кому забирать: path-юнит включён и работает. Без systemd, с ADMIN_UPDATE=off, с
@@ -2104,7 +2108,20 @@ requests_watched() {
 # установленной версии в контейнере без сети, без прав и с файловой системой только на чтение,
 # а на хост возвращается одна строка JSON, которую скрипт ещё раз проверяет. Код 1 — не удалось
 # (итог записан в состояние, как и удача)
-check_update() {
+check_update() (
+  mkdir -p "$STATE_DIR"
+  # Две проверки разом (ночная и по заявке из админки) не идут: вторая тихо уступает. Без flock
+  # (не Linux) — без замка: лимит раз в 5 минут ниже всё равно держит частоту
+  exec 8>"$STATE_DIR/.check-update.lock"
+  if command -v flock >/dev/null 2>&1; then flock -n 8 || return 0; fi
+  local last=0 epoch
+  epoch="$(date -u +%s)"
+  if [[ -f "$STATE_DIR/.check-update-at" ]]; then read -r last <"$STATE_DIR/.check-update-at" || last=0; fi
+  if [[ "$last" =~ ^[0-9]{1,12}$ ]] && (( epoch >= last && epoch - last < 300 )); then
+    say 'Новые версии уже проверялись: повторная проверка не чаще раза в 5 минут'
+    return 0
+  fi
+  printf '%s\n' "$epoch" >"$STATE_DIR/.check-update-at"
   # Диапазоны в шаблонах — по байтам, а не по правилам языка системы
   local LC_ALL=C
   local current source api_image web_image tmp out error='' version
@@ -2184,7 +2201,7 @@ check_update() {
   else
     say "Новых версий нет: установлена $current, последняя — $version"
   fi
-}
+)
 
 cmd_check_update() {
   [[ $# -eq 0 ]] || fail "непонятный аргумент: $1"
@@ -2330,7 +2347,7 @@ cmd_install_units() {
   if ! command -v systemctl >/dev/null 2>&1; then
     say "Нет systemd: бэкап по расписанию не поставлен — добавьте в cron: $AVERRA_DIR/averra.sh backup --kind scheduled. Обновление из админки без systemd не работает: кнопки в админке не будет"
     # Заявку забирать некому: лежащая осталась бы в админке «отправленной»
-    rm -f "$REQUEST_FILE"
+    rm -f "$REQUEST_FILE" "$CHECK_REQUEST_FILE"
     check_update || true
     return 0
   fi
@@ -2387,6 +2404,31 @@ Type=oneshot
 ExecStart=$AVERRA_DIR/averra.sh update-request
 ExecStopPost=/bin/rm -f $REQUEST_FILE
 UNIT
+  write_unit averra-check-update.path <<UNIT
+[Unit]
+Description=Заявка на проверку новых версий Averra из админки
+
+[Path]
+PathExists=$CHECK_REQUEST_FILE
+Unit=averra-check-update.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+  write_unit averra-check-update.service <<UNIT
+[Unit]
+Description=Проверка новых версий Averra по заявке из админки
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+TimeoutStartSec=4min
+ExecStart=$AVERRA_DIR/averra.sh check-update
+ExecStopPost=/bin/rm -f $CHECK_REQUEST_FILE
+UNIT
   # Обновление, оборванное перезагрузкой, доводится при старте сервера: API мог остаться
   # остановленным на время бэкапа, а у владельца нет SSH. Условие — отметка .update-run, без неё
   # служба не запускается. Включается без --now: идущее сейчас обновление она не трогает. Раньше
@@ -2410,6 +2452,7 @@ WantedBy=multi-user.target
 UNIT
   systemctl daemon-reload
   systemctl enable --now averra-backup.timer
+  systemctl enable --now averra-check-update.path
   systemctl enable averra-update-resume.service
   if admin_update_enabled; then
     systemctl enable --now averra-update-request.path

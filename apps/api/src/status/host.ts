@@ -8,6 +8,7 @@ import {
   type DiskSpace,
   KEPT_DUMP,
   ReleaseCheck,
+  ReleaseCheckRequest,
   ReleaseLatest,
   RestoreRun,
   UpdateRequestDecision,
@@ -37,6 +38,7 @@ const KeptDumps = z.object({ files: z.array(z.string().regex(KEPT_DUMP)).max(100
 
 /** Заявка на обновление в папке заявок — то же имя, что REQUEST_FILE в deploy/averra.sh */
 export const REQUEST_FILE = 'update.json'
+export const CHECK_REQUEST_FILE = 'check-update.json'
 
 const writable = (dir: string) =>
   access(dir, constants.W_OK).then(
@@ -123,12 +125,15 @@ export function hostStatus({
     async release() {
       // Нет папки состояния или averra.sh ещё ни разу не проверял версию — хостовой части нет
       if (!stateDir) return NO_HOST_RELEASE
-      const [check, latest, request, pending] = await Promise.all([
+      const [check, latest, request, pending, checkPending] = await Promise.all([
         readState(join(stateDir, STATE_FILES.releaseCheck), ReleaseCheck),
         readState(join(stateDir, STATE_FILES.releaseLatest), ReleaseLatest),
         readState(join(stateDir, STATE_FILES.updateRequest), UpdateRequestDecision),
         requestsDir
           ? readState(join(requestsDir, REQUEST_FILE), UpdateRequestFile)
+          : Promise.resolve({ value: null, unreadable: false }),
+        requestsDir
+          ? readState(join(requestsDir, CHECK_REQUEST_FILE), ReleaseCheckRequest)
           : Promise.resolve({ value: null, unreadable: false }),
       ])
       let mode: AdminUpdateMode = 'ready'
@@ -138,6 +143,12 @@ export function hostStatus({
       else if (!requestsDir || !(await writable(requestsDir))) mode = 'no-requests'
       return {
         mode,
+        checkAvailable: !!(
+          check.value?.checksWatched &&
+          requestsDir &&
+          (await writable(requestsDir))
+        ),
+        checkPending: checkPending.value?.requestedAt ?? null,
         check: check.value,
         latest: latest.value,
         pending: pending.value
@@ -176,6 +187,23 @@ export function hostStatus({
         return (error as NodeJS.ErrnoException).code === 'EEXIST' ? 'exists' : 'no-dir'
       } finally {
         await rm(tmp, { force: true })
+      }
+    },
+
+    async requestReleaseCheck(file) {
+      if (!requestsDir) return 'no-dir'
+      const tmp = join(requestsDir, `.check-update-${randomUUID()}.tmp`)
+      try {
+        await writeFile(tmp, `${JSON.stringify(ReleaseCheckRequest.parse(file))}\n`, {
+          flag: 'wx',
+          mode: 0o600,
+        })
+        await link(tmp, join(requestsDir, CHECK_REQUEST_FILE))
+        return 'written'
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === 'EEXIST' ? 'exists' : 'no-dir'
+      } finally {
+        await rm(tmp, { force: true }).catch(() => {})
       }
     },
 
