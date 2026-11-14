@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/midhey/averra-cms/compare/v0.1.1...v0.2.0) (2026-11-13)
+
+
+### Features
+
+* **mail:** edit mail templates in the admin and via MCP drafts ([ca58ef0](https://github.com/midhey/averra-cms/commit/ca58ef043f232ad4cee189191be870d21b64ee38))
+* **status:** check for new versions from the admin on demand ([988ae73](https://github.com/midhey/averra-cms/commit/988ae737a0fc5df47a59dee3da5bb66ff4cf93ad))
+
 ## [0.1.1](https://github.com/midhey/averra-cms/compare/v0.1.0...v0.1.1) (2026-11-13)
 
 
