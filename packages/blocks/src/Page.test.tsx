@@ -38,6 +38,33 @@ const splitHero = (id: string, alt: string) => ({
 })
 
 describe('Page', () => {
+  it('скрытые блоки не выводятся ни на сайте, ни в предпросмотре; h1 у первого видимого', () => {
+    const content = PageContent.parse({
+      blocks: [
+        { ...splitHero('hidden', 'Скрытое фото'), hidden: true },
+        { id: 'custom-hidden', type: 'custom:offer', hidden: true, props: {} },
+        splitHero('visible', 'Видимое фото'),
+      ],
+    })
+    for (const preview of [false, true]) {
+      const html = renderToStaticMarkup(<Page content={content} media={media} preview={preview} />)
+      expect(html).not.toContain('id="hidden"')
+      expect(html).not.toContain('Скрытое фото')
+      expect(html).not.toContain('custom-hidden')
+      expect(countH1(html)).toBe(1)
+      expect(html).toMatch(/<h1[^>]*>Блок visible<\/h1>/)
+      expect(html).toContain('fetchPriority="high"')
+    }
+    expect(mainHeadingBlock(content.blocks)?.id).toBe('visible')
+    expect(content.blocks).toHaveLength(3)
+    const onlyHidden = { ...content, blocks: content.blocks.slice(0, 2) }
+    expect(render(onlyHidden)).toBe('<main id="content"></main>')
+    const checks = pageSeoChecks(
+      { slug: 'offer', title: 'Акция', blocks: onlyHidden.blocks },
+      { titleTemplate: '', description: '', ogImage: null, url: null, hideFromSearch: false },
+    )
+    expect(checks.find((check) => check.id === 'h1')?.level).toBe('problem')
+  })
   it('рендерит демо-лендинг с одним h1', () => {
     expect(countH1(render(demoPage))).toBe(1)
   })
@@ -71,6 +98,12 @@ describe('Page', () => {
       renderToStaticMarkup(<Page content={PageContent.parse(input)} customBlocks={customBlocks} />)
     const mine = { id: 'top', type: 'custom:le-hero', props: { title: 'Привет, я Лера' } }
     const hero = { id: 'h', type: 'hero', props: { title: 'Второй' } }
+
+    it('скрытый свой блок с h1 не выводится и не забирает h1 у видимого', () => {
+      const html = renderCustom({ blocks: [{ ...mine, hidden: true }, hero] })
+      expect(html).not.toContain('Привет, я Лера')
+      expect(html).toMatch(/<h1[^>]*>Второй<\/h1>/)
+    })
 
     it('h1 страницы — он, а «Первый экран» после него становится h2', () => {
       const content = PageContent.parse({ blocks: [mine, hero] })

@@ -1,6 +1,7 @@
 import { blocks as blockCatalog } from './blocks'
 import { samePhone } from './contact'
 import { customBlockType } from './custom-blocks'
+import { visibleBlocks } from './define-block'
 import { type BlockSchemaNode, blockPropsSchema, schemaStep } from './media-svg'
 import {
   MAIN_PAGE_SLUG,
@@ -19,7 +20,12 @@ import { isInternalPath } from './url'
 // сниппет в редакторе, проверки и собранный сайт не разошлись
 
 /** Блок страницы так, как его видят проверки: черновик может быть ещё не проверен схемой */
-export type SeoBlock = { readonly id: string; readonly type: string; readonly props?: unknown }
+export type SeoBlock = {
+  readonly id: string
+  readonly type: string
+  readonly props?: unknown
+  readonly hidden?: boolean | undefined
+}
 
 /**
  * Есть ли в шаблоне своего блока h1: литеральный `<h1` вне комментариев Liquid и HTML. Признак
@@ -55,7 +61,7 @@ export function customH1Types(definitions: Iterable<{ key: string; template: str
 export const mainHeadingBlock = <B extends SeoBlock>(
   blocks: readonly B[],
   ownH1?: ReadonlySet<string>,
-) => blocks.find((block) => block.type === 'hero' || ownH1?.has(block.type) === true)
+) => visibleBlocks(blocks).find((block) => block.type === 'hero' || ownH1?.has(block.type) === true)
 
 /**
  * Что сайт сообщает странице для SEO: GET /api/sites/:siteId отдаёт это всем, кто правит страницы
@@ -464,6 +470,7 @@ export function pageSeoChecks(
   site: SiteSeo,
   options: { ownH1?: ReadonlySet<string> } = {},
 ): SeoCheck[] {
+  const blocks = visibleBlocks(page.blocks)
   const seo = page.seo ?? {}
   const notFound = page.slug === NOT_FOUND_PAGE_SLUG
   const documentTitle = pageDocumentTitle(page, site.titleTemplate)
@@ -475,12 +482,12 @@ export function pageSeoChecks(
       : titleCheck(documentTitle, Boolean(seo.title?.trim())),
   ]
   if (!notFound) checks.push(descriptionCheck(seo.description?.trim() ?? '', site.description))
-  checks.push(headingCheck(page.blocks, options.ownH1))
-  const alt = altCheck(page.blocks)
+  checks.push(headingCheck(blocks, options.ownH1))
+  const alt = altCheck(blocks)
   if (alt) checks.push(alt)
   if (notFound) return checks
 
-  const contacts = site.organization && contactsCheck(page.blocks, site.organization)
+  const contacts = site.organization && contactsCheck(blocks, site.organization)
   if (contacts) checks.push(contacts)
 
   if (page.slug !== MAIN_PAGE_SLUG) checks.push(slugCheck(page.slug))

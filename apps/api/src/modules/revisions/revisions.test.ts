@@ -80,6 +80,30 @@ async function snapshotTitles(siteId: string) {
 }
 
 describe('публикация пишет историю', () => {
+  it('видимость блока хранится в версии; возврат восстанавливает флажок только в черновике', async () => {
+    const siteId = await newSite()
+    const page = pageOf(asOwner, siteId, 'index')
+    const visible = contentWith('Сезонная акция')
+    const hidden = {
+      ...visible,
+      blocks: visible.blocks.map((block) => ({ ...block, hidden: true })),
+    }
+    expect((await page.save('Акция', hidden)).status).toBe(200)
+    expect((await page.publish()).status).toBe(200)
+    const [revision] = await page.revisions()
+    if (!revision) throw new Error('Нет версии')
+    expect((await page.content(revision.id)).blocks[0]).toMatchObject({
+      hidden: true,
+      props: { title: 'Сезонная акция' },
+    })
+    expect((await page.save('Акция', visible)).status).toBe(200)
+    expect((await page.publish()).status).toBe(200)
+    expect((await page.restore(revision.id)).status).toBe(200)
+    const restored = await page.get()
+    expect(restored.draft.blocks[0]).toMatchObject({ hidden: true })
+    expect(restored.published?.blocks[0]).not.toHaveProperty('hidden')
+    expect((await page.revisions()).map((item) => item.version)).toEqual([2, 1])
+  })
   it('две публикации → две версии, возврат первой меняет только черновик', async () => {
     const siteId = await newSite()
     const page = pageOf(asOwner, siteId, 'index')

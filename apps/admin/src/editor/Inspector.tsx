@@ -1,4 +1,5 @@
 import { SchemaForm, type Widgets } from '../forms/SchemaForm'
+import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { InlineAlert } from '../ui/InlineAlert'
 import { type CatalogEntry, catalog, findEntry } from './catalog'
@@ -9,6 +10,7 @@ type InspectorProps = {
   block: EditorBlock | undefined
   errors: Readonly<Record<string, string>>
   onChange: (props: Record<string, unknown>) => void
+  onHiddenChange: (hidden: boolean) => void
   /** Свои виджеты полей: выбор картинки из медиатеки сайта */
   widgets: Widgets
   /** Каталог со своими блоками сайта: из него форма своего блока */
@@ -16,7 +18,14 @@ type InspectorProps = {
 }
 
 /** Поля выбранного блока. Форма строится по JSON Schema из каталога */
-export function Inspector({ block, errors, onChange, widgets, entries = catalog }: InspectorProps) {
+export function Inspector({
+  block,
+  errors,
+  onChange,
+  onHiddenChange,
+  widgets,
+  entries = catalog,
+}: InspectorProps) {
   if (!block) {
     return (
       <aside className={styles.panel} aria-label="Поля блока">
@@ -37,6 +46,14 @@ export function Inspector({ block, errors, onChange, widgets, entries = catalog 
           Якорь для ссылок: <code>#{block.id}</code>
         </p>
       </div>
+      <Button onClick={() => onHiddenChange(!block.hidden)}>
+        {block.hidden ? 'Показать' : 'Скрыть на сайте'}
+      </Button>
+      {block.hidden && (
+        <InlineAlert tone="info" title="Скрыт на сайте">
+          Содержимое сохранено. В предпросмотре блока нет; на сайте он исчезнет после публикации.
+        </InlineAlert>
+      )}
       {errors[''] && <InlineAlert tone="danger">{errors['']}</InlineAlert>}
       {entry ? (
         <SchemaForm

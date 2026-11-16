@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { BlockInstance, type BlockType, blocks } from './blocks'
 import { Button } from './common'
 import { placeStarter } from './custom-place-starter'
-import { BLOCK_CATEGORIES, type BlockCategory, BlockId } from './define-block'
+import { BLOCK_CATEGORIES, type BlockCategory, BlockHidden, BlockId } from './define-block'
 import { Image } from './media'
 
 /**
@@ -525,6 +525,7 @@ export function parsedExample(draft: Pick<CustomBlockDraft, 'fields' | 'example'
 /** Блок на странице: поля — объект, их проверяет определение блока (applyCustomBlocks) */
 export const CustomBlockInstance = z.strictObject({
   id: BlockId,
+  hidden: BlockHidden,
   type: CustomBlockType,
   props: z.record(z.string(), z.unknown()),
 })

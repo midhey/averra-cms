@@ -5,6 +5,7 @@ import {
   mainHeadingBlock,
   type PageBlock,
   type PageContent,
+  visibleBlocks,
 } from '@averra/schema'
 import { Clients } from './clients/Clients'
 import { Contacts } from './contacts/Contacts'
@@ -57,14 +58,15 @@ export function Page({
   preview = false,
   nested = false,
 }: PageProps) {
+  const visible = visibleBlocks(content.blocks)
   // h1 на странице один: его получает первый блок «Первый экран» или свой блок, у которого h1
   // в шаблоне (тогда «Первый экран» после него — h2). Правило — в схеме: по нему же проверки SEO
   // в редакторе и MCP говорят, есть ли h1
   const mainHeroId = nested
     ? undefined
-    : mainHeadingBlock(content.blocks, customH1Types(Object.values(customBlocks)))?.id
-  const pageIds = content.blocks.map((block) => block.id)
-  const blocks = content.blocks.map((block, index) => (
+    : mainHeadingBlock(visible, customH1Types(Object.values(customBlocks)))?.id
+  const pageIds = visible.map((block) => block.id)
+  const blocks = visible.map((block, index) => (
     <Block
       key={block.id}
       block={block}

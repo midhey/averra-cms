@@ -11,6 +11,7 @@ import {
   PageContent,
   SiteScript,
   type SiteScriptInput,
+  visibleBlocks,
 } from '@averra/schema'
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
@@ -329,7 +330,7 @@ function ScriptPreview({ siteId, script }: { siteId: string; script: string }) {
   )
   const scripts = useMemo(() => {
     const list = script.trim() === '' ? [] : [{ label: 'сайт', file: siteScriptFile(script) }]
-    for (const key of customBlockKeysOf(content)) {
+    for (const key of customBlockKeysOf({ blocks: visibleBlocks(content.blocks) })) {
       const block = customBlocks[key]
       if (block?.script?.trim()) {
         list.push({ label: key, file: customBlockScriptFile(key, block.script) })

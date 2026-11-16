@@ -770,6 +770,15 @@ export function Editor({ site, page, customBlocks = NO_CUSTOM_BLOCKS }: EditorPr
           ) : (
             <Inspector
               block={selected}
+              onHiddenChange={(hidden) => {
+                if (selected) {
+                  setBlocks(
+                    blocks.map((block) =>
+                      block.id === selected.id ? { ...block, hidden } : block,
+                    ),
+                  )
+                }
+              }}
               errors={selected ? (validation.blockErrors[selected.id] ?? {}) : {}}
               onChange={(props) => {
                 if (selected) setBlocks(updateBlockProps(blocks, selected.id, props))

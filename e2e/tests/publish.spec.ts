@@ -1,7 +1,52 @@
 import { urls } from '../urls'
-import { demo, editor, expect, openSite, test } from './fixtures'
+import { demo, editor, expect, openSite, sites, test } from './fixtures'
 
 const published = 'Опубликовано. Обнови сайт, чтобы увидеть'
+
+test('скрыть блок → опубликовать → показать → опубликовать, содержимое сохраняется', async ({
+  page,
+  demoSite,
+}) => {
+  const header = sites[':siteId'].header
+  const param = { siteId: demoSite.id }
+  expect(
+    (
+      await header.$put({
+        param,
+        json: { menu: [{ label: 'Акция', page: 'index', block: 'contact' }] },
+      })
+    ).status,
+  ).toBe(200)
+  expect((await header.publish.$post({ param })).status).toBe(200)
+  const ed = editor(page)
+  await ed.open()
+  await ed.selectBlock('Призыв к действию')
+  await ed.inspector.getByRole('button', { name: 'Скрыть на сайте', exact: true }).click()
+  await expect(ed.block('Призыв к действию')).toContainText('Скрыт на сайте')
+  await expect(ed.field('Заголовок')).toHaveValue(demo.ctaTitle)
+  await expect(ed.preview.getByRole('heading', { name: demo.ctaTitle, exact: true })).toHaveCount(0)
+  await ed.saveButton.click()
+  await expect(ed.status).toHaveText('Сохранено · правки не опубликованы')
+  const site = await openSite(page)
+  await expect(site.getByRole('heading', { name: demo.ctaTitle, exact: true })).toBeVisible()
+  await expect(site.locator('header a[href="/#contact"]').first()).toBeVisible()
+  await page.reload()
+  await ed.selectBlock('Призыв к действию')
+  await expect(ed.inspector.getByRole('button', { name: 'Показать', exact: true })).toBeVisible()
+  await ed.publishButton.click()
+  await expect(ed.status).toHaveText(published)
+  await site.reload()
+  await expect(site.getByRole('heading', { name: demo.ctaTitle, exact: true })).toHaveCount(0)
+  await expect(site.locator('header a[href="/#contact"]')).toHaveCount(0)
+  await expect(site.locator('#contact')).toHaveCount(0)
+  await ed.inspector.getByRole('button', { name: 'Показать', exact: true }).click()
+  await expect(ed.preview.getByRole('heading', { name: demo.ctaTitle, exact: true })).toBeVisible()
+  await ed.publishButton.click()
+  await expect(ed.status).toHaveText(published)
+  await site.reload()
+  await expect(site.getByRole('heading', { name: demo.ctaTitle, exact: true })).toBeVisible()
+  await expect(site.locator('header a[href="/#contact"]').first()).toBeVisible()
+})
 
 test('сохранённый черновик переживает перезагрузку, но на сайт не попадает', async ({ page }) => {
   const ed = editor(page)

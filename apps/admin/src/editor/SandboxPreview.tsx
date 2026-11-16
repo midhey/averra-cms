@@ -1,6 +1,12 @@
 import { type CustomBlockMap, customBlocksCss, Page } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
-import { customBlockKeysOf, type MediaMap, type PageContent, type Theme } from '@averra/schema'
+import {
+  customBlockKeysOf,
+  type MediaMap,
+  type PageContent,
+  type Theme,
+  visibleBlocks,
+} from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -92,7 +98,10 @@ export function SandboxPreview(props: SandboxPreviewProps) {
       .map((node) => node.outerHTML)
       .join('')
     const keys = [
-      ...new Set([...placeKeys.split(' ').filter(Boolean), ...customBlockKeysOf(content)]),
+      ...new Set([
+        ...placeKeys.split(' ').filter(Boolean),
+        ...customBlockKeysOf({ blocks: visibleBlocks(content.blocks) }),
+      ]),
     ]
     const customCss = customBlocks ? customBlocksCss(keys, customBlocks, media) : ''
     let body: string

@@ -14,6 +14,7 @@ import {
   Header,
   type MediaMap,
   type PageContent,
+  visibleBlocks,
 } from '@averra/schema'
 import type { ReactNode } from 'react'
 import type { SandboxScript } from '../editor/sandbox-document'
@@ -28,7 +29,10 @@ export type ChromeInput = {
   siteName: string
   /** Открытая страница: её адрес (текущий пункт) и скрыты ли на ней шапка и подвал */
   page: { slug: string; content: PageContent }
-  pages: readonly { slug: string; blocks: readonly { id: string }[] }[]
+  pages: readonly {
+    slug: string
+    blocks: readonly { id: string; hidden?: boolean | undefined }[]
+  }[]
   /** Телефон и адрес для стандартной шапки */
   contacts: { phone: string; address: string }
   /** «Организация» целиком — для подвала и своих видов */
@@ -51,7 +55,8 @@ export type Chrome = {
 export function siteChrome(input: ChromeInput): Chrome {
   const linkable = input.pages.map((page) => ({
     slug: page.slug,
-    blockIds: page.blocks.map((block) => block.id),
+    blockIds: visibleBlocks(page.blocks).map((block) => block.id),
+    hiddenBlockIds: page.blocks.filter((block) => block.hidden === true).map((block) => block.id),
   }))
   const year = new Date().getFullYear()
   const headerView = siteHeaderView({
@@ -75,7 +80,7 @@ export function siteChrome(input: ChromeInput): Chrome {
     consentHref: input.legal.consentHref,
     year,
   })
-  const pageIds = input.page.content.blocks.map((block) => block.id)
+  const pageIds = visibleBlocks(input.page.content.blocks).map((block) => block.id)
   const placeKeys = [headerView?.custom?.key, footerView?.custom?.key].filter(
     (key): key is string => key !== undefined,
   )

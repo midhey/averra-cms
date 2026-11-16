@@ -15,6 +15,7 @@ import {
   overlayFits,
   resolveSiteLink,
   telHref,
+  visibleBlocks,
 } from '@averra/schema'
 import { type PlaceData, placeData } from '../custom/place-data'
 
@@ -101,7 +102,7 @@ type ViewInput = {
   page: {
     slug: string
     content: {
-      blocks: readonly { type: string; props: unknown }[]
+      blocks: readonly { type: string; props: unknown; hidden?: boolean | undefined }[]
       hideHeader?: boolean | undefined
       shortHeader?: boolean | undefined
     }
@@ -244,7 +245,7 @@ function standardHeaderView({
     layout: header.layout,
     sticky: header.sticky,
     condense: header.sticky && header.condense,
-    overlay: header.overlay && overlayFits(page.content.blocks),
+    overlay: header.overlay && overlayFits(visibleBlocks(page.content.blocks)),
     siteName,
     logo: header.logo,
     brand,

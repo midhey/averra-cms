@@ -74,6 +74,33 @@ beforeEach(async () => {
 })
 
 describe('шапка до публикации', () => {
+  it('скрытые блоки не служат целями меню, опубликованный якорь живёт до публикации правки', async () => {
+    const [main] = await db
+      .select()
+      .from(pages)
+      .where(and(eq(pages.siteId, demoSiteId), eq(pages.slug, 'index')))
+    if (!main?.published) throw new Error('Нет опубликованной главной')
+    const content = main.published
+    const hidden = {
+      ...content,
+      blocks: content.blocks.map((block) => ({ ...block, hidden: true })),
+    }
+    try {
+      await db.update(pages).set({ draft: hidden }).where(eq(pages.id, main.id))
+      const draftTargets = (await ok(await read())).targets?.find((page) => page.slug === 'index')
+      expect(draftTargets?.blocks[0]).toMatchObject({ draft: false, published: true })
+      await db.update(pages).set({ published: hidden }).where(eq(pages.id, main.id))
+      const publishedTargets = (await ok(await read())).targets?.find(
+        (page) => page.slug === 'index',
+      )
+      expect(publishedTargets?.blocks).toEqual([])
+    } finally {
+      await db
+        .update(pages)
+        .set({ draft: main.draft, published: main.published })
+        .where(eq(pages.id, main.id))
+    }
+  })
   it('сайт до шага шапки: черновик по умолчанию, на сайте шапки нет', async () => {
     const view = await ok(await read())
     expect(view.draft).toEqual(defaultHeader)

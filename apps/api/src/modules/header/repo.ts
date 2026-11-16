@@ -37,7 +37,7 @@ const stateOf = (row: { headerPublished: unknown; headerDraft: unknown }): Heade
 
 const typeTitles = new Map<string, string>(blockCatalog.map((block) => [block.type, block.title]))
 
-type StoredBlock = { id?: unknown; type?: unknown; props?: unknown }
+type StoredBlock = { id?: unknown; type?: unknown; props?: unknown; hidden?: unknown }
 type StoredContent = { blocks?: StoredBlock[]; hideHeader?: unknown; hideFooter?: unknown } | null
 
 /** Заголовок блока, если он есть: «Наши цены» понятнее, чем #pricing-1 */
@@ -50,10 +50,12 @@ function blockLabel(block: StoredBlock) {
 
 /** Блоки страницы для выбора цели: сначала черновик в его порядке, потом то, что только на сайте */
 function targetBlocks(draft: StoredContent, published: StoredContent): HeaderTargetBlock[] {
-  const onSite = new Set((published?.blocks ?? []).map((block) => String(block.id)))
-  const inDraft = new Set((draft?.blocks ?? []).map((block) => String(block.id)))
+  const publishedBlocks = (published?.blocks ?? []).filter((block) => block.hidden !== true)
+  const draftBlocks = (draft?.blocks ?? []).filter((block) => block.hidden !== true)
+  const onSite = new Set(publishedBlocks.map((block) => String(block.id)))
+  const inDraft = new Set(draftBlocks.map((block) => String(block.id)))
   const seen = new Set<string>()
-  return [...(draft?.blocks ?? []), ...(published?.blocks ?? [])].flatMap((block) => {
+  return [...draftBlocks, ...publishedBlocks].flatMap((block) => {
     const id = String(block.id)
     if (seen.has(id)) return []
     seen.add(id)
@@ -91,10 +93,12 @@ async function targetsOf(db: Db | Tx, siteId: string): Promise<HeaderTargetPage[
       hideHeader: published?.hideHeader === true,
       hideFooter: published?.hideFooter === true,
       overlay: overlayFits(
-        (published?.blocks ?? []).map((block) => ({
-          type: String(block.type),
-          props: block.props,
-        })),
+        (published?.blocks ?? [])
+          .filter((block) => block.hidden !== true)
+          .map((block) => ({
+            type: String(block.type),
+            props: block.props,
+          })),
       ),
       blocks: targetBlocks(row.draft as StoredContent, published),
     }

@@ -160,6 +160,7 @@ function BlockItem(props: BlockItemProps) {
       >
         <span className={styles.type}>
           {title}
+          {block.hidden && <StatusPill tone="neutral">Скрыт на сайте</StatusPill>}
           {invalid && <StatusPill tone="danger">Ошибка</StatusPill>}
         </span>
         <span className={styles.hint}>{blockHint(block)}</span>

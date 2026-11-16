@@ -136,6 +136,39 @@ describe('полоса редактора', () => {
 })
 
 describe('блоки', () => {
+  it('скрывает и показывает блок, сохраняет флажок и содержимое обычным черновиком', async () => {
+    const user = userEvent.setup()
+    const bodies: { content: PageContent }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          const body = JSON.parse(String(init.body))
+          bodies.push(body)
+          return Response.json({ ...published, draft: body.content })
+        }
+        return Response.json({ items: [], maxBytes: 1024 })
+      }),
+    )
+    await renderWithRouter(<Editor site={site} page={published} />)
+    const original = demoPage.blocks[0]
+    await user.click(screen.getByRole('button', { name: 'Скрыть на сайте' }))
+    expect(within(blockList()).getByText('Скрыт на сайте')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Показать' })).toBeTruthy()
+    expect((screen.getByLabelText('Заголовок', { exact: true }) as HTMLInputElement).value).toBe(
+      original?.props.title,
+    )
+    expect(status().textContent).toBe('Есть несохранённые правки')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await vi.waitFor(() => expect(status().textContent).toBe('Сохранено · правки не опубликованы'))
+    expect(bodies[0]?.content.blocks[0]).toEqual({ ...original, hidden: true })
+    expect(bodies[0]?.content.blocks.slice(1)).toEqual(demoPage.blocks.slice(1))
+    await user.click(screen.getByRole('button', { name: 'Показать' }))
+    expect(within(blockList()).queryByText('Скрыт на сайте')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await vi.waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[1]?.content.blocks[0]).toEqual({ ...original, hidden: false })
+  })
   it('«Добавить блок» — окно с каталогом: блок встаёт после выбранного и выбран', async () => {
     const user = userEvent.setup()
     await renderWithRouter(<Editor site={site} page={published} />)

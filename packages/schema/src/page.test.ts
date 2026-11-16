@@ -3,6 +3,20 @@ import { hero } from './blocks'
 import { isServicePageSlug, NewPage, PageContent, PageSlug, pageTemplateContent } from './page'
 import { SiteName } from './site'
 
+describe('видимость блоков страницы', () => {
+  it.each(['hero', 'custom:offer'])('%s: старые данные видимы, флажок сохраняется', (type) => {
+    const block = { id: 'offer', type, props: { title: 'Сезонное предложение' } }
+    expect(PageContent.parse({ blocks: [block] }).blocks[0]).not.toHaveProperty('hidden')
+    for (const hidden of [true, false]) {
+      expect(PageContent.parse({ blocks: [{ ...block, hidden }] }).blocks[0]).toMatchObject({
+        ...block,
+        hidden,
+      })
+    }
+    expect(PageContent.safeParse({ blocks: [{ ...block, hidden: 'true' }] }).success).toBe(false)
+  })
+})
+
 describe('PageSlug', () => {
   it.each(['index', 'o-nas', 'price-2026', 'a', '404', 'a'.repeat(64)])(
     'принимает «%s»',

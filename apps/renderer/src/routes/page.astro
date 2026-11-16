@@ -103,6 +103,7 @@ const headerView = siteHeaderView({
   pages: pages.map((candidate) => ({
     slug: candidate.slug,
     blockIds: candidate.content.blocks.map((block) => block.id),
+    hiddenBlockIds: candidate.hiddenBlockIds,
   })),
   contacts: headerContacts(site.settings.organization),
   organization: footerContacts(site.settings.organization),
@@ -121,6 +122,7 @@ const footerView = siteFooterView({
   pages: pages.map((candidate) => ({
     slug: candidate.slug,
     blockIds: candidate.content.blocks.map((block) => block.id),
+    hiddenBlockIds: candidate.hiddenBlockIds,
   })),
   contacts: footerContacts(site.settings.organization),
   legal: cookies.footer,

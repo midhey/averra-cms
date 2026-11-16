@@ -5,7 +5,12 @@ import { type CatalogEntry, catalog, catalogEntry } from './catalog'
  * Блок в редакторе: поля как есть, пока без гарантий. Проверяет их схема при каждом изменении.
  * Тип — встроенного блока (hero) или своего (custom:tariffs)
  */
-export type EditorBlock = { id: string; type: string; props: Record<string, unknown> }
+export type EditorBlock = {
+  id: string
+  type: string
+  props: Record<string, unknown>
+  hidden?: boolean | undefined
+}
 
 /**
  * Новый блок с примером содержимого. Id читаемый и годится как якорь: hero-2, cta-3; у своего

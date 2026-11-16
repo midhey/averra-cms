@@ -146,6 +146,7 @@ export {
   defineBlock,
   ENUM_SKETCHES,
   type EnumSketch,
+  visibleBlocks,
 } from './define-block'
 export { demoPage, demoPageTitle, demoSiteId } from './demo'
 export {

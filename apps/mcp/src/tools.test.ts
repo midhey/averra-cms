@@ -114,6 +114,36 @@ describe('каталог блоков', () => {
 })
 
 describe('инструменты', () => {
+  it('токен скрывает и показывает блок в черновике; публикация хранит флажок и содержимое', async () => {
+    const ref = { slug: 'hidden-offer' }
+    const initial = PageContent.parse(demoPage)
+    await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Акция', content: initial }))
+    await tools.publishPage(ref)
+    const content = {
+      ...initial,
+      blocks: initial.blocks.map((block) => ({ ...block, hidden: true })),
+    }
+    await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Акция', content }))
+    const read = async () =>
+      z.object({ draft: PageContent, published: PageContent }).parse(await tools.getPage(ref))
+    const saved = await read()
+    expect(saved.draft).toEqual(content)
+    expect(saved.published).toEqual(initial)
+    await tools.publishPage(ref)
+    expect((await read()).published).toEqual(content)
+    const shown = {
+      ...content,
+      blocks: content.blocks.map((block) => ({ ...block, hidden: false })),
+    }
+    await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Акция', content: shown }))
+    expect((await read()).published).toEqual(content)
+    await tools.publishPage(ref)
+    expect((await read()).published).toEqual(shown)
+    expect(blockCatalog().rules.join(' ')).toContain('hidden: true')
+    expect(JSON.stringify(z.toJSONSchema(SaveDraftInput, { io: 'input' }))).toContain(
+      'Скрыть на сайте',
+    )
+  })
   it('без siteId работают на сайте токена: в установке сайт один, id искать не нужно', async () => {
     const ref = { slug: 'bez-id' }
     await tools.saveDraft(SaveDraftInput.parse({ ...ref, title: 'Без id', content: demoPage }))

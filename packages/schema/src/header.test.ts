@@ -407,6 +407,13 @@ describe('ссылки шапки', () => {
     })
   })
 
+  it('скрытого блока нет в меню, при показе ссылка возвращается', () => {
+    const target = { page: 'index', block: 'pricing-1' }
+    const hiddenPages = [{ slug: 'index', blockIds: [], hiddenBlockIds: ['pricing-1'] }]
+    expect(resolveSiteLink(target, hiddenPages)).toEqual({ href: undefined, missing: 'block' })
+    expect(resolveSiteLink(target, pages).href).toBe('/#pricing-1')
+  })
+
   it('текущий — пункт на саму страницу, а не на её блок', () => {
     expect(isCurrentLink({ page: 'raboty' }, 'raboty')).toBe(true)
     expect(isCurrentLink({ page: 'index', block: 'hero' }, 'index')).toBe(false)

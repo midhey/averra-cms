@@ -7,6 +7,7 @@ import {
   NOT_FOUND_PAGE_SLUG,
   NOT_FOUND_PAGE_TITLE,
   type PageContent,
+  visibleBlocks,
 } from '@averra/schema'
 import { hc } from 'hono/client'
 import { ICON_FILES } from './icon-files'
@@ -41,7 +42,18 @@ async function fetchSnapshot() {
     ...snapshot,
     // Страницы и свои блоки — ровно то, что API проверил своими схемами. Тип клиента Hono видит
     // в них JSON и не узнаёт поля своих блоков (объект неизвестной формы)
-    pages: snapshot.pages.map((page) => ({ ...page, content: page.content as PageContent })),
+    // Скрытые блоки не участвуют ни в HTML, ни в меню, разметке поисковиков и скриптах.
+    // В API опубликованное содержимое остаётся целиком — для истории и возврата блока.
+    pages: snapshot.pages.map((page) => {
+      const content = page.content as PageContent
+      return {
+        ...page,
+        hiddenBlockIds: content.blocks
+          .filter((block) => block.hidden === true)
+          .map((block) => block.id),
+        content: { ...content, blocks: visibleBlocks(content.blocks) },
+      }
+    }),
     customBlocks: snapshot.customBlocks as CustomBlockMap,
     media: withSiteUrls(snapshot.media),
   }
@@ -116,6 +128,7 @@ export function notFoundPage(pages: readonly SnapshotPage[]): SnapshotPage {
       slug: NOT_FOUND_PAGE_SLUG,
       title: NOT_FOUND_PAGE_TITLE,
       content: defaultNotFoundContent(),
+      hiddenBlockIds: [],
       publishedAt: null,
     }
   )

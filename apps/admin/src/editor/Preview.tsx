@@ -1,6 +1,12 @@
 import { type CustomBlockMap, customBlocksCss, Page, themeBackgroundCss } from '@averra/blocks'
 import baseCss from '@averra/blocks/base.css?inline'
-import { customBlockKeysOf, type MediaMap, type PageContent, type Theme } from '@averra/schema'
+import {
+  customBlockKeysOf,
+  type MediaMap,
+  type PageContent,
+  type Theme,
+  visibleBlocks,
+} from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import {
   Component,
@@ -124,7 +130,12 @@ export function Preview(props: PreviewProps) {
     () =>
       customBlocks
         ? customBlocksCss(
-            [...new Set([...placeKeys.split(' ').filter(Boolean), ...customBlockKeysOf(content)])],
+            [
+              ...new Set([
+                ...placeKeys.split(' ').filter(Boolean),
+                ...customBlockKeysOf({ blocks: visibleBlocks(content.blocks) }),
+              ]),
+            ],
             customBlocks,
             media,
           )

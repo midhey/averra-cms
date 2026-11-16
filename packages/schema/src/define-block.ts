@@ -5,6 +5,16 @@ export const BlockId = z
   .string()
   .regex(/^[\w-]{1,64}$/, 'Id блока: латиница, цифры, _ и -, не длиннее 64 символов')
 
+/** Нет флажка — блок виден: старые страницы сохраняют прежний вид */
+export const BlockHidden = z.boolean().optional().meta({
+  title: 'Скрыть на сайте',
+  description: 'Блок остаётся в черновике и истории; на сайте исчезнет после публикации',
+})
+
+/** Блоки для сайта и предпросмотра; исходный черновик остаётся целиком */
+export const visibleBlocks = <B extends { hidden?: boolean | undefined }>(blocks: readonly B[]) =>
+  blocks.filter((block) => block.hidden !== true)
+
 /**
  * Разделы каталога «Добавить блок»: в каком месте страницы и для чего блок. Ключ — для схемы и
  * MCP, подпись — для людей. Порядок — как на странице: сверху вниз
@@ -35,9 +45,10 @@ export function defineBlock<const Type extends string, Props extends z.ZodObject
 }) {
   return {
     ...definition,
-    /** Блок, поставленный на страницу: { id, type, props } */
+    /** Блок, поставленный на страницу: { id, type, props, hidden? } */
     instance: z.strictObject({
       id: BlockId,
+      hidden: BlockHidden,
       type: z.literal(definition.type),
       props: definition.props,
     }),

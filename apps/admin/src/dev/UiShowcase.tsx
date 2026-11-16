@@ -780,6 +780,7 @@ export function UiShowcase() {
 
         <Section id="statuses" title="Состояния">
           <div className={styles.row}>
+            <StatusPill tone="neutral">Скрыт на сайте</StatusPill>
             {statuses.map(([tone, label]) => (
               <StatusPill key={label} tone={tone}>
                 {label}

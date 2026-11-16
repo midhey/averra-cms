@@ -416,18 +416,27 @@ export const sameHeaderLook = (a: Header, b: Header) =>
   JSON.stringify(headerLookOf(Header.parse(a))) === JSON.stringify(headerLookOf(Header.parse(b)))
 
 /** Опубликованная страница — то, что нужно, чтобы проверить ссылку шапки */
-export type LinkablePage = { slug: string; blockIds: readonly string[] }
+export type LinkablePage = {
+  slug: string
+  blockIds: readonly string[]
+  /** Ссылки на временно скрытые блоки не выводятся; при показе возвращаются */
+  hiddenBlockIds?: readonly string[] | undefined
+}
 
 /**
  * Куда ссылка шапки ведёт на собранном сайте. Страницы нет на сайте — ссылки нет (undefined):
  * пункт не выводится. Блока на странице нет — ведёт на страницу без якоря. Так пропавшая цель
- * не роняет сборку и не даёт битой ссылки. missing — что пропало: его админка показывает
+ * не роняет сборку и не даёт битой ссылки. Временно скрытый блок — без ссылки: она вернётся с
+ * показом блока. missing — что пропало: его админка показывает
  */
 export function resolveSiteLink(link: HeaderLink, pages: readonly LinkablePage[]) {
   // Внешняя ссылка проверена схемой и от страниц сайта не зависит
   if (link.url !== undefined) return { href: link.url, missing: undefined }
   const page = pages.find((candidate) => candidate.slug === link.page)
   if (!page) return { href: undefined, missing: 'page' as const }
+  if (link.block && page.hiddenBlockIds?.includes(link.block)) {
+    return { href: undefined, missing: 'block' as const }
+  }
   if (link.block && !page.blockIds.includes(link.block)) {
     return { href: siteLinkHref({ page: page.slug }), missing: 'block' as const }
   }
