@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/midhey/averra-cms/compare/v0.2.0...v0.2.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deploy:** keep the admin domain out of search results ([eccb611](https://github.com/midhey/averra-cms/commit/eccb6112db086372a8d64669653c5b28a91de05d))
+
 ## [0.2.0](https://github.com/midhey/averra-cms/compare/v0.1.1...v0.2.0) (2026-11-13)
 
 
