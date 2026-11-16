@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { createRef, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
+import styles from './Checkbox.module.scss'
+import { CHECKBOX_STYLE } from './control-style'
 import { Checkbox, counterText, Select, TextArea, TextInput } from './Field'
 
 afterEach(cleanup)
@@ -126,6 +128,42 @@ describe('поля', () => {
 })
 
 describe('Checkbox', () => {
+  it('variant выбирает класс, по умолчанию — CHECKBOX_STYLE', () => {
+    const { rerender } = render(<Checkbox label="Выбор" />)
+    const wrapper = () => screen.getByRole('checkbox').parentElement?.parentElement
+    expect(wrapper()?.classList.contains(styles[CHECKBOX_STYLE] as string)).toBe(true)
+    for (const variant of ['classic', 'soft'] as const) {
+      rerender(<Checkbox label="Выбор" variant={variant} />)
+      expect(wrapper()?.classList.contains(styles[variant] as string)).toBe(true)
+    }
+  })
+
+  it('indeterminate задаёт нативный mixed, ref остаётся доступен', async () => {
+    const user = userEvent.setup()
+    const ref = createRef<HTMLInputElement>()
+    const { rerender } = render(<Checkbox ref={ref} label="Все пункты" indeterminate />)
+    const input = screen.getByRole('checkbox') as HTMLInputElement
+    expect(ref.current).toBe(input)
+    expect(input.indeterminate).toBe(true)
+    expect(input.hasAttribute('aria-checked')).toBe(false)
+    await user.click(screen.getByText('Все пункты'))
+    expect(input.indeterminate).toBe(false)
+    expect(input.checked).toBe(true)
+    rerender(<Checkbox ref={ref} label="Все пункты" indeterminate={false} />)
+    expect(input.indeterminate).toBe(false)
+  })
+
+  it.each([false, true])('disabled не меняет отметку %s', async (checked) => {
+    const user = userEvent.setup()
+    render(<Checkbox label="Нет доступа" disabled defaultChecked={checked} />)
+    const input = screen.getByRole('checkbox') as HTMLInputElement
+    await user.click(screen.getByText('Нет доступа'))
+    await user.tab()
+    await user.keyboard(' ')
+    expect(document.activeElement).not.toBe(input)
+    expect(input.checked).toBe(checked)
+  })
+
   it('нажимается по подписи, подсказка и ошибка связаны', async () => {
     const user = userEvent.setup()
     render(<Checkbox label="Согласие" hint="Без него форма не уйдёт" error="Отметьте флажок" />)

@@ -14,10 +14,11 @@ import {
 import { Link } from '@tanstack/react-router'
 import type { Widgets } from '../forms/SchemaForm'
 import { CustomPlaceFields } from '../header/CustomPlaceFields'
-import { Checkbox, TextArea, TextInput } from '../ui/Field'
+import { TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { Section } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { Switch } from '../ui/Switch'
 import styles from './FooterFields.module.scss'
 import { consentNote, organizationNote, policyNote, sectionsNote } from './footer-format'
 import type { FooterEditor } from './use-footer-editor'
@@ -100,7 +101,7 @@ export function FooterFields(props: FooterFieldsProps) {
       <div className={styles.panel}>
         {custom}
         <Section title="Документы" card>
-          <Checkbox
+          <Switch
             label="Ссылка на согласие на обработку данных"
             hint={consentNote(props.consent, form.consent)}
             checked={form.consent}
@@ -178,7 +179,7 @@ export function FooterFields(props: FooterFieldsProps) {
           onChange={(tone) => editor.change({ ...form, tone })}
         />
         <p className={styles.note}>{toneHints[form.tone]}.</p>
-        <Checkbox
+        <Switch
           label="Линия над подвалом"
           checked={form.divider}
           disabled={lookReadOnly}
@@ -210,21 +211,21 @@ export function FooterFields(props: FooterFieldsProps) {
             value={form.textFont}
             onChange={(textFont) => editor.change({ ...form, textFont })}
           />
-          <Checkbox
+          <Switch
             label="© и год"
             hint="«© год название сайта» перед реквизитами; год — год сборки сайта"
             checked={form.copyright}
             disabled={readOnly}
             onChange={(event) => editor.change({ ...form, copyright: event.target.checked })}
           />
-          <Checkbox
+          <Switch
             label="Ссылка на согласие на обработку данных"
             hint={consentNote(props.consent, form.consent)}
             checked={form.consent}
             disabled={readOnly}
             onChange={(event) => editor.change({ ...form, consent: event.target.checked })}
           />
-          <Checkbox
+          <Switch
             label="Логотип шапки в подвале"
             hint="Тот же, что в шапке: картинка, знак и подпись"
             checked={form.brand}
@@ -250,7 +251,7 @@ export function FooterFields(props: FooterFieldsProps) {
                 onChange={(event) => editor.change({ ...form, about: event.target.value }, 'about')}
               />
             )}
-            <Checkbox
+            <Switch
               label="Разделы — пункты меню шапки"
               hint={sectionsNote({ menuOnSite: props.menuOnSite, menuEdited: props.menuEdited })}
               checked={form.sections}

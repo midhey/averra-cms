@@ -15,11 +15,12 @@ import { notificationsQuery, queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { useConfirm } from '../ui/Confirm'
-import { Checkbox, TextInput } from '../ui/Field'
+import { TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { Facts, FormActions, formClassName, mutedClassName, Section } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
+import { Switch } from '../ui/Switch'
 import styles from './Notifications.module.scss'
 import { checkStepLabel } from './notifications-format'
 
@@ -81,7 +82,7 @@ function ChannelToggle({ channel }: { channel: Channel }) {
   })
   return (
     <>
-      <Checkbox
+      <Switch
         name={`${channel.kind}-enabled`}
         checked={toggle.isPending ? toggle.variables : channel.enabled}
         disabled={toggle.isPending}
@@ -428,7 +429,7 @@ function TelegramForm({
           }
         />
         {savedProxy !== '' && (
-          <Checkbox
+          <Switch
             name="keepProxy"
             checked={keepProxy}
             onChange={(event) => setKeepProxy(event.target.checked)}

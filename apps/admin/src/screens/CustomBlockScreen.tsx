@@ -48,12 +48,13 @@ import { Button, iconButtonClassName } from '../ui/Button'
 import { CodeEditor, type LineMark } from '../ui/CodeEditor'
 import { useConfirm } from '../ui/Confirm'
 import { lineRange } from '../ui/code-highlight'
-import { Checkbox, Select, TextInput } from '../ui/Field'
+import { Select, TextInput } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { FormActions, monoClassName, Screen } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
+import { Switch } from '../ui/Switch'
 import { Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import { useSiteId } from '../use-site'
@@ -803,7 +804,7 @@ function BlockPreview({
         </p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
-      <Checkbox
+      <Switch
         label="Выполнять скрипт"
         hint="Блок в изолированной рамке: скрипту недоступны вход в админку и её данные, рамку на чужой адрес браузер не пускает. Скрипт в рамке может передать введённое в ней наружу (WebRTC, CSP это не закрывает): не вводите в предпросмотре пароли и личные данные, черновик от ИИ сначала прочитайте. Шрифты темы там могут замениться системными"
         checked={runScript}

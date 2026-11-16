@@ -50,6 +50,9 @@
   --color-action-hover: var(--palette-accent-700);
   --color-action-text: var(--palette-neutral-0);
 
+  // Ползунок iOS остаётся светлым и в тёмной теме
+  --color-switch-thumb: var(--palette-neutral-0);
+
   /* Главное действие экрана (основная кнопка) */
   --color-primary: var(--palette-accent-500);
   --color-primary-hover: var(--palette-accent-700);

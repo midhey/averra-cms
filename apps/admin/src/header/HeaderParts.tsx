@@ -13,8 +13,9 @@ import type { FieldErrors } from '../forms/field-errors'
 import { useItemKeys } from '../forms/item-keys'
 import { Button, IconButton } from '../ui/Button'
 import { cx } from '../ui/cx'
-import { Checkbox, Select, TextInput } from '../ui/Field'
+import { Select, TextInput } from '../ui/Field'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
+import { Switch } from '../ui/Switch'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import styles from './HeaderParts.module.scss'
@@ -109,7 +110,7 @@ export function LinkTarget({
           onChange={(event) => onChange({ ...link, url: event.target.value })}
         />
       )}
-      <Checkbox
+      <Switch
         label="Открывать в новой вкладке"
         name={`${path}.newTab`}
         checked={opensNewTab({ ...link, url: link.url?.trim() })}
@@ -118,7 +119,7 @@ export function LinkTarget({
         onChange={(event) => onChange({ ...link, newTab: event.target.checked })}
       />
       {!external && (
-        <Checkbox
+        <Switch
           label="Открывать в окне"
           name={`${path}.window`}
           checked={link.window === true}

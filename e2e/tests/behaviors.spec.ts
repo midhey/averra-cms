@@ -101,7 +101,7 @@ async function setUp(page: Page, siteId: string) {
   await ed.open('zapis')
   await page.getByRole('button', { name: /^SEO/ }).click()
   const panel = page.getByRole('complementary', { name: 'SEO страницы' })
-  await panel.getByRole('checkbox', { name: 'Открывать страницу окном' }).check()
+  await panel.getByRole('switch', { name: 'Открывать страницу окном' }).check()
   await panel.getByLabel('Заголовок окна').fill('Пробный урок')
   await panel
     .getByRole('group', { name: 'Ширина окна' })
@@ -440,16 +440,16 @@ test('кнопка и пункт меню шапки с «Открывать в 
 
   // В админке: кнопка шапки и пункт меню — на страницу-окно, с флажком
   await page.goto('/header')
-  await page.getByRole('checkbox', { name: 'Кнопка в шапке' }).check()
+  await page.getByRole('switch', { name: 'Кнопка в шапке' }).check()
   await page.getByRole('textbox', { name: 'Текст кнопки' }).fill('Урок бесплатно')
   await page.getByRole('combobox', { name: 'Куда ведёт' }).selectOption('zapis')
-  await page.getByRole('checkbox', { name: 'Открывать в окне' }).check()
+  await page.getByRole('switch', { name: 'Открывать в окне' }).check()
   await page.getByRole('tab', { name: 'Меню' }).click()
   await page.getByRole('button', { name: 'Пункт меню', exact: true }).click()
   const item = page.getByRole('list', { name: 'Пункты меню' }).getByRole('listitem').first()
   await item.getByRole('textbox', { name: 'Подпись', exact: true }).fill('Запись')
   await item.getByRole('combobox', { name: 'Куда ведёт' }).selectOption('zapis')
-  await item.getByRole('checkbox', { name: 'Открывать в окне' }).check()
+  await item.getByRole('switch', { name: 'Открывать в окне' }).check()
   await page.getByRole('button', { name: 'Опубликовать' }).click()
   await expect(page.getByText(/Шапка опубликована/)).toBeVisible()
 
@@ -461,10 +461,10 @@ test('кнопка и пункт меню шапки с «Открывать в 
       .getByRole('list', { name: 'Пункты меню' })
       .getByRole('listitem')
       .first()
-      .getByRole('checkbox', { name: 'Открывать в окне' }),
+      .getByRole('switch', { name: 'Открывать в окне' }),
   ).toBeChecked()
   await page.getByRole('tab', { name: 'Шапка' }).click()
-  await expect(page.getByRole('checkbox', { name: 'Открывать в окне' })).toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Открывать в окне' })).toBeChecked()
   const view = await sites[':siteId'].header.$get({ param: { siteId: demoSite.id } })
   const stored = (await view.json()) as {
     published: { button: { window?: boolean }; menu: { window?: boolean }[] }

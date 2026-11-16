@@ -11,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('флажок публичных проверок', () => {
+describe('переключатель публичных проверок', () => {
   it('сохраняет выбор через API и показывает новое состояние после повторного чтения', async () => {
     let enabled = true
     const fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -33,7 +33,7 @@ describe('флажок публичных проверок', () => {
         <ServiceRecipientsSection />
       </Suspense>,
     )
-    const checkbox = await screen.findByRole('checkbox', {
+    const checkbox = await screen.findByRole('switch', {
       name: 'Проверять доступность сайта и сертификаты',
     })
     expect((checkbox as HTMLInputElement).checked).toBe(true)
@@ -44,7 +44,7 @@ describe('флажок публичных проверок', () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ enabled: false })
   })
 
-  it('при ошибке показывает причину и сохраняет прежний флажок', async () => {
+  it('при ошибке показывает причину и сохраняет прежнее состояние', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: RequestInfo | URL) =>
@@ -67,7 +67,7 @@ describe('флажок публичных проверок', () => {
         <ServiceRecipientsSection />
       </Suspense>,
     )
-    const checkbox = await screen.findByRole('checkbox', {
+    const checkbox = await screen.findByRole('switch', {
       name: 'Проверять доступность сайта и сертификаты',
     })
     await userEvent.click(checkbox)

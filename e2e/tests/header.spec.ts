@@ -184,12 +184,12 @@ test('настроить шапку и меню, опубликовать — н
 
   // Шапка: раскладка, сборка при прокрутке (только у липкой), кнопка к форме
   await page.getByRole('radio', { name: 'Классика' }).check()
-  const condense = page.getByRole('checkbox', { name: 'Собирается при прокрутке' })
-  await page.getByRole('checkbox', { name: 'Липкая шапка' }).uncheck()
+  const condense = page.getByRole('switch', { name: 'Собирается при прокрутке' })
+  await page.getByRole('switch', { name: 'Липкая шапка' }).uncheck()
   await expect(condense).toBeDisabled()
-  await page.getByRole('checkbox', { name: 'Липкая шапка' }).check()
+  await page.getByRole('switch', { name: 'Липкая шапка' }).check()
   await condense.check()
-  await page.getByRole('checkbox', { name: 'Кнопка в шапке' }).check()
+  await page.getByRole('switch', { name: 'Кнопка в шапке' }).check()
   await expect(page.getByRole('textbox', { name: 'Текст кнопки' })).toHaveValue('Оставить заявку')
   await expect(page.getByRole('combobox', { name: 'Куда ведёт' })).toHaveValue('index#contact')
 

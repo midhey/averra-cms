@@ -75,12 +75,13 @@ import {
 import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { useConfirm } from '../ui/Confirm'
-import { Checkbox, TextArea, TextInput } from '../ui/Field'
+import { TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { FormActions, formClassName, Screen, Section } from '../ui/Screen'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill } from '../ui/StatusPill'
+import { Switch } from '../ui/Switch'
 import { Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import { useSiteId } from '../use-site'
@@ -464,7 +465,7 @@ function HeaderEditor(props: EditorProps) {
 
               <Section title="Поведение" card>
                 <div className={styles.toggles}>
-                  <Checkbox
+                  <Switch
                     label="Липкая шапка"
                     hint="Остаётся сверху, пока листают страницу"
                     checked={form.sticky}
@@ -478,7 +479,7 @@ function HeaderEditor(props: EditorProps) {
                       })
                     }
                   />
-                  <Checkbox
+                  <Switch
                     label="Собирается при прокрутке"
                     name="condense"
                     hint={
@@ -494,7 +495,7 @@ function HeaderEditor(props: EditorProps) {
                     }
                   />
                   {!form.custom && (
-                    <Checkbox
+                    <Switch
                       label="Прозрачная на первом экране"
                       hint={overlayHint(pages)}
                       checked={form.overlay}
@@ -503,7 +504,7 @@ function HeaderEditor(props: EditorProps) {
                     />
                   )}
                   {!form.custom && (
-                    <Checkbox
+                    <Switch
                       label="Телефон в шапке"
                       hint={
                         contacts === null
@@ -521,7 +522,7 @@ function HeaderEditor(props: EditorProps) {
               </Section>
 
               <Section title="Кнопка" card>
-                <Checkbox
+                <Switch
                   label="Кнопка в шапке"
                   hint="Например «Рассчитать» — ведёт к форме заявки"
                   checked={form.button !== null}
@@ -666,7 +667,7 @@ function HeaderEditor(props: EditorProps) {
                   card
                 >
                   <div className={styles.toggles}>
-                    <Checkbox
+                    <Switch
                       label="Линия под шапкой"
                       hint="Без линии шапка сливается с фоном страницы"
                       checked={form.look.divider}
@@ -1031,7 +1032,7 @@ function HeaderPreview(props: PreviewProps) {
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
       {chrome.scripts.length > 0 && (
-        <Checkbox
+        <Switch
           label="Выполнять скрипты своих шапки и подвала"
           hint="В изолированной рамке: скриптам недоступны вход в админку и её данные, рамку на чужой адрес браузер не пускает. Скрипт в рамке может передать введённое в ней наружу (WebRTC, CSP это не закрывает): не вводите в предпросмотре пароли и личные данные, черновик от ИИ сначала прочитайте. Запускаются только скрипты определений; поведение шапки Averra (Esc, закрытие меню после выбора пункта, сжатие при прокрутке) видно только на сайте"
           checked={runScripts}

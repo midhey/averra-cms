@@ -68,8 +68,15 @@ describe('рабочая сборка админки', () => {
     expect(output.some(({ text }) => screenText.some((form) => text.includes(form)))).toBe(true)
   })
 
-  it('витрины /dev/ui в ней нет: ни адреса, ни текстов, ни стилей', () => {
-    const traces = [...forms('Витрина компонентов'), ...forms('Разделы витрины'), '/dev/ui']
+  it('витрин /dev/ui и /dev/controls в ней нет: ни адреса, ни текстов, ни стилей', () => {
+    const traces = [
+      ...forms('Витрина компонентов'),
+      ...forms('Разделы витрины'),
+      ...forms('Витрина переключателей и флажков'),
+      'ControlsShowcase',
+      '/dev/ui',
+      '/dev/controls',
+    ]
     const found = output.flatMap(({ file, text }) =>
       traces.filter((trace) => text.includes(trace)).map((trace) => `${file}: ${trace}`),
     )

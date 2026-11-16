@@ -25,9 +25,10 @@ import { SearchSnippet } from '../seo/SearchSnippet'
 import { SeoChecks } from '../seo/SeoChecks'
 import { SocialCard } from '../seo/SocialCard'
 import { snippetAddress } from '../seo/seo-format'
-import { Checkbox, TextArea, TextInput } from '../ui/Field'
+import { TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { Switch } from '../ui/Switch'
 import { useDebouncedValue } from '../ui/use-debounced-value'
 import styles from './Inspector.module.scss'
 import panel from './SeoPanel.module.scss'
@@ -299,7 +300,7 @@ export function SeoPanel({
             onChange={(event) => set('canonical', event.target.value)}
             hint="Пусто — адрес этой страницы. Другой адрес — если страница копирует другую (та же акция по двум адресам): поисковик покажет тот, а эту уберёт из карты сайта"
           />
-          <Checkbox
+          <Switch
             checked={seo.noindex === true}
             onChange={(event) => set('noindex', event.target.checked)}
             label="Скрыть страницу от поисковиков"
@@ -330,7 +331,7 @@ export function SeoPanel({
           <h3 id={`${ids}-window`} className={panel.heading}>
             Окно
           </h3>
-          <Checkbox
+          <Switch
             checked={window !== null}
             onChange={(event) => onWindowChange(event.target.checked ? PageWindow.parse({}) : null)}
             label="Открывать страницу окном"
@@ -359,7 +360,7 @@ export function SeoPanel({
                 value={window.surface}
                 onChange={(surface) => onWindowChange({ ...window, surface })}
               />
-              <Checkbox
+              <Switch
                 checked={window.closeOnBackdrop}
                 onChange={(event) =>
                   onWindowChange({ ...window, closeOnBackdrop: event.target.checked })
@@ -379,7 +380,7 @@ export function SeoPanel({
         <h3 id={`${ids}-footer`} className={panel.heading}>
           Подвал сайта
         </h3>
-        <Checkbox
+        <Switch
           checked={hideFooter}
           onChange={(event) => onHideFooterChange(event.target.checked)}
           label="Скрыть подвал на этой странице"

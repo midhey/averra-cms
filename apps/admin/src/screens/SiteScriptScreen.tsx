@@ -28,12 +28,13 @@ import { UnsavedChangesGuard, useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
 import { CodeEditor, type LineMark } from '../ui/CodeEditor'
 import { lineRange } from '../ui/code-highlight'
-import { Checkbox, TextArea } from '../ui/Field'
+import { TextArea } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { FormActions, Screen } from '../ui/Screen'
 import { StatusPill } from '../ui/StatusPill'
+import { Switch } from '../ui/Switch'
 import { usePageTitle } from '../ui/use-page-title'
 import { useSiteId } from '../use-site'
 import styles from './SiteScriptScreen.module.scss'
@@ -344,7 +345,7 @@ function ScriptPreview({ siteId, script }: { siteId: string; script: string }) {
         <p className={styles.note}>Главная страница (черновик)</p>
         <DeviceSwitch value={device} onChange={setDevice} />
       </div>
-      <Checkbox
+      <Switch
         label="Выполнять скрипты"
         hint="Страница в изолированной рамке: скриптам недоступны вход в админку и её данные, формы не отправляются, рамку на чужой адрес браузер не пускает. Скрипт в рамке может передать введённое в ней наружу (WebRTC, CSP это не закрывает): не вводите в предпросмотре пароли и личные данные, черновик от ИИ сначала прочитайте. Шрифты темы там могут замениться системными"
         checked={run}

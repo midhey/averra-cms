@@ -9,6 +9,7 @@ import { Button } from '../ui/Button'
 import { Checkbox, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { FormActions, mutedClassName, Section } from '../ui/Screen'
+import { Switch } from '../ui/Switch'
 import { ChatLink } from './ChatLink'
 import styles from './Notifications.module.scss'
 import { eventsLine, type RecipientView, recipientName } from './notifications-format'
@@ -118,7 +119,7 @@ export function ServiceRecipientsSection() {
       card
     >
       <div className={styles.stack}>
-        <Checkbox
+        <Switch
           label="Проверять доступность сайта и сертификаты"
           hint="Раз в 5 минут по публичным HTTPS-адресам сайта и админки. В разработке проверка выключена."
           checked={monitoringEnabled}

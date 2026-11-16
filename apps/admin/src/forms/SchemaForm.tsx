@@ -1,8 +1,9 @@
 import { type ComponentType, type ReactNode, useId, useMemo, useState } from 'react'
 import { Button, IconButton } from '../ui/Button'
-import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
+import { Select, TextArea, TextInput } from '../ui/Field'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { DragHandle, SortableList, useSortableItem } from '../ui/SortableList'
+import { Switch } from '../ui/Switch'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import { useItemKeys } from './item-keys'
@@ -94,7 +95,7 @@ function SchemaField(props: FieldProps) {
     case 'select':
       return <EnumField {...props} />
     case 'checkbox':
-      return <CheckboxField {...props} />
+      return <SwitchField {...props} />
     case 'number':
       return <NumberField {...props} />
     case 'object':
@@ -261,10 +262,10 @@ function EnumField({ schema, value, path, label, required, errors, onChange }: F
  * Да или нет: флажок с подписью. Значение по умолчанию — из схемы. Ошибка — у флажка: «выделить
  * можно один тариф» встаёт у второго выделенного
  */
-function CheckboxField({ schema, value, path, label, errors, onChange }: FieldProps) {
+function SwitchField({ schema, value, path, label, errors, onChange }: FieldProps) {
   const checked = typeof value === 'boolean' ? value : schema.default === true
   return (
-    <Checkbox
+    <Switch
       label={label}
       hint={schema.description}
       error={errors[pathKey(path)]}
@@ -289,7 +290,7 @@ function ObjectField(props: FieldProps) {
     <fieldset className={styles.group}>
       <legend className={styles.legend}>{label}</legend>
       {!required && (
-        <Checkbox
+        <Switch
           label="Показывать"
           checked={present}
           onChange={(event) => toggle(event.target.checked)}

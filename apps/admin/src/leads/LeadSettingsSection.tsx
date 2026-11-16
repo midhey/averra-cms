@@ -9,9 +9,10 @@ import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { leadSettingsQuery, queryKeys } from '../queries'
 import { useReportUnsaved } from '../seo/unsaved'
 import { Button } from '../ui/Button'
-import { Checkbox, TextInput } from '../ui/Field'
+import { TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
 import { FormActions, formClassName, mutedClassName, Section } from '../ui/Screen'
+import { Switch } from '../ui/Switch'
 
 type Notice = { kind: 'done' | 'error'; text: string }
 
@@ -101,7 +102,7 @@ export function LeadSettingsSection({ siteId, id }: { siteId: string; id?: strin
           error={form.errors.retentionDays}
           hint="От 7 до 1825. Старые заявки удаляются сами: в них персональные данные посетителей"
         />
-        <Checkbox
+        <Switch
           name="confirmToVisitor"
           checked={confirmToVisitor}
           onChange={(event) => setConfirmToVisitor(event.target.checked)}

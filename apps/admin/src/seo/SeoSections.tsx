@@ -13,8 +13,9 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { MediaPickField } from '../media/MediaPickField'
 import { buttonClassName } from '../ui/Button'
-import { Checkbox, Select, TextArea, TextInput } from '../ui/Field'
+import { Select, TextArea, TextInput } from '../ui/Field'
 import { InlineAlert } from '../ui/InlineAlert'
+import { Switch } from '../ui/Switch'
 import { SearchSnippet } from './SearchSnippet'
 import { SettingsCard } from './SettingsCard'
 import {
@@ -170,7 +171,7 @@ export function IndexingSection({ siteId, view }: SectionProps) {
           — иначе его не найдут в поиске.
         </InlineAlert>
       )}
-      <Checkbox
+      <Switch
         name="hideFromSearch"
         checked={hidden}
         onChange={(event) => setHidden(event.target.checked)}

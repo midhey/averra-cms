@@ -208,7 +208,7 @@ test('подсказка у «Разделов» — о меню шапки на
 }) => {
   const param = { siteId: demoSite.id }
   const header = sites[':siteId'].header
-  const sections = page.getByRole('checkbox', { name: 'Разделы — пункты меню шапки' })
+  const sections = page.getByRole('switch', { name: 'Разделы — пункты меню шапки' })
   const openFooterTab = async () => {
     await page.goto('/header')
     await page.getByRole('tab', { name: 'Подвал' }).click()

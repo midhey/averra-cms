@@ -1,0 +1,197 @@
+@use "@averra/ui" as ui;
+
+.control {
+  --switch-width: #{ui.rem(40)};
+  --switch-height: #{ui.rem(22)};
+  --switch-thumb: #{ui.rem(16)};
+  --switch-thumb-off: var(--color-control-border);
+  --switch-thumb-on: var(--color-action-text);
+  --switch-shadow: none;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+// Прозрачный input покрывает подпись: мышь, касание и Playwright нажимают нативный элемент.
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: inherit;
+  opacity: 0;
+}
+
+.track {
+  display: flex;
+  flex: 0 0 var(--switch-width);
+  align-items: center;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  padding: ui.rem(2);
+  pointer-events: none;
+  background: var(--color-surface-muted);
+  border: ui.rem(1) solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.thumb {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: var(--switch-thumb);
+  height: var(--switch-thumb);
+  color: var(--color-surface);
+  background: var(--switch-thumb-off);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--switch-shadow);
+  transition: transform 180ms ease, width 180ms ease, background-color 180ms ease;
+}
+
+.onIcon {
+  display: none;
+}
+
+.input:checked + .track {
+  background: var(--color-action);
+  border-color: var(--color-action);
+
+  .thumb {
+    color: var(--color-action);
+    background: var(--switch-thumb-on);
+    transform: translateX(calc(var(--switch-width) - var(--switch-thumb) - #{ui.rem(6)}));
+  }
+
+  .onIcon {
+    display: block;
+  }
+
+  .offIcon {
+    display: none;
+  }
+}
+
+.input:focus-visible + .track {
+  @include ui.focus-ring;
+}
+
+.row:hover .input:not(:disabled, :checked) + .track {
+  background: var(--color-control-hover);
+  border-color: var(--color-control-border-hover);
+}
+
+.minimal {
+  --switch-width: #{ui.rem(32)};
+  --switch-height: #{ui.rem(18)};
+  --switch-thumb: #{ui.rem(12)};
+}
+
+.icon {
+  // Класс варианта нужен и при совпадении с базовыми размерами: выбор виден в DOM.
+  --switch-width: #{ui.rem(40)};
+}
+
+.ios {
+  --switch-width: #{ui.rem(46)};
+  --switch-height: #{ui.rem(28)};
+  --switch-thumb: #{ui.rem(22)};
+  --switch-thumb-off: var(--color-switch-thumb);
+  --switch-thumb-on: var(--color-switch-thumb);
+  --switch-shadow: var(--shadow-raised);
+
+  .row:active .input:not(:disabled) + .track .thumb {
+    width: calc(var(--switch-thumb) + #{ui.rem(3)});
+  }
+
+  .row:active .input:checked:not(:disabled) + .track .thumb {
+    transform: translateX(calc(var(--switch-width) - var(--switch-thumb) - #{ui.rem(9)}));
+  }
+}
+
+.row:has(.input:disabled) {
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
+}
+
+.input:disabled + .track {
+  background: var(--color-disabled-surface);
+  border-color: var(--color-disabled-border);
+  border-style: dashed;
+
+  .thumb {
+    color: var(--color-disabled-surface);
+    background: var(--color-disabled-text);
+    box-shadow: none;
+  }
+}
+
+.input[aria-invalid="true"] + .track {
+  border-color: var(--color-danger-text);
+}
+
+.hint,
+.error {
+  padding-inline-start: calc(var(--switch-width) + var(--space-2));
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-danger-text);
+}
+
+@include ui.reduced-motion {
+  .track,
+  .thumb {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .track {
+    background: Canvas;
+    border-color: ButtonText;
+    forced-color-adjust: none;
+  }
+
+  .thumb {
+    color: Canvas;
+    background: ButtonText;
+  }
+
+  .input:checked + .track {
+    background: Highlight;
+    border-color: Highlight;
+
+    .thumb {
+      color: Highlight;
+      background: HighlightText;
+    }
+  }
+
+  .input:disabled + .track {
+    border-color: GrayText;
+
+    .thumb {
+      background: GrayText;
+    }
+  }
+
+  .input:focus-visible + .track {
+    outline-color: Highlight;
+  }
+}

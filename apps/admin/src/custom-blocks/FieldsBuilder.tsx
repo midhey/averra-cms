@@ -9,7 +9,8 @@ import { createContext, useContext, useRef, useState } from 'react'
 import type { FieldErrors } from '../forms/field-errors'
 import { Button, IconButton } from '../ui/Button'
 import { useConfirm } from '../ui/Confirm'
-import { Checkbox, Select, TextInput } from '../ui/Field'
+import { Select, TextInput } from '../ui/Field'
+import { Switch } from '../ui/Switch'
 import { moveItem } from '../ui/sortable'
 import { useMoveButtons } from '../ui/use-move-buttons'
 import { changeFieldType, fieldTypesAt, newField, numberOf } from './custom-block-format'
@@ -276,7 +277,7 @@ function FieldCard({
           />
         </div>
         {field.type !== 'boolean' && field.type !== 'select' && (
-          <Checkbox
+          <Switch
             label="Обязательное"
             checked={field.required === true}
             onChange={(event) => set('required', event.target.checked)}
@@ -386,7 +387,7 @@ function TypeSettings({ field, record, set, error }: SettingsProps) {
           {numberInput('min', 'Не меньше')}
           {numberInput('max', 'Не больше')}
           {numberInput('default', 'По умолчанию')}
-          <Checkbox
+          <Switch
             label="Только целое"
             checked={record.integer === true}
             onChange={(event) => set('integer', event.target.checked)}
@@ -395,7 +396,7 @@ function TypeSettings({ field, record, set, error }: SettingsProps) {
       )
     case 'boolean':
       return (
-        <Checkbox
+        <Switch
           label="Включено по умолчанию"
           checked={record.default === true}
           onChange={(event) => set('default', event.target.checked)}

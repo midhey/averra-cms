@@ -111,10 +111,10 @@ test('настройки шапки и подвала: админка → сай
   await page.getByRole('radio', { name: 'Текст', exact: true }).check()
   await page.getByRole('textbox', { name: 'Знак', exact: true }).fill('Ре')
   await page.getByRole('textbox', { name: 'Подпись', exact: true }).fill('Ремонт\nу Ивана')
-  await page.getByRole('checkbox', { name: 'Кнопка в шапке' }).check()
+  await page.getByRole('switch', { name: 'Кнопка в шапке' }).check()
   await page.getByRole('textbox', { name: 'Текст кнопки' }).fill('Рассчитать стоимость')
   await page.getByRole('textbox', { name: 'Текст на телефоне' }).fill('Расчёт')
-  await page.getByRole('checkbox', { name: 'Линия под шапкой' }).uncheck()
+  await page.getByRole('switch', { name: 'Линия под шапкой' }).uncheck()
   await page.getByRole('radio', { name: 'Таблетка' }).check()
   await page.getByRole('radio', { name: 'Цвет и подъём' }).check()
   await page.getByRole('radio', { name: 'Цвет акцента' }).check()
@@ -136,7 +136,7 @@ test('настройки шапки и подвала: админка → сай
     .fill('Почему выбирают нас')
   await items.nth(0).getByRole('combobox', { name: 'Куда ведёт' }).selectOption('index#benefits')
   await expect(
-    items.nth(0).getByRole('checkbox', { name: 'Открывать в новой вкладке' }),
+    items.nth(0).getByRole('switch', { name: 'Открывать в новой вкладке' }),
   ).not.toBeChecked()
   await page.getByRole('button', { name: 'Пункт меню', exact: true }).click()
   await items.nth(1).getByRole('textbox', { name: 'Подпись', exact: true }).fill('Telegram')
@@ -149,7 +149,7 @@ test('настройки шапки и подвала: админка → сай
   await expect(link).toBeFocused()
   await link.fill('https://t.me/remont')
   await expect(
-    items.nth(1).getByRole('checkbox', { name: 'Открывать в новой вкладке' }),
+    items.nth(1).getByRole('switch', { name: 'Открывать в новой вкладке' }),
   ).toBeChecked()
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
   await expect(page.getByText(/Шапка опубликована/)).toBeVisible()
@@ -168,14 +168,14 @@ test('настройки шапки и подвала: админка → сай
   await expect(sections.getByRole('link', { name: 'Почему мы' })).not.toHaveAttribute('target')
   await page.getByRole('radio', { name: /^Простой/ }).check()
   await page.getByRole('radio', { name: 'Как у страницы' }).check()
-  await page.getByRole('checkbox', { name: 'Линия над подвалом' }).uncheck()
+  await page.getByRole('switch', { name: 'Линия над подвалом' }).uncheck()
   await page.getByRole('textbox', { name: 'Свой текст' }).fill('Работаем с 9 до 18\nбез выходных')
   await page.getByRole('radio', { name: 'Акцентный' }).check()
-  await page.getByRole('checkbox', { name: '© и год' }).uncheck()
-  const consentBox = page.getByRole('checkbox', { name: 'Ссылка на согласие на обработку данных' })
+  await page.getByRole('switch', { name: '© и год' }).uncheck()
+  const consentBox = page.getByRole('switch', { name: 'Ссылка на согласие на обработку данных' })
   await consentBox.check()
   await expect(page.getByText('Рядом с политикой — ссылка на /consent/')).toBeVisible()
-  await page.getByRole('checkbox', { name: 'Логотип шапки в подвале' }).check()
+  await page.getByRole('switch', { name: 'Логотип шапки в подвале' }).check()
   const footerPreview = page.frameLocator('iframe[title="Предпросмотр подвала"]').locator('footer')
   await expect(footerPreview.getByRole('link', { name: /^Согласие на обработку/ })).toBeVisible()
   await page.getByRole('button', { name: 'Опубликовать подвал' }).click()
@@ -421,16 +421,16 @@ test('администратор сайта меняет тексты и ссы�
     page.getByText(/Раскладку, поведение и вид шапки и подвала меняет владелец/),
   ).toBeVisible()
   await expect(page.getByRole('radio', { name: 'Классика' })).toBeDisabled()
-  await expect(page.getByRole('checkbox', { name: 'Липкая шапка' })).toBeDisabled()
-  await expect(page.getByRole('checkbox', { name: 'Линия под шапкой' })).toBeDisabled()
+  await expect(page.getByRole('switch', { name: 'Липкая шапка' })).toBeDisabled()
+  await expect(page.getByRole('switch', { name: 'Линия под шапкой' })).toBeDisabled()
   await expect(page.getByRole('radio', { name: 'В строке шапки' })).toBeDisabled()
   // Тексты и логотип — его
   await expect(page.getByRole('radio', { name: 'Текст', exact: true })).toBeEnabled()
-  await expect(page.getByRole('checkbox', { name: 'Кнопка в шапке' })).toBeEnabled()
+  await expect(page.getByRole('switch', { name: 'Кнопка в шапке' })).toBeEnabled()
   await page.getByRole('tab', { name: 'Подвал' }).click()
   await expect(page.getByRole('radio', { name: 'Как у страницы' })).toBeDisabled()
   await expect(page.getByRole('textbox', { name: 'Свой текст' })).toBeEnabled()
   await expect(
-    page.getByRole('checkbox', { name: 'Ссылка на согласие на обработку данных' }),
+    page.getByRole('switch', { name: 'Ссылка на согласие на обработку данных' }),
   ).toBeEnabled()
 })

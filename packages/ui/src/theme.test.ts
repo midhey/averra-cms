@@ -23,6 +23,8 @@ describe.each([
   ['светлая', ':root'],
   ['тёмная', ':root[data-theme=dark]'],
   ['системная тёмная', ':root[data-theme=system]'],
+  ['светлая область', '[data-theme-scope=light]'],
+  ['тёмная область', '[data-theme-scope=dark]'],
 ])('тема Averra: %s', (_name, selector) => {
   const overrides = rootProperties('@use "@averra/ui/themes/averra";', selector)
   const averra = new Map([
@@ -86,7 +88,9 @@ describe.each([
   })
 
   it('задаёт браузерную цветовую схему', () => {
-    expect(averra.get('color-scheme')).toBe(selector === ':root' ? 'light' : 'dark')
+    expect(averra.get('color-scheme')).toBe(
+      selector === ':root' || selector === '[data-theme-scope=light]' ? 'light' : 'dark',
+    )
   })
 
   it.each([
@@ -129,6 +133,10 @@ describe.each([
     ['--color-control-border', '--color-surface-muted'],
     ['--color-control-border', '--color-surface-inset'],
     ['--color-control-border', '--color-surface-sidebar'],
+    // Дорожка включённого Switch; выключенную отличает рамка control-border.
+    ['--color-action', '--color-surface-muted'],
+    ['--color-action', '--color-surface-inset'],
+    ['--color-action', '--color-surface-accent'],
     ['--color-control-border-hover', '--color-control-hover'],
     ['--color-disabled-border', '--color-surface'],
     ['--color-focus-ring', '--color-surface'],
@@ -183,6 +191,18 @@ describe.each([
       }
     }
   })
+})
+
+it.each([
+  ['light', ':root'],
+  ['dark', ':root[data-theme=dark]'],
+])('область %s повторяет роли соответствующей темы', (theme, selector) => {
+  const source = '@use "@averra/ui/themes/averra";'
+  const roles = (values: Map<string, string>) =>
+    new Map([...values].filter(([name]) => /^(--color-|--shadow-|color-scheme)/u.test(name)))
+  expect(roles(rootProperties(source, `[data-theme-scope=${theme}]`))).toEqual(
+    roles(rootProperties(source, selector)),
+  )
 })
 
 it('системная тёмная тема совпадает с явной и включается только медиазапросом', () => {

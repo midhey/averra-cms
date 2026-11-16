@@ -3,38 +3,9 @@
 // Тема Averra (концепт админки): тёплый светлый фон, белые поверхности, почти чёрный текст,
 // один синий акцент. Своя палитра объявлена здесь же, роли ссылаются на неё.
 // Светлая и тёмная темы меняют значения ролей, но не стили компонентов
-:root {
-  /* Палитра темы */
-  --palette-sand-0: #fff;
-  --palette-sand-50: #fbfaf8;
-  --palette-sand-100: #f6f5f1;
-  --palette-sand-150: #f4f3ef;
-  --palette-sand-200: #eceae4;
-  --palette-sand-250: #e9e7e1;
-  --palette-sand-300: #e2e0da;
-  --palette-sand-350: #f0eee9;
-  --palette-sand-600: #827f78;
-  --palette-sand-400: #c9c6bd;
-  --palette-ink-600: #6b6c72;
-  --palette-ink-700: #5f6066;
-  --palette-ink-800: #3a3b40;
-  --palette-ink-950: #1a1b1e;
-  --palette-ink-1000: #000;
-  --palette-blue-50: #f3f5fd;
-  --palette-blue-100: #e8ecfa;
-  --palette-blue-600: #2b44c7;
-  --palette-blue-800: #1e3399;
-  --palette-green-50: #e6f2ea;
-  --palette-green-400: #3a9a5b;
-  --palette-green-800: #1f6b3a;
-  --palette-amber-50: #fbf1e2;
-  --palette-amber-400: #b27408;
-  --palette-amber-900: #8a5208;
-  --palette-red-50: #fbe9e7;
-  --palette-red-400: #c8372d;
-  --palette-red-800: #a3271f;
-  --palette-stone-100: #eeedea;
-  --palette-stone-800: #4a4b50;
+// Области витрины и корень используют одни роли: сравнение тем не меняет палитру.
+@mixin light {
+  color-scheme: light;
 
   /* Фон и поверхности */
   --color-background: var(--palette-sand-150);
@@ -77,6 +48,7 @@
   --color-action: var(--palette-blue-600);
   --color-action-hover: var(--palette-blue-800);
   --color-action-text: var(--palette-sand-0);
+  --color-switch-thumb: var(--palette-sand-0);
   --color-primary: var(--palette-ink-950);
   --color-primary-hover: var(--palette-ink-600);
   --color-primary-text: var(--palette-sand-0);
@@ -99,6 +71,44 @@
   --color-neutral-surface: var(--palette-stone-100);
   --color-neutral-text: var(--palette-stone-800);
   --color-neutral-indicator: var(--palette-sand-400);
+  --shadow-raised: 0 0.0625rem 0.125rem rgb(26 27 30 / 12%);
+  --shadow-overlay: 0 0.0625rem 0.1875rem rgb(26 27 30 / 8%), 0 0.5rem 1.5rem rgb(26 27 30 / 10%);
+}
+
+:root {
+  /* Палитра темы */
+  --palette-sand-0: #fff;
+  --palette-sand-50: #fbfaf8;
+  --palette-sand-100: #f6f5f1;
+  --palette-sand-150: #f4f3ef;
+  --palette-sand-200: #eceae4;
+  --palette-sand-250: #e9e7e1;
+  --palette-sand-300: #e2e0da;
+  --palette-sand-350: #f0eee9;
+  --palette-sand-600: #827f78;
+  --palette-sand-400: #c9c6bd;
+  --palette-ink-600: #6b6c72;
+  --palette-ink-700: #5f6066;
+  --palette-ink-800: #3a3b40;
+  --palette-ink-950: #1a1b1e;
+  --palette-ink-1000: #000;
+  --palette-blue-50: #f3f5fd;
+  --palette-blue-100: #e8ecfa;
+  --palette-blue-600: #2b44c7;
+  --palette-blue-800: #1e3399;
+  --palette-green-50: #e6f2ea;
+  --palette-green-400: #3a9a5b;
+  --palette-green-800: #1f6b3a;
+  --palette-amber-50: #fbf1e2;
+  --palette-amber-400: #b27408;
+  --palette-amber-900: #8a5208;
+  --palette-red-50: #fbe9e7;
+  --palette-red-400: #c8372d;
+  --palette-red-800: #a3271f;
+  --palette-stone-100: #eeedea;
+  --palette-stone-800: #4a4b50;
+
+  @include light;
 
   /* Шрифты: файлы раздаёт сама админка (@font-face в её стилях) */
   --font-sans: "Golos Text", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -114,8 +124,6 @@
   --radius-control: 0.625rem;
   --radius-item: 0.5rem;
   --radius-card: 0.875rem;
-  --shadow-raised: 0 0.0625rem 0.125rem rgb(26 27 30 / 12%);
-  --shadow-overlay: 0 0.0625rem 0.1875rem rgb(26 27 30 / 8%), 0 0.5rem 1.5rem rgb(26 27 30 / 10%);
 
   /* Раскладка: на телефоне поля страницы уже */
   --space-page-inline: 1rem;
@@ -155,6 +163,7 @@
   --color-action: #9eafff;
   --color-action-hover: #cad3ff;
   --color-action-text: #17191f;
+  --color-switch-thumb: #fff;
   --color-primary: #eeeef1;
   --color-primary-hover: #aaaeb8;
   --color-primary-text: #17191f;
@@ -194,4 +203,17 @@
     --space-page-inline: 2.5rem;
     --space-page-block: 2rem;
   }
+}
+
+[data-theme-scope="light"] {
+  @include light;
+}
+
+[data-theme-scope="dark"] {
+  @include dark;
+}
+
+[data-theme-scope] {
+  color: var(--color-text);
+  background: var(--color-background);
 }

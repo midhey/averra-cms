@@ -246,7 +246,7 @@ test('предпросмотр со скриптом изолирован: ни 
   await expect(plain.getByRole('heading', { name: 'Карточки' })).toBeVisible()
   await expect(plain.locator('#probe')).toHaveCount(0)
 
-  await page.getByRole('checkbox', { name: 'Выполнять скрипт' }).check()
+  await page.getByRole('switch', { name: 'Выполнять скрипт' }).check()
   const frame = page.locator('iframe[data-sandbox-preview]')
   await expect(frame).toHaveAttribute('sandbox', 'allow-scripts')
   const probe = page.frameLocator('iframe[data-sandbox-preview]').locator('#probe')
@@ -295,7 +295,7 @@ for (const [when, { code, keeps }] of Object.entries(HIJACKS)) {
     })
     await page.goto(`/blocks/${KEY}`)
     await expect(page.getByRole('heading', { level: 1, name: 'Карточки' })).toBeVisible()
-    await page.getByRole('checkbox', { name: 'Выполнять скрипт' }).check()
+    await page.getByRole('switch', { name: 'Выполнять скрипт' }).check()
     const frame = page.frameLocator('iframe[data-sandbox-preview]')
     if (keeps) await expect(frame.getByRole('heading', { name: 'Карточки' })).toBeVisible()
     else await expect(frame.getByRole('heading', { name: 'Сессия истекла' })).toBeVisible()
@@ -327,7 +327,7 @@ test('форма главной в предпросмотре со скрипт�
   form?.submit()
 }, 100)`,
   )
-  await page.getByRole('checkbox', { name: 'Выполнять скрипты' }).check()
+  await page.getByRole('switch', { name: 'Выполнять скрипты' }).check()
   const body = page.frameLocator('iframe[data-sandbox-preview]').locator('body[data-form-tried]')
   await expect(body).toHaveAttribute('data-form-tried', 'yes')
   await page.waitForTimeout(800)
@@ -382,14 +382,14 @@ test('скрипт сайта в админке: черновик → предп
     .getByRole('textbox', { name: 'Домены внешних скриптов' })
     .fill('https://widget.example.ru')
 
-  await page.getByRole('checkbox', { name: 'Выполнять скрипты' }).check()
+  await page.getByRole('switch', { name: 'Выполнять скрипты' }).check()
   await expect(
     page.frameLocator('iframe[data-sandbox-preview]').locator('body[data-site-script="preview"]'),
   ).toHaveCount(1)
 
   await page.screenshot({ path: testInfo.outputPath('site-script-1440.png'), fullPage: true })
   await page.setViewportSize({ width: 375, height: 812 })
-  await expect(page.getByRole('checkbox', { name: 'Выполнять скрипты' })).toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Выполнять скрипты' })).toBeChecked()
   const overflow = await page.evaluate(
     'document.documentElement.scrollWidth - document.documentElement.clientWidth',
   )

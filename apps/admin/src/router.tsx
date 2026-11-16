@@ -89,7 +89,11 @@ const PUBLIC_PATHS = new Set([LOGIN_PATH, '/forgot-password', '/reset-password',
  * Данных API она не берёт, поэтому открывается без входа и со своей оболочкой
  */
 const DEV_UI_PATH = '/dev/ui'
-if (import.meta.env.DEV) PUBLIC_PATHS.add(DEV_UI_PATH)
+const DEV_CONTROLS_PATH = '/dev/controls'
+if (import.meta.env.DEV) {
+  PUBLIC_PATHS.add(DEV_UI_PATH)
+  PUBLIC_PATHS.add(DEV_CONTROLS_PATH)
+}
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   // Вся админка, кроме входа, — только после входа. Кто вошёл, спрашиваем у API один раз
@@ -514,6 +518,11 @@ const devRoutes = import.meta.env.DEV
         getParentRoute: () => rootRoute,
         path: DEV_UI_PATH,
         component: lazyRouteComponent(() => import('./dev/UiShowcase'), 'UiShowcase'),
+      }),
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: DEV_CONTROLS_PATH,
+        component: lazyRouteComponent(() => import('./dev/ControlsShowcase'), 'ControlsShowcase'),
       }),
     ]
   : []

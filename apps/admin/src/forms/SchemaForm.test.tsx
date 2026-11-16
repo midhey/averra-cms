@@ -120,17 +120,18 @@ describe('SchemaForm', () => {
     expect(described.join(' ')).not.toMatch(/символ/)
   })
 
-  it('необязательный объект — флажок «Показывать»', async () => {
+  it('необязательный объект — переключатель «Показывать»', async () => {
     const user = userEvent.setup()
     render(<BlockForm type="hero" initial={{ title: 'Ремонт' }} />)
     const button = screen.getByRole('group', { name: 'Кнопка' })
     expect(within(button).queryByLabelText('Текст кнопки')).toBeNull()
-    await user.click(within(button).getByLabelText('Показывать'))
+    await user.click(within(button).getByRole('switch', { name: 'Показывать', checked: false }))
+    expect(within(button).getByRole('switch', { name: 'Показывать', checked: true })).toBeTruthy()
     expect(formValue().button).toEqual({ label: '', href: '' })
     expect(within(button).getByLabelText('Текст кнопки')).toBeTruthy()
   })
 
-  it('длинный выбор и да/нет: тип поля формы — список, «Обязательное» — флажок', () => {
+  it('длинный выбор и да/нет: тип поля формы — список, «Обязательное» — переключатель', () => {
     render(
       <BlockForm
         type="form"
@@ -144,7 +145,7 @@ describe('SchemaForm', () => {
     const type = screen.getByLabelText('Тип поля') as HTMLSelectElement
     expect(type.tagName).toBe('SELECT')
     expect(type.selectedOptions[0]?.textContent).toBe('Телефон')
-    expect((screen.getByLabelText('Обязательное') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByRole('switch', { name: 'Обязательное', checked: true })).toBeTruthy()
   })
 
   it('необязательный выбор без значения: показан «не задан», выбранный вид связи снимается', async () => {

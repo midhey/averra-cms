@@ -5,6 +5,33 @@ import { expect, test } from './fixtures'
 // стили, шрифты, кольцо фокуса, клавиатура и ширина телефона
 
 test.describe('витрина компонентов', () => {
+  test('витрина переключателей открывается из /dev/ui и показывает обе темы рядом', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui')
+    await page
+      .getByRole('link', { name: 'Варианты переключателей и флажков в обеих темах' })
+      .click()
+    await expect(page).toHaveURL(/\/dev\/controls$/u)
+    await expect(page).toHaveTitle('Витрина переключателей и флажков — Averra CMS')
+    for (const name of ['Светлая тема', 'Тёмная тема']) {
+      const theme = page.getByRole('region', { name, exact: true })
+      await expect(theme.getByRole('heading', { name, exact: true })).toBeVisible()
+      await expect(theme.getByRole('switch')).toHaveCount(27)
+      await expect(theme.getByRole('checkbox')).toHaveCount(20)
+      const enabled = theme.getByRole('switch', { name: 'Выключен', exact: true }).first()
+      await enabled.check()
+      await expect(enabled).toBeChecked()
+      await enabled.uncheck()
+      await enabled.focus()
+      await page.keyboard.press('Space')
+      await expect(enabled).toBeChecked()
+      await expect(
+        theme.getByRole('checkbox', { name: 'Частичный выбор' }).first(),
+      ).toHaveJSProperty('indeterminate', true)
+    }
+  })
+
   test('показывает компоненты в обеих темах', async ({ page }) => {
     await page.goto('/dev/ui')
     const theme = page.getByRole('group', { name: 'Тема админки' })
@@ -177,7 +204,7 @@ test.describe('витрина компонентов', () => {
       const lum = (c) => c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 })
         .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0)
       const ratio = (a, b) => { const [l, d] = [lum(a), lum(b)].sort((x, y) => y - x); return (l + 0.05) / (d + 0.05) }
-      const box = document.querySelector('input[type=checkbox]:not(:checked):not(:disabled)')
+      const box = document.querySelector('input[type=checkbox]:not([role=switch]):not(:checked):not(:disabled)').nextElementSibling
       const cs = getComputedStyle(box)
       const neutral = [...document.querySelectorAll('[class*=neutral]')]
         .map((el) => el.querySelector('[class*=indicator]')).find(Boolean)

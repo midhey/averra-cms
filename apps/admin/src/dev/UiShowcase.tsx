@@ -65,6 +65,7 @@ import { Facts } from '../ui/Screen'
 import { LayoutThumbnail, SegmentedControl } from '../ui/SegmentedControl'
 import { StatusPill, type StatusTone } from '../ui/StatusPill'
 import { Steps } from '../ui/Steps'
+import { Switch } from '../ui/Switch'
 import { TabList, Tabs } from '../ui/Tabs'
 import { usePageTitle } from '../ui/use-page-title'
 import styles from './UiShowcase.module.scss'
@@ -319,6 +320,7 @@ export function UiShowcase() {
           }
         />
         <AdminThemeControl />
+        <a href="/dev/controls">Варианты переключателей и флажков в обеих темах</a>
 
         <Section id="buttons" title="Кнопки">
           <div className={styles.row}>
@@ -551,6 +553,11 @@ export function UiShowcase() {
               hint="Без отметки форма не отправится"
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
+            />
+            <Switch
+              label="Показывать уведомления"
+              hint="Текущий стиль переключателя"
+              defaultChecked
             />
             <Checkbox label="Обязательное поле" error="Отметьте флажок" />
             <Checkbox label="Выключен" disabled defaultChecked />

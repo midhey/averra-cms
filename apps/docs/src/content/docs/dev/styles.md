@@ -99,7 +99,7 @@ sidebar:
 ### Компоненты
 
 `apps/admin/src/ui`: `Button`, `IconButton`, `Icon`, `Field` (`TextInput`, `TextArea`, `Select`),
-`Checkbox`, `SegmentedControl`, `Tabs`, `StatusPill`, `Card`, `DataTable`, `EmptyState`,
+`Checkbox`, `Switch`, `SegmentedControl`, `Tabs`, `StatusPill`, `Card`, `DataTable`, `EmptyState`,
 `InlineAlert`, `Dialog`, `AppShell`, `PageHeader`, `Screen`, `Section`, `SortableList`. Оболочка
 экранов — `src/shell`.
 
@@ -116,6 +116,20 @@ sidebar:
 - Новое состояние компонента показываем на **витрине `/dev/ui`** — она есть только в разработке
   (`pnpm dev`, e2e); в сборке её нет, это проверяет тест.
 
+### Флажки и переключатели
+
+`Switch` — включение одной настройки, `Checkbox` — согласие, подтверждение или выбор пунктов
+из набора. Оба используют нативный `input type="checkbox"`, у `Switch` роль `switch`; подпись
+нажимается целиком, Space меняет состояние, `hint` и `error` связаны через `aria-describedby`.
+`Checkbox` поддерживает `indeterminate` для частичного выбора.
+
+Стиль всей админки выбирается в `apps/admin/src/ui/control-style.ts`: `SWITCH_STYLE`
+(`minimal`, `icon`, `ios`, по умолчанию `icon`) и `CHECKBOX_STYLE` (`classic`, `soft`, по умолчанию
+`classic`). Проп `variant` нужен витрине. На `/dev/controls` все варианты и состояния показаны
+одновременно в светлой и тёмной теме; ссылка есть на `/dev/ui`. Обе витрины доступны без входа
+только в разработке и исключены из рабочей сборки. У iOS-варианта включённая дорожка цвета действия,
+белый ползунок с тенью; при уменьшении движения анимации отключаются у всех вариантов.
+
 ### Проверки в `pnpm check`
 
 - stylelint по `*.scss` (конфиг кита, `stylelint.config.mjs`);
@@ -128,7 +142,10 @@ sidebar:
 
 `packages/ui/src/themes/_averra.scss` задаёт светлые роли на `:root`, а тёмные — на
 `:root[data-theme="dark"]`. Режим `data-theme="system"` включает тот же набор через
-`@media (prefers-color-scheme: dark)`. Общий Sass-миксин исключает расхождение двух тёмных режимов.
+`@media (prefers-color-scheme: dark)`. Миксины `light` и `dark` переиспользуются в областях
+`[data-theme-scope="light"]` и `[data-theme-scope="dark"]`: они задают роли, цветовую схему,
+фон и цвет текста контейнера, не меняя тему приложения. Так витрина показывает обе темы рядом.
+Общий Sass-миксин исключает расхождение двух тёмных режимов.
 Тёмная тема переопределяет все `--color-*`, тени и `color-scheme: dark`; компоненты используют
 прежние семантические токены, включая `--color-scrollbar-thumb` и `--color-scrollbar-thumb-hover`.
 
