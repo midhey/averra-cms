@@ -2,7 +2,7 @@
 
 // Тема Averra (концепт админки): тёплый светлый фон, белые поверхности, почти чёрный текст,
 // один синий акцент. Своя палитра объявлена здесь же, роли ссылаются на неё.
-// Тёмная тема — ещё один такой же блок под [data-theme="dark"] с теми же ролями
+// Светлая и тёмная темы меняют значения ролей, но не стили компонентов
 :root {
   /* Палитра темы */
   --palette-sand-0: #fff;
@@ -43,6 +43,9 @@
   --color-surface-sidebar: var(--palette-sand-50);
   --color-surface-inset: var(--palette-sand-250);
   --color-surface-accent: var(--palette-blue-50);
+  --color-preview-surface: var(--palette-sand-0);
+  --color-preview-selection: var(--palette-blue-600);
+  --color-preview-hover: var(--palette-sand-600);
 
   /* Текст */
   --color-text: var(--palette-ink-950);
@@ -118,6 +121,72 @@
   --space-page-inline: 1rem;
   --space-page-block: 1.25rem;
   --space-card: 1.25rem;
+}
+
+// Один набор ролей для явного выбора и системного режима: они не должны расходиться
+@mixin dark {
+  color-scheme: dark;
+
+  --color-background: #17191f;
+  --color-surface: #202329;
+  --color-surface-muted: #2b2e36;
+  --color-surface-sidebar: #1c1f25;
+  --color-surface-inset: #30343d;
+  --color-surface-accent: #272e48;
+  --color-preview-surface: #fff;
+  --color-preview-selection: #2b44c7;
+  --color-preview-hover: #827f78;
+  --color-text: #eeeef1;
+  --color-text-strong: #fff;
+  --color-text-muted: #bec1ca;
+  --color-text-placeholder: #aaaeb8;
+  --color-border: #464b57;
+  --color-border-strong: #9096a4;
+  --color-border-subtle: #363b45;
+  --color-scrollbar-thumb: #686f7d;
+  --color-scrollbar-thumb-hover: #9096a4;
+  --color-control-border: #9096a4;
+  --color-control-border-hover: #e2e5ed;
+  --color-control-hover: #393e49;
+  --color-control-active: #484f5e;
+  --color-disabled-text: #bec1ca;
+  --color-disabled-surface: #2b2e36;
+  --color-disabled-border: #9096a4;
+  --color-action: #9eafff;
+  --color-action-hover: #cad3ff;
+  --color-action-text: #17191f;
+  --color-primary: #eeeef1;
+  --color-primary-hover: #aaaeb8;
+  --color-primary-text: #17191f;
+  --color-focus-ring: #9eafff;
+  --color-overlay: rgb(0 0 0 / 68%);
+  --color-success-surface: #243b2e;
+  --color-success-text: #a5d8b4;
+  --color-success-indicator: #a5d8b4;
+  --color-warning-surface: #40331f;
+  --color-warning-text: #f2bc64;
+  --color-warning-indicator: #f2bc64;
+  --color-danger-surface: #432b2e;
+  --color-danger-text: #ed9a94;
+  --color-danger-indicator: #ed9a94;
+  --color-info-surface: #2a3350;
+  --color-info-text: #b6c3ff;
+  --color-info-indicator: #7085d5;
+  --color-neutral-surface: #30343d;
+  --color-neutral-text: #d3d6de;
+  --color-neutral-indicator: #eff1f5;
+  --shadow-raised: 0 0.0625rem 0.125rem rgb(0 0 0 / 32%);
+  --shadow-overlay: 0 0.0625rem 0.1875rem rgb(0 0 0 / 24%), 0 0.5rem 1.5rem rgb(0 0 0 / 36%);
+}
+
+:root[data-theme="dark"] {
+  @include dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    @include dark;
+  }
 }
 
 @include ui.breakpoint(medium) {

@@ -40,6 +40,7 @@ import type { RedirectRow } from '../seo/seo-format'
 import { SiteHeader } from '../shell/SiteHeader'
 import { ColorRow, ContrastBadge, ThemeSwatch } from '../theme/ThemeParts'
 import { escapeBlockedText, issuedDoneLabel } from '../tokens/token-format'
+import { AdminThemeControl } from '../ui/AdminThemeControl'
 import {
   AppShell,
   NavLinkContent,
@@ -317,6 +318,7 @@ export function UiShowcase() {
             </>
           }
         />
+        <AdminThemeControl />
 
         <Section id="buttons" title="Кнопки">
           <div className={styles.row}>

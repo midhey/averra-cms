@@ -35,13 +35,16 @@
 .frameBox {
   height: 100%;
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--color-preview-surface);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-raised);
 }
 
 .frame {
+  // В рамке показан сайт: браузерные поля и прокрутка сохраняют его светлую схему
+  color-scheme: light;
   display: block;
+  background: var(--color-preview-surface);
   border: 0;
   transform-origin: top left;
 }

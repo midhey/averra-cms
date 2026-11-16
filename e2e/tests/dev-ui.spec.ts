@@ -5,6 +5,21 @@ import { expect, test } from './fixtures'
 // стили, шрифты, кольцо фокуса, клавиатура и ширина телефона
 
 test.describe('витрина компонентов', () => {
+  test('показывает компоненты в обеих темах', async ({ page }) => {
+    await page.goto('/dev/ui')
+    const theme = page.getByRole('group', { name: 'Тема админки' })
+    for (const [label, value] of [
+      ['Тёмная', 'dark'],
+      ['Светлая', 'light'],
+    ] as const) {
+      await theme.getByRole('radio', { name: label, exact: true }).check()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', value)
+      await expect(page.locator('html')).toHaveCSS('color-scheme', value)
+      await expect(page.getByRole('heading', { level: 2, name: 'Состояния' })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'CSS блока', exact: true })).toBeVisible()
+    }
+  })
+
   test('открывается, все разделы на месте, шрифты свои', async ({ page }) => {
     const external: string[] = []
     page.on('request', (request) => {

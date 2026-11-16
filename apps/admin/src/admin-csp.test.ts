@@ -20,4 +20,9 @@ describe('CSP админки', () => {
   it('чужой адрес и «*» в frame-src не попадают', () => {
     expect(policy).not.toMatch(/\*|https?:\/\//)
   })
+
+  it('разрешает ранний inline-скрипт темы без ослабления политики рамок', () => {
+    expect(policy).not.toMatch(/(?:^|;)\s*(?:script-src(?:-elem)?|default-src)\s/)
+    expect(html.indexOf('averra-admin-theme')).toBeLessThan(html.indexOf('<body>'))
+  })
 })

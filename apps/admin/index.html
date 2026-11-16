@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
     <!-- Админку не индексируют: и без Caddy (своя раздача), и вместе с X-Robots-Tag из Caddyfile -->
     <meta name="robots" content="noindex, nofollow" />
     <!--
@@ -17,6 +18,20 @@
       content="frame-src 'self'"
     />
     <title>Averra CMS</title>
+    <!-- Тема известна до загрузки React и его стилей; запрет хранилища не мешает входу -->
+    <script>
+      (() => {
+        let theme = 'light'
+        try {
+          const saved = localStorage.getItem('averra-admin-theme')
+          if (saved === 'light' || saved === 'dark' || saved === 'system') theme = saved
+        } catch {}
+        document.documentElement.dataset.theme = theme
+        // Цвет пустого окна тоже выбран до загрузки CSS, чтобы не мигал светлый фон
+        document.querySelector('meta[name="color-scheme"]').content =
+          theme === 'system' ? 'light dark' : theme
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

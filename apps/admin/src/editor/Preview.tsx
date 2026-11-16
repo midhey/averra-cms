@@ -102,8 +102,8 @@ type PreviewProps = {
 function readSelectionColors(): SelectionColors {
   const style = getComputedStyle(document.documentElement)
   return {
-    selection: style.getPropertyValue('--color-action') || 'currentcolor',
-    hover: style.getPropertyValue('--color-border-strong') || 'currentcolor',
+    selection: style.getPropertyValue('--color-preview-selection') || 'currentcolor',
+    hover: style.getPropertyValue('--color-preview-hover') || 'currentcolor',
   }
 }
 

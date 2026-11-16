@@ -9,6 +9,7 @@ import { ChangePasswordForm } from '../forms/password'
 import { focusField, useFormErrors } from '../forms/use-form-errors'
 import { currentSiteQuery, meQuery, queryKeys, sessionsQuery, siteQuery } from '../queries'
 import { roleName } from '../shell/sidebar-model'
+import { AdminThemeControl } from '../ui/AdminThemeControl'
 import { Button } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
 import { useConfirm } from '../ui/Confirm'
@@ -48,6 +49,14 @@ export function ProfileScreen() {
         />
         <div className={cardClassName()}>
           <NameForm name={me.name} />
+        </div>
+      </Section>
+      <Section
+        title="Оформление"
+        description="Тема админки сохраняется в этом браузере. Сайт и письма выглядят как прежде."
+      >
+        <div className={cardClassName()}>
+          <AdminThemeControl />
         </div>
       </Section>
       <Section

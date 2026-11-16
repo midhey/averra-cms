@@ -1,5 +1,70 @@
-import { expect, sidebar, test } from './fixtures'
+import { editor, expect, sidebar, test } from './fixtures'
 import { disablePerson, guestContext, newMember, signInContext } from './people'
+
+test('тема профиля сохраняется после перезагрузки, системная следует за устройством', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/profile')
+  const root = page.locator('html')
+  const theme = page.getByRole('group', { name: 'Тема админки' })
+  // Без настройки сохраняется прежний светлый вид, даже при тёмной схеме устройства
+  await expect(root).toHaveAttribute('data-theme', 'light')
+  await expect(root).toHaveCSS('color-scheme', 'light')
+  await theme.getByRole('radio', { name: 'Тёмная' }).check()
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(root).toHaveCSS('color-scheme', 'dark')
+  await page.reload()
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(theme.getByRole('radio', { name: 'Тёмная' })).toBeChecked()
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(root).toHaveCSS('color-scheme', 'dark')
+  await theme.getByRole('radio', { name: 'Как в системе' }).check()
+  await expect(root).toHaveAttribute('data-theme', 'system')
+  await expect(root).toHaveCSS('color-scheme', 'light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(root).toHaveCSS('color-scheme', 'dark')
+  await page.reload()
+  await expect(root).toHaveAttribute('data-theme', 'system')
+  await expect(root).toHaveCSS('color-scheme', 'dark')
+  await theme.getByRole('radio', { name: 'Светлая', exact: true }).check()
+  await expect(root).toHaveCSS('color-scheme', 'light')
+  await page.setViewportSize({ width: 375, height: 812 })
+  expect(
+    await page.evaluate<number>(
+      'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+    ),
+  ).toBeLessThanOrEqual(0)
+})
+
+test('тёмная админка сохраняет светлую схему страниц и писем в предпросмотре', async ({ page }) => {
+  await page.goto('/profile')
+  await page.getByRole('radio', { name: 'Тёмная' }).check()
+  await editor(page).open()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+  await expect(page.getByTitle('Предпросмотр страницы', { exact: true })).toHaveCSS(
+    'color-scheme',
+    'light',
+  )
+  const preview = page.frameLocator('iframe[title="Предпросмотр страницы"]')
+  await expect(preview.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(preview.locator('html')).not.toHaveAttribute('data-theme', 'dark')
+
+  await page.goto('/mail')
+  const article = page
+    .getByRole('region', { name: 'Шаблоны писем' })
+    .getByRole('article')
+    .filter({
+      has: page.getByRole('heading', { name: 'Проверка почты', exact: true }),
+    })
+  await article.getByText('Редактировать письмо «Проверка почты»', { exact: true }).click()
+  await article.getByRole('button', { name: 'Обновить предпросмотр' }).click()
+  await expect(article.getByTitle('Предпросмотр письма «Проверка почты»')).toHaveCSS(
+    'color-scheme',
+    'light',
+  )
+  await expect(article.frameLocator('iframe').locator('body')).toContainText('Почта работает')
+})
 
 // Профиль — у каждого, кто вошёл: имя, смена своего пароля и «Выйти на других устройствах».
 // Владелец e2e тут не годится: смена пароля и выход везде погасили бы его сессию для остальных

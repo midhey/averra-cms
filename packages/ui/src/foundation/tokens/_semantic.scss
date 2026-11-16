@@ -11,6 +11,11 @@
   --color-surface-inset: var(--palette-neutral-100);
   --color-surface-accent: var(--palette-accent-50);
 
+  // Документ предпросмотра сохраняет свой светлый фон независимо от темы интерфейса
+  --color-preview-surface: var(--palette-neutral-0);
+  --color-preview-selection: var(--palette-accent-500);
+  --color-preview-hover: var(--palette-neutral-500);
+
   /* Текст */
   --color-text: var(--palette-neutral-800);
   --color-text-strong: var(--palette-neutral-950);
