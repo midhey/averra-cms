@@ -108,6 +108,8 @@ export type ClaimedMail = {
   data: unknown
   custom?: unknown
   recipient: string
+  /** Сайт письма: по его теме письмо оформляется при отправке */
+  siteId: string | null
   attempts: number
   /** Срок одноразовой ссылки в письме: позже письмо не отправляется */
   expiresAt: Date | null
@@ -170,6 +172,7 @@ export function outboxRepo(db: Db) {
           data: mailOutbox.data,
           custom: mailOutbox.custom,
           recipient: mailOutbox.recipient,
+          siteId: mailOutbox.siteId,
           attempts: mailOutbox.attempts,
           expiresAt: mailOutbox.expiresAt,
           nextAttemptAt: mailOutbox.nextAttemptAt,

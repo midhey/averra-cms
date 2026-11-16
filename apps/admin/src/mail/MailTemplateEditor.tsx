@@ -152,7 +152,7 @@ export function MailTemplateEditor({
         rows={12}
         maxChars={5000}
         error={error('body')}
-        hint="Пустая строка разделяет абзацы. > в начале абзаца — пояснение мелким текстом. Блок вставляется отдельным абзацем. HTML отображается как текст."
+        hint="Пустая строка разделяет абзацы. > в начале абзаца — пояснение мелким текстом, # — заголовок. Абзац [Текст](https://…) — кнопка. Блок вставляется отдельным абзацем. HTML отображается как текст."
         onChange={(event) => setText({ ...text, body: event.target.value })}
       />
       <fieldset className={styles.insertions}>

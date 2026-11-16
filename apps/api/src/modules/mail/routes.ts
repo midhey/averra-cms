@@ -13,7 +13,7 @@ import { describeMailer } from '../../mail/mailer'
 import { outboxRepo } from '../../mail/outbox'
 import type { MailRuntime } from '../../mail/runtime'
 import { mailSettingsFieldLabels, mailSettingsRepo } from '../../mail/settings'
-import { publishedMailText } from '../../mail/template-store'
+import { publishedMailText, siteMailStyleOf } from '../../mail/template-store'
 import { MailTemplateId, mailTemplateList, previewMail, renderMail } from '../../mail/templates'
 import { toMailLine } from '../../mail/templates/line'
 import type { OutboxSettings } from '../../mail/worker'
@@ -234,6 +234,7 @@ export function mailRoutes({
             template,
             site ? toMailLine(site.name, 80, 'сайт') : undefined,
             await publishedMailText(db, template, site?.id),
+            await siteMailStyleOf(db, site?.id),
           ),
           200,
         )

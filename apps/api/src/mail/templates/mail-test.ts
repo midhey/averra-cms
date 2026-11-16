@@ -1,7 +1,6 @@
 import { MailLine } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { details, note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 
 const sentAtFormat = new Intl.DateTimeFormat('ru-RU', {
@@ -50,7 +49,7 @@ export const mailTestTemplate = defineMailTemplate({
     // Пример показывает то, что видит владелец: письмо уходит по кнопке в админке
     via: 'admin',
   },
-  render({ sentAt, provider, via }) {
+  render({ sentAt, provider, via }, ui) {
     const when = `${sentAtFormat.format(new Date(sentAt))} по Москве`
     const intro =
       `Почта работает. Это проверочное письмо: его отправила ${senders[via]}, ` +
@@ -61,10 +60,10 @@ export const mailTestTemplate = defineMailTemplate({
     return {
       subject: 'Проверка почты Averra CMS',
       preheader: 'Почта работает: письма из Averra CMS доходят',
-      body: html`${paragraph(intro)}${details([
+      body: html`${ui.paragraph(intro)}${ui.details([
         ['Отправлено', when],
         ['Через', provider],
-      ])}${note(spam)}`,
+      ])}${ui.note(spam)}`,
       text: `${intro}\n\nОтправлено: ${when}\nЧерез: ${provider}\n\n${spam}`,
     }
   },

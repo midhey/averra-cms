@@ -92,4 +92,39 @@ describe('редактируемый текст письма', () => {
       }),
     ).toThrow(MailDataError)
   })
+
+  it('«# » — заголовок, абзац [текст](адрес) — кнопка, адреса в тексте — ссылки', () => {
+    const template = mailTemplates['lead-received']
+    const rendered = renderMail('lead-received', template.example, {
+      ...template.defaultText,
+      body: '# Заявка у меня, {siteName}\n\nПиши: https://t.me/school.\n\n[Написать в Telegram](https://t.me/school)',
+    })
+    expect(rendered.html).toMatch(/<h1 [^>]+>Заявка у меня, Ремонт квартир под ключ<\/h1>/)
+    expect(rendered.html).toContain('<a href="https://t.me/school" style="color:')
+    // Точка после адреса — конец фразы, а не часть ссылки
+    expect(rendered.html).toContain('>https://t.me/school</a>.')
+    expect(rendered.html).toMatch(/<a href="https:\/\/t.me\/school" [^>]+>Написать в Telegram<\/a>/)
+    // Кнопке из текста подсказка «скопируйте ссылку» не нужна
+    expect(rendered.html).not.toContain('скопируйте ссылку')
+    expect(rendered.text).toContain('Заявка у меня, Ремонт квартир под ключ')
+    expect(rendered.text).not.toContain('# ')
+    expect(rendered.text).toContain('Написать в Telegram: https://t.me/school')
+  })
+
+  it('кнопка ведёт только на http(s), а адреса из подставленных данных ссылками не становятся', () => {
+    const template = mailTemplates['lead-new']
+    expect(() =>
+      validateTemplateText(template as EditableTemplate, {
+        ...template.defaultText,
+        body: `${template.defaultText.body}\n\n[Нажми](javascript:alert(1))`,
+      }),
+    ).toThrow(MailTextError)
+    const rendered = renderMail(
+      'lead-new',
+      { ...template.example, formTitle: 'https://evil.example' },
+      { ...template.defaultText, body: 'Форма {formTitle}\n\n{fields}' },
+    )
+    expect(rendered.html).toContain('Форма https://evil.example')
+    expect(rendered.html).not.toContain('href="https://evil.example"')
+  })
 })

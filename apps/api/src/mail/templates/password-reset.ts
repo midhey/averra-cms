@@ -1,7 +1,6 @@
 import { MailLine, MailUrl } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { button, note, paragraph } from '../layout'
 import { defineMailTemplate, formatMinutes } from './define'
 
 /** Сброс пароля админки. Ставит в очередь sendResetPassword (auth/password-reset.ts) */
@@ -21,8 +20,8 @@ export const passwordResetTemplate = defineMailTemplate({
     button: {
       label: 'Ссылка сброса пароля',
       required: true,
-      render: ({ url }) => ({
-        html: button('Задать новый пароль', url),
+      render: ({ url }, ui) => ({
+        html: ui.button('Задать новый пароль', url),
         text: `Задать новый пароль: ${url}`,
       }),
     },
@@ -48,7 +47,7 @@ export const passwordResetTemplate = defineMailTemplate({
   },
   // В ссылке токен: в очереди он живёт до отправки и не дольше, чем сама ссылка
   secret: { lifetimeMs: ({ expiresInMinutes }) => expiresInMinutes * 60 * 1000 },
-  render({ name, url, expiresInMinutes }) {
+  render({ name, url, expiresInMinutes }, ui) {
     const greeting = `Здравствуйте, ${name}!`
     const intro =
       'Кто-то (надеемся, вы) попросил сбросить пароль от админки Averra CMS. ' +
@@ -58,7 +57,7 @@ export const passwordResetTemplate = defineMailTemplate({
     return {
       subject: 'Сброс пароля в Averra CMS',
       preheader: 'Ссылка, чтобы задать новый пароль',
-      body: html`${paragraph(greeting)}${paragraph(intro)}${button('Задать новый пароль', url)}${note(expires)}${note(ignore)}`,
+      body: html`${ui.paragraph(greeting)}${ui.paragraph(intro)}${ui.button('Задать новый пароль', url)}${ui.note(expires)}${ui.note(ignore)}`,
       text: `${greeting}\n\n${intro}\n${url}\n\n${expires}\n${ignore}`,
     }
   },

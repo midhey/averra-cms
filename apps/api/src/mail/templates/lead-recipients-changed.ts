@@ -1,7 +1,6 @@
 import { MailAddress, MailLine } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { details, note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 
 const changedAtFormat = new Intl.DateTimeFormat('ru-RU', {
@@ -26,7 +25,7 @@ export const leadRecipientsChangedTemplate = defineMailTemplate({
   blocks: {
     details: {
       label: 'Сведения об изменении',
-      render: ({ changedBy, changedByEmail, changedAt, recipients, targets }) => {
+      render: ({ changedBy, changedByEmail, changedAt, recipients, targets }, ui) => {
         const where = targets ?? recipients ?? []
         const rows: [string, string][] = [
           ['Кто', `${changedBy} (${changedByEmail})`],
@@ -34,7 +33,7 @@ export const leadRecipientsChangedTemplate = defineMailTemplate({
           ['Теперь заявки приходят', where.length ? where.join(', ') : 'владельцам админки'],
         ]
         return {
-          html: details(rows),
+          html: ui.details(rows),
           text: rows.map(([label, value]) => `${label}: ${value}`).join('\n'),
         }
       },
@@ -63,7 +62,7 @@ export const leadRecipientsChangedTemplate = defineMailTemplate({
     changedAt: '2026-10-15T09:30:00.000Z',
     targets: ['manager@example.ru', 'sales@example.ru', 'Telegram «Отдел продаж»'],
   },
-  render({ siteName, changedBy, changedByEmail, changedAt, recipients, targets }) {
+  render({ siteName, changedBy, changedByEmail, changedAt, recipients, targets }, ui) {
     const intro = `У сайта «${siteName}» изменили, куда приходят уведомления о новых заявках.`
     const where = targets ?? recipients ?? []
     const rows: [string, string][] = [
@@ -77,7 +76,7 @@ export const leadRecipientsChangedTemplate = defineMailTemplate({
     return {
       subject: `Получатели уведомлений о заявках изменены — ${siteName}`,
       preheader: 'Уведомления о заявках теперь уходят другим получателям',
-      body: html`${paragraph(intro)}${details(rows)}${note(warning)}`,
+      body: html`${ui.paragraph(intro)}${ui.details(rows)}${ui.note(warning)}`,
       text: `${intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join('\n')}\n\n${warning}`,
     }
   },

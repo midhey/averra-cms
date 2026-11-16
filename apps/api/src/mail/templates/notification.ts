@@ -1,7 +1,6 @@
 import { MailLine, MailUrl } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { button, fieldTable, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 
 /**
@@ -39,17 +38,17 @@ export const notificationTemplate = defineMailTemplate({
   blocks: {
     lines: {
       label: 'Текст события',
-      render: ({ lines, title }) => ({
-        html: html`${lines.map((line) => paragraph(line))}`,
+      render: ({ lines, title }, ui) => ({
+        html: html`${lines.map((line) => ui.paragraph(line))}`,
         text: lines.join('\n\n') || title,
       }),
     },
     fields: {
       label: 'Поля события',
       required: true,
-      render: ({ fields }) => ({
+      render: ({ fields }, ui) => ({
         html: fields.length
-          ? fieldTable(fields.map(({ label, value }) => [label, value || '—']))
+          ? ui.fieldTable(fields.map(({ label, value }) => [label, value || '—']))
           : html``,
         text: fields.map(({ label, value }) => `${label}: ${value || '—'}`).join('\n'),
       }),
@@ -57,8 +56,8 @@ export const notificationTemplate = defineMailTemplate({
     link: {
       label: 'Ссылка события',
       required: true,
-      render: ({ link }) => ({
-        html: link ? button(link.label, link.url) : html``,
+      render: ({ link }, ui) => ({
+        html: link ? ui.button(link.label, link.url) : html``,
         text: link ? `${link.label}: ${link.url}` : '',
       }),
     },
@@ -92,7 +91,7 @@ export const notificationTemplate = defineMailTemplate({
     ],
     link: { label: 'Состояние установки', url: 'https://admin.example.ru/status' },
   },
-  render({ title, lines, fields, link }) {
+  render({ title, lines, fields, link }, ui) {
     const rows = fields.map(({ label, value }) => [label, value === '' ? '—' : value] as const)
     const text = [
       ...lines,
@@ -102,7 +101,7 @@ export const notificationTemplate = defineMailTemplate({
     return {
       subject: title,
       preheader: lines[0] ?? title,
-      body: html`${lines.map((line) => paragraph(line))}${rows.length > 0 ? fieldTable(rows) : ''}${link ? button(link.label, link.url) : ''}`,
+      body: html`${lines.map((line) => ui.paragraph(line))}${rows.length > 0 ? ui.fieldTable(rows) : ''}${link ? ui.button(link.label, link.url) : ''}`,
       text: text === '' ? title : text,
     }
   },

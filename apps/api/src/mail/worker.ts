@@ -2,6 +2,7 @@ import type { MailTemplateText } from '@averra/schema'
 import type { Db } from '../db/client'
 import { type Mailer, MailSendError, type MailStep } from './mailer'
 import { type ClaimedMail, outboxRepo, retryDelayMs } from './outbox'
+import { siteMailStyleOf } from './template-store'
 import { type EditableTemplate, validateTemplateText } from './template-text'
 import { MailDataError, MailTemplateId, mailTemplates, renderMail } from './templates'
 
@@ -181,7 +182,12 @@ export async function processOutbox({
           )
         }
       }
-      const rendered = renderMail(template.data, mail.data, custom)
+      const rendered = renderMail(
+        template.data,
+        mail.data,
+        custom,
+        await siteMailStyleOf(db, mail.siteId),
+      )
       ;({ messageId } = await sender.send({ to: mail.recipient, ...rendered }))
     } catch (error) {
       if (isSenderRejection(error)) {

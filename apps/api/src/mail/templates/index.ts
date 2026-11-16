@@ -1,6 +1,13 @@
 import { MailAddress, MailSubject, type MailTemplateText } from '@averra/schema'
 import { z } from 'zod'
-import { MAIL_FOOTER, mailLayout } from '../layout'
+import {
+  averraMailStyle,
+  footerLine,
+  type MailParts,
+  type MailStyle,
+  mailLayout,
+  mailParts,
+} from '../layout'
 import { type EditableTemplate, renderTemplateText } from '../template-text'
 import { invitationTemplate } from './invitation'
 import { leadNewTemplate } from './lead-new'
@@ -71,21 +78,25 @@ function header(template: string, name: string, schema: z.ZodType<string>, value
 /**
  * Письмо из шаблона: данные проверяются схемой, тело оборачивается в общий макет, к тексту
  * добавляется подвал. Тема и Reply-To проверяются схемами заголовков: перевод строки из данных
- * не дойдёт до заголовка письма, даже если шаблон соберёт тему из них
+ * не дойдёт до заголовка письма, даже если шаблон соберёт тему из них. style — оформление письма
+ * сайта (siteMailStyle); у писем установки его нет, и они всегда в оформлении Averra CMS
  */
 export function renderMail(
   template: MailTemplateId,
   data: unknown,
   custom?: MailTemplateText,
+  siteStyle?: MailStyle,
 ): RenderedMail {
   const definition = mailTemplates[template]
   const parsed = parseMailData(template, data)
+  const style = definition.scope === 'site' && siteStyle ? siteStyle : averraMailStyle
+  const parts = mailParts(style)
   // Схема у каждого шаблона своя, а реестр общий: TypeScript не свяжет их сам
-  const original = (definition.render as (value: unknown) => ReturnType<typeof definition.render>)(
-    parsed,
-  )
+  const original = (
+    definition.render as (value: unknown, parts: MailParts) => ReturnType<typeof definition.render>
+  )(parsed, parts)
   const content = custom
-    ? { ...original, ...renderTemplateText(definition as EditableTemplate, parsed, custom) }
+    ? { ...original, ...renderTemplateText(definition as EditableTemplate, parsed, custom, parts) }
     : original
   const subject = header(template, 'subject', MailSubject, content.subject)
   return {
@@ -94,9 +105,10 @@ export function renderMail(
       subject,
       preheader: content.preheader,
       body: content.body,
+      style,
       ...(content.footer === undefined ? {} : { footer: content.footer }),
     }),
-    text: `${content.text}\n\n—\n${content.footer ?? MAIL_FOOTER}\n`,
+    text: `${content.text}\n\n—\n${footerLine(style, content.footer)}\n`,
     ...(content.replyTo === undefined
       ? {}
       : { replyTo: header(template, 'replyTo', MailAddress, content.replyTo) }),
@@ -133,9 +145,10 @@ export function previewMail(
   template: MailTemplateId,
   siteName?: string,
   custom?: MailTemplateText,
+  siteStyle?: MailStyle,
 ) {
   const example: Record<string, unknown> = { ...mailTemplates[template].example }
   // Примерное письмо — про сайт этой установки, а не про вымышленный «Ремонт квартир»
   if (siteName !== undefined && 'siteName' in example) example.siteName = siteName
-  return renderMail(template, example, custom)
+  return renderMail(template, example, custom, siteStyle)
 }

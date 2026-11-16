@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { type AuthEnv, notFound, requireOwner, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { apiTokens, mailTemplateTexts, sites } from '../../db/schema'
-import { templateScope } from '../../mail/template-store'
+import { siteMailStyleOf, templateScope } from '../../mail/template-store'
 import {
   type EditableTemplate,
   MailTextError,
@@ -145,14 +145,19 @@ export function mailTemplateRoutes(db: Db, scope: 'site' | 'installation') {
       if (error) return c.json(error, 400)
       const siteId = siteIdOf(c.req.param('siteId'))
       const [site] = await db
-        .select({ name: sites.name })
+        .select({ id: sites.id, name: sites.name })
         .from(sites)
         .where(siteId ? eq(sites.id, siteId) : undefined)
         .orderBy(sites.createdAt)
         .limit(1)
       try {
         return c.json(
-          previewMail(template, site ? toMailLine(site.name, 80, 'сайт') : undefined, input),
+          previewMail(
+            template,
+            site ? toMailLine(site.name, 80, 'сайт') : undefined,
+            input,
+            await siteMailStyleOf(db, site?.id),
+          ),
           200,
         )
       } catch (error) {

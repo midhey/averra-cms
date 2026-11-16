@@ -1,7 +1,6 @@
 import { MailAddress, MailLine, MailUrl } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { button, fieldTable, note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 import { toMailLine } from './line'
 
@@ -54,15 +53,15 @@ export const leadNewTemplate = defineMailTemplate({
     fields: {
       label: 'Поля заявки',
       required: true,
-      render: ({ fields }) => ({
-        html: fieldTable(fields.map(({ label, value }) => [label, value || '—'])),
+      render: ({ fields }, ui) => ({
+        html: ui.fieldTable(fields.map(({ label, value }) => [label, value || '—'])),
         text: fields.map(({ label, value }) => `${label}: ${value || '—'}`).join('\n'),
       }),
     },
     button: {
       label: 'Ссылка на заявку',
-      render: ({ url }) => ({
-        html: button('Открыть заявку в админке', url),
+      render: ({ url }, ui) => ({
+        html: ui.button('Открыть заявку в админке', url),
         text: `Заявка в админке: ${url}`,
       }),
     },
@@ -101,7 +100,7 @@ export const leadNewTemplate = defineMailTemplate({
     url: 'https://admin.example.ru/leads/example',
     replyTo: 'anna@example.ru',
   },
-  render({ siteName, formTitle, pagePath, fields, createdAt, url, replyTo }) {
+  render({ siteName, formTitle, pagePath, fields, createdAt, url, replyTo }, ui) {
     const when = `${createdAtFormat.format(new Date(createdAt))} по Москве`
     const intro = `Новая заявка с сайта «${siteName}»: форма «${formTitle}» на странице ${pagePath}.`
     const rows = fields.map(({ label, value }) => [label, value === '' ? '—' : value] as const)
@@ -120,12 +119,12 @@ export const leadNewTemplate = defineMailTemplate({
     return {
       subject: `Новая заявка с сайта «${siteName}»`,
       preheader: `Форма «${formTitle}», ${when}`,
-      body: html`${paragraph(intro)}${note(`Когда: ${when}`)}${fieldTable(rows)}${paragraph(reply)}${button('Открыть заявку в админке', url)}`,
+      body: html`${ui.paragraph(intro)}${ui.note(`Когда: ${when}`)}${ui.fieldTable(rows)}${ui.paragraph(reply)}${ui.button('Открыть заявку в админке', url)}`,
       text,
       ...(replyTo === undefined ? {} : { replyTo }),
       footer: replyTo
-        ? 'Averra CMS · уведомление о заявке с сайта. «Ответить» напишет посетителю'
-        : 'Averra CMS · уведомление о заявке с сайта, отправлено автоматически',
+        ? 'уведомление о заявке с сайта. «Ответить» напишет посетителю'
+        : 'уведомление о заявке с сайта, отправлено автоматически',
     }
   },
 })

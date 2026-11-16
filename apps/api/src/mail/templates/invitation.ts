@@ -1,7 +1,6 @@
 import { MailLine, MailUrl } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { button, note, paragraph } from '../layout'
 import { defineMailTemplate, formatDays } from './define'
 
 const roles = {
@@ -25,8 +24,8 @@ export const invitationTemplate = defineMailTemplate({
     button: {
       label: 'Ссылка приглашения',
       required: true,
-      render: ({ url }) => ({
-        html: button('Принять приглашение', url),
+      render: ({ url }, ui) => ({
+        html: ui.button('Принять приглашение', url),
         text: `Принять приглашение: ${url}`,
       }),
     },
@@ -53,7 +52,7 @@ export const invitationTemplate = defineMailTemplate({
   },
   // В ссылке токен: в очереди он живёт до отправки и не дольше, чем само приглашение
   secret: { lifetimeMs: ({ expiresInDays }) => expiresInDays * 24 * 60 * 60 * 1000 },
-  render({ inviterName, siteName, role, url, expiresInDays }) {
+  render({ inviterName, siteName, role, url, expiresInDays }, ui) {
     const intro = `${inviterName} приглашает вас работать с сайтом «${siteName}» в Averra CMS.`
     const roleLine = `Ваша роль — ${roles[role]}.`
     const action = 'Чтобы принять приглашение, откройте ссылку:'
@@ -66,7 +65,7 @@ export const invitationTemplate = defineMailTemplate({
     return {
       subject: `Приглашение на сайт «${siteName}» в Averra CMS`,
       preheader: `${inviterName} приглашает вас на сайт «${siteName}»`,
-      body: html`${paragraph(intro)}${paragraph(roleLine)}${paragraph(action)}${button('Принять приглашение', url)}${note(howTo)}${note(expires)}${note(ignore)}`,
+      body: html`${ui.paragraph(intro)}${ui.paragraph(roleLine)}${ui.paragraph(action)}${ui.button('Принять приглашение', url)}${ui.note(howTo)}${ui.note(expires)}${ui.note(ignore)}`,
       text: `${intro}\n${roleLine}\n\n${action}\n${url}\n\n${howTo}\n${expires}\n${ignore}`,
     }
   },

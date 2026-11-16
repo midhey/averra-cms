@@ -1,8 +1,9 @@
+import { defaultTheme, legacyTheme } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createDb, type Db } from '../db/client'
 import { migrateDb } from '../db/migrate'
-import { mailOutbox } from '../db/schema'
+import { mailOutbox, sites } from '../db/schema'
 import { MailSendError } from './mailer'
 import { memoryMailer } from './memory-mailer'
 import { enqueueMail } from './outbox'
@@ -52,6 +53,32 @@ async function until(check: () => boolean | Promise<boolean>, timeoutMs = 5000) 
 const statusOf = async (id: string) =>
   (await db.select({ status: mailOutbox.status }).from(mailOutbox).where(eq(mailOutbox.id, id)))[0]
     ?.status
+
+describe('оформление при отправке', () => {
+  it('письмо сайта уходит в цветах его опубликованной темы и с его названием', async () => {
+    const theme = {
+      ...defaultTheme,
+      colors: { ...defaultTheme.colors, background: '#f3ece0', accent: '#213d32' },
+    }
+    const [site] = await db
+      .insert(sites)
+      .values({ name: 'Vallex English', theme: legacyTheme(theme), themePublished: theme })
+      .returning({ id: sites.id })
+    const mailer = memoryMailer()
+    await enqueueMail(db, {
+      template: 'lead-received',
+      data: { siteName: 'Vallex English' },
+      to: 'anna@example.ru',
+      siteId: site?.id,
+    })
+    await processOutbox({ db, mailer, ...settings })
+    const [sent] = mailer.sent
+    expect(sent?.html).toContain('background:#f3ece0')
+    expect(sent?.html).toContain('>Vallex English</td>')
+    expect(sent?.html).not.toContain('Averra CMS')
+    expect(sent?.text).toContain('Vallex English · письмо отправлено автоматически')
+  })
+})
 
 describe('обработчик в процессе API', () => {
   it('сам забирает письма из очереди', async () => {

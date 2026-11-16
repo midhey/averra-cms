@@ -1,7 +1,6 @@
 import { MailLine } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 
 /**
@@ -24,14 +23,14 @@ export const leadReceivedTemplate = defineMailTemplate({
   },
   schema: z.strictObject({ siteName: MailLine(80) }),
   example: { siteName: 'Ремонт квартир под ключ' },
-  render({ siteName }) {
+  render({ siteName }, ui) {
     const intro = `Мы получили вашу заявку на сайте «${siteName}» и скоро с вами свяжемся.`
     const ignore =
       'Если вы не оставляли заявку, просто удалите это письмо: больше писем без вашей заявки не будет.'
     return {
       subject: `Заявка получена — ${siteName}`,
       preheader: 'Мы получили вашу заявку и скоро свяжемся с вами',
-      body: html`${paragraph('Здравствуйте!')}${paragraph(intro)}${note(ignore)}`,
+      body: html`${ui.paragraph('Здравствуйте!')}${ui.paragraph(intro)}${ui.note(ignore)}`,
       text: `Здравствуйте!\n\n${intro}\n\n${ignore}`,
     }
   },

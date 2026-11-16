@@ -1,4 +1,6 @@
+import { defaultTheme, type Theme } from '@averra/schema'
 import { describe, expect, it } from 'vitest'
+import { siteMailStyle } from '../layout'
 import { formatDays, formatMinutes } from './define'
 import { MailDataError, MailTemplateId, mailTemplates, previewMail, renderMail } from './index'
 
@@ -259,5 +261,68 @@ describe('шаблоны писем', () => {
         renderMail('notification', { title: 'А\nBcc: x@evil.ru', lines: [], fields: [] }),
       ),
     ).toBeInstanceOf(MailDataError)
+  })
+})
+
+describe('оформление писем сайта', () => {
+  const theme: Theme = {
+    ...defaultTheme,
+    colors: {
+      background: '#f3ece0',
+      surface: '#fbf7f0',
+      text: '#1e2b25',
+      muted: '#5b645e',
+      accent: '#213d32',
+      onAccent: '#fbf7f0',
+      border: '#d6cdbb',
+    },
+    fonts: { heading: 'playfair-display', body: 'manrope' },
+    radius: 'large',
+  }
+  const style = siteMailStyle('Vallex English', theme)
+
+  it('письмо сайта — в цветах и шрифтах его темы, с его названием в шапке и подвале', () => {
+    const mail = previewMail('lead-received', 'Vallex English', undefined, style)
+    expect(mail.html).toContain('background:#f3ece0')
+    expect(mail.html).toContain(
+      'background:#fbf7f0;border:1px solid #d6cdbb;border-top:4px solid #213d32;border-radius:16px',
+    )
+    expect(mail.html).toContain('color:#1e2b25')
+    expect(mail.html).not.toContain('#2f5bea')
+    expect(mail.html).not.toContain('Averra CMS')
+    expect(mail.html).toContain('>Vallex English</td>')
+    // Стек шрифтов не закрывает атрибут style: кавычки в нём только экранированные
+    expect(mail.html).toMatch(/font-family:&#39;Manrope&#39;, [^"]+;font-size:16px/)
+    expect(mail.text).toMatch(/\n—\nVallex English · письмо отправлено автоматически.+\n$/)
+  })
+
+  it('кнопка заявки — цветом акцента, а не синим Averra', () => {
+    const mail = previewMail('lead-new', 'Vallex English', undefined, style)
+    expect(mail.html).toContain('border-radius:16px;background:#213d32')
+    expect(mail.html).toContain('color:#fbf7f0;text-decoration:none')
+    expect(mail.text).toMatch(/\n—\nVallex English · уведомление о заявке с сайта.+\n$/)
+  })
+
+  it('письма установки остаются в оформлении Averra CMS, даже если передать тему', () => {
+    const mail = renderMail(
+      'password-reset',
+      mailTemplates['password-reset'].example,
+      undefined,
+      style,
+    )
+    expect(mail.html).toContain('#2f5bea')
+    expect(mail.html).not.toContain('Vallex English')
+    expect(mail.text).toMatch(/\n—\nAverra CMS · .+\n$/)
+  })
+
+  it('свой текст письма собирается в том же оформлении, что и стандартный', () => {
+    const mail = previewMail(
+      'lead-new',
+      'Vallex English',
+      mailTemplates['lead-new'].defaultText,
+      style,
+    )
+    expect(mail.html).toContain('background:#213d32')
+    expect(mail.html).not.toContain('#2f5bea')
   })
 })

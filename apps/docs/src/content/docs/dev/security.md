@@ -275,7 +275,9 @@ Content-Security-Policy. Строку собирает `siteCsp` (`packages/sche
 - Шаблон — файл в `src/mail/templates/` (`defineMailTemplate`: схема данных, пример, `render`) и
   строка в `templates/index.ts`. HTML — только тегом `html` из `src/mail/html.ts` (подстановки
   экранируются), оформление — инлайн-стилями из `src/mail/layout.ts`, без `<style>` и внешних
-  ресурсов. У письма есть текстовая версия.
+  ресурсов. Абзацы, кнопки и таблицы шаблон берёт из второго аргумента `render` (`mailParts`): у
+  писем сайта они в цветах его темы (`siteMailStyle`), у писем установки — Averra CMS. У письма
+  есть текстовая версия.
 - Команда, которая кладёт письмо в очередь (`pnpm member:invite`), решает «почта есть» так же, как
   API (`readStoredPassword` из `src/mail/runtime.ts`). Ссылки из писем ведут на `ADMIN_URL`: если это
   localhost, а почта идёт по SMTP, команда отказывает, а API предупреждает в логе и на странице

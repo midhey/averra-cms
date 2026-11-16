@@ -1,6 +1,7 @@
 import { type MailTemplateText, pluralRu } from '@averra/schema'
 import type { z } from 'zod'
 import type { SafeHtml } from '../html'
+import type { MailParts } from '../layout'
 
 /** Что шаблон собирает из данных. Макет, подвал и проверку темы добавляет renderMail */
 export type MailContent = {
@@ -37,7 +38,7 @@ export type MailTemplate<S extends z.ZodType = z.ZodType> = {
     {
       label: string
       required?: boolean
-      render: (data: z.output<S>) => { html: SafeHtml; text: string }
+      render: (data: z.output<S>, parts: MailParts) => { html: SafeHtml; text: string }
     }
   >
   defaultText: MailTemplateText
@@ -50,7 +51,8 @@ export type MailTemplate<S extends z.ZodType = z.ZodType> = {
    * не ушло за lifetimeMs (срок ссылки), не отправляется вовсе и тоже теряет данные
    */
   secret?: { lifetimeMs(data: z.output<S>): number }
-  render(data: z.output<S>): MailContent
+  /** parts — абзацы, кнопки и таблицы в оформлении письма: у писем сайта — по его теме */
+  render(data: z.output<S>, parts: MailParts): MailContent
 }
 
 export const defineMailTemplate = <S extends z.ZodType>(template: MailTemplate<S>) => template

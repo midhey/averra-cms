@@ -1,7 +1,6 @@
 import { MailAddress, MailLine } from '@averra/schema'
 import { z } from 'zod'
 import { html } from '../html'
-import { details, note, paragraph } from '../layout'
 import { defineMailTemplate } from './define'
 
 const changedAtFormat = new Intl.DateTimeFormat('ru-RU', {
@@ -40,7 +39,10 @@ export const mailSettingsChangedTemplate = defineMailTemplate({
   blocks: {
     details: {
       label: 'Сведения об изменении',
-      render: ({ changedBy, changedByEmail, changedAt, action, fields, provider, verified }) => {
+      render: (
+        { changedBy, changedByEmail, changedAt, action, fields, provider, verified },
+        ui,
+      ) => {
         const rows: [string, string][] = [
           ['Кто', `${changedBy} (${changedByEmail})`],
           ['Когда', `${changedAtFormat.format(new Date(changedAt))} по Москве`],
@@ -55,7 +57,7 @@ export const mailSettingsChangedTemplate = defineMailTemplate({
           )
         rows.push(['Теперь письма уходят', provider])
         return {
-          html: details(rows),
+          html: ui.details(rows),
           text: rows.map(([label, value]) => `${label}: ${value}`).join('\n'),
         }
       },
@@ -88,7 +90,7 @@ export const mailSettingsChangedTemplate = defineMailTemplate({
     provider: 'SMTP smtp.example.ru:465 (TLS), вход noreply@example.ru',
     verified: true,
   },
-  render({ changedBy, changedByEmail, changedAt, action, fields, provider, verified }) {
+  render({ changedBy, changedByEmail, changedAt, action, fields, provider, verified }, ui) {
     const when = `${changedAtFormat.format(new Date(changedAt))} по Москве`
     const intro =
       action === 'saved'
@@ -115,7 +117,7 @@ export const mailSettingsChangedTemplate = defineMailTemplate({
         action === 'saved'
           ? 'Настройки SMTP изменены в админке'
           : 'Настройки SMTP удалены из админки',
-      body: html`${paragraph(intro)}${details(rows)}${note(warning)}`,
+      body: html`${ui.paragraph(intro)}${ui.details(rows)}${ui.note(warning)}`,
       text: `${intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join('\n')}\n\n${warning}`,
     }
   },
