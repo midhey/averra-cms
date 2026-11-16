@@ -857,6 +857,13 @@ describe('дополнительные домены-редиректы (--redire
       expect(block).not.toMatch(/file_server|reverse_proxy|handle/)
     })
 
+    it('админка и API закрыты от поисковиков заголовком, сайт — нет', () => {
+      const admin = text.slice(text.indexOf('{$ADMIN_DOMAIN} {'), text.indexOf('{$SITE_DOMAIN} {'))
+      expect(admin).toContain('header X-Robots-Tag "noindex, nofollow"')
+      const site = text.slice(text.indexOf('{$SITE_DOMAIN} {'), start)
+      expect(site).not.toContain('X-Robots-Tag')
+    })
+
     it('скобки Caddyfile сбалансированы, блоков сайта три: админка, сайт, редиректы', () => {
       let depth = 0
       // Подстановки {$ИМЯ}, {uri}, {file.…} — не блоки

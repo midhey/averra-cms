@@ -25,6 +25,10 @@
 {$ADMIN_DOMAIN} {
 	import security
 	encode zstd gzip
+	# Админке и API не место в поисковой выдаче. Домен поисковики находят и без ссылок — по журналам
+	# сертификатов (Certificate Transparency). robots.txt не закрываем: робот должен зайти и увидеть
+	# noindex, иначе адрес остаётся в выдаче без описания. Тот же запрет — meta в index.html админки
+	header X-Robots-Tag "noindex, nofollow"
 
 	handle /api/* {
 		# Caddy передаёт API настоящий Host и ставит X-Forwarded-For адресом клиента: присланный

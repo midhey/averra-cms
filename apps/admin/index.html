@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Админку не индексируют: и без Caddy (своя раздача), и вместе с X-Robots-Tag из Caddyfile -->
+    <meta name="robots" content="noindex, nofollow" />
     <!--
       Рамки админки — только свои (srcdoc предпросмотра и письма; плееры блока «Видео» админка не
       встраивает). Директива frame-src родителя распространяется и на переход, который начала сама
