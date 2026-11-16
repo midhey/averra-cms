@@ -37,7 +37,7 @@ const tokens = {
 type Item = {
   id: string
   name: string
-  rights: { blocksDraft: boolean; publish: boolean; delete: boolean }
+  rights: { blocksDraft: boolean; designDraft: boolean; publish: boolean; delete: boolean }
   createdBy: string | null
   createdAt: string
   lastUsedAt: string | null
@@ -92,7 +92,7 @@ describe('выпуск, список, права, отзыв', () => {
     const created = await issue({ name: '  Claude Code Алексея  ' })
     expect(created).toMatchObject({
       name: 'Claude Code Алексея',
-      rights: { blocksDraft: true, publish: false, delete: false },
+      rights: { blocksDraft: true, designDraft: true, publish: false, delete: false },
       createdBy: owner.user.name,
       lastUsedAt: null,
       revokedAt: null,
@@ -110,7 +110,12 @@ describe('выпуск, список, права, отзыв', () => {
 
   it('выпуск с правами; кривое имя и лишнее поле — 400 с путём до поля', async () => {
     const all = await issue({ name: 'всё', rights: { publish: true, delete: true } })
-    expect(all.rights).toEqual({ blocksDraft: true, publish: true, delete: true })
+    expect(all.rights).toEqual({
+      blocksDraft: true,
+      designDraft: true,
+      publish: true,
+      delete: true,
+    })
 
     const empty = await tokens.create(owner.headers, { name: '   ' })
     expect(empty.status).toBe(400)
@@ -134,6 +139,7 @@ describe('выпуск, список, права, отзыв', () => {
     expect(res.status).toBe(200)
     expect(((await res.json()) as Item).rights).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: true,
       delete: false,
     })
@@ -231,4 +237,15 @@ describe('права токена в API', () => {
     })
     expect(denied.status).toBe(403)
   })
+})
+
+it('владелец переключает черновики оформления без изменения остальных прав', async () => {
+  const created = await issue()
+  const before = created.rights
+  for (const enabled of [false, true]) {
+    const res = await tokens.rights(owner.headers, created.id, { designDraft: enabled })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as Item).rights).toEqual({ ...before, designDraft: enabled })
+    expect((await listed(created.id))?.rights.designDraft).toBe(enabled)
+  }
 })

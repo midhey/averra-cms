@@ -37,8 +37,8 @@ type HeaderDeps = {
  * Шапка сайта и меню (экран «Шапка и подвал» админки): монтируется на /sites/:siteId/header.
  * Черновик и публикация, как у темы: «Сохранить» меняет черновик, «Опубликовать» — шапку на сайте
  * и пересобирает его. Читать может любой участник и токен (шапка и так видна на сайте), менять —
- * владелец и администратор сайта (header.edit); токену API — нет: шапку на всех страницах решает
- * человек, глядя на предпросмотр
+ * владелец и администратор сайта. Токену с designDraft открыт черновик вместе с видом:
+ * публикацию и возврат из истории решает человек, глядя на предпросмотр
  */
 export function headerRoutes({ db, publisher, log }: HeaderDeps) {
   const repo = headerRepo(db)
@@ -56,7 +56,9 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
   const saveDraft = async (c: Context<AuthEnv>, siteId: string, input: Header) => {
     // У логотипа «Текст» картинки нет: спрятанная держала бы файл в медиатеке
     const header = headerWithVisibleLogo(input)
-    const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+    // Владелец доверил токену черновик вместе с видом: человек проверит предпросмотр до публикации.
+    // Людям без header.look вид по-прежнему закрыт
+    const lookLockedForMe = c.var.actor.kind === 'user' && !can(c.var.siteRole, 'header.look')
     // Быстрая сверка вида — до проверок 409: чужой вид отвечает 403, а не списком полей.
     // Окончательная — внутри сохранения, под блокировкой строки
     if (lookLockedForMe) {
@@ -114,7 +116,7 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
       .put(
         '/',
         validate('param', SiteParams),
-        site('header.edit'),
+        site('header.draft'),
         validate('json', Header),
         async (c) => {
           return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))

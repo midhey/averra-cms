@@ -16,6 +16,7 @@ describe('token:create', () => {
   it('по умолчанию — «только черновики»: черновики блоков да, публикация и удаление нет', () => {
     expect(parseTokenCreate(['--name', 'mcp']).rights).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: false,
       delete: false,
     })
@@ -24,7 +25,7 @@ describe('token:create', () => {
   it('--publish и --delete включают права, --no-blocks-draft снимает черновики блоков', () => {
     expect(
       parseTokenCreate(['--name', 'mcp', '--publish', '--delete', '--no-blocks-draft']).rights,
-    ).toEqual({ blocksDraft: false, publish: true, delete: true })
+    ).toEqual({ blocksDraft: false, designDraft: true, publish: true, delete: true })
   })
 
   it('прежний --blocks-draft принимается: право и так включено', () => {
@@ -70,11 +71,12 @@ describe('token:grant', () => {
       publish: false,
       delete: false,
     })
-    expect(await grantRights(api.db, tokenId, { blocksDraft: true, publish: true })).toMatch(
-      /Публикация страниц — да/,
-    )
+    expect(
+      await grantRights(api.db, tokenId, { blocksDraft: true, designDraft: true, publish: true }),
+    ).toMatch(/Публикация страниц — да/)
     expect((await tokensRepo(api.db).verify(token))?.rights).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: true,
       delete: false,
     })
@@ -94,5 +96,28 @@ describe('token:grant', () => {
     // Права в базе остались прежними
     const row = (await tokensRepo(api.db).list()).find((token) => token.id === tokenId)
     expect(row?.rights.publish).toBe(false)
+  })
+})
+
+describe('--design-draft', () => {
+  it('create принимает on|off, grant меняет только новое право', () => {
+    expect(parseTokenCreate(['--name', 'mcp', '--design-draft', 'off']).rights.designDraft).toBe(
+      false,
+    )
+    expect(parseTokenCreate(['--name', 'mcp', '--design-draft', 'on']).rights.designDraft).toBe(
+      true,
+    )
+    expect(parseTokenGrant(['--id', id, '--design-draft', 'on'])).toEqual({
+      id,
+      rights: { designDraft: true },
+    })
+    expect(parseTokenGrant(['--id', id, '--design-draft', 'off'])).toEqual({
+      id,
+      rights: { designDraft: false },
+    })
+    expect(() => parseTokenGrant(['--id', id, '--design-draft', 'yes'])).toThrow(/Нужно on или off/)
+    expect(() => parseTokenCreate(['--name', 'mcp', '--design-draft', 'yes'])).toThrow(
+      /Нужно on или off/,
+    )
   })
 })

@@ -73,8 +73,8 @@ type ThemeDeps = {
  * Тема сайта (экран «Тема» админки): монтируется на /sites/:siteId/theme. Черновик и публикация,
  * как у страниц: «Сохранить» меняет черновик, «Опубликовать» — тему на сайте и пересобирает его.
  * Читать может любой участник и токен (тема и так видна на сайте), менять — только владелец
- * (theme.edit: фирменный стиль делает студия); токену API — нет: тему решает человек, глядя на
- * предпросмотр
+ * (theme.edit: фирменный стиль делает студия). Токену с designDraft открыт черновик,
+ * а публикацию и возврат из истории решает человек, глядя на предпросмотр
  */
 export function themeRoutes({ db, publisher, log }: ThemeDeps) {
   const repo = themeRepo(db)
@@ -105,7 +105,7 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
       .put(
         '/',
         validate('param', SiteParams),
-        site('theme.edit'),
+        site('theme.draft'),
         validate('json', ThemeInput),
         async (c) => {
           return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))

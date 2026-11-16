@@ -45,7 +45,8 @@ export function tokensRoutes({ db }: { db: Db }) {
         return c.json(list, 200)
       })
 
-      // Выпуск — на сайт установки: в установке он один. Права не названы — «только черновики»
+      // Выпуск — на сайт установки: в установке он один. Права не названы — «только черновики»,
+      // включая оформление: сайт до проверки человеком не меняется
       .post('/', manage, validate('json', NewToken), async (c) => {
         const { name, rights } = c.req.valid('json')
         const site = await sites.installationSite()

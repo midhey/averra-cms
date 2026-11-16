@@ -8,8 +8,10 @@ import {
   customBlockType,
   customH1Types,
   describeApiError,
+  Footer,
   footerLayoutTitles,
   footerToneTitles,
+  Header,
   headerLayoutTitles,
   headerLinkHref,
   isCustomBlockType,
@@ -33,6 +35,7 @@ import {
   SLUG_RECOMMENDED_MAX,
   SVG_MIME_TYPE,
   seoAdvice,
+  ThemeInput,
   themeFontTitles,
   Uuid,
 } from '@averra/schema'
@@ -79,10 +82,11 @@ const SavedDraft = z.object({
 })
 
 /**
- * Тема из GET /api/sites/:siteId/theme: черновик не нужен — нейронке важно то, что на сайте. Тему
- * читает readTheme: установка новее MCP могла добавить поле или шрифт, и это не повод для ошибки
+ * Тема из GET /api/sites/:siteId/theme: правим актуальный черновик, сохраняя опубликованное.
+ * readTheme допускает поля и шрифты установки новее MCP
  */
 const SiteThemeView = z.object({
+  draft: z.unknown().transform((theme) => readTheme(theme)),
   published: z.unknown().transform((theme) => readTheme(theme)),
   unpublished: z.boolean().catch(false),
 })
@@ -110,6 +114,10 @@ const SiteRef = z.object({
     .describe('Id сайта. Не нужен: по умолчанию — сайт, на который выпущен токен'),
 })
 type SiteRef = z.output<typeof SiteRef>
+
+export const SaveThemeDraftInput = SiteRef.extend({ theme: ThemeInput })
+export const SaveHeaderDraftInput = SiteRef.extend({ header: Header })
+export const SaveFooterDraftInput = SiteRef.extend({ footer: Footer })
 
 export const ListPagesInput = SiteRef.extend(PageListFilters.shape).extend({
   limit: z.number().int().min(1).max(PAGE_LIST_MAX).default(PAGE_LIST_DEFAULT),
@@ -180,7 +188,7 @@ const rules = [
   'save_draft сохраняет черновик. На сайт он попадает только после publish_page.',
   'У любого блока страницы рядом с id, type и props есть необязательный hidden: true — скрыть на сайте, false или отсутствие — показать. Содержимое и порядок сохраняются; скрытый блок не выводится в предпросмотре и на сайте, не служит якорем меню. Изменение попадёт на сайт после publish_page и останется в истории.',
   'Свои блоки установки (custom: true, тип custom:<ключ>) ставятся на страницу так же: { id, type: "custom:tariffs", props } по их схеме props. Их сделал разработчик студии под этот сайт — бери их, если они подходят по смыслу. Новый блок можно предложить черновиком определения (list_custom_blocks, save_custom_block_draft, check_custom_block) — если владелец включил токену это право; публикует определение только человек в админке, и до этого блока на страницах нет.',
-  'Шапка, меню и подвал — одни на весь сайт, их меняют в админке (get_header только читает). Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. Пункт или кнопка с url ведут на другой сайт, телефон или почту (href в get_header). hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. shortHeader: true — короткая шапка (логотип и «← На главную» вместо меню и кнопки) для служебной страницы: «Спасибо», документа, страницы 404 — ставь, если человек просил или делаешь такую страницу. Подвал тоже меняют только в админке. Сохраняя черновик, передавай hideHeader, shortHeader, hideFooter, seo и window, если они уже были: без них поле пропадёт (а страница-окно станет обычной страницей).',
+  'Шапка, меню и подвал — одни на весь сайт, их черновики доступны с правом «Черновики темы, шапки и подвала» (save_header_draft, save_footer_draft), публикует и откатывает человек в админке. Пункты меню ведут на страницу или блок по его id — не меняй id блоков, на которые ссылается меню, и не удаляй такие блоки без просьбы человека: пункт перестанет вести к разделу. Пункт или кнопка с url ведут на другой сайт, телефон или почту (href в get_header). hideHeader: true рядом с blocks скрывает шапку на этой странице, hideFooter: true — подвал (ссылки на документы остаются) — только для промо-страницы и если человек об этом просил. shortHeader: true — короткая шапка (логотип и «← На главную» вместо меню и кнопки) для служебной страницы: «Спасибо», документа, страницы 404 — ставь, если человек просил или делаешь такую страницу. Черновик подвала сохраняет save_footer_draft; публикует человек в админке. Сохраняя черновик, передавай hideHeader, shortHeader, hideFooter, seo и window, если они уже были: без них поле пропадёт (а страница-окно станет обычной страницей).',
 ]
 
 /**
@@ -357,6 +365,10 @@ export function cmsTools(client: Api | undefined) {
       publishPage: fail,
       getTheme: fail,
       getHeader: fail,
+      getFooter: fail,
+      saveThemeDraft: fail,
+      saveHeaderDraft: fail,
+      saveFooterDraft: fail,
       listCustomBlocks: fail,
       getCustomBlock: fail,
       saveCustomBlockDraft: fail,
@@ -507,7 +519,7 @@ export function cmsTools(client: Api | undefined) {
     },
     /**
      * Тема на сайте: цвета, шрифты (с названиями) и скругления — чтобы подбирать тексты и картинки
-     * под стиль. Только чтение: тему меняют в админке, токену API запись запрещена
+     * под стиль. Правку начинаем с черновика: там могут быть ещё не опубликованные правки человека
      */
     getTheme: async ({ siteId }: SiteRef) => {
       const param = { siteId: await siteOf(siteId) }
@@ -515,6 +527,8 @@ export function cmsTools(client: Api | undefined) {
       const { heading, body, accent } = view.published.fonts
       return {
         theme: view.published,
+        published: view.published,
+        draft: view.draft,
         fonts: {
           heading: themeFontTitles[heading],
           body: themeFontTitles[body],
@@ -527,7 +541,7 @@ export function cmsTools(client: Api | undefined) {
     /**
      * Шапка, меню и подвал на сайте: раскладка, пункты меню с адресами (страница, блок или
      * внешняя ссылка), логотип, вид, подвал и черновики — чтобы не ломать ссылки меню правкой
-     * страниц. Только чтение: шапку и подвал меняют в админке
+     * страниц. Черновики читаем перед правкой, чтобы сохранить работу человека
      */
     getHeader: async ({ siteId }: SiteRef) => {
       const param = { siteId: await siteOf(siteId) }
@@ -553,15 +567,39 @@ export function cmsTools(client: Api | undefined) {
       })
       return {
         header: view.published && describe(view.published),
+        published: view.published,
         note: view.published
           ? undefined
           : 'Шапку ещё не публиковали: на сайте её нет. Её настраивают в админке, «Шапка и подвал»',
-        draft: describe(view.draft),
+        // Черновик возвращаем по схеме Header: вычисленные подписи и href помешали бы сохранить его
+        draft: view.draft,
         unpublishedDraft: view.unpublished,
         footer: footer.published && describeFooter(footer.published),
         footerDraft: describeFooter(footer.draft),
         unpublishedFooterDraft: footer.unpublished,
       }
+    },
+    getFooter: async ({ siteId }: SiteRef) => {
+      const param = { siteId: await siteOf(siteId) }
+      return SiteFooterView.parse(await unwrap(() => sites[':siteId'].footer.$get({ param })))
+    },
+    saveThemeDraft: async ({ siteId, theme }: z.output<typeof SaveThemeDraftInput>) => {
+      const param = { siteId: await siteOf(siteId) }
+      return SiteThemeView.parse(
+        await unwrap(() => sites[':siteId'].theme.$put({ param, json: theme })),
+      )
+    },
+    saveHeaderDraft: async ({ siteId, header }: z.output<typeof SaveHeaderDraftInput>) => {
+      const param = { siteId: await siteOf(siteId) }
+      return SiteHeaderView.parse(
+        await unwrap(() => sites[':siteId'].header.$put({ param, json: header })),
+      )
+    },
+    saveFooterDraft: async ({ siteId, footer }: z.output<typeof SaveFooterDraftInput>) => {
+      const param = { siteId: await siteOf(siteId) }
+      return SiteFooterView.parse(
+        await unwrap(() => sites[':siteId'].footer.$put({ param, json: footer })),
+      )
     },
     /**
      * Свои блоки сайта с определениями: поля, шаблон, CSS, пример. Токен с правом на черновики видит
@@ -864,7 +902,7 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Тема сайта',
       description:
-        'Цвета, шрифты и скругления сайта, как они на сайте сейчас: чтобы подбирать тексты, картинки и обложки под стиль. Менять тему через MCP нельзя — это делают в админке, на экране «Тема».',
+        'Цвета, шрифты и скругления: опубликованная тема (published и theme) и актуальный черновик (draft). Перед save_theme_draft прочитай draft: сохранение заменит его целиком. Публикует и откатывает человек в админке.',
       inputSchema: SiteRef,
       annotations: { readOnlyHint: true },
     },
@@ -876,11 +914,59 @@ export function registerTools(server: McpServer, api: Api | undefined) {
     {
       title: 'Шапка и меню сайта',
       description:
-        'Шапка сайта, меню и подвал, как они на сайте сейчас: раскладка, пункты меню (страница и блок или внешняя ссылка, href, новая вкладка), кнопка, логотип, вид, свой вид (custom: ключ своего блока с местом header или footer и его поля; null — стандартный), подвал (вид, фон, свой текст, ссылка на согласие) и черновики. Чтобы не ломать ссылки меню правкой страниц. Менять шапку и подвал через MCP нельзя — это делают в админке, «Шапка и подвал».',
+        'Шапка сайта, меню и подвал, как они на сайте сейчас: раскладка, пункты меню (страница и блок или внешняя ссылка, href, новая вкладка), кнопка, логотип, вид, свой вид (custom: ключ своего блока с местом header или footer и его поля; null — стандартный), подвал (вид, фон, свой текст, ссылка на согласие) и черновики. Чтобы не ломать ссылки меню правкой страниц. Перед save_header_draft прочитай draft: сохраняется шапка вместе с меню целиком. Черновик подвала отдельно — get_footer. Публикует и откатывает человек в админке.',
       inputSchema: SiteRef,
       annotations: { readOnlyHint: true },
     },
     async (args) => asText(await tools.getHeader(args)),
+  )
+
+  server.registerTool(
+    'get_footer',
+    {
+      title: 'Подвал сайта',
+      description:
+        'Актуальный черновик (draft), опубликованный подвал (published; null — ещё не публиковали) и наличие изменений (unpublished). Контакты организации не возвращаются. Перед save_footer_draft прочитай draft: сохранение заменит его целиком.',
+      inputSchema: SiteRef,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.getFooter(args)),
+  )
+
+  server.registerTool(
+    'save_theme_draft',
+    {
+      title: 'Сохранить черновик темы',
+      description:
+        'Сохраняет только черновик темы целиком. Перед правкой прочитай draft через get_theme, чтобы сохранить правки человека. На сайт изменения уходят после публикации человеком в админке; снимает с сайта и возвращает из истории тоже человек. Нужно право токена «Черновики темы, шапки и подвала»: владелец включает его в Установка → Доступ для ИИ или token:grant --design-draft on. Ошибки API с путями полей возвращаются по-русски.',
+      inputSchema: SaveThemeDraftInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => asText(await tools.saveThemeDraft(args)),
+  )
+
+  server.registerTool(
+    'save_header_draft',
+    {
+      title: 'Сохранить черновик шапки вместе с меню',
+      description:
+        'Сохраняет только черновик шапки вместе с меню целиком. Перед правкой прочитай draft через get_header, чтобы сохранить правки человека. На сайт изменения уходят после публикации человеком в админке; снимает с сайта и возвращает из истории тоже человек. Нужно право токена «Черновики темы, шапки и подвала»: владелец включает его в Установка → Доступ для ИИ или token:grant --design-draft on. Ошибки API с путями полей возвращаются по-русски.',
+      inputSchema: SaveHeaderDraftInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => asText(await tools.saveHeaderDraft(args)),
+  )
+
+  server.registerTool(
+    'save_footer_draft',
+    {
+      title: 'Сохранить черновик подвала',
+      description:
+        'Сохраняет только черновик подвала целиком. Перед правкой прочитай draft через get_footer, чтобы сохранить правки человека. На сайт изменения уходят после публикации человеком в админке; снимает с сайта и возвращает из истории тоже человек. Нужно право токена «Черновики темы, шапки и подвала»: владелец включает его в Установка → Доступ для ИИ или token:grant --design-draft on. Ошибки API с путями полей возвращаются по-русски.',
+      inputSchema: SaveFooterDraftInput,
+      annotations: { idempotentHint: true },
+    },
+    async (args) => asText(await tools.saveFooterDraft(args)),
   )
 
   server.registerTool(

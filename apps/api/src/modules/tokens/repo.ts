@@ -15,9 +15,15 @@ const TOKEN_FORMAT =
 export const REVOKED_TOKEN_MESSAGE = 'Токен отозван: права ему уже не нужны. Выпустите новый'
 
 /** Права токена из строки api_tokens */
-const rightsOf = (row: { blocksDraft: boolean; canPublish: boolean; canDelete: boolean }) =>
+const rightsOf = (row: {
+  blocksDraft: boolean
+  designDraft: boolean
+  canPublish: boolean
+  canDelete: boolean
+}) =>
   ({
     blocksDraft: row.blocksDraft,
+    designDraft: row.designDraft,
     publish: row.canPublish,
     delete: row.canDelete,
   }) satisfies TokenRights
@@ -25,12 +31,14 @@ const rightsOf = (row: { blocksDraft: boolean; canPublish: boolean; canDelete: b
 /** Права в колонки api_tokens: только названные */
 const columnsOf = (rights: TokenRightsPatch) => ({
   ...(rights.blocksDraft === undefined ? {} : { blocksDraft: rights.blocksDraft }),
+  ...(rights.designDraft === undefined ? {} : { designDraft: rights.designDraft }),
   ...(rights.publish === undefined ? {} : { canPublish: rights.publish }),
   ...(rights.delete === undefined ? {} : { canDelete: rights.delete }),
 })
 
 const rightsColumns = {
   blocksDraft: apiTokens.blocksDraft,
+  designDraft: apiTokens.designDraft,
   canPublish: apiTokens.canPublish,
   canDelete: apiTokens.canDelete,
 }
@@ -39,7 +47,7 @@ export function tokensRepo(db: Db) {
   return {
     /**
      * Новый токен. Сам токен возвращается один раз: в базе остаётся только его хеш. Права — все
-     * три явно, по умолчанию «только черновики»: DEFAULT колонок — для вставок прежней версии API
+     * явно, по умолчанию «только черновики»: DEFAULT колонок — для вставок прежней версии API
      */
     async create({
       siteId,
@@ -133,9 +141,9 @@ export function tokensRepo(db: Db) {
         .innerJoin(sites, eq(sites.id, apiTokens.siteId))
         .leftJoin(users, eq(users.id, apiTokens.createdBy))
         .orderBy(asc(apiTokens.createdAt))
-      return rows.map(({ blocksDraft, canPublish, canDelete, ...row }) => ({
+      return rows.map(({ blocksDraft, designDraft, canPublish, canDelete, ...row }) => ({
         ...row,
-        rights: rightsOf({ blocksDraft, canPublish, canDelete }),
+        rights: rightsOf({ blocksDraft, designDraft, canPublish, canDelete }),
       }))
     },
   }

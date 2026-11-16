@@ -5,10 +5,11 @@ describe('выпуск токена', () => {
   it('без прав — «только черновики»; названные права поверх них', () => {
     expect(NewToken.parse({ name: ' mcp ' })).toEqual({
       name: 'mcp',
-      rights: { blocksDraft: true, publish: false, delete: false },
+      rights: { blocksDraft: true, designDraft: true, publish: false, delete: false },
     })
     expect(NewToken.parse({ name: 'mcp', rights: { publish: true } }).rights).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: true,
       delete: false,
     })
@@ -25,5 +26,9 @@ describe('правка прав', () => {
   it('нужно хотя бы одно право', () => {
     expect(TokenRightsPatch.safeParse({}).success).toBe(false)
     expect(TokenRightsPatch.parse({ delete: true })).toEqual({ delete: true })
+    expect(TokenRightsPatch.parse({ designDraft: false })).toEqual({ designDraft: false })
+    expect(NewToken.parse({ name: 'mcp', rights: { designDraft: false } }).rights.designDraft).toBe(
+      false,
+    )
   })
 })

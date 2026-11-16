@@ -45,22 +45,26 @@ describe('токены API', () => {
     const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'mcp' })
     expect(await rowOf(id)).toMatchObject({
       blocksDraft: true,
+      designDraft: true,
       canPublish: false,
       canDelete: false,
     })
     expect(await tokens.setRights(id, { publish: true })).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: true,
       delete: false,
     })
     expect((await tokens.verify(token))?.rights).toEqual({
       blocksDraft: true,
+      designDraft: true,
       publish: true,
       delete: false,
     })
     await tokens.setRights(id, { blocksDraft: false, delete: true })
     expect((await tokens.verify(token))?.rights).toEqual({
       blocksDraft: false,
+      designDraft: true,
       publish: true,
       delete: true,
     })
@@ -68,10 +72,11 @@ describe('токены API', () => {
     const all = await tokens.create({
       siteId: api.demoSiteId,
       name: 'mcp2',
-      rights: { blocksDraft: false, publish: true, delete: true },
+      rights: { blocksDraft: false, designDraft: true, publish: true, delete: true },
     })
     expect((await tokens.verify(all.token))?.rights).toEqual({
       blocksDraft: false,
+      designDraft: true,
       publish: true,
       delete: true,
     })
@@ -83,7 +88,7 @@ describe('токены API', () => {
     expect(await tokens.verify(token)).toEqual({
       id,
       siteId: api.demoSiteId,
-      rights: { blocksDraft: true, publish: false, delete: false },
+      rights: { blocksDraft: true, designDraft: true, publish: false, delete: false },
     })
     expect((await rowOf(id)).lastUsedAt).toBeInstanceOf(Date)
   })
@@ -125,7 +130,12 @@ describe('токены API', () => {
     const item = (await tokens.list()).find((token) => token.id === id)
     expect(item).toMatchObject({ name: 'в списке', siteId: api.demoSiteId, createdBy: owner.email })
     expect(item).not.toHaveProperty('tokenHash')
-    expect(item?.rights).toEqual({ blocksDraft: true, publish: false, delete: false })
+    expect(item?.rights).toEqual({
+      blocksDraft: true,
+      designDraft: true,
+      publish: false,
+      delete: false,
+    })
   })
 
   it('удаляется вместе с сайтом', async () => {
@@ -138,4 +148,19 @@ describe('токены API', () => {
     await api.db.delete(sites).where(eq(sites.id, site.id))
     expect(await api.db.select().from(apiTokens).where(eq(apiTokens.id, id))).toEqual([])
   })
+})
+
+it('право оформления меняется независимо и сразу попадает в проверку и список', async () => {
+  const { id, token } = await tokens.create({ siteId: api.demoSiteId, name: 'оформление' })
+  expect((await tokens.verify(token))?.rights.designDraft).toBe(true)
+  await tokens.setRights(id, { designDraft: false })
+  expect((await tokens.verify(token))?.rights).toEqual({
+    blocksDraft: true,
+    designDraft: false,
+    publish: false,
+    delete: false,
+  })
+  expect((await tokens.list()).find((item) => item.id === id)?.rights.designDraft).toBe(false)
+  await tokens.setRights(id, { designDraft: true })
+  expect((await tokens.verify(token))?.rights.designDraft).toBe(true)
 })

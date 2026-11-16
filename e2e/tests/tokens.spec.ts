@@ -29,6 +29,9 @@ test('выпустить токен, скопировать фрагмент .mc
   // По умолчанию — «только черновики»: черновики своих блоков да, публикация и удаление нет
   const form = page.getByRole('form', { name: 'Выпустить токен' })
   await expect(form.getByRole('checkbox', { name: 'Черновики своих блоков' })).toBeChecked()
+  await expect(
+    form.getByRole('checkbox', { name: 'Черновики темы, шапки и подвала' }),
+  ).toBeChecked()
   await expect(form.getByRole('checkbox', { name: 'Публикация страниц' })).not.toBeChecked()
   await expect(
     form.getByRole('checkbox', { name: 'Удаление страниц и картинок' }),
@@ -212,6 +215,9 @@ test('права токена меняются в окне и действуют
   await page.getByRole('button', { name: `Права токена «${name}»` }).click()
   const rights = page.getByRole('dialog', { name: `Права токена «${name}»` })
   await expect(rights.getByRole('button', { name: 'Сохранить права' })).toBeDisabled()
+  const designDraft = rights.getByRole('checkbox', { name: 'Черновики темы, шапки и подвала' })
+  await expect(designDraft).toBeChecked()
+  await designDraft.uncheck()
   await rights.getByRole('checkbox', { name: 'Публикация страниц' }).check()
   await rights.getByRole('button', { name: 'Сохранить права' }).click()
   await expect(rights).toBeHidden()
@@ -220,6 +226,7 @@ test('права токена меняются в окне и действуют
   const row = page.getByRole('table', { name: 'Токены' }).getByRole('row').filter({ hasText: name })
   await expect(row).toContainText('публикация страниц')
   await expect(row).not.toContainText('Только черновики')
+  await expect(row).not.toContainText('черновики темы, шапки и подвала')
 
   const headers = { authorization: `Bearer ${token}` }
   const publish = await page.request.post(
@@ -233,6 +240,24 @@ test('права токена меняются в окне и действуют
   await expect(row).toContainText('не пользовались')
   await page.clock.fastForward(31_000)
   await expect(row).not.toContainText('не пользовались')
+  const themeUrl = `${urls.api}/api/sites/${demoSite.id}/theme`
+  const theme = (await (await page.request.get(themeUrl, { headers })).json()) as {
+    draft: unknown
+    published: unknown
+  }
+  const denied = await page.request.put(themeUrl, { headers, data: theme.draft })
+  expect(denied.status()).toBe(403)
+  expect(await denied.text()).toContain('--design-draft on')
+
+  await page.getByRole('button', { name: `Права токена «${name}»` }).click()
+  await expect(designDraft).not.toBeChecked()
+  await designDraft.check()
+  await rights.getByRole('button', { name: 'Сохранить права' }).click()
+  await expect(rights).toBeHidden()
+  await expect(row).toContainText('черновики темы, шапки и подвала')
+  const saved = await page.request.put(themeUrl, { headers, data: theme.draft })
+  expect(saved.status()).toBe(200)
+  expect((await saved.json()).published).toEqual(theme.published)
   // Убираем за собой: токен с правом публикации не должен пережить тест
   await page.getByRole('button', { name: `Отозвать токен «${name}»` }).click()
   await page

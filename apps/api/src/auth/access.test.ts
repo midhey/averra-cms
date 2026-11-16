@@ -1,6 +1,13 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { createTestApi } from '../testing'
-import { assignableRoles, can, type Permission, type SiteRole, tokenDenied } from './access'
+import {
+  assignableRoles,
+  can,
+  type Permission,
+  type SiteRole,
+  tokenDenied,
+  tokenGrants,
+} from './access'
 
 // Права ролей через настоящие запросы: каждый тест получает сессию нужной роли или токен
 // из помощников createTestApi и проверяет, что API разрешает и что запрещает
@@ -64,6 +71,17 @@ async function ownerPage(slug: string) {
 }
 
 describe('таблица разрешений', () => {
+  it('черновики оформления требуют отдельного права, публикация остаётся в запретах токену', () => {
+    for (const permission of ['theme.draft', 'header.draft'] as const) {
+      expect(tokenGrants[permission]?.grant).toBe('designDraft')
+      expect(tokenGrants[permission]?.message).toContain('--design-draft on')
+      expect(tokenDenied[permission]).toBeUndefined()
+    }
+    for (const permission of ['theme.edit', 'header.edit'] as const) {
+      expect(tokenDenied[permission]).toBeTruthy()
+      expect(tokenGrants[permission]).toBeUndefined()
+    }
+  })
   const roles: SiteRole[] = ['owner', 'client', 'editor']
   // Решение владельца продукта 2026-11-02: владелец — всё; администратор сайта (client) — контент,
   // SEO, медиа, заявки, уведомления, выгрузка, шапка и подвал, редакторы; редактор — страницы и
@@ -83,7 +101,9 @@ describe('таблица разрешений', () => {
     ['site.export', [true, true, false]],
     ['site.settings', [true, true, false]],
     ['theme.edit', [true, false, false]],
+    ['theme.draft', [true, false, false]],
     ['header.edit', [true, true, false]],
+    ['header.draft', [true, true, false]],
     ['header.look', [true, false, false]],
     ['blocks.define', [true, false, false]],
     ['blocks.draft', [true, false, false]],
@@ -357,7 +377,7 @@ describe('токен API', () => {
       token: {
         id,
         siteId: demoSiteId,
-        rights: { blocksDraft: false, publish: true, delete: true },
+        rights: { blocksDraft: false, designDraft: false, publish: true, delete: true },
       },
     })
   })

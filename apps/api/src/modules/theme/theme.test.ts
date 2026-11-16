@@ -203,7 +203,7 @@ describe('права', () => {
       const denied = await save(preset('fresh'), headers)
       expect(denied.status, role).toBe(403)
       expect(await denied.json()).toMatchObject({
-        error: { message: 'Тему сайта меняет владелец установки' },
+        error: { message: 'Черновик темы сайта меняет владелец установки' },
       })
       expect((await publish(headers)).status, role).toBe(403)
     }
@@ -216,7 +216,7 @@ describe('права', () => {
     const res = await save(preset('fresh'), bearer)
     expect(res.status).toBe(403)
     expect(await res.json()).toMatchObject({
-      error: { message: 'Тему сайта меняют в админке: токену API она доступна только для чтения' },
+      error: { message: expect.stringMatching(/Черновики темы.*--design-draft on/) },
     })
     expect((await publish(bearer)).status).toBe(403)
   })
@@ -349,5 +349,28 @@ describe('фон-картинка, CSS окон и кольцо фокуса', (
     expect(await sitesRepo(db).publishedMediaIds(demoSiteId)).toContain(mediaId)
     await ok(await save(defaultTheme))
     await ok(await publish())
+  })
+})
+
+describe('черновики оформления по праву токена', () => {
+  it('с правом меняет черновик и вид, без права — подсказка; публикация и снятие закрыты', async () => {
+    const granted = await api.createToken(demoSiteId, 'оформление', { designDraft: true })
+    const headers = { authorization: `Bearer ${granted.token}` }
+    const before = await ok(await read())
+    const content = preset('night')
+    const saved = await ok(await save(content, headers))
+    expect(saved.draft).toMatchObject(content)
+    expect(saved.published).toEqual(before.published)
+    expect(saved.unpublished).toBe(true)
+    expect(requested).toEqual([])
+    expect((await publish(headers)).status).toBe(403)
+    await api.setTokenRights(granted.id, { designDraft: false })
+    const denied = await save(content, headers)
+    expect(denied.status).toBe(403)
+    expect(await denied.text()).toContain('--design-draft on')
+    const after = await ok(await read())
+    expect(after.draft).toEqual(saved.draft)
+    expect(after.published).toEqual(before.published)
+    expect(requested).toEqual([])
   })
 })

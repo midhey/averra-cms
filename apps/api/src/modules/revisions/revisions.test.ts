@@ -215,7 +215,7 @@ describe('публикация пишет историю', () => {
       kind: 'token',
       tokenId: missingId,
       siteId,
-      rights: { blocksDraft: false, publish: true, delete: false },
+      rights: { blocksDraft: false, designDraft: false, publish: true, delete: false },
     } as const
     await expect(sitesRepo(db).publish(siteId, 'index', ghost)).rejects.toThrow()
 

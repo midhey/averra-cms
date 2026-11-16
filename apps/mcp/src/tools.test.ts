@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AppType } from '@averra/api'
 import { createTestApi } from '@averra/api/testing'
-import { demoPage, PageContent } from '@averra/schema'
+import { defaultFooter, defaultHeader, defaultTheme, demoPage, PageContent } from '@averra/schema'
 import { hc } from 'hono/client'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -17,6 +17,9 @@ import {
   revealBlockTypes,
   SaveCustomBlockInput,
   SaveDraftInput,
+  SaveFooterDraftInput,
+  SaveHeaderDraftInput,
+  SaveThemeDraftInput,
 } from './tools'
 
 // Настоящая цепочка без сети: инструменты → типизированный клиент с токеном → API → база в памяти
@@ -589,7 +592,7 @@ describe('шапка сайта', () => {
     const result = await tools.getHeader({})
     expect(result.header).toBeNull()
     expect(result.note).toMatch(/Шапку ещё не публиковали/)
-    expect(result.draft).toMatchObject({ layout: 'classic', layoutTitle: 'Классика', menu: [] })
+    expect(result.draft).toMatchObject({ layout: 'classic', menu: [] })
     const res = await clientWith(token).api.sites[':siteId'].header.$put({
       param: { siteId: site.id },
       json: { layout: 'minimal' },
@@ -619,7 +622,7 @@ describe('шапка сайта', () => {
     expect(result.footerDraft).toMatchObject({ layout: 'simple', consent: false, text: '' })
   })
 
-  it('get_header: внешний пункт — адрес как есть и «новая вкладка» по умолчанию', async () => {
+  it('get_header: черновик с внешней ссылкой подходит схеме сохранения без вычисленных полей', async () => {
     const owner = await api.loginAs('owner')
     const headers = { ...owner.headers, 'content-type': 'application/json' }
     const body = JSON.stringify({ menu: [{ label: 'Telegram', url: 'https://t.me/remont' }] })
@@ -631,10 +634,9 @@ describe('шапка сайта', () => {
         label: 'Telegram',
         mobileLabel: '',
         url: 'https://t.me/remont',
-        href: 'https://t.me/remont',
-        newTab: true,
       },
     ])
+    expect(SaveHeaderDraftInput.parse({ header: result.draft }).header).toEqual(result.draft)
   })
 })
 
@@ -922,5 +924,177 @@ describe('письма сайта через MCP', () => {
     await expect(tools.previewMailTemplate({ ...input, body: '{неизвестно}' })).rejects.toThrow(
       'Неизвестная подстановка',
     )
+  })
+})
+
+describe('черновики темы, шапки и подвала через MCP', () => {
+  it('сохраняет три черновика, включая вид и меню, опубликованное и контакты не меняет', async () => {
+    const siteId = await api.createSite('Черновики оформления MCP')
+    const { token } = await api.createToken(siteId, 'оформление', { designDraft: true })
+    const own = cmsTools(clientWith(token))
+    const owner = await api.loginAs('owner')
+    const headers = { ...owner.headers, 'content-type': 'application/json' }
+    const base = `/api/sites/${siteId}`
+    for (const [entity, content] of [
+      ['theme', defaultTheme],
+      ['header', defaultHeader],
+      ['footer', defaultFooter],
+    ] as const) {
+      expect(
+        (
+          await api.app.request(`${base}/${entity}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(content),
+          })
+        ).status,
+      ).toBe(200)
+      expect(
+        (await api.app.request(`${base}/${entity}/publish`, { method: 'POST', headers })).status,
+      ).toBe(200)
+    }
+    const organization = {
+      name: 'ИП Закрытов',
+      phone: '+7 900 111-22-33',
+      email: 'private@example.ru',
+      address: { city: 'Закрытый город', street: 'Закрытая улица, 1' },
+    }
+    expect(
+      (
+        await api.app.request(`${base}/settings`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ organization }),
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (await api.app.request(`${base}/pages/index/publish`, { method: 'POST', headers })).status,
+    ).toBe(200)
+    for (const entity of ['header', 'footer']) {
+      const human = await api.app.request(`${base}/${entity}`, { headers })
+      expect(await human.json()).toMatchObject({ contacts: { phone: organization.phone } })
+    }
+    const beforeTheme = await own.getTheme({})
+    const beforeHeader = await own.getHeader({})
+    const beforeFooter = await own.getFooter({})
+    const theme = { ...beforeTheme.draft, radius: 'large' as const }
+    const header = {
+      ...beforeHeader.draft,
+      layout: 'minimal' as const,
+      sticky: !defaultHeader.sticky,
+      menu: [{ label: 'Справка', url: 'https://example.ru/help' }],
+    }
+    const footer = { ...beforeFooter.draft, tone: 'accent' as const, text: 'Новый текст' }
+    const saved = [
+      await own.saveThemeDraft(SaveThemeDraftInput.parse({ theme })),
+      await own.saveHeaderDraft(SaveHeaderDraftInput.parse({ header })),
+      await own.saveFooterDraft(SaveFooterDraftInput.parse({ footer })),
+    ]
+    expect(saved[0]).toMatchObject({
+      draft: theme,
+      published: beforeTheme.published,
+      unpublished: true,
+    })
+    expect(saved[1]).toMatchObject({
+      draft: header,
+      published: beforeHeader.published,
+      unpublished: true,
+    })
+    expect(saved[2]).toMatchObject({
+      draft: footer,
+      published: beforeFooter.published,
+      unpublished: true,
+    })
+    const views = [await own.getTheme({}), await own.getHeader({}), await own.getFooter({})]
+    expect(views[0]).toMatchObject({ draft: theme, published: beforeTheme.published })
+    expect(views[1]).toMatchObject({ draft: header, published: beforeHeader.published })
+    expect(views[2]).toMatchObject({ draft: footer, published: beforeFooter.published })
+    for (const view of [...saved, ...views]) {
+      expect(view).not.toHaveProperty('contacts')
+      const text = JSON.stringify(view)
+      const { name, phone, email, address } = organization
+      for (const secret of [name, phone, email, address.city, address.street, owner.user.email])
+        expect(text).not.toContain(secret)
+    }
+  })
+
+  it('без права — отказ с подсказкой, без токена — инструкция; чужой сайт закрыт', async () => {
+    const foreign = await api.createSite('Чужое оформление')
+    for (const [method, input] of [
+      ['saveThemeDraft', SaveThemeDraftInput.parse({ theme: defaultTheme })],
+      ['saveHeaderDraft', SaveHeaderDraftInput.parse({ header: defaultHeader })],
+      ['saveFooterDraft', SaveFooterDraftInput.parse({ footer: defaultFooter })],
+    ] as const) {
+      const call = () => {
+        if (method === 'saveThemeDraft') return tools.saveThemeDraft(input)
+        if (method === 'saveHeaderDraft') return tools.saveHeaderDraft(input)
+        return tools.saveFooterDraft(input)
+      }
+      await expect(call()).rejects.toThrow(/Доступ для ИИ.*--design-draft on/s)
+    }
+    const noToken = cmsTools(undefined)
+    await expect(noToken.getFooter({})).rejects.toThrow(missingTokenMessage)
+    await expect(noToken.saveThemeDraft({ theme: defaultTheme })).rejects.toThrow(
+      missingTokenMessage,
+    )
+    await expect(noToken.saveHeaderDraft({ header: defaultHeader })).rejects.toThrow(
+      missingTokenMessage,
+    )
+    await expect(noToken.saveFooterDraft({ footer: defaultFooter })).rejects.toThrow(
+      missingTokenMessage,
+    )
+    const granted = cmsTools(
+      clientWith((await api.createToken(undefined, 'право', { designDraft: true })).token),
+    )
+    await expect(granted.getFooter({ siteId: foreign })).rejects.toThrow('Сайт не найден')
+    await expect(granted.saveThemeDraft({ siteId: foreign, theme: defaultTheme })).rejects.toThrow(
+      'Сайт не найден',
+    )
+    await expect(
+      granted.saveHeaderDraft({ siteId: foreign, header: defaultHeader }),
+    ).rejects.toThrow('Сайт не найден')
+    await expect(
+      granted.saveFooterDraft({ siteId: foreign, footer: defaultFooter }),
+    ).rejects.toThrow('Сайт не найден')
+  })
+
+  it('ошибки API 400 и 409 сохраняют русский текст и пути полей', async () => {
+    const siteId = await api.createSite('Ошибки оформления MCP')
+    const own = cmsTools(
+      clientWith((await api.createToken(siteId, 'ошибки', { designDraft: true })).token),
+    )
+    await expect(
+      own.saveThemeDraft({
+        theme: { ...defaultTheme, colors: { ...defaultTheme.colors, accent: 'красный' } },
+      }),
+    ).rejects.toThrow('colors.accent')
+    await expect(
+      own.saveHeaderDraft({
+        header: {
+          ...defaultHeader,
+          menu: [{ label: 'Ссылка', mobileLabel: '', url: 'javascript:alert(1)' }],
+        },
+      }),
+    ).rejects.toThrow('menu.0.url')
+    await expect(
+      own.saveFooterDraft({ footer: { ...defaultFooter, text: 'А'.repeat(301) } }),
+    ).rejects.toThrow('text')
+    await expect(
+      own.saveHeaderDraft({
+        header: {
+          ...defaultHeader,
+          menu: [{ label: 'Нет страницы', mobileLabel: '', page: 'missing' }],
+        },
+      }),
+    ).rejects.toThrow('menu.0.page')
+    await expect(
+      own.saveFooterDraft({
+        footer: { ...defaultFooter, custom: { key: 'missing-footer', props: {} } },
+      }),
+    ).rejects.toThrow('custom.key')
+    expect((await own.getTheme({})).draft).toEqual(defaultTheme)
+    expect((await own.getHeader({})).draft).toMatchObject(defaultHeader)
+    expect((await own.getFooter({})).draft).toEqual(defaultFooter)
   })
 })

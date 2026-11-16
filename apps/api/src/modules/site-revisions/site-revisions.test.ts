@@ -25,7 +25,7 @@ afterAll(api.close)
 const owner = await api.loginAs('owner')
 const client = await api.loginAs('client')
 const editor = await api.loginAs('editor')
-const token = await api.createToken(demoSiteId, 'История', { blocksDraft: true })
+const token = await api.createToken(demoSiteId, 'История', { blocksDraft: true, designDraft: true })
 const tokenHeaders = { authorization: `Bearer ${token.token}` }
 const plainToken = await api.createToken()
 type Headers = Record<string, string>
@@ -169,10 +169,12 @@ describe.each(['header', 'footer', 'theme', 'script'] as const)('история 
     }
     for (const headers of [client.headers, editor.headers, tokenHeaders]) {
       const allowed = headers === client.headers && (entity === 'header' || entity === 'footer')
+      const before = await state(entity)
       expect(
         (await request(entity, 'POST', `/revisions/${revision.id}/restore`, undefined, headers))
           .status,
       ).toBe(allowed ? 200 : 403)
+      if (!allowed) expect(await state(entity)).toEqual(before)
     }
     expect((await api.app.request(`/api/sites/${demoSiteId}/${entity}/revisions`)).status).toBe(401)
     const other = randomUUID()

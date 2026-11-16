@@ -39,7 +39,8 @@ type FooterDeps = {
  * Подвал сайта (вкладка «Подвал» экрана «Шапка и подвал»): монтируется на
  * /sites/:siteId/footer. Черновик и публикация, как у шапки. Читать может любой участник и токен
  * (подвал и так виден на сайте), менять — владелец и администратор сайта (то же право
- * header.edit: шапка и подвал — один раздел); токену API — нет
+ * header.edit: шапка и подвал — один раздел). Токену с designDraft открыт только черновик:
+ * публикацию, снятие с сайта и возврат из истории решает человек
  */
 export function footerRoutes({ db, publisher, log }: FooterDeps) {
   const repo = footerRepo(db)
@@ -54,7 +55,9 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
 
   const saveDraft = async (c: Context<AuthEnv>, siteId: string, input: Footer) => {
     const footer = input
-    const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+    // Владелец доверил токену черновик вместе с видом: человек проверит предпросмотр до публикации.
+    // Людям без header.look вид по-прежнему закрыт
+    const lookLockedForMe = c.var.actor.kind === 'user' && !can(c.var.siteRole, 'header.look')
     // Быстрая сверка вида — до проверок 409; окончательная — внутри сохранения
     if (lookLockedForMe) {
       const current = await repo.read(siteId)
@@ -123,7 +126,7 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
       .put(
         '/',
         validate('param', SiteParams),
-        site('header.edit'),
+        site('header.draft'),
         validate('json', Footer),
         async (c) => {
           return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))

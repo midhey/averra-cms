@@ -390,9 +390,7 @@ describe('права', () => {
     expect((await read(bearer)).status).toBe(200)
     const res = await save({ menu }, bearer)
     expect(res.status).toBe(403)
-    expect((await problemOf(res)).message).toBe(
-      'Шапку, меню и подвал сайта меняют в админке: токену API они доступны только для чтения',
-    )
+    expect((await problemOf(res)).message).toMatch(/Черновики шапки.*--design-draft on/)
     expect((await publish(bearer)).status).toBe(403)
   })
 
@@ -497,5 +495,30 @@ describe('вид шапки — владельцу, тексты и ссылки
     const res = await save({ menu: [{ label: 'X', url: 'javascript:alert(1)' }] })
     expect(res.status).toBe(400)
     expect(JSON.stringify(await res.json())).toContain('menu.0.url')
+  })
+})
+
+describe('черновики оформления по праву токена', () => {
+  it('с правом меняет черновик и вид, без права — подсказка; публикация и снятие закрыты', async () => {
+    const granted = await api.createToken(demoSiteId, 'оформление', { designDraft: true })
+    const headers = { authorization: `Bearer ${granted.token}` }
+    const before = await ok(await read())
+    const content = { ...defaultHeader, layout: 'minimal', sticky: !defaultHeader.sticky, menu }
+    const saved = await ok(await save(content, headers))
+    expect(saved.draft).toMatchObject(content)
+    expect(saved.published).toEqual(before.published)
+    expect(saved.unpublished).toBe(true)
+    expect(requested).toEqual([])
+    expect((await publish(headers)).status).toBe(403)
+    expect((await app.request(url, { method: 'DELETE', headers })).status).toBe(403)
+    expect((await ok(await read(headers))).contacts).toBeNull()
+    await api.setTokenRights(granted.id, { designDraft: false })
+    const denied = await save(content, headers)
+    expect(denied.status).toBe(403)
+    expect(await denied.text()).toContain('--design-draft on')
+    const after = await ok(await read())
+    expect(after.draft).toEqual(saved.draft)
+    expect(after.published).toEqual(before.published)
+    expect(requested).toEqual([])
   })
 })

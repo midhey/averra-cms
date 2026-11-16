@@ -10,12 +10,13 @@ import { args, CliError, check } from './common'
 // выпуска в админке (NewToken и DRAFTS_ONLY в @averra/schema)
 
 export const tokenCreateUsage = `Выпустить токен API для MCP на сайт установки:
-  pnpm token:create --name mcp [--publish] [--delete] [--no-blocks-draft] [--by <почта владельца>]
+  pnpm token:create --name mcp [--publish] [--delete] [--no-blocks-draft] [--design-draft on|off] [--by <почта владельца>]
 
 По умолчанию токен — «только черновики», как в админке: черновики страниц и своих блоков, новые
 страницы, загрузка картинок. --publish разрешает публиковать страницы (MCP: publish_page) и
 «Собрать заново», --delete — удалять страницы и картинки, --no-blocks-draft снимает черновики
-своих блоков. Опубликовать свой блок токен не может никогда: это делает человек в админке.
+своих блоков. --design-draft on|off включает или выключает черновики темы, шапки и подвала
+(по умолчанию включены). Публикацию, снятие и возврат из истории решает человек. Опубликовать свой блок токен не может никогда: это делает человек в админке.
 Позже права меняют в админке (Установка → Доступ для ИИ) или командой pnpm token:grant.
 
 Токен показывается один раз. --by нужен, только если владельцев несколько. --site <id сайта> не
@@ -30,6 +31,7 @@ const TokenCreateArgs = z.object({
   // Прежний флаг: право на черновики своих блоков теперь и так есть по умолчанию
   'blocks-draft': z.boolean().optional(),
   'no-blocks-draft': z.boolean().optional(),
+  'design-draft': z.enum(['on', 'off'], 'Нужно on или off').optional(),
 })
 
 export function parseTokenCreate(argv?: string[]) {
@@ -44,6 +46,7 @@ export function parseTokenCreate(argv?: string[]) {
         delete: { type: 'boolean' },
         'blocks-draft': { type: 'boolean' },
         'no-blocks-draft': { type: 'boolean' },
+        'design-draft': { type: 'string' },
       },
       tokenCreateUsage,
       argv,
@@ -55,6 +58,10 @@ export function parseTokenCreate(argv?: string[]) {
   }
   const rights: TokenRights = {
     blocksDraft: values['no-blocks-draft'] !== true && DRAFTS_ONLY.blocksDraft,
+    designDraft:
+      values['design-draft'] === undefined
+        ? DRAFTS_ONLY.designDraft
+        : values['design-draft'] === 'on',
     publish: values.publish === true,
     delete: values.delete === true,
   }
@@ -62,11 +69,12 @@ export function parseTokenCreate(argv?: string[]) {
 }
 
 export const tokenGrantUsage = `Включить или выключить права токена API:
-  pnpm token:grant --id <id токена> [--blocks-draft on|off] [--publish on|off] [--delete on|off]
+  pnpm token:grant --id <id токена> [--blocks-draft on|off] [--design-draft on|off] [--publish on|off] [--delete on|off]
   (на сервере: node dist/server/token-grant.js с теми же параметрами)
 
 --blocks-draft — черновики своих блоков (MCP читает их, создаёт блок, сохраняет черновик,
-проверяет шаблон), --publish — публикация страниц и «Собрать заново», --delete — удаление страниц
+проверяет шаблон), --design-draft — черновики темы, шапки с меню и подвала (включая вид;
+публикует, снимает с сайта и возвращает из истории человек), --publish — публикация страниц и «Собрать заново», --delete — удаление страниц
 и картинок. Не названные права не меняются. Опубликовать, удалить или откатить свой блок токен не
 может никогда: это делает человек в админке. Права действуют сразу, перевыпускать токен не нужно.
 id видно в pnpm token:list. То же — в админке: Установка → Доступ для ИИ.`
@@ -76,6 +84,7 @@ const OnOff = z.enum(['on', 'off'], 'Нужно on или off').optional()
 const TokenGrantArgs = z.object({
   id: Uuid('Нужен id токена'),
   'blocks-draft': OnOff,
+  'design-draft': OnOff,
   publish: OnOff,
   delete: OnOff,
 })
@@ -87,6 +96,7 @@ export function parseTokenGrant(argv?: string[]) {
       {
         id: { type: 'string' },
         'blocks-draft': { type: 'string' },
+        'design-draft': { type: 'string' },
         publish: { type: 'string' },
         delete: { type: 'string' },
       },
@@ -98,6 +108,7 @@ export function parseTokenGrant(argv?: string[]) {
   const rights: Partial<TokenRights> = {}
   const pairs = [
     ['blocksDraft', values['blocks-draft']],
+    ['designDraft', values['design-draft']],
     ['publish', values.publish],
     ['delete', values.delete],
   ] as const
@@ -106,7 +117,7 @@ export function parseTokenGrant(argv?: string[]) {
   }
   if (Object.keys(rights).length === 0) {
     throw new CliError(
-      `Укажите право: --blocks-draft, --publish или --delete со значением on или off\n\n${tokenGrantUsage}`,
+      `Укажите право: --blocks-draft, --design-draft, --publish или --delete со значением on или off\n\n${tokenGrantUsage}`,
     )
   }
   return { id: values.id, rights }

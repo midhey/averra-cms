@@ -10,6 +10,8 @@ import { hasHeaderBreak } from './mail'
 export const TokenRights = z.strictObject({
   /** Черновики своих блоков: читать, создать блок, сохранить черновик, проверить шаблон */
   blocksDraft: z.boolean(),
+  /** Черновики темы, шапки с меню и подвала; публикацию и откат решает человек */
+  designDraft: z.boolean(),
   /** Опубликовать страницу и «Собрать заново» */
   publish: z.boolean(),
   /** Удалить страницу и картинку медиатеки */
@@ -17,12 +19,18 @@ export const TokenRights = z.strictObject({
 })
 export type TokenRights = z.infer<typeof TokenRights>
 
-/** Новый токен по умолчанию — «только черновики»: страницы и свои блоки, без публикации и удаления */
-export const DRAFTS_ONLY: TokenRights = { blocksDraft: true, publish: false, delete: false }
+/** Новый токен — черновики страниц, блоков и оформления, без публикации и удаления */
+export const DRAFTS_ONLY: TokenRights = {
+  blocksDraft: true,
+  designDraft: true,
+  publish: false,
+  delete: false,
+}
 
 /** Подписи прав — одни в админке, CLI и документации */
 export const tokenRightLabels: Record<keyof TokenRights, string> = {
   blocksDraft: 'Черновики своих блоков',
+  designDraft: 'Черновики темы, шапки и подвала',
   publish: 'Публикация страниц',
   delete: 'Удаление страниц и картинок',
 }

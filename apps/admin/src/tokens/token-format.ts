@@ -3,12 +3,15 @@ import { DRAFTS_ONLY, type TokenRights, tokenRightLabels } from '@averra/schema'
 /** Права по порядку: так они стоят в форме выпуска, в окне прав и в таблице */
 export const tokenRightOrder = [
   'blocksDraft',
+  'designDraft',
   'publish',
   'delete',
 ] as const satisfies readonly (keyof TokenRights)[]
 
 /** Подсказки к флажкам прав: что именно откроется нейронке */
 export const tokenRightHints: Record<keyof TokenRights, string> = {
+  designDraft:
+    'Сохранять черновики темы, шапки с меню и подвала, включая их вид. Публикует, снимает с сайта и возвращает версии из истории только человек в админке.',
   blocksDraft:
     'Читать черновики своих блоков, создавать блок и сохранять черновик, а ещё читать и сохранять черновик скрипта сайта с доменами для CSP. Опубликовать блок или скрипт токен не может никогда: это делаете вы.',
   publish:

@@ -42,8 +42,8 @@ sidebar:
 | `pnpm user:password --email …` | `user-password.js` | новый пароль, все входы пользователя завершаются, ссылки сброса сгорают. Путь вернуть доступ без почты |
 | `pnpm member:add --email … --role editor\|client [--site <id>]` | `member-add.js` | доступ к сайту уже заведённому пользователю; повторный вызов меняет роль. `client` — администратор сайта. То же в админке: «Настройки сайта → Участники» |
 | `pnpm member:invite --email … --role editor\|client [--by <почта владельца>] [--site <id>]` | `member-invite.js` | приглашение письмом, как «Пригласить» в админке. Без `--by` — единственный владелец |
-| `pnpm token:create --name … [--publish] [--delete] [--no-blocks-draft] [--by <почта>] [--site <id>]` | `token-create.js` | токен API для MCP «только черновики», как в админке; флаги добавляют публикацию и удаление или снимают черновики своих блоков. Показывается один раз |
-| `pnpm token:grant --id <id> [--blocks-draft on\|off] [--publish on\|off] [--delete on\|off]` | `token-grant.js` | поменять названные права токена, как «Права» в админке |
+| `pnpm token:create --name … [--publish] [--delete] [--no-blocks-draft] [--design-draft on\|off] [--by <почта>] [--site <id>]` | `token-create.js` | токен API для MCP «только черновики», как в админке; флаги добавляют публикацию и удаление или снимают черновики своих блоков; `--design-draft on\|off` управляет черновиками темы, шапки и подвала (по умолчанию включены). Показывается один раз |
+| `pnpm token:grant --id <id> [--blocks-draft on\|off] [--design-draft on\|off] [--publish on\|off] [--delete on\|off]` | `token-grant.js` | поменять названные права токена, как «Права» в админке |
 | `pnpm token:list` | `token-list.js` | токены без самих токенов: сайт, кто выпустил, когда пользовались, отозван ли, права |
 | `pnpm token:revoke --id <id>` | `token-revoke.js` | отозвать токен |
 | `pnpm mail:test --to <адрес>` | `mail-test.js` | проверочное письмо напрямую, по шагам. Проверяет только SMTP из окружения |

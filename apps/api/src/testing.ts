@@ -303,7 +303,7 @@ export async function createTestApi({
         siteId,
         name,
         ...(createdBy && { createdBy }),
-        rights: { blocksDraft: false, publish: true, delete: true, ...rights },
+        rights: { blocksDraft: false, designDraft: false, publish: true, delete: true, ...rights },
       }),
     setTokenRights: (id: string, rights: Partial<TokenRights>) => tokens.setRights(id, rights),
     revokeToken: (id: string) => tokens.revoke(id),

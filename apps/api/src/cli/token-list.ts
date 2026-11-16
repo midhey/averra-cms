@@ -19,6 +19,7 @@ await run(async () => {
         выпустил: token.createdBy ?? '—',
         создан: date(token.createdAt),
         'черновики блоков': token.rights.blocksDraft ? 'да' : 'нет',
+        'черновики темы, шапки и подвала': token.rights.designDraft ? 'да' : 'нет',
         публикация: token.rights.publish ? 'да' : 'нет',
         удаление: token.rights.delete ? 'да' : 'нет',
         'последний раз': date(token.lastUsedAt),

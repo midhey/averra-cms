@@ -26,17 +26,23 @@ describe('фрагмент .mcp.json', () => {
 
 describe('права словами', () => {
   it('черновики страниц — всегда, дальше — включённые права', () => {
-    expect(rightsSummary({ blocksDraft: false, publish: false, delete: false })).toBe(
-      'Черновики страниц',
-    )
-    expect(rightsSummary({ blocksDraft: true, publish: true, delete: true })).toBe(
-      'Черновики страниц, черновики своих блоков, публикация страниц, удаление страниц и картинок',
+    expect(
+      rightsSummary({ blocksDraft: false, designDraft: false, publish: false, delete: false }),
+    ).toBe('Черновики страниц')
+    expect(
+      rightsSummary({ blocksDraft: true, designDraft: true, publish: true, delete: true }),
+    ).toBe(
+      'Черновики страниц, черновики своих блоков, черновики темы, шапки и подвала, публикация страниц, удаление страниц и картинок',
     )
   })
 
   it('«только черновики» — без публикации и удаления', () => {
-    expect(isDraftsOnly({ blocksDraft: true, publish: false, delete: false })).toBe(true)
-    expect(isDraftsOnly({ blocksDraft: true, publish: true, delete: false })).toBe(false)
+    expect(
+      isDraftsOnly({ blocksDraft: true, designDraft: false, publish: false, delete: false }),
+    ).toBe(true)
+    expect(
+      isDraftsOnly({ blocksDraft: true, designDraft: false, publish: true, delete: false }),
+    ).toBe(false)
   })
 })
 
@@ -59,4 +65,9 @@ describe('подсказки прав', () => {
     expect(tokenRightHints.blocksDraft).toContain('скрипта сайта')
     expect(tokenRightHints.blocksDraft).toContain('CSP')
   })
+})
+
+it('подсказка к черновикам оформления оставляет публикацию и историю человеку', () => {
+  expect(tokenRightHints.designDraft).toContain('включая их вид')
+  expect(tokenRightHints.designDraft).toContain('только человек в админке')
 })

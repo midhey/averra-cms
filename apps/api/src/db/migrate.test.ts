@@ -656,3 +656,51 @@ describe('миграция 0029_service_events_monitoring', () => {
     ])
   })
 })
+
+describe('миграция 0030_token_design_draft', () => {
+  it('старые токены и вставки после отката не получают новое право, остальные права сохранены', async () => {
+    client = new PGlite()
+    const before = readdirSync(new URL('../../drizzle', import.meta.url))
+      .filter((name) => name.endsWith('.sql') && name < '0030')
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort()
+    for (const name of before) await applyMigration(client, name)
+    const siteId = '00000000-0000-4000-8000-000000000030'
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO api_tokens (site_id, name, token_hash, blocks_draft, can_publish, can_delete)
+        VALUES ('${siteId}', 'старый', 'a', true, true, true);
+    `)
+    await applyMigration(client, '0030_token_design_draft')
+    // После отката прежняя версия не знает колонки: безопасный DEFAULT действует и для неё
+    await client.exec(`
+      INSERT INTO api_tokens (site_id, name, token_hash)
+        VALUES ('${siteId}', 'после отката', 'b');
+    `)
+    const { rows } = await client.query<{
+      name: string
+      blocks_draft: boolean
+      design_draft: boolean
+      can_publish: boolean
+      can_delete: boolean
+    }>(
+      'SELECT name, blocks_draft, design_draft, can_publish, can_delete FROM api_tokens ORDER BY token_hash',
+    )
+    expect(rows).toEqual([
+      {
+        name: 'старый',
+        blocks_draft: true,
+        design_draft: false,
+        can_publish: true,
+        can_delete: true,
+      },
+      {
+        name: 'после отката',
+        blocks_draft: false,
+        design_draft: false,
+        can_publish: false,
+        can_delete: false,
+      },
+    ])
+  })
+})
