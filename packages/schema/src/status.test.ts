@@ -4,6 +4,7 @@ import {
   InstallationFacts,
   isNewerVersion,
   NO_RELEASE_STATE,
+  PublicCheck,
   pendingStale,
   ReleaseLatest,
   RestoreRun,
@@ -19,6 +20,72 @@ import {
 
 const now = new Date('2026-10-16T12:00:00Z')
 const hoursBefore = (hours: number) => new Date(now.getTime() - hours * 3_600_000).toISOString()
+
+describe('публичные проверки в состоянии', () => {
+  const check: PublicCheck = {
+    target: 'site',
+    checkedAt: now.toISOString(),
+    available: false,
+    status: 503,
+    failures: 1,
+    certificate: { state: 'unknown', expiresAt: null },
+  }
+
+  it('первый сбой и неизвестный сертификат ещё не проблема; два сбоя — недоступность', () => {
+    expect(statusProblems(facts({ publicChecks: [check] }), now)).toEqual([])
+    expect(statusProblems(facts({ publicChecks: [{ ...check, failures: 2 }] }), now)).toEqual([
+      { code: 'public_down', message: 'Сайт не отвечает по HTTPS' },
+    ])
+  })
+
+  it('срок и недействительность видны по каждой цели; выключенные проверки не тревожат', () => {
+    const checks: PublicCheck[] = [
+      {
+        ...check,
+        target: 'admin',
+        available: true,
+        certificate: {
+          state: 'valid',
+          expiresAt: new Date(now.getTime() + 3 * 86_400_000).toISOString(),
+        },
+      },
+      { ...check, certificate: { state: 'invalid', expiresAt: now.toISOString() } },
+    ]
+    expect(statusProblems(facts({ publicChecks: checks }), now)).toEqual([
+      { code: 'certificate_expiring', message: 'Админка: сертификат истекает через 3 дн.' },
+      { code: 'certificate_invalid', message: 'Сайт: сертификат истёк или недействителен' },
+    ])
+    expect(
+      statusProblems(facts({ publicChecks: checks, publicMonitoringEnabled: false }), now),
+    ).toEqual([])
+  })
+
+  it('снимок проверяется схемой и не раскрывает внутренние данные наблюдателя', () => {
+    expect(
+      PublicCheck.parse({ ...check, fingerprint: 'secret-internal', downNotifiedAt: now }),
+    ).toEqual(check)
+    expect(PublicCheck.safeParse({ ...check, target: 'other' }).success).toBe(false)
+  })
+
+  it('срок прошлого успешного сертификата уже истёк — это проблема, а не «осталось 0 дней»', () => {
+    expect(
+      statusProblems(
+        facts({
+          publicChecks: [
+            {
+              ...check,
+              available: true,
+              certificate: { state: 'valid', expiresAt: now.toISOString() },
+            },
+          ],
+        }),
+        now,
+      ),
+    ).toEqual([
+      { code: 'certificate_invalid', message: 'Сайт: сертификат истёк или недействителен' },
+    ])
+  })
+})
 
 const okBackup = (hours: number): BackupRun => ({
   name: '20261016-033000-scheduled',

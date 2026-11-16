@@ -6,6 +6,7 @@ import { RelativeTime } from '../pages/PagesTable'
 import { formatDateTime } from '../pages-format'
 import { buildStatusLabels } from '../publish/build-format'
 import { statusQuery } from '../queries'
+import { PublicChecksSection } from '../status/PublicChecksSection'
 import {
   describeBackup,
   describeDisk,
@@ -155,6 +156,11 @@ export function InstallationScreen() {
         now={new Date(data.checkedAt)}
         loadedVersion={loadedVersion}
         offline={status.isRefetchError}
+      />
+
+      <PublicChecksSection
+        checks={data.publicChecks ?? []}
+        enabled={data.publicMonitoringEnabled}
       />
 
       <Section title="Сведения" card>

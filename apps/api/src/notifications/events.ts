@@ -65,6 +65,52 @@ const serviceBase = {
 const statusLink = (url: string) => ({ label: 'Состояние установки', url })
 
 export const notificationEvents = {
+  'site.down': define({
+    audience: 'service',
+    title: NOTIFICATION_EVENT_TITLES['site.down'],
+    schema: z.strictObject({
+      ...serviceBase,
+      target: MailLine(80),
+      reminder: z.boolean(),
+    }),
+    message: ({ state, installation, url, target, reminder }) => ({
+      title: `${installation}: ${target} ${state === 'resolved' ? 'снова работает' : reminder ? 'всё ещё не отвечает' : 'не отвечает'}`,
+      lines: [
+        state === 'resolved'
+          ? 'Публичный HTTPS-адрес снова отвечает успешно.'
+          : 'Две проверки подряд не получили HTTP 2xx/3xx. Проверьте сайт, DNS и Caddy.',
+      ],
+      fields: [],
+      link: statusLink(url),
+    }),
+  }),
+  'certificate.expiring': define({
+    audience: 'service',
+    title: NOTIFICATION_EVENT_TITLES['certificate.expiring'],
+    schema: z.strictObject({
+      ...serviceBase,
+      target: MailLine(80),
+      days: z.number().int().nonnegative(),
+      expiresAt: z.iso.datetime(),
+    }),
+    message: ({ installation, url, target, days, expiresAt }) => ({
+      title: `${installation}: сертификат истекает через ${days} дн.`,
+      lines: [`${target}: проверьте автоматическое продление сертификата в Caddy.`],
+      fields: [{ label: 'Действует до', value: formatMoscow(expiresAt) }],
+      link: statusLink(url),
+    }),
+  }),
+  'certificate.invalid': define({
+    audience: 'service',
+    title: NOTIFICATION_EVENT_TITLES['certificate.invalid'],
+    schema: z.strictObject({ ...serviceBase, target: MailLine(80) }),
+    message: ({ installation, url, target }) => ({
+      title: `${installation}: сертификат истёк или недействителен`,
+      lines: [`${target}: TLS-проверка не пройдена. Посетители не могут безопасно открыть адрес.`],
+      fields: [],
+      link: statusLink(url),
+    }),
+  }),
   /**
    * Новая заявка с формы сайта. Данные — те же, что у письма lead-new: по почте уходит оно
    * (Reply-To посетителя), в остальные каналы — сообщение с полями заявки

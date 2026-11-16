@@ -20,6 +20,7 @@ import { toMailLine } from '../../mail/templates/line'
 import { type NotificationDeps, notifyDepsOf } from '../../notifications/deps'
 import { eventTitle } from '../../notifications/events'
 import { notificationOutboxRepo } from '../../notifications/outbox'
+import { publicMonitoringEnabled, setPublicMonitoring } from '../../notifications/public-watch'
 import { leadNotificationSummary } from '../../notifications/recipients'
 import { type AudienceSite, notificationSettingsRepo } from '../../notifications/settings'
 import { issueLinkCode } from '../../notifications/telegram/binder'
@@ -172,6 +173,7 @@ export function notificationsRoutes(input: Deps) {
             channels: await channelsView(db, current),
             telegramLock: telegramLock(current),
             events: serviceEvents(),
+            monitoringEnabled: await publicMonitoringEnabled(db),
             recipients: await actions.list(null),
           },
           200,
@@ -254,6 +256,12 @@ export function notificationsRoutes(input: Deps) {
         if (result.ok) notifications.wake(kind)
         else if (result.queued > 0) notifications.wake()
         return c.json({ ok: result.ok, steps: result.steps }, 200)
+      })
+
+      .put('/service/monitoring', validate('json', NotificationChannelToggle), async (c) => {
+        const { enabled } = c.req.valid('json')
+        await setPublicMonitoring(db, enabled)
+        return c.json({ enabled }, 200)
       })
 
       .put('/service/email', validate('json', ServiceEmailRecipients), async (c) => {

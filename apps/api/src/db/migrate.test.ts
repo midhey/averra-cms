@@ -623,3 +623,36 @@ describe('миграция 0023_token_rights', () => {
     ])
   })
 })
+
+describe('миграция 0029_service_events_monitoring', () => {
+  it('подписанным на служебные события добавляет события доступности, остальных не трогает', async () => {
+    client = new PGlite()
+    const before = readdirSync(new URL('../../drizzle', import.meta.url))
+      .filter((name) => name.endsWith('.sql') && name < '0029')
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort()
+    for (const name of before) await applyMigration(client, name)
+    const siteId = '00000000-0000-4000-8000-000000000029'
+    await client.exec(`
+      INSERT INTO sites (id, name, theme) VALUES ('${siteId}', 'Сайт', '{}');
+      INSERT INTO notification_recipients (site_id, channel, address, events) VALUES
+        (NULL, 'email', 'studio@example.ru', '["backup.failed", "site.down"]'),
+        (NULL, 'telegram', '42', '[]'),
+        ('${siteId}', 'email', 'boss@example.ru', '["lead.new"]');
+    `)
+
+    await applyMigration(client, '0029_service_events_monitoring')
+
+    const { rows } = await client.query<{ address: string; events: string[] }>(
+      'SELECT address, events FROM notification_recipients ORDER BY address',
+    )
+    expect(rows).toEqual([
+      { address: '42', events: [] },
+      { address: 'boss@example.ru', events: ['lead.new'] },
+      {
+        address: 'studio@example.ru',
+        events: ['backup.failed', 'site.down', 'certificate.expiring', 'certificate.invalid'],
+      },
+    ])
+  })
+})

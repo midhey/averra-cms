@@ -16,6 +16,7 @@ import {
 } from '@averra/schema'
 import { sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
+import { publicChecks, publicMonitoringEnabled } from '../../notifications/public-watch'
 
 // Состояние установки: одно для владельца в админке (GET /api/status) и для студии
 // (команда status.js, её зовёт deploy/averra.sh status по SSH). Без Node API: файлы состояния
@@ -155,6 +156,8 @@ async function dbFacts(db: Db, now: Date) {
     )
     return {
       up: true as const,
+      publicChecks: await publicChecks(db),
+      publicMonitoringEnabled: await publicMonitoringEnabled(db),
       migrations: Number(migrations?.n ?? 0),
       serviceDatabases: databases,
       lastBuild: lastBuild
@@ -221,6 +224,8 @@ export async function collectStatus(
       failingSince: fromDb.up ? fromDb.mailFailingSince : null,
     },
     disk,
+    publicChecks: fromDb.up ? fromDb.publicChecks : [],
+    publicMonitoringEnabled: fromDb.up ? fromDb.publicMonitoringEnabled : undefined,
   }
   return { ...facts, problems: statusProblems(facts, now) }
 }

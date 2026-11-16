@@ -204,6 +204,13 @@
       "when": 1794841555692,
       "tag": "0028_small_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794847409568,
+      "tag": "0029_service_events_monitoring",
+      "breakpoints": true
     }
   ]
 }

@@ -20,10 +20,12 @@ type ServiceEvent = { id: ServiceEventId; title: string; hint: string }
 /**
  * Служебные события установки для студии — только владельцу: бэкап, диск, сборка, почта.
  * У каждого получателя (адрес почты или чат Telegram) — свои события. Уведомление приходит
- * на переходе: проблема появилась и проблема ушла, а не каждые пять минут
+ * на переходе: проблема появилась и проблема ушла; для недоступности — повтор раз в 6 часов
  */
 export function ServiceRecipientsSection() {
-  const { recipients, events, channels } = useSuspenseQuery(notificationsQuery()).data
+  const { recipients, events, channels, monitoringEnabled } = useSuspenseQuery(
+    notificationsQuery(),
+  ).data
   const queryClient = useQueryClient()
   const telegram = channels.find((channel) => channel.kind === 'telegram')
   const titleOf = (kind: string) => channels.find((channel) => channel.kind === kind)?.title ?? kind
@@ -48,6 +50,15 @@ export function ServiceRecipientsSection() {
       await refresh()
       setNotice({ kind: 'done', text: 'Адреса служебных уведомлений сохранены' })
     },
+    onError: (error) => setNotice({ kind: 'error', text: messageOf(error) }),
+  })
+
+  const monitoring = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await api.notifications.service.monitoring.$put({ json: { enabled } })
+      if (res.status !== 200) throw await apiRequestError(res)
+    },
+    onSuccess: refresh,
     onError: (error) => setNotice({ kind: 'error', text: messageOf(error) }),
   })
 
@@ -103,10 +114,17 @@ export function ServiceRecipientsSection() {
   return (
     <Section
       title="Служебные события"
-      description="Для студии, которая ведёт установку: о проблеме — один раз, когда она появилась, и ещё раз, когда ушла."
+      description="Для студии, которая ведёт установку: появление проблемы и восстановление; о недоступности — напоминание раз в 6 часов."
       card
     >
       <div className={styles.stack}>
+        <Checkbox
+          label="Проверять доступность сайта и сертификаты"
+          hint="Раз в 5 минут по публичным HTTPS-адресам сайта и админки. В разработке проверка выключена."
+          checked={monitoringEnabled}
+          disabled={monitoring.isPending}
+          onChange={(event) => monitoring.mutate(event.target.checked)}
+        />
         {recipients.length > 0 ? (
           <RecipientList
             label="Получатели служебных уведомлений"

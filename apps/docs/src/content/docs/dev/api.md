@@ -293,6 +293,7 @@ API — Hono, все маршруты под `/api`. Типы API (`AppType`) ч
 | `DELETE /api/notifications/telegram` | удалить бота `{ currentPassword }`, чаты отвязываются в той же транзакции, ждущие им сообщения удаляются |
 | `POST /api/notifications/channels/:kind/check` | «Проверить» канал — `check` его адаптера → `{ ok, steps }`: Telegram — `getMe` и сообщение в каждый чат сразу, почта — письмо себе через очередь; 10 за 15 минут. Прошла — пауза канала после сбоя снимается, его сообщения уходят сразу |
 | `PUT /api/notifications/service/email` | `{ recipients: [{ address, events }] }` — адреса почты служебных |
+| `PUT /api/notifications/service/monitoring` | `{ enabled }` — включить или выключить публичные HTTPS-проверки сайта и сертификатов; текущий флажок — `monitoringEnabled` в `GET /api/notifications` |
 | `PATCH /api/notifications/service/recipients/:id` | `{ events }` — события получателя |
 | `DELETE /api/notifications/service/recipients/:id` | отвязать: 204 |
 | `POST /api/notifications/service/telegram/link`, `GET …/link/:id` | привязка чата к служебным, как у заявок |

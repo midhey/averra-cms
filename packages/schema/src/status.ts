@@ -386,6 +386,9 @@ export const StatusProblemCode = z.enum([
   'mail_failing',
   'build_failed',
   'disk_low',
+  'public_down',
+  'certificate_invalid',
+  'certificate_expiring',
 ])
 
 export const StatusProblem = z.object({ code: StatusProblemCode, message: z.string() })
@@ -398,6 +401,20 @@ export const DiskSpace = z.object({
   totalBytes: z.number().int().nonnegative(),
 })
 export type DiskSpace = z.infer<typeof DiskSpace>
+
+/** Последняя проверка публичного HTTPS-адреса; неизвестный TLS не означает плохой сертификат */
+export const PublicCheck = z.object({
+  target: z.enum(['site', 'admin']),
+  checkedAt: IsoTime,
+  available: z.boolean(),
+  status: z.number().int().nullable(),
+  failures: z.number().int().nonnegative(),
+  certificate: z.object({
+    state: z.enum(['valid', 'invalid', 'unknown']),
+    expiresAt: IsoTime.nullable(),
+  }),
+})
+export type PublicCheck = z.infer<typeof PublicCheck>
 
 /** Состояние установки без списка проблем: из него проблемы и считаются */
 export const InstallationFacts = z.object({
@@ -452,6 +469,9 @@ export const InstallationFacts = z.object({
     failingSince: IsoTime.nullable(),
   }),
   disk: z.array(DiskSpace),
+  /** Нет у прежних API; пусто — проверки ещё не было или публичные HTTPS-домены не заданы */
+  publicChecks: z.array(PublicCheck).optional(),
+  publicMonitoringEnabled: z.boolean().optional(),
 })
 export type InstallationFacts = z.infer<typeof InstallationFacts>
 
@@ -504,6 +524,26 @@ const hoursAgo = (iso: string, now: Date) =>
 export function statusProblems(facts: InstallationFacts, now: Date): StatusProblem[] {
   const problems: StatusProblem[] = []
   const add = (code: StatusProblem['code'], message: string) => problems.push({ code, message })
+
+  if (facts.publicMonitoringEnabled !== false) {
+    for (const check of facts.publicChecks ?? []) {
+      const name = check.target === 'site' ? 'Сайт' : 'Админка'
+      if (!check.available && check.failures >= 2)
+        add('public_down', `${name} не отвечает по HTTPS`)
+      if (check.certificate.state === 'invalid') {
+        add('certificate_invalid', `${name}: сертификат истёк или недействителен`)
+      } else if (check.certificate.state === 'valid' && check.certificate.expiresAt) {
+        const days = Math.ceil(
+          (Date.parse(check.certificate.expiresAt) - now.getTime()) / 86_400_000,
+        )
+        if (Date.parse(check.certificate.expiresAt) <= now.getTime()) {
+          add('certificate_invalid', `${name}: сертификат истёк или недействителен`)
+        } else if (days <= 14) {
+          add('certificate_expiring', `${name}: сертификат истекает через ${days} дн.`)
+        }
+      }
+    }
+  }
 
   if (!facts.db.up) {
     add(

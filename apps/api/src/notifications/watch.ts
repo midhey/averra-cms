@@ -219,6 +219,8 @@ export async function runServiceWatch(
       if (done) raised += 1
     }
     for (const row of stored) {
+      // Публичный HTTPS-наблюдатель хранит здесь и здоровые проверки, со своим жизненным циклом.
+      if (row.key.startsWith('public:')) continue
       if (current.has(row.key) || reading.unknown(row.key, row.raisedAt)) continue
       const done = await isolated(row.key, async (sp) => {
         await sp.delete(notificationWatch).where(sql`${notificationWatch.key} = ${row.key}`)

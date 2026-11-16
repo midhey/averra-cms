@@ -472,6 +472,7 @@ export {
   KEPT_DUMP,
   mailStuck,
   NO_RELEASE_STATE,
+  PublicCheck,
   pendingStale,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASE_NOTES_MAX,

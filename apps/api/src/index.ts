@@ -28,6 +28,8 @@ import { sitesRepo } from './modules/sites/repo'
 import { collectStatus } from './modules/status/service'
 import { createChannels } from './notifications/channels'
 import { type NotificationDeps, notifyDepsOf } from './notifications/deps'
+import { probePublicHttps, publicTargets } from './notifications/public-probe'
+import { runPublicWatch } from './notifications/public-watch'
 import { notificationSettingsRepo } from './notifications/settings'
 import { telegramBinder } from './notifications/telegram/binder'
 import { botApi } from './notifications/telegram/bot-api'
@@ -244,10 +246,28 @@ const host = hostStatus({
   disks: diskTargets(config),
   dbExternal: config.DATABASE_EXTERNAL,
 })
+const publicCheckTargets = publicTargets(config)
 const serviceWatch = startServiceWatch({
   db,
   deps: () => notifyDepsOf(mailDeps, notifications),
   read: async () => {
+    const site = await sites.installationSite()
+    const context = {
+      installation: installationLabel(site?.name ?? installationSite.name, config.SITE_URL),
+      adminUrl: config.ADMIN_URL,
+    }
+    const { queued } = await runPublicWatch({
+      db,
+      deps: notifyDepsOf(mailDeps, notifications),
+      targets: publicCheckTargets,
+      probe: probePublicHttps,
+      context,
+      onFailure: ({ key }) => console.log(`Публичная проверка «${key}» не сохранена, повторим`),
+    })
+    if (queued > 0) {
+      mailWorker.wake()
+      notificationWorker.wake()
+    }
     const state = mail.status()
     const facts = await collectStatus(db, {
       version: config.AVERRA_VERSION,
@@ -257,14 +277,10 @@ const serviceWatch = startServiceWatch({
     })
     // База не ответила — ничего не знаем: круг пропускается, а не «все проблемы ушли»
     if (!facts.db.up) return undefined
-    const site = await sites.installationSite()
     return serviceSignals(
       facts,
       await failedBuilds(db),
-      {
-        installation: installationLabel(site?.name ?? installationSite.name, config.SITE_URL),
-        adminUrl: config.ADMIN_URL,
-      },
+      context,
       new Date(),
       await lastMailSentAt(db),
     )

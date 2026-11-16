@@ -19,6 +19,9 @@ export const ServiceEventId = z.enum([
   'build.failed',
   'mail.down',
   'update.requested',
+  'site.down',
+  'certificate.expiring',
+  'certificate.invalid',
 ])
 export type ServiceEventId = z.infer<typeof ServiceEventId>
 
@@ -34,6 +37,9 @@ export const NOTIFICATION_EVENT_TITLES: Record<NotificationEventId, string> = {
   'build.failed': 'Сборка сайта упала',
   'mail.down': 'Почта не работает',
   'update.requested': 'Запрошено обновление',
+  'site.down': 'Сайт не отвечает',
+  'certificate.expiring': 'Сертификат скоро истекает',
+  'certificate.invalid': 'Сертификат истёк или недействителен',
 }
 
 /** Когда приходит служебное уведомление: для подсказок в админке */
@@ -43,6 +49,10 @@ export const SERVICE_EVENT_HINTS: Record<ServiceEventId, string> = {
   'build.failed': 'сайт не собрался после публикации, на сайте прежняя версия',
   'mail.down': 'письма не уходят дольше 15 минут: сервер не пускает или отказал отправителю',
   'update.requested': 'владелец нажал «Обновить» в админке: кто и до какой версии',
+  'site.down': 'сайт или админка не отвечают по HTTPS две проверки подряд; затем — восстановление',
+  'certificate.expiring': 'сертификату сайта или админки осталось не больше 14 или 3 дней',
+  'certificate.invalid':
+    'TLS-сертификат сайта или админки истёк, ещё не действует или не прошёл проверку',
 }
 
 /** Сколько адресов почты у одной аудитории: как было у адресов уведомлений о заявках */
