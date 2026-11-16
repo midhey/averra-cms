@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/midhey/averra-cms/compare/v0.2.1...v0.3.0) (2026-11-16)
+
+
+### Features
+
+* **mail:** style site letters with the site theme ([ce44a3d](https://github.com/midhey/averra-cms/commit/ce44a3d9bbdee9b21abbb63cdf0915ad668d73df))
+
 ## [0.2.1](https://github.com/midhey/averra-cms/compare/v0.2.0...v0.2.1) (2026-11-16)
 
 
