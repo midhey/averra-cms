@@ -30,6 +30,7 @@ import { type FormEvent, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
+import { SiteHistory } from '../editor/SiteHistory'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { issueFieldErrors, zodFieldErrors } from '../forms/field-errors'
 import { useFormErrors } from '../forms/use-form-errors'
@@ -246,6 +247,7 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
     if (unsaved && !(await saveDraft())) return
     try {
       const published = await publish.mutateAsync()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'theme') })
       queryClient.setQueryData(queryKeys.theme(siteId), published)
       setForm(formOf(published.draft))
       setNotice({
@@ -562,6 +564,19 @@ function ThemeEditor({ siteId, draft, unpublished, readOnly }: EditorProps) {
             </FormActions>
           )}
         </div>
+        <SiteHistory
+          siteId={siteId}
+          entity="theme"
+          canRestore={!readOnly}
+          unsaved={unsaved}
+          busy={pending}
+          onRestored={async () => {
+            const next = await queryClient.fetchQuery({ ...themeQuery(siteId), staleTime: 0 })
+            setForm(formOf(next.draft))
+            errors.reset()
+            setNotice(undefined)
+          }}
+        />
       </form>
       <ThemePreview siteId={siteId} theme={previewTheme} />
     </div>

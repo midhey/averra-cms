@@ -9,7 +9,7 @@ import {
   Uuid,
 } from '@averra/schema'
 import { and, eq, isNotNull } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { can, forbiddenMessages } from '../../auth/access'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
@@ -22,6 +22,7 @@ import { validate } from '../../validate'
 import { placeMediaIssues } from '../custom-blocks/place-media'
 import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
+import { siteRevisionsRoutes } from '../site-revisions/routes'
 import { sitesRepo } from '../sites/repo'
 import { footerRepo, policyOf } from './repo'
 
@@ -51,8 +52,37 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
     }
   }
 
+  const saveDraft = async (c: Context<AuthEnv>, siteId: string, input: Footer) => {
+    const footer = input
+    const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+    // Быстрая сверка вида — до проверок 409; окончательная — внутри сохранения
+    if (lookLockedForMe) {
+      const current = await repo.read(siteId)
+      if (current && !sameFooterLook(current.draft, footer)) {
+        return c.json(lookLocked(forbiddenMessages['header.look']), 403)
+      }
+    }
+    // Свой вид: определение подвала есть (опубликованное или черновик) и поля ему подходят
+    const issues = [
+      ...customPlaceIssues(footer.custom, 'footer', await placeDefinitions(db, siteId, 'any')),
+      ...(await placeMediaIssues(db, siteId, footer.custom)),
+    ]
+    if (issues.length > 0) {
+      return c.json(conflict('Подвал не сохранить: причина — у каждого поля', issues), 409)
+    }
+    // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
+    const state = await repo.saveDraft(siteId, footer, lookLockedForMe)
+    if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
+    if (!state) return c.json(notFound('Сайт не найден'), 404)
+    return c.json(state, 200)
+  }
+
   return (
     new Hono<AuthEnv>()
+      .route(
+        '/revisions',
+        siteRevisionsRoutes({ db, entity: 'footer', schema: Footer, restore: saveDraft }),
+      )
       // Черновик, подвал на сайте, страница политики, есть ли «Настройки cookie» и контакты
       // «Организации» — для предпросмотра.
       // Контакты — только людям и только когда главная опубликована: как у шапки, редактор не
@@ -96,40 +126,14 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
         site('header.edit'),
         validate('json', Footer),
         async (c) => {
-          const { siteId } = c.req.valid('param')
-          const footer = c.req.valid('json')
-          const lookLockedForMe = !can(c.var.siteRole, 'header.look')
-          // Быстрая сверка вида — до проверок 409; окончательная — внутри сохранения
-          if (lookLockedForMe) {
-            const current = await repo.read(siteId)
-            if (current && !sameFooterLook(current.draft, footer)) {
-              return c.json(lookLocked(forbiddenMessages['header.look']), 403)
-            }
-          }
-          // Свой вид: определение подвала есть (опубликованное или черновик) и поля ему подходят
-          const issues = [
-            ...customPlaceIssues(
-              footer.custom,
-              'footer',
-              await placeDefinitions(db, siteId, 'any'),
-            ),
-            ...(await placeMediaIssues(db, siteId, footer.custom)),
-          ]
-          if (issues.length > 0) {
-            return c.json(conflict('Подвал не сохранить: причина — у каждого поля', issues), 409)
-          }
-          // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
-          const state = await repo.saveDraft(siteId, footer, lookLockedForMe)
-          if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
-          if (!state) return c.json(notFound('Сайт не найден'), 404)
-          return c.json(state, 200)
+          return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))
         },
       )
 
       // Публикация: большому подвалу нужна опубликованная политика — в нём форма с телефоном
       .post('/publish', validate('param', SiteParams), site('header.edit'), async (c) => {
         const { siteId } = c.req.valid('param')
-        const result = await repo.publish(siteId)
+        const result = await repo.publish(siteId, c.var.actor)
         if (!result) return c.json(notFound('Сайт не найден'), 404)
         if (result.problem) {
           const first = result.problem[0]?.message ?? ''

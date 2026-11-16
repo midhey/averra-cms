@@ -1,7 +1,7 @@
 import { compileWindowCss } from '@averra/blocks/custom-engine'
 import { type Theme, ThemeInput, themeMediaIds, Uuid } from '@averra/schema'
 import { and, eq, inArray } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
@@ -9,6 +9,7 @@ import { media } from '../../db/schema'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { siteRevisionsRoutes } from '../site-revisions/routes'
 import { themeRepo } from './repo'
 
 const SiteParams = z.object({ siteId: Uuid() })
@@ -79,8 +80,20 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
   const repo = themeRepo(db)
   const site = (permission: Parameters<typeof requireSite>[1]) => requireSite(db, permission)
 
+  const saveDraft = async (c: Context<AuthEnv>, siteId: string, theme: Theme) => {
+    const issues = await themeIssues(db, siteId, theme)
+    if (issues.length > 0) return c.json(validationError(issues), 400)
+    const view = await repo.saveDraft(siteId, theme)
+    if (!view) return c.json(notFound('Сайт не найден'), 404)
+    return c.json(view, 200)
+  }
+
   return (
     new Hono<AuthEnv>()
+      .route(
+        '/revisions',
+        siteRevisionsRoutes({ db, entity: 'theme', schema: ThemeInput, restore: saveDraft }),
+      )
       .get('/', validate('param', SiteParams), site('site.read'), async (c) => {
         const view = await repo.read(c.req.valid('param').siteId)
         if (!view) return c.json(notFound('Сайт не найден'), 404)
@@ -95,13 +108,7 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
         site('theme.edit'),
         validate('json', ThemeInput),
         async (c) => {
-          const { siteId } = c.req.valid('param')
-          const theme = c.req.valid('json')
-          const issues = await themeIssues(db, siteId, theme)
-          if (issues.length > 0) return c.json(validationError(issues), 400)
-          const view = await repo.saveDraft(siteId, theme)
-          if (!view) return c.json(notFound('Сайт не найден'), 404)
-          return c.json(view, 200)
+          return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))
         },
       )
 
@@ -111,11 +118,14 @@ export function themeRoutes({ db, publisher, log }: ThemeDeps) {
         const { siteId } = c.req.valid('param')
         // Фон-картинку из медиатеки не удалить, пока она в теме («где используется»), а CSS окон
         // проверен при сохранении черновика: здесь — схема ещё раз
-        const result = await repo.publish(siteId, (draft) =>
-          ThemeInput.safeParse(draft).error?.issues.map((issue) => ({
-            path: issue.path.map(String).join('.'),
-            message: issue.message,
-          })),
+        const result = await repo.publish(
+          siteId,
+          (draft) =>
+            ThemeInput.safeParse(draft).error?.issues.map((issue) => ({
+              path: issue.path.map(String).join('.'),
+              message: issue.message,
+            })),
+          c.var.actor,
         )
         if (!result) return c.json(notFound('Сайт не найден'), 404)
         if (result.problem) return c.json(validationError(result.problem), 400)

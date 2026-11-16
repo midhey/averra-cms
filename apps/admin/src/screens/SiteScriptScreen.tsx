@@ -18,6 +18,7 @@ import { api } from '../api'
 import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { SandboxPreview } from '../editor/SandboxPreview'
+import { SiteHistory } from '../editor/SiteHistory'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { zodFieldErrors } from '../forms/field-errors'
 import { mediaMapOf } from '../media/media-format'
@@ -137,6 +138,7 @@ function SiteScriptEditor({ siteId, state }: { siteId: string; state: State }) {
     if (!seen) return
     try {
       accept(await publish.mutateAsync(SiteScript.parse(seen)))
+      await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'script') })
       setNotice({ tone: 'success', text: 'Опубликовано: сайт пересобирается' })
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
@@ -247,6 +249,17 @@ function SiteScriptEditor({ siteId, state }: { siteId: string; state: State }) {
               </Button>
             </FormActions>
           </div>
+          <SiteHistory
+            siteId={siteId}
+            entity="script"
+            canRestore
+            unsaved={unsaved}
+            busy={pending}
+            onRestored={async () => {
+              accept(await queryClient.fetchQuery({ ...siteScriptQuery(siteId), staleTime: 0 }))
+              setNotice(undefined)
+            }}
+          />
         </div>
         <ScriptPreview siteId={siteId} script={deferred?.script ?? ''} />
       </div>

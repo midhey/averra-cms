@@ -8,6 +8,7 @@ import { conflict } from '../../errors'
 import { errorForLog } from '../../log-error'
 import type { SitePublisher } from '../../publish/queue'
 import { validate, validationError } from '../../validate'
+import { siteRevisionsRoutes } from '../site-revisions/routes'
 import { type SiteScriptState, siteScriptRepo } from './repo'
 
 const SiteParams = z.object({ siteId: Uuid() })
@@ -47,6 +48,19 @@ export function siteScriptRoutes({ db, publisher, log }: Deps) {
 
   return (
     new Hono<AuthEnv>()
+      .route(
+        '/revisions',
+        siteRevisionsRoutes({
+          db,
+          entity: 'script',
+          schema: SiteScript,
+          restore: async (c, siteId, draft) => {
+            const state = await repo.saveDraft(siteId, draft)
+            if (!state) return c.json(notFound('Сайт не найден'), 404)
+            return c.json(withProblems(state), 200)
+          },
+        }),
+      )
       .get('/', validate('param', SiteParams), site('blocks.draft'), async (c) => {
         const state = await repo.read(c.req.valid('param').siteId)
         if (!state) return c.json(notFound('Сайт не найден'), 404)
@@ -91,7 +105,7 @@ export function siteScriptRoutes({ db, publisher, log }: Deps) {
               400,
             )
           }
-          const result = await repo.publish(siteId, seen)
+          const result = await repo.publish(siteId, seen, c.var.actor)
           if (!result) return c.json(notFound('Сайт не найден'), 404)
           if (result.changed) return c.json(conflict(changedDraft), 409)
           await rebuild(siteId)

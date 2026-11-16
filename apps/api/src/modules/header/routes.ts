@@ -8,7 +8,7 @@ import {
   sameHeaderLook,
   Uuid,
 } from '@averra/schema'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { can, forbiddenMessages } from '../../auth/access'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
@@ -20,6 +20,7 @@ import { validate } from '../../validate'
 import { placeMediaIssues } from '../custom-blocks/place-media'
 import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
+import { siteRevisionsRoutes } from '../site-revisions/routes'
 import { sitesRepo } from '../sites/repo'
 import { headerRepo } from './repo'
 
@@ -52,8 +53,41 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
     }
   }
 
+  const saveDraft = async (c: Context<AuthEnv>, siteId: string, input: Header) => {
+    // У логотипа «Текст» картинки нет: спрятанная держала бы файл в медиатеке
+    const header = headerWithVisibleLogo(input)
+    const lookLockedForMe = !can(c.var.siteRole, 'header.look')
+    // Быстрая сверка вида — до проверок 409: чужой вид отвечает 403, а не списком полей.
+    // Окончательная — внутри сохранения, под блокировкой строки
+    if (lookLockedForMe) {
+      const current = await repo.read(siteId)
+      if (current && !sameHeaderLook(current.draft, header)) {
+        return c.json(lookLocked(forbiddenMessages['header.look']), 403)
+      }
+    }
+    // Свой вид: определение шапки есть (опубликованное или черновик) и поля ему подходят
+    const issues = [
+      ...(await repo.logoIssues(siteId, header)),
+      ...headerLinkIssues(header, await repo.targets(siteId), 'draft'),
+      ...customPlaceIssues(header.custom, 'header', await placeDefinitions(db, siteId, 'any')),
+      ...(await placeMediaIssues(db, siteId, header.custom)),
+    ]
+    if (issues.length > 0) {
+      return c.json(conflict('Шапку не сохранить: причина — у каждого поля', issues), 409)
+    }
+    // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
+    const state = await repo.saveDraft(siteId, header, lookLockedForMe)
+    if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
+    if (!state) return c.json(notFound('Сайт не найден'), 404)
+    return c.json(state, 200)
+  }
+
   return (
     new Hono<AuthEnv>()
+      .route(
+        '/revisions',
+        siteRevisionsRoutes({ db, entity: 'header', schema: Header, restore: saveDraft }),
+      )
       // Черновик, шапка на сайте и цели меню — страницы с блоками. Телефон и адрес организации —
       // для предпросмотра, только людям: телефон ИП — персональные данные, токену их не отдаём.
       // И людям — только когда они уже на сайте: до публикации главной снимок прячет организацию,
@@ -83,37 +117,7 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
         site('header.edit'),
         validate('json', Header),
         async (c) => {
-          const { siteId } = c.req.valid('param')
-          // У логотипа «Текст» картинки нет: спрятанная держала бы файл в медиатеке
-          const header = headerWithVisibleLogo(c.req.valid('json'))
-          const lookLockedForMe = !can(c.var.siteRole, 'header.look')
-          // Быстрая сверка вида — до проверок 409: чужой вид отвечает 403, а не списком полей.
-          // Окончательная — внутри сохранения, под блокировкой строки
-          if (lookLockedForMe) {
-            const current = await repo.read(siteId)
-            if (current && !sameHeaderLook(current.draft, header)) {
-              return c.json(lookLocked(forbiddenMessages['header.look']), 403)
-            }
-          }
-          // Свой вид: определение шапки есть (опубликованное или черновик) и поля ему подходят
-          const issues = [
-            ...(await repo.logoIssues(siteId, header)),
-            ...headerLinkIssues(header, await repo.targets(siteId), 'draft'),
-            ...customPlaceIssues(
-              header.custom,
-              'header',
-              await placeDefinitions(db, siteId, 'any'),
-            ),
-            ...(await placeMediaIssues(db, siteId, header.custom)),
-          ]
-          if (issues.length > 0) {
-            return c.json(conflict('Шапку не сохранить: причина — у каждого поля', issues), 409)
-          }
-          // Вид сверяется ещё раз внутри сохранения, под блокировкой строки сайта
-          const state = await repo.saveDraft(siteId, header, lookLockedForMe)
-          if (state === 'look') return c.json(lookLocked(forbiddenMessages['header.look']), 403)
-          if (!state) return c.json(notFound('Сайт не найден'), 404)
-          return c.json(state, 200)
+          return saveDraft(c, c.req.valid('param').siteId, c.req.valid('json'))
         },
       )
 
@@ -121,8 +125,10 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
       // на сайте вышла бы битая ссылка. Логотип мог исчезнуть из медиатеки после сохранения
       .post('/publish', validate('param', SiteParams), site('header.edit'), async (c) => {
         const { siteId } = c.req.valid('param')
-        const result = await repo.publish(siteId, (draft, targets) =>
-          headerLinkIssues(draft, targets, 'published'),
+        const result = await repo.publish(
+          siteId,
+          (draft, targets) => headerLinkIssues(draft, targets, 'published'),
+          c.var.actor,
         )
         if (!result) return c.json(notFound('Сайт не найден'), 404)
         if (result.problem) {

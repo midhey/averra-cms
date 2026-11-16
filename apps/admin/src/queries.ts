@@ -28,6 +28,8 @@ export const queryKeys = {
   leadSettings: (siteId: string) => ['sites', siteId, 'leads', 'settings'] as const,
   siteSettings: (siteId: string) => ['sites', siteId, 'settings'] as const,
   theme: (siteId: string) => ['sites', siteId, 'theme'] as const,
+  siteRevisions: (siteId: string, entity: SiteRevisionEntity) =>
+    ['sites', siteId, entity, 'revisions'] as const,
   header: (siteId: string) => ['sites', siteId, 'header'] as const,
   footer: (siteId: string) => ['sites', siteId, 'footer'] as const,
   customBlocks: (siteId: string) => ['sites', siteId, 'custom-blocks'] as const,
@@ -49,6 +51,18 @@ export const queryKeys = {
   status: ['status'] as const,
   tokens: ['tokens'] as const,
 }
+
+export type SiteRevisionEntity = 'header' | 'footer' | 'theme' | 'script'
+
+export const siteRevisionsQuery = (siteId: string, entity: SiteRevisionEntity) =>
+  queryOptions({
+    queryKey: queryKeys.siteRevisions(siteId, entity),
+    queryFn: async () => {
+      const res = await api.sites[':siteId'][entity].revisions.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
 
 /**
  * Сайт установки: одна установка — один сайт, и в адресах админки id сайта нет. Отсюда админка

@@ -1,7 +1,9 @@
 import { readSiteScript, type SiteScript } from '@averra/schema'
 import { eq } from 'drizzle-orm'
+import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { sites } from '../../db/schema'
+import { recordSiteRevision } from '../site-revisions/repo'
 
 const columns = { scriptPublished: sites.scriptPublished, scriptDraft: sites.scriptDraft }
 
@@ -58,7 +60,7 @@ export function siteScriptRepo(db: Db) {
      * ушёл бы непрочитанный код. Поменялся — changed, ничего не публикуется. Строка сайта
      * заблокирована до конца
      */
-    publish(siteId: string, seen: SiteScript) {
+    publish(siteId: string, seen: SiteScript, actor: Actor) {
       return db.transaction(async (tx) => {
         const [row] = await tx.select(columns).from(sites).where(eq(sites.id, siteId)).for('update')
         if (!row) return undefined
@@ -70,6 +72,7 @@ export function siteScriptRepo(db: Db) {
           .where(eq(sites.id, siteId))
           .returning(columns)
         if (!saved) throw new Error('База не вернула сайт после публикации скрипта')
+        await recordSiteRevision(tx, siteId, 'script', draft, actor)
         return { changed: false as const, state: stateOf(saved) }
       })
     },

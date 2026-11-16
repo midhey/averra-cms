@@ -11,12 +11,14 @@ import {
   sameHeaderLook,
 } from '@averra/schema'
 import { and, asc, eq, sql } from 'drizzle-orm'
+import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { media, pages, sites } from '../../db/schema'
 import type { Issue } from '../../errors'
 import type { Tx } from '../../mail/outbox'
 import { placeMediaIssues } from '../custom-blocks/place-media'
 import { placeDefinitions } from '../custom-blocks/repo'
+import { recordSiteRevision } from '../site-revisions/repo'
 import { draftHeader, publishedHeader } from './read'
 
 const columns = { headerPublished: sites.headerPublished, headerDraft: sites.headerDraft }
@@ -158,7 +160,11 @@ export function headerRepo(db: Db) {
      * ничего не меняя. Строка сайта заблокирована до конца: черновик не поменяется между чтением и
      * записью
      */
-    publish(siteId: string, check: (draft: Header, targets: HeaderTargetPage[]) => Issue[]) {
+    publish(
+      siteId: string,
+      check: (draft: Header, targets: HeaderTargetPage[]) => Issue[],
+      actor: Actor,
+    ) {
       return db.transaction(async (tx) => {
         const [row] = await tx.select(columns).from(sites).where(eq(sites.id, siteId)).for('update')
         if (!row) return undefined
@@ -181,6 +187,7 @@ export function headerRepo(db: Db) {
           .where(eq(sites.id, siteId))
           .returning(columns)
         if (!saved) throw new Error('База не вернула сайт после публикации шапки')
+        await recordSiteRevision(tx, siteId, 'header', draft, actor)
         return { problem: undefined, state: stateOf(saved) }
       })
     },

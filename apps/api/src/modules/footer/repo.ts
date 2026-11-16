@@ -6,6 +6,7 @@ import {
   sameFooterLook,
 } from '@averra/schema'
 import { and, eq, isNotNull } from 'drizzle-orm'
+import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pages, sites } from '../../db/schema'
 import type { Issue } from '../../errors'
@@ -13,6 +14,7 @@ import type { Tx } from '../../mail/outbox'
 import { placeMediaIssues } from '../custom-blocks/place-media'
 import { placeDefinitions } from '../custom-blocks/repo'
 import { readStoredSettings } from '../settings/read'
+import { recordSiteRevision } from '../site-revisions/repo'
 import { draftFooter, publishedFooter } from './read'
 
 const columns = { footerPublished: sites.footerPublished, footerDraft: sites.footerDraft }
@@ -87,7 +89,7 @@ export function footerRepo(db: Db) {
      * нужна опубликованная политика). Замечания возвращаются как есть, ничего не меняя. Строка
      * сайта заблокирована до конца: черновик не поменяется между чтением и записью
      */
-    publish(siteId: string) {
+    publish(siteId: string, actor: Actor) {
       return db.transaction(async (tx) => {
         const [row] = await tx.select(columns).from(sites).where(eq(sites.id, siteId)).for('update')
         if (!row) return undefined
@@ -110,6 +112,7 @@ export function footerRepo(db: Db) {
           .where(eq(sites.id, siteId))
           .returning(columns)
         if (!saved) throw new Error('База не вернула сайт после публикации подвала')
+        await recordSiteRevision(tx, siteId, 'footer', draft, actor)
         return { problem: undefined, state: stateOf(saved) }
       })
     },

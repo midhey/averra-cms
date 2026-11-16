@@ -40,6 +40,7 @@ import { api } from '../api'
 import { useCustomBlockMap } from '../custom-blocks/use-custom-block-map'
 import { type Device, DeviceSwitch, initialDevice, Preview } from '../editor/Preview'
 import { SandboxPreview } from '../editor/SandboxPreview'
+import { SiteHistory } from '../editor/SiteHistory'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
 import { FooterFields } from '../footer/FooterFields'
 import { footerHiddenOnText, footerStatus } from '../footer/footer-format'
@@ -359,6 +360,7 @@ function HeaderEditor(props: EditorProps) {
     setNotice(undefined)
     try {
       const state = await takeDown.mutateAsync()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'header') })
       queryClient.setQueryData(queryKeys.header(siteId), (current) =>
         current ? { ...current, ...state } : current,
       )
@@ -374,6 +376,7 @@ function HeaderEditor(props: EditorProps) {
     if (unsaved && !(await saveDraft())) return
     try {
       const published = await publish.mutateAsync()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'header') })
       queryClient.setQueryData(queryKeys.header(siteId), (current) =>
         current ? { ...current, ...published } : current,
       )
@@ -906,6 +909,25 @@ function HeaderEditor(props: EditorProps) {
             </FormActions>
           )}
         </div>
+        <SiteHistory
+          key={tab === 'footer' ? 'footer' : 'header'}
+          siteId={siteId}
+          entity={tab === 'footer' ? 'footer' : 'header'}
+          canRestore={!readOnly}
+          unsaved={tab === 'footer' ? footer.unsaved : unsaved}
+          busy={pending || footer.pending}
+          onRestored={async () => {
+            if (tab === 'footer') {
+              const next = await queryClient.fetchQuery({ ...footerQuery(siteId), staleTime: 0 })
+              footer.acceptDraft(next.draft)
+            } else {
+              const next = await queryClient.fetchQuery({ ...headerQuery(siteId), staleTime: 0 })
+              setForm(next.draft)
+              errors.reset()
+            }
+            setNotice(undefined)
+          }}
+        />
       </form>
       <HeaderPreview
         siteId={siteId}

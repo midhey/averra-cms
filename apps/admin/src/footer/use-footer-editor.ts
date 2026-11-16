@@ -123,6 +123,12 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
     publishing: publish.isPending,
     takingDown: takeDown.isPending,
 
+    acceptDraft(next: Footer) {
+      setForm(next)
+      errors.reset()
+      onNotice(undefined)
+    },
+
     change(next: Footer, field?: string) {
       setForm(next)
       onNotice(undefined)
@@ -144,6 +150,7 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
       if (unsaved && !(await saveDraft())) return
       try {
         const published = await publish.mutateAsync()
+        await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'footer') })
         updateCache(published)
         setForm(published.draft)
         onNotice({
@@ -168,6 +175,7 @@ export function useFooterEditor({ siteId, draft, onNotice, onFieldError }: Optio
       onNotice(undefined)
       try {
         updateCache(await takeDown.mutateAsync())
+        await queryClient.invalidateQueries({ queryKey: queryKeys.siteRevisions(siteId, 'footer') })
         onNotice({ kind: 'done', text: 'Подвал убрали с сайта. Сайт пересобирается' })
         await queryClient.invalidateQueries({ queryKey: queryKeys.build(siteId) })
       } catch (error) {

@@ -10,6 +10,62 @@ import { expect, sites, test } from './fixtures'
 
 const release = (siteId: string) => join(publishDir, siteId, 'current')
 
+test('история: две публикации темы → вернуть первую в черновик → опубликовать', async ({
+  page,
+  demoSite,
+}) => {
+  test.setTimeout(240_000)
+  const themeApi = sites[':siteId'].theme
+  const param = { siteId: demoSite.id }
+  await page.goto('/theme')
+  await page.getByRole('radio', { name: 'Ночная' }).check()
+  await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect(page.getByText(/Тема опубликована/)).toBeVisible()
+  const first = await themeApi.$get({ param })
+  if (first.status !== 200) throw new Error('Не удалось прочитать тему')
+  const firstTheme = (await first.json()).published
+  const firstHistory = await themeApi.revisions.$get({ param })
+  if (firstHistory.status !== 200) throw new Error('Не удалось прочитать историю темы')
+  const revision = (await firstHistory.json())[0]
+  if (!revision) throw new Error('Публикации нет в истории')
+  await expect
+    .poll(() => servedHtml(demoSite.id), { timeout: 90_000 })
+    .toContain(`--color-accent:${firstTheme.colors.accent}`)
+
+  const accent = page.getByRole('textbox', { name: 'Акцент (кнопки, ссылки)', exact: true })
+  await accent.fill('#f5c04a')
+  await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect(page.getByText(/Тема опубликована/)).toBeVisible()
+  await expect
+    .poll(() => servedHtml(demoSite.id), { timeout: 90_000 })
+    .toContain('--color-accent:#f5c04a')
+
+  await page.getByRole('button', { name: 'История', exact: true }).click()
+  const history = page.getByRole('region', { name: 'История публикаций' })
+  await history.getByRole('button', { name: new RegExp(`Версия ${revision.version}\\b`) }).click()
+  await history.getByRole('button', { name: 'Вернуть в черновик', exact: true }).click()
+  await expect(
+    history.getByText(new RegExp(`Версия ${revision.version} возвращена в черновик`)),
+  ).toBeVisible()
+  await expect(accent).toHaveValue(firstTheme.colors.accent)
+  const restored = await themeApi.$get({ param })
+  if (restored.status !== 200) throw new Error('Не удалось прочитать возвращённую тему')
+  const restoredState = await restored.json()
+  expect(restoredState.draft).toEqual(firstTheme)
+  expect(restoredState.published.colors.accent).toBe('#f5c04a')
+  await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect
+    .poll(async () => {
+      const response = await themeApi.$get({ param })
+      if (response.status !== 200) return null
+      return (await response.json()).published
+    })
+    .toEqual(firstTheme)
+  await expect
+    .poll(() => servedHtml(demoSite.id), { timeout: 90_000 })
+    .toContain(`--color-accent:${firstTheme.colors.accent}`)
+})
+
 async function servedHtml(siteId: string) {
   const file = join(release(siteId), 'index.html')
   return existsSync(file) ? readFile(file, 'utf8') : ''

@@ -1,8 +1,10 @@
 import { legacyTheme, sameTheme, type Theme } from '@averra/schema'
 import { eq } from 'drizzle-orm'
+import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { sites } from '../../db/schema'
 import type { Issue } from '../../errors'
+import { recordSiteRevision } from '../site-revisions/repo'
 import { draftTheme, publishedTheme } from './read'
 
 const columns = {
@@ -44,7 +46,7 @@ export function themeRepo(db: Db) {
      * есть, ничего не меняя. Строка сайта заблокирована до конца: черновик не поменяется между
      * чтением и записью
      */
-    publish(siteId: string, check: (draft: Theme) => Issue[] | undefined) {
+    publish(siteId: string, check: (draft: Theme) => Issue[] | undefined, actor: Actor) {
       return db.transaction(async (tx) => {
         const [row] = await tx.select(columns).from(sites).where(eq(sites.id, siteId)).for('update')
         if (!row) return undefined
@@ -57,6 +59,7 @@ export function themeRepo(db: Db) {
           .where(eq(sites.id, siteId))
           .returning(columns)
         if (!saved) throw new Error('База не вернула сайт после публикации темы')
+        await recordSiteRevision(tx, siteId, 'theme', draft, actor)
         return { problem: undefined, view: viewOf(saved) }
       })
     },

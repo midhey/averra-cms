@@ -190,6 +190,13 @@
       "when": 1794573938769,
       "tag": "0026_jittery_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794835448134,
+      "tag": "0027_groovy_annihilus",
+      "breakpoints": true
     }
   ]
 }

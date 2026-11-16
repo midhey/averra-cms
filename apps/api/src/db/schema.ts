@@ -311,6 +311,37 @@ export const apiTokens = pgTable(
 )
 
 /**
+ * Публикации общих настроек сайта: отдельная нумерация и последние 50 снимков у каждой сущности.
+ * Публикация пишет снимок и чистит старые версии в своей транзакции
+ */
+export const siteRevisions = pgTable(
+  'site_revisions',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    entity: text().$type<'header' | 'footer' | 'theme' | 'script'>().notNull(),
+    version: integer().notNull(),
+    content: jsonb().$type<Record<string, unknown>>().notNull(),
+    publishedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('site_revisions_entity_version_unique').on(
+      table.siteId,
+      table.entity,
+      table.version,
+    ),
+    check('site_revisions_version_positive', sql`${table.version} > 0`),
+    check(
+      'site_revisions_entity_valid',
+      sql`${table.entity} IN ('header', 'footer', 'theme', 'script')`,
+    ),
+  ],
+)
+
+/**
  * Снимок страницы при каждой публикации: что ушло на сайт, кто и когда. Пишет его публикация
  * в той же транзакции (sitesRepo.publish), а возврат версии в черновик историю не меняет
  */
