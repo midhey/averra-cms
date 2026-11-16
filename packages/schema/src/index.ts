@@ -267,6 +267,13 @@ export {
 } from './header'
 export { Uuid } from './id'
 export {
+  ATTRIBUTION_PREFIX,
+  LeadAttribution,
+  LeadSummaryQuery,
+  UTM_KEYS,
+  UTM_MAX_LENGTH,
+} from './lead-attribution'
+export {
   LEGAL_NOTE_BLOCK_ID,
   LegalDocument,
   type LegalFacts,

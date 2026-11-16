@@ -14,6 +14,98 @@ const SUCCESS = 'Спасибо! Заявка отправлена, мы ско�
 
 let visitorCount = 0
 
+test('метки переживают переход по сайту: обычный POST сохраняет источник в карточке', async ({
+  page,
+  browser,
+  demoSite,
+}) => {
+  const pagesApi = sites[':siteId'].pages[':slug']
+  const slug = 'utm-contact'
+  const home = { siteId: demoSite.id, slug: MAIN_PAGE_SLUG }
+  const contact = { siteId: demoSite.id, slug }
+  expect(
+    (
+      await pagesApi.$put({
+        param: home,
+        json: {
+          title: demoPageTitle,
+          content: {
+            blocks: [
+              {
+                id: 'go',
+                type: 'hero',
+                props: { title: 'Запишитесь', button: { label: 'К форме', href: `/${slug}` } },
+              },
+            ],
+          },
+        },
+      })
+    ).status,
+  ).toBe(200)
+  expect((await pagesApi.publish.$post({ param: home })).status).toBe(200)
+  expect(
+    (
+      await pagesApi.$put({
+        param: contact,
+        json: {
+          title: 'Контакты',
+          content: {
+            blocks: [{ id: 'utm-form', type: 'form', props: form.example }],
+          },
+        },
+      })
+    ).status,
+  ).toBe(200)
+  expect((await pagesApi.publish.$post({ param: contact })).status).toBe(200)
+  const context = await browser.newContext({
+    javaScriptEnabled: true,
+    storageState: { cookies: [], origins: [] },
+    extraHTTPHeaders: { 'x-forwarded-for': `10.21.0.${++visitorCount}` },
+  })
+  const marker = `Источник ${Date.now()}`
+  try {
+    const visitorPage = await context.newPage()
+    await visitorPage.goto(`${urls.renderer}/?utm_source=ya&utm_campaign=x`)
+    // Ожидаем выполнение внешнего модуля до ухода со страницы.
+    await expect
+      .poll(() => visitorPage.evaluate(() => sessionStorage.getItem('averra_lead_attribution')))
+      .toContain('ya')
+    await visitorPage.getByRole('link', { name: 'К форме', exact: true }).click()
+    const leadForm = visitorPage.getByRole('form', { name: form.example.title })
+    await expect(leadForm.locator('input[name="_av_utm_source"]')).toHaveValue('ya')
+    await leadForm.getByLabel('Имя').fill(marker)
+    await leadForm.getByLabel('Телефон').fill('+7 900 111-22-33')
+    await leadForm.getByLabel('Я согласен на обработку персональных данных').check()
+    await leadForm.getByRole('button', { name: 'Отправить заявку' }).click()
+    await expect(visitorPage.getByText(SUCCESS)).toBeVisible()
+  } finally {
+    await context.close()
+  }
+  await page.goto('/leads')
+  await page
+    .getByRole('list', { name: 'Список заявок' })
+    .getByRole('link')
+    .filter({ hasText: marker })
+    .click()
+  const source = page
+    .getByRole('article', { name: marker })
+    .getByRole('region', { name: 'Источник' })
+  await expect(source.getByText('ya', { exact: true })).toHaveCount(2)
+  await expect(source.getByText('x', { exact: true })).toBeVisible()
+  await expect(source.getByText(`${urls.renderer}/${slug}`, { exact: true })).toBeVisible()
+  const summary = page.getByRole('region', { name: 'Сводка заявок' })
+  await expect(
+    summary
+      .getByRole('table', { name: 'По источнику' })
+      .getByRole('rowheader', { name: 'ya', exact: true }),
+  ).toBeVisible()
+  await summary.getByRole('tab', { name: '7 дней' }).click()
+  await expect(summary.getByRole('tab', { name: '7 дней' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+})
+
 /**
  * Посетитель сайта: свой контекст браузера без JavaScript и без входа в админку. Свой
  * X-Forwarded-For (API e2e доверяет прокси): лимит заявок с одного IP не делится между тестами

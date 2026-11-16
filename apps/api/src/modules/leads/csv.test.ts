@@ -35,6 +35,12 @@ describe('CSV заявок', () => {
         pageSlug: 'o-nas',
         source: 'block',
         formTitle: 'Заявка',
+        attribution: {
+          utm_source: '=1+1',
+          utm_campaign: 'x',
+          pageUrl: 'https://site.test/o-nas',
+          referrerDomain: 'search.test',
+        },
         data: [
           { name: 'name', label: 'Имя', type: 'name', value: 'Анна' },
           { name: 'agree', label: 'Перезвонить', type: 'checkbox', value: true },
@@ -54,9 +60,9 @@ describe('CSV заявок', () => {
       labels,
     )
     expect(CSV_BOM + csvLine(leadsCsvHeader(labels)) + csvLine(first) + csvLine(second)).toBe(
-      '\uFEFF"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город"\r\n' +
-        '"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";""\r\n' +
-        '"14.10.2026, 12:30";"новая";"/";"Другая (подвал сайта)";"";"";"Тверь"\r\n',
+      '\uFEFF"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Перезвонить";"Город";"utm_source";"utm_medium";"utm_campaign";"utm_content";"utm_term";"Адрес страницы";"Домен Referer"\r\n' +
+        '"15.10.2026, 12:30";"обработана";"/o-nas";"Заявка";"Анна";"да";"";"\'=1+1";"";"x";"";"";"https://site.test/o-nas";"search.test"\r\n' +
+        '"14.10.2026, 12:30";"новая";"/";"Другая (подвал сайта)";"";"";"Тверь";"";"";"";"";"";"";""\r\n',
     )
   })
 })

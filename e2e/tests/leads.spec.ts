@@ -156,7 +156,7 @@ test('пустая вкладка: панель — остановка Tab, фо
   const tabs = page.getByRole('tablist', { name: 'Фильтр заявок' })
   await tabs.getByRole('tab', { name: 'Обработанные' }).focus()
   await page.keyboard.press('Tab')
-  await expect(page.getByRole('tabpanel')).toBeFocused()
+  await expect(page.getByRole('tabpanel', { name: 'Обработанные' })).toBeFocused()
 })
 
 test('без почты посетителя «Ответить письмом» нет', async ({ page, demoSite }) => {

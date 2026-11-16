@@ -141,6 +141,12 @@ describe('все данные сайта', () => {
       pageSlug: 'index',
       blockId: 'lead',
       formTitle: 'Заявка',
+      attribution: {
+        utm_source: 'ya',
+        utm_campaign: 'x',
+        pageUrl: 'https://site.test/',
+        referrerDomain: 'search.test',
+      },
       data: [{ name: 'name', label: 'Имя', type: 'name', value: 'Анна' }],
       consentText: 'Согласен',
       consentPolicyUrl: '/privacy',
@@ -222,6 +228,12 @@ describe('все данные сайта', () => {
       expect.objectContaining({
         pageSlug: 'index',
         consentText: 'Согласен',
+        attribution: {
+          utm_source: 'ya',
+          utm_campaign: 'x',
+          pageUrl: 'https://site.test/',
+          referrerDomain: 'search.test',
+        },
         data: [{ name: 'name', label: 'Имя', type: 'name', value: 'Анна' }],
       }),
     ])

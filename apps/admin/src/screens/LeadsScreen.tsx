@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { api } from '../api'
 import { saveResponse } from '../download'
 import { apiRequestError, messageOf } from '../errors'
+import { LeadSummary } from '../leads/LeadSummary'
 import {
   type LeadField,
   leadName,
@@ -107,6 +108,8 @@ function SiteLeads({ siteId }: { siteId: string }) {
         </InlineAlert>
       )}
       {notice?.kind === 'error' && <InlineAlert tone="danger">{notice.text}</InlineAlert>}
+
+      <LeadSummary siteId={siteId} />
 
       <div id={LEADS_TABS_ID} className={cx(styles.layout, selected && styles.cardOpen)}>
         <Tabs

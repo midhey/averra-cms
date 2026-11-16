@@ -1,4 +1,4 @@
-import { LeadSettings, LeadStatus, UpdateLead, Uuid } from '@averra/schema'
+import { LeadSettings, LeadStatus, LeadSummaryQuery, UpdateLead, Uuid } from '@averra/schema'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
@@ -116,6 +116,20 @@ export function leadsRoutes({
           const saved = await repo.saveSettings(siteId, c.req.valid('json'))
           if (!saved) return c.json(notFound('Сайт не найден'), 404)
           return c.json(saved, 200)
+        },
+      )
+
+      .get(
+        '/summary',
+        validate('param', SiteParams),
+        site('leads.read'),
+        validate('query', LeadSummaryQuery),
+        async (c) => {
+          c.header('Cache-Control', 'no-store')
+          return c.json(
+            await repo.summary(c.req.valid('param').siteId, Number(c.req.valid('query').days)),
+            200,
+          )
         },
       )
 

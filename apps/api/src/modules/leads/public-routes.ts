@@ -20,6 +20,7 @@ import { errorForLog } from '../../log-error'
 import { type NotificationDeps, notifyDepsOf } from '../../notifications/deps'
 import { createRateLimiter } from '../../rate-limit'
 import type { MailDeps } from '../mail/routes'
+import { leadAttribution } from './attribution'
 import { messagePage, PAGE_HEADERS } from './pages'
 import { leadsRepo, storedLeadBytes } from './repo'
 import { acceptLead, findPublishedForm, leadSnapshot, pagePath } from './service'
@@ -345,6 +346,13 @@ export function formsRoutes({
         await acceptLead(db, {
           form: published,
           values: parsed.data,
+          attribution: leadAttribution({
+            raw,
+            origin: c.req.header('origin'),
+            referer: c.req.header('referer'),
+            requestUrl: c.req.url,
+            pagePath: pagePath(slug),
+          }),
           notifications: notifyDepsOf(mail, notifications),
           adminUrl,
         })

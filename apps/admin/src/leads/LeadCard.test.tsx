@@ -31,6 +31,29 @@ const lead = (email: string) => ({
 })
 
 describe('LeadCard', () => {
+  it('показывает источник, кампанию, страницу и домен Referer', async () => {
+    await renderWithRouter(
+      <LeadCard
+        site={site}
+        lead={{
+          ...lead(''),
+          attribution: {
+            utm_source: 'ya',
+            utm_campaign: 'x',
+            pageUrl: 'https://site.test/contacts',
+            referrerDomain: 'search.test',
+          },
+        }}
+        status={undefined}
+      />,
+    )
+    const source = screen.getByRole('region', { name: 'Источник' })
+    expect(within(source).getByText('x')).toBeTruthy()
+    expect(within(source).getAllByText('ya')).toHaveLength(2)
+    expect(within(source).getByText('https://site.test/contacts')).toBeTruthy()
+    expect(within(source).getByText('search.test')).toBeTruthy()
+  })
+
   it('имя — заголовок карточки, поля списком, «Ответить письмом» — mailto с адресом посетителя', async () => {
     await renderWithRouter(
       <LeadCard

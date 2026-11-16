@@ -1,5 +1,6 @@
 import type {
   FormFieldType,
+  LeadAttribution,
   LeadSource,
   LeadStatus,
   LegacyTheme,
@@ -404,6 +405,7 @@ export const leads = pgTable(
     // Откуда заявка: блок «Форма» на странице (block) или форма подвала (footer, blockId — ~footer)
     source: text().$type<LeadSource>().notNull().default('block'),
     formTitle: text().notNull(),
+    attribution: jsonb().$type<Partial<LeadAttribution>>().notNull().default({}),
     data: jsonb().$type<StoredLeadField[]>().notNull(),
     // Размер data в байтах (UTF-8 JSON) — для дневного предела объёма: сумма по колонке, а не
     // распаковка jsonb всех заявок сайта за сутки на каждой отправке формы

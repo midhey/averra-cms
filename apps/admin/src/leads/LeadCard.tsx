@@ -1,4 +1,4 @@
-import type { LeadSource, LeadStatus } from '@averra/schema'
+import { type LeadAttribution, type LeadSource, type LeadStatus, UTM_KEYS } from '@averra/schema'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useId, useState } from 'react'
@@ -31,6 +31,7 @@ type Lead = {
   pageSlug: string
   source: LeadSource
   formTitle: string
+  attribution?: Partial<LeadAttribution>
   data: unknown
   consentText: string
   consentPolicyUrl: string
@@ -166,6 +167,22 @@ export function LeadCard({ site, lead, pageTitle, status, onDeleted }: LeadCardP
           ] as const
         })}
       />
+
+      <section aria-label="Источник" className={styles.consent}>
+        <h3 className={styles.consentTitle}>Источник</h3>
+        <Facts
+          label="Источник заявки"
+          items={[
+            [
+              'Источник',
+              lead.attribution?.utm_source || lead.attribution?.referrerDomain || 'прямой заход',
+            ],
+            ...UTM_KEYS.map((key) => [key, lead.attribution?.[key] || '—'] as const),
+            ['Адрес страницы', lead.attribution?.pageUrl || pagePath(lead.pageSlug)],
+            ['Домен Referer', lead.attribution?.referrerDomain || '—'],
+          ]}
+        />
+      </section>
 
       <section aria-label="Согласие на обработку персональных данных" className={styles.consent}>
         <p className={styles.consentTitle}>Согласие на обработку персональных данных</p>

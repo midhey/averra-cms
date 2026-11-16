@@ -1,4 +1,4 @@
-import type { LeadSettings, LeadSource, LeadStatus } from '@averra/schema'
+import type { LeadAttribution, LeadSettings, LeadSource, LeadStatus } from '@averra/schema'
 import { and, count, desc, eq, gt, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { leads, type StoredLeadField, sites } from '../../db/schema'
@@ -33,6 +33,7 @@ export type NewLead = {
   /** Блок «Форма» на странице или форма подвала */
   source: LeadSource
   formTitle: string
+  attribution?: LeadAttribution
   data: StoredLeadField[]
   consentText: string
   consentPolicyUrl: string
@@ -46,6 +47,7 @@ const leadColumns = {
   blockId: leads.blockId,
   source: leads.source,
   formTitle: leads.formTitle,
+  attribution: leads.attribution,
   data: leads.data,
   consentText: leads.consentText,
   consentPolicyUrl: leads.consentPolicyUrl,
@@ -60,6 +62,44 @@ export function leadsRepo(db: Db) {
   const leadIs = (siteId: string, id: string) => and(eq(leads.siteId, siteId), eq(leads.id, id))
 
   return {
+    async summary(siteId: string, days: number, now = new Date()) {
+      const since = new Date(now.getTime() - days * 86_400_000)
+      const filter = and(
+        eq(leads.siteId, siteId),
+        sql`${leads.createdAt} >= ${since.toISOString()}::timestamptz`,
+        sql`${leads.createdAt} <= ${now.toISOString()}::timestamptz`,
+      )
+      const source = sql<string>`coalesce(nullif(${leads.attribution}->>'utm_source', ''), nullif(${leads.attribution}->>'referrerDomain', ''), 'прямой заход')`
+      const grouped = (label: ReturnType<typeof sql<string>>) =>
+        db
+          .select({ label, count: count() })
+          .from(leads)
+          .where(filter)
+          .groupBy(label)
+          .orderBy(desc(count()), label)
+      const [total] = await db.select({ count: count() }).from(leads).where(filter)
+      return {
+        days,
+        total: total?.count ?? 0,
+        sources: await grouped(source),
+        pages: await grouped(
+          sql<string>`coalesce(nullif(${leads.attribution}->>'pageUrl', ''), case when ${leads.pageSlug} = 'index' then '/' else '/' || ${leads.pageSlug} end)`,
+        ),
+        forms: await db
+          .select({
+            pageSlug: leads.pageSlug,
+            blockId: leads.blockId,
+            source: leads.source,
+            label: leads.formTitle,
+            count: count(),
+          })
+          .from(leads)
+          .where(filter)
+          .groupBy(leads.pageSlug, leads.blockId, leads.source, leads.formTitle)
+          .orderBy(desc(count()), leads.pageSlug, leads.blockId, leads.source, leads.formTitle),
+      }
+    },
+
     /** Пишет заявку тем же объектом, что и письма о ней: откатится одно — откатится и другое */
     async insert(tx: DbOrTx, lead: NewLead) {
       const { now, ...values } = lead

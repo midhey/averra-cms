@@ -310,6 +310,19 @@ export const leadsQuery = (siteId: string, status?: LeadStatus) =>
     },
   })
 
+export const leadSummaryQuery = (siteId: string, days: '7' | '30' | '90') =>
+  queryOptions({
+    queryKey: [...queryKeys.leads(siteId), 'summary', days],
+    queryFn: async () => {
+      const res = await api.sites[':siteId'].leads.summary.$get({
+        param: { siteId },
+        query: { days },
+      })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
+
 /**
  * Последние заявки для обзора сайта: три штуки и только поля карточки (откуда, кто, что, когда).
  * Полный список с персональными данными обзору не нужен. Ключ — под queryKeys.leads: обработка

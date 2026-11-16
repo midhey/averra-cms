@@ -11,6 +11,7 @@ import {
 } from '@averra/schema'
 import { hc } from 'hono/client'
 import { ICON_FILES } from './icon-files'
+import { leadAttributionNeeded } from './lead-attribution'
 import { oncePerBuild } from './once-per-build'
 
 const api = hc<AppType>(CMS_API_URL).api
@@ -38,24 +39,29 @@ async function fetchSnapshot() {
   }
   if (res.status !== 200) throw new Error(`API ответил ${res.status} на снимок сайта`)
   const snapshot = await res.json()
+  const pages = snapshot.pages.map((page) => {
+    const content = page.content as PageContent
+    return {
+      ...page,
+      hiddenBlockIds: content.blocks
+        .filter((block) => block.hidden === true)
+        .map((block) => block.id),
+      content: { ...content, blocks: visibleBlocks(content.blocks) },
+    }
+  })
+  const customBlocks = snapshot.customBlocks as CustomBlockMap
+  const media = withSiteUrls(snapshot.media)
   return {
     ...snapshot,
     // Страницы и свои блоки — ровно то, что API проверил своими схемами. Тип клиента Hono видит
     // в них JSON и не узнаёт поля своих блоков (объект неизвестной формы)
     // Скрытые блоки не участвуют ни в HTML, ни в меню, разметке поисковиков и скриптах.
     // В API опубликованное содержимое остаётся целиком — для истории и возврата блока.
-    pages: snapshot.pages.map((page) => {
-      const content = page.content as PageContent
-      return {
-        ...page,
-        hiddenBlockIds: content.blocks
-          .filter((block) => block.hidden === true)
-          .map((block) => block.id),
-        content: { ...content, blocks: visibleBlocks(content.blocks) },
-      }
-    }),
-    customBlocks: snapshot.customBlocks as CustomBlockMap,
-    media: withSiteUrls(snapshot.media),
+    pages,
+    customBlocks,
+    media,
+    // fetchSnapshot вызывается один раз на сборку: решение общее для всех страниц и 404.
+    hasLeadForms: leadAttributionNeeded({ site: snapshot.site, pages, media, customBlocks }),
   }
 }
 

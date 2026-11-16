@@ -146,6 +146,45 @@ const sendAll = (testApi: TestApi = api) => sendQueue(testApi)
 const leadsUrl = (siteId: string) => `/api/sites/${siteId}/leads`
 
 describe('приём заявки', () => {
+  it('сохраняет проверенные метки отдельно от полей посетителя; без JS читает Referer', async () => {
+    const siteId = await siteWithForm()
+    expect(
+      (
+        await submit(
+          siteId,
+          validFields({
+            _av_utm_source: ' ya ',
+            _av_utm_medium: 'cpc',
+            _av_utm_campaign: 'x',
+            _av_utm_content: 'a'.repeat(300),
+            _av_utm_term: 'a\nb',
+            _av_referrer: 'https://search.test/private?email=secret',
+            _av_page_url: `${SITE_ORIGIN}/?secret=1#top`,
+            extra: 'не сохранять',
+          }),
+        )
+      ).status,
+    ).toBe(303)
+    const [lead] = await leadsOf(api, siteId)
+    expect(lead?.attribution).toEqual({
+      utm_source: 'ya',
+      utm_medium: 'cpc',
+      utm_campaign: 'x',
+      utm_content: 'a'.repeat(200),
+      utm_term: '',
+      pageUrl: `${SITE_ORIGIN}/`,
+      referrerDomain: 'search.test',
+    })
+    expect(JSON.stringify(lead)).not.toContain('secret')
+    expect(JSON.stringify(lead)).not.toContain('не сохранять')
+    await submit(siteId, validFields(), { headers: { referer: `${SITE_ORIGIN}/?utm_source=nojs` } })
+    expect((await leadsOf(api, siteId)).some((row) => row.attribution.utm_source === 'nojs')).toBe(
+      true,
+    )
+    const csv = await api.app.request(`${leadsUrl(siteId)}/export`, { headers: owner.headers })
+    expect(await csv.text()).toContain('"ya";"cpc";"x"')
+  })
+
   it('принимает форму и возвращает на страницу с якорем успеха (303)', async () => {
     const siteId = await siteWithForm()
     const res = await submit(siteId, validFields({ comment: 'Нужен\r\nремонт', call_me: 'yes' }))
@@ -161,6 +200,12 @@ describe('приём заявки', () => {
       consentText: 'Я согласен на обработку персональных данных',
       consentPolicyUrl: '/privacy',
       pageVersion: 1,
+      attribution: {
+        utm_source: '',
+        utm_campaign: '',
+        pageUrl: `${SITE_ORIGIN}/`,
+        referrerDomain: 'remont.example.ru',
+      },
     })
     expect(lead?.consentedAt).toBeInstanceOf(Date)
     expect(lead?.data).toEqual([
@@ -940,6 +985,7 @@ describe('раздел «Заявки» в админке', () => {
     const requests = (headers: Headers) => [
       api.app.request(leadsUrl(siteId), { headers }),
       api.app.request(`${leadsUrl(siteId)}/recent`, { headers }),
+      api.app.request(`${leadsUrl(siteId)}/summary`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/export`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/settings`, { headers }),
       api.app.request(`${leadsUrl(siteId)}/${lead?.id}`, { headers }),
@@ -987,7 +1033,7 @@ describe('раздел «Заявки» в админке', () => {
     const csv = new TextDecoder().decode(bytes)
     const [header, row] = csv.split('\r\n')
     expect(header).toBe(
-      '"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Телефон";"Почта";"Комментарий";"Услуга";"Перезвоните мне"',
+      '"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Телефон";"Почта";"Комментарий";"Услуга";"Перезвоните мне";"utm_source";"utm_medium";"utm_campaign";"utm_content";"utm_term";"Адрес страницы";"Домен Referer"',
     )
     expect(row).toContain(`"'=HYPERLINK(""https://evil.example"")"`)
     expect(row).toContain(`"'@SUM(1)"`)
@@ -1029,7 +1075,9 @@ describe('раздел «Заявки» в админке', () => {
     expect(res.status).toBe(200)
     const [header, ...rows] = (await res.text()).split('\r\n')
     // Подписи всех заявок, свежая форма слева: «Город» есть только у самой старой
-    expect(header).toBe('"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Город"')
+    expect(header).toBe(
+      '"Дата (МСК)";"Статус";"Страница";"Форма";"Имя";"Город";"utm_source";"utm_medium";"utm_campaign";"utm_content";"utm_term";"Адрес страницы";"Домен Referer"',
+    )
     expect(rows.at(-1)).toBe('')
     const indexes = rows.slice(0, -1).map((row) => Number(/"Заявка (\d+)"/.exec(row)?.[1]))
     expect(indexes).toHaveLength(total)

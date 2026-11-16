@@ -25,6 +25,7 @@ import {
 } from '../editor/catalog'
 import { HeaderLayoutSketch, MenuEditor } from '../header/HeaderParts'
 import { roleHints, roleLabels } from '../invitations/invitation-format'
+import { LeadSummaryView } from '../leads/LeadSummary'
 import { MailTemplateEditor } from '../mail/MailTemplateEditor'
 import { MediaCard } from '../media/MediaCard'
 import { MediaUsage } from '../media/MediaLibrary'
@@ -953,6 +954,7 @@ export function UiShowcase() {
               rowKey={(page) => page.slug}
             />
           </div>
+          <LeadSummaryExample />
           <DataTable
             caption="Заявки"
             columns={[{ key: 'name', header: 'Имя', cell: (row: { name: string }) => row.name }]}
@@ -1247,6 +1249,36 @@ export function UiShowcase() {
         </Section>
       </main>
     </AppShell>
+  )
+}
+
+function LeadSummaryExample() {
+  const [days, setDays] = useState<'7' | '30' | '90'>('30')
+  return (
+    <LeadSummaryView
+      days={days}
+      onDaysChange={setDays}
+      data={
+        days === '7'
+          ? {
+              total: 0,
+              sources: [],
+              pages: [],
+              forms: [],
+            }
+          : {
+              total: 3,
+              sources: [
+                { label: 'ya', count: 2 },
+                { label: 'прямой заход', count: 1 },
+              ],
+              pages: [{ label: '/', count: 3 }],
+              forms: [
+                { label: 'Замер', pageSlug: 'index', blockId: 'form', source: 'block', count: 3 },
+              ],
+            }
+      }
+    />
   )
 }
 

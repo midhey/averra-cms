@@ -4,6 +4,7 @@ import {
   type FormField,
   footerFormFields,
   form,
+  type LeadAttribution,
   type LeadSource,
   type LeadValue,
   leadFormLabel,
@@ -196,6 +197,7 @@ async function confirmedRecently(tx: DbOrTx, siteId: string, email: string, now:
 }
 
 type AcceptInput = {
+  attribution?: LeadAttribution
   form: PublishedForm
   /** Проверенные значения по leadValuesSchema: только поля формы и согласие */
   values: Record<string, LeadValue>
@@ -225,6 +227,7 @@ export async function acceptLead(db: Db, input: AcceptInput) {
       pageId: page.id,
       pageSlug: page.slug,
       blockId: published.blockId,
+      ...(input.attribution ? { attribution: input.attribution } : {}),
       source: published.source,
       formTitle: props.title,
       data,

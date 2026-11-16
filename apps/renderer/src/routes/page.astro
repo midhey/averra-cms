@@ -32,6 +32,7 @@ import {
 } from '@averra/schema'
 import { themeToCss } from '@averra/tokens'
 import CookieConsent from '../components/CookieConsent.astro'
+import LeadAttribution from '../components/LeadAttribution.astro'
 import SiteBehaviors from '../components/SiteBehaviors.astro'
 import SiteHeaderScript from '../components/SiteHeaderScript.astro'
 import VideoPlayer from '../components/VideoPlayer.astro'
@@ -55,7 +56,7 @@ export async function getStaticPaths() {
 
 // Содержимое грузим здесь, а не в getStaticPaths: в dev-режиме этот код выполняется
 // на каждый запрос, и опубликованные правки видны после обновления страницы
-const { site, pages, media, customBlocks } = await loadSnapshot()
+const { site, pages, media, customBlocks, hasLeadForms } = await loadSnapshot()
 // /404 в dev — отдельный маршрут (astro.config.mjs): иначе Astro показал бы там свою заглушку
 const devNotFound = Astro.routePattern === '/404'
 if (devNotFound) Astro.response.status = 404
@@ -259,6 +260,7 @@ if (import.meta.env.DEV) {
         />
       )
     }
+    {hasLeadForms && <LeadAttribution />}
     {cookies.notice && <CookieConsent notice={cookies.notice} />}
     {hasVideo && <VideoPlayer />}
     {headerScriptNeeded(header) && <SiteHeaderScript />}

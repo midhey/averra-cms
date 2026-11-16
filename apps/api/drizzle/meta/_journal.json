@@ -197,6 +197,13 @@
       "when": 1794835448134,
       "tag": "0027_groovy_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794841555692,
+      "tag": "0028_small_wither",
+      "breakpoints": true
     }
   ]
 }

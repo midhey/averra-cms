@@ -64,7 +64,8 @@ site.json — все данные сайта (формат averra-site-export, �
               revisions — история публикаций страницы;
   media     — картинки: исходное имя, тип, размеры и путь к оригиналу в этом архиве (file);
   leads     — заявки с форм: источник (source: block — блок «Форма» на странице, footer —
-              форма подвала), поля с подписями, согласие на обработку персональных данных
+              форма подвала), attribution (пять UTM-меток, адрес страницы без запроса и
+              фрагмента, домен Referer), поля с подписями, согласие на обработку персональных данных
               (текст, политика, версия страницы, время), состояние;
   missingFiles — картинки, файла которых не оказалось в хранилище при выгрузке.
 
@@ -270,6 +271,7 @@ async function* siteJson(
           blockId: lead.blockId,
           source: lead.source,
           formTitle: lead.formTitle,
+          attribution: lead.attribution,
           data: lead.data,
           consentText: lead.consentText,
           consentPolicyUrl: lead.consentPolicyUrl,

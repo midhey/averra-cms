@@ -1,4 +1,10 @@
-import { type LeadSource, type LeadStatus, leadFormLabel } from '@averra/schema'
+import {
+  type LeadAttribution,
+  type LeadSource,
+  type LeadStatus,
+  leadFormLabel,
+  UTM_KEYS,
+} from '@averra/schema'
 import type { StoredLeadField } from '../../db/schema'
 import { displayValue, pagePath } from './service'
 
@@ -36,6 +42,7 @@ type CsvLead = {
   source: LeadSource
   formTitle: string
   data: StoredLeadField[]
+  attribution?: Partial<LeadAttribution>
 }
 
 /** Заголовок CSV заявок: дата (по Москве), статус, страница, форма и колонка на каждую подпись */
@@ -45,6 +52,9 @@ export const leadsCsvHeader = (labels: readonly string[]) => [
   'Страница',
   'Форма',
   ...labels,
+  ...UTM_KEYS,
+  'Адрес страницы',
+  'Домен Referer',
 ]
 
 /** Строка заявки под заголовком leadsCsvHeader(labels). У заявки без такого поля ячейка пустая */
@@ -56,5 +66,8 @@ export function leadCsvRow(lead: CsvLead, labels: readonly string[]) {
     pagePath(lead.pageSlug),
     leadFormLabel(lead),
     ...labels.map((label) => byLabel.get(label) ?? ''),
+    ...UTM_KEYS.map((key) => lead.attribution?.[key] ?? ''),
+    lead.attribution?.pageUrl ?? '',
+    lead.attribution?.referrerDomain ?? '',
   ]
 }
