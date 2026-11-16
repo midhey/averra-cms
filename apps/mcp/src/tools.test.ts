@@ -1,13 +1,18 @@
+import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { AppType } from '@averra/api'
 import { createTestApi } from '@averra/api/testing'
 import { demoPage, PageContent } from '@averra/schema'
 import { hc } from 'hono/client'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { MCP_IMAGE_MAX_BASE64, MCP_IMAGE_MAX_BYTES, UploadImageInput } from './image-upload'
 import {
   blockCatalog,
   CheckCustomBlockInput,
   cmsTools,
+  ListPagesInput,
   missingTokenMessage,
   revealBlockTypes,
   SaveCustomBlockInput,
@@ -30,6 +35,212 @@ const [site] = z.array(z.object({ id: z.string() })).parse(await tools.listSites
 if (!site) throw new Error('Демо-сайт не создался')
 
 afterAll(api.close)
+
+describe('список страниц через MCP', () => {
+  it('ищет по заголовку и адресу, фильтрует состояния и листает без содержимого', async () => {
+    const siteId = await api.createSite('Список страниц MCP')
+    const own = cmsTools(
+      clientWith((await api.createToken(siteId, 'список', { publish: true })).token),
+    )
+    for (const [slug, title] of [
+      ['find-a', 'Первая витрина'],
+      ['find-b', 'Вторая витрина'],
+      ['find-c', 'Третья'],
+    ] as const) {
+      await own.saveDraft(SaveDraftInput.parse({ siteId, slug, title, content: { blocks: [] } }))
+    }
+    await own.publishPage({ siteId, slug: 'find-a' })
+    await own.publishPage({ siteId, slug: 'find-b' })
+    await own.saveDraft(
+      SaveDraftInput.parse({
+        siteId,
+        slug: 'find-b',
+        title: 'Новая витрина',
+        content: { blocks: [] },
+      }),
+    )
+    const first = await own.listPages({ q: 'FIND-', limit: 2 })
+    const second = await own.listPages({ q: 'find-', limit: 2, offset: 2 })
+    expect(first).toMatchObject({ total: 3, limit: 2, offset: 0 })
+    expect(first.items.map((item) => item.slug)).toEqual(['find-a', 'find-b'])
+    expect(second.items.map((item) => item.slug)).toEqual(['find-c'])
+    expect((await own.listPages({ q: 'ВИТРИНА' })).total).toBe(2)
+    expect(
+      (await own.listPages({ q: 'find-', state: 'draft' })).items.map((item) => item.slug),
+    ).toEqual(['find-c'])
+    expect((await own.listPages({ q: 'find-', state: 'published' })).total).toBe(2)
+    expect(
+      (await own.listPages({ q: 'find-', state: 'unpublished' })).items.map((item) => item.slug),
+    ).toEqual(['find-b', 'find-c'])
+    expect(first.items.map((item) => item.state)).toEqual(['published', 'unpublished'])
+    expect(first.items[0]).toEqual({
+      slug: 'find-a',
+      title: 'Первая витрина',
+      state: 'published',
+      updatedAt: expect.any(String),
+      publishedAt: expect.any(String),
+      hasUnpublishedChanges: false,
+    })
+    expect((await own.listPages({ q: 'find-', offset: 99 })).items).toEqual([])
+    expect((await own.listPages({ q: 'ничего' })).total).toBe(0)
+    expect(await own.listPages({})).toMatchObject({ limit: 20, offset: 0 })
+    await expect(own.listPages({ siteId: site.id })).rejects.toThrow('Сайт не найден')
+    expect(ListPagesInput.safeParse({ limit: 101 }).success).toBe(false)
+    await expect(cmsTools(undefined).listPages({})).rejects.toThrow(missingTokenMessage)
+  })
+})
+
+const folder = await mkdtemp(join(tmpdir(), 'averra-mcp-upload-'))
+describe('загрузка картинок через MCP', () => {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 12"><rect width="24" height="12"/></svg>'
+  const data = Buffer.from(svg).toString('base64')
+  afterAll(async () => {
+    await rm(folder, { recursive: true, force: true })
+  })
+
+  it('загружает обычный файл и base64 с правом любого токена, возвращает только картинку', async () => {
+    const path = join(folder, 'logo.svg')
+    await writeFile(path, svg)
+    for (const source of [{ path }, { data, fileName: 'logo.svg' }]) {
+      const image = await tools.uploadImage(source)
+      // Маленький SVG API дотягивает до 100 по длинной стороне (MIN_SVG_SIDE), пропорции те же
+      expect(image).toEqual({
+        mediaId: expect.any(String),
+        width: 100,
+        height: 50,
+        mimeType: 'image/svg+xml',
+        usage: expect.stringContaining('логотип'),
+      })
+      const stored = await clientWith(token).api.sites[':siteId'].media.$get({
+        param: { siteId: site.id },
+      })
+      if (stored.status !== 200) throw new Error(`Ожидали 200, пришёл ${stored.status}`)
+      const body = await stored.json()
+      expect(body.items.some((item) => item.id === image.mediaId)).toBe(true)
+    }
+    await expect(cmsTools(undefined).uploadImage({ path })).rejects.toThrow(missingTokenMessage)
+  })
+
+  it('передаёт растровый mediaId в блок и сохраняет страницу', async () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='
+    const image = await tools.uploadImage({ data: png, fileName: 'pixel.png' })
+    expect(image).toMatchObject({ width: 1, height: 1, mimeType: 'image/png' })
+    await tools.saveDraft(
+      SaveDraftInput.parse({
+        slug: 'mcp-image',
+        title: 'Картинка',
+        content: {
+          blocks: [
+            {
+              id: 'hero',
+              type: 'hero',
+              props: {
+                title: 'Картинка',
+                variant: 'split',
+                image: { mediaId: image.mediaId, alt: 'Пиксель' },
+              },
+            },
+          ],
+        },
+      }),
+    )
+  })
+
+  it('отклоняет оба источника, отсутствие источника, неполный base64 и URL', async () => {
+    for (const input of [
+      {},
+      { path: 'logo.svg', data, fileName: 'logo.svg' },
+      { data },
+      { fileName: 'logo.svg' },
+    ]) {
+      expect(UploadImageInput.safeParse(input).success).toBe(false)
+      await expect(tools.uploadImage(input)).rejects.toThrow('ровно один источник')
+    }
+    expect(UploadImageInput.safeParse({ url: 'http://localhost/logo.svg' }).success).toBe(false)
+    await expect(tools.uploadImage({ data: '!!!=', fileName: 'logo.svg' })).rejects.toThrow(
+      'base64',
+    )
+    await expect(
+      tools.uploadImage({ data: `data:image/svg+xml;base64,${data}`, fileName: 'logo.svg' }),
+    ).rejects.toThrow('base64')
+  })
+
+  it('отклоняет неподдерживаемые типы, каталог и отсутствующий файл до отправки', async () => {
+    const request = vi.fn(fetchFromApp)
+    const local = cmsTools(
+      hc<AppType>('http://cms.test', {
+        fetch: request,
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    )
+    await expect(local.uploadImage({ path: join(folder, 'missing.gif') })).rejects.toThrow('JPEG')
+    await expect(local.uploadImage({ data, fileName: 'logo.txt' })).rejects.toThrow('JPEG')
+    const directory = join(folder, 'directory.png')
+    await mkdir(directory)
+    await expect(local.uploadImage({ path: directory })).rejects.toThrow('обычный файл')
+    await expect(local.uploadImage({ path: join(folder, 'missing.png') })).rejects.toThrow(
+      'проверьте путь',
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('отказывает по stat до чтения большого файла и не отправляет слишком большой base64', async () => {
+    const path = join(folder, 'large.png')
+    const file = await open(path, 'w')
+    try {
+      await file.truncate(MCP_IMAGE_MAX_BYTES + 1)
+    } finally {
+      await file.close()
+    }
+    const request = vi.fn(fetchFromApp)
+    const local = cmsTools(
+      hc<AppType>('http://cms.test', {
+        fetch: request,
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    )
+    await expect(local.uploadImage({ path })).rejects.toThrow('Файл больше')
+    await expect(
+      local.uploadImage({ data: 'A'.repeat(MCP_IMAGE_MAX_BASE64 + 4), fileName: 'large.png' }),
+    ).rejects.toThrow('Файл больше')
+    await expect(
+      local.uploadImage({ data: 'A'.repeat(MCP_IMAGE_MAX_BASE64), fileName: 'large.png' }),
+    ).rejects.toThrow('Файл больше')
+    await expect(
+      local.uploadImage({
+        data: 'A'.repeat(4 * Math.ceil((256 * 1024) / 3)),
+        fileName: 'large.svg',
+      }),
+    ).rejects.toThrow('SVG больше')
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('передаёт русские отказы API по содержимому и меньшему серверному лимиту', async () => {
+    await expect(
+      tools.uploadImage({
+        data: Buffer.from('не картинка').toString('base64'),
+        fileName: 'broken.png',
+      }),
+    ).rejects.toThrow(/картинк|формат/i)
+    const small = await createTestApi({ mediaMaxBytes: 16 })
+    try {
+      const { token } = await small.createToken(small.demoSiteId)
+      const local = cmsTools(
+        hc<AppType>('http://cms.test', {
+          fetch: (input: string | URL | Request, init?: RequestInit) =>
+            small.app.request(input, init),
+          headers: { authorization: `Bearer ${token}` },
+        }),
+      )
+      await expect(local.uploadImage({ data, fileName: 'logo.svg' })).rejects.toThrow('Файл больше')
+    } finally {
+      await small.close()
+    }
+    // Второй API с базой в памяти поднимается секунды, а в pnpm check — параллельно с другими
+  }, 30_000)
+})
 
 describe('каталог блоков', () => {
   it('отдаёт все блоки с JSON Schema и подписями полей', () => {

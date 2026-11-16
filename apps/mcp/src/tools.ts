@@ -16,7 +16,10 @@ import {
   isPageBlockDefinition,
   MailTemplateText,
   opensNewTab,
+  PAGE_LIST_DEFAULT,
+  PAGE_LIST_MAX,
   PageContent,
+  PageListFilters,
   PageSlug,
   PageTitle,
   pageSeoChecks,
@@ -28,6 +31,7 @@ import {
   SiteScript,
   type SiteSeo,
   SLUG_RECOMMENDED_MAX,
+  SVG_MIME_TYPE,
   seoAdvice,
   themeFontTitles,
   Uuid,
@@ -36,6 +40,7 @@ import type { McpServer } from '@modelcontextprotocol/server'
 import type { ClientResponse, hc } from 'hono/client'
 import { z } from 'zod'
 import { customBlockRules } from './custom-block-rules'
+import { imageFile, UploadImageInput } from './image-upload'
 
 export { customBlockRules }
 
@@ -105,6 +110,26 @@ const SiteRef = z.object({
     .describe('Id сайта. Не нужен: по умолчанию — сайт, на который выпущен токен'),
 })
 type SiteRef = z.output<typeof SiteRef>
+
+export const ListPagesInput = SiteRef.extend(PageListFilters.shape).extend({
+  limit: z.number().int().min(1).max(PAGE_LIST_MAX).default(PAGE_LIST_DEFAULT),
+  offset: z.number().int().min(0).max(2_147_483_647).default(0),
+})
+
+const PageListItem = z.object({
+  slug: z.string(),
+  title: z.string(),
+  updatedAt: z.string(),
+  publishedAt: z.string().nullable(),
+  hasUnpublishedChanges: z.boolean(),
+})
+
+const UploadedImage = z.object({
+  id: Uuid(),
+  width: z.number(),
+  height: z.number(),
+  mimeType: z.string(),
+})
 
 const PageRef = z.object({
   // Одна установка — один сайт, и токен выпущен на него: id указывать не нужно
@@ -325,6 +350,8 @@ export function cmsTools(client: Api | undefined) {
     return {
       listBlocks: async () => blockCatalog(),
       listSites: fail,
+      listPages: fail,
+      uploadImage: fail,
       getPage: fail,
       saveDraft: fail,
       publishPage: fail,
@@ -419,6 +446,55 @@ export function cmsTools(client: Api | undefined) {
       }
     },
     listSites: () => unwrap(() => sites.$get()),
+    listPages: async (raw: z.input<typeof ListPagesInput>) => {
+      const { siteId, q, state, limit, offset } = ListPagesInput.parse(raw)
+      const param = { siteId: await siteOf(siteId) }
+      const response = await sites[':siteId'].pages
+        .$get({
+          param,
+          query: { q, state, limit: String(limit), offset: String(offset) },
+        })
+        .catch((cause: unknown) => {
+          throw new Error('API не отвечает. Запусти его: pnpm dev', { cause })
+        })
+      const items = z.array(PageListItem).parse(await unwrap(async () => response))
+      const total = z.coerce
+        .number()
+        .int()
+        .nonnegative()
+        .parse(response.headers.get('X-Total-Count') ?? undefined)
+      return {
+        items: items.map((item) => ({
+          ...item,
+          state:
+            item.publishedAt === null
+              ? 'draft'
+              : item.hasUnpublishedChanges
+                ? 'unpublished'
+                : 'published',
+        })),
+        total,
+        limit,
+        offset,
+      }
+    },
+    uploadImage: async (input: UploadImageInput) => {
+      const file = await imageFile(input)
+      const param = { siteId: await siteOf(undefined) }
+      const uploaded = UploadedImage.parse(
+        await unwrap(() => sites[':siteId'].media.$post({ param, form: { file } })),
+      )
+      return {
+        mediaId: uploaded.id,
+        width: uploaded.width,
+        height: uploaded.height,
+        mimeType: uploaded.mimeType,
+        usage:
+          uploaded.mimeType === SVG_MIME_TYPE
+            ? 'SVG — для логотипов и иконки: { mediaId }. В обычные картинки блоков не ставится'
+            : 'В картинке блока: { mediaId, alt }, alt — описание до 200 символов. В логотипе: { mediaId }. Для полей темы и SEO используйте mediaId по схеме поля; настройки меняет человек в админке',
+      }
+    },
     getPage: async ({ siteId, slug }: PageRef) => {
       const param = { siteId: await siteOf(siteId), slug }
       const found = await unwrap(() => page.$get({ param }))
@@ -675,6 +751,28 @@ const asText = (value: unknown) => ({
 
 export function registerTools(server: McpServer, api: Api | undefined) {
   const tools = cmsTools(api)
+  server.registerTool(
+    'list_pages',
+    {
+      title: 'Список страниц',
+      description:
+        'Страницы сайта токена без блоков: slug, заголовок, состояние и даты. q — поиск по заголовку и адресу; state: draft — без публикации, published — есть на сайте, unpublished — есть неопубликованные изменения (включая новые черновики). limit: 1–100, по умолчанию 20; offset: от 0. Право site.read.',
+      inputSchema: ListPagesInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => asText(await tools.listPages(args)),
+  )
+  server.registerTool(
+    'upload_image',
+    {
+      title: 'Загрузить картинку',
+      description:
+        'Картинка в медиатеку сайта токена: ровно один источник — локальный path или base64 data вместе с fileName. JPEG, PNG, WebP, AVIF до 10 МиБ; SVG до 256 КиБ (только логотипы и иконка). Лимит API может быть ниже. URL не принимается: скачайте файл сами и передайте путь. Право media.upload есть у любого токена. Ответ: mediaId, размеры, тип и способ ссылки. Alt задаётся в блоке.',
+      inputSchema: UploadImageInput,
+      annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => asText(await tools.uploadImage(args)),
+  )
   server.registerTool(
     'list_mail_templates',
     {

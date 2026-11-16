@@ -4,7 +4,9 @@ import {
   MAIN_PAGE_SLUG,
   NewPage,
   NOT_FOUND_PAGE_SLUG,
+  PAGE_LIST_DEFAULT,
   PageContent,
+  PageListQuery,
   PageSlug,
   PageTitle,
   pageTemplateContent,
@@ -132,10 +134,23 @@ export function sitesRoutes({
         return c.json(snapshot)
       })
 
-      .get('/:siteId/pages', validate('param', SiteParams), site('site.read'), async (c) => {
-        const { siteId } = c.req.valid('param')
-        return c.json(await repo.listPages(siteId))
-      })
+      .get(
+        '/:siteId/pages',
+        validate('param', SiteParams),
+        site('site.read'),
+        validate('query', PageListQuery.default({})),
+        async (c) => {
+          const { siteId } = c.req.valid('param')
+          const query = c.req.valid('query')
+          const paginated = Object.values(query).some((value) => value !== undefined)
+          const filters = paginated
+            ? { ...query, limit: query.limit ?? PAGE_LIST_DEFAULT, offset: query.offset ?? 0 }
+            : query
+          // Массив сохраняет контракт админки, а общее число MCP получает из заголовка.
+          if (paginated) c.header('X-Total-Count', String(await repo.countPages(siteId, filters)))
+          return c.json(await repo.listPages(siteId, filters))
+        },
+      )
 
       .post(
         '/:siteId/pages',

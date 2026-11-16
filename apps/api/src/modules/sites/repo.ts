@@ -6,13 +6,14 @@ import {
   MAIN_PAGE_SLUG,
   newSiteSettings,
   type PageContent,
+  type PageListQuery,
   SITE_NAME_MAX,
   type StoredSiteSettings,
   settingsMediaIds,
   type Theme,
   themeMediaIds,
 } from '@averra/schema'
-import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm'
+import { and, asc, count, eq, ilike, isNotNull, isNull, max, or, sql } from 'drizzle-orm'
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
@@ -33,6 +34,20 @@ export function defaultSiteName(siteUrl: string | undefined) {
 }
 
 export function sitesRepo(db: Db) {
+  const unpublished = sql<boolean>`(${pages.published} is null
+    or ${pages.draft} is distinct from ${pages.published}
+    or ${pages.title} is distinct from ${pages.publishedTitle})`
+  const pageListWhere = (siteId: string, filters: PageListQuery) => {
+    // Поиск буквальный: проценты и подчёркивания в заголовке не становятся шаблоном SQL.
+    const q = filters.q?.replace(/[\\%_]/g, '\\$&')
+    return and(
+      eq(pages.siteId, siteId),
+      q ? or(ilike(pages.title, `%${q}%`), ilike(pages.slug, `%${q}%`)) : undefined,
+      filters.state === 'draft' ? isNull(pages.published) : undefined,
+      filters.state === 'published' ? isNotNull(pages.published) : undefined,
+      filters.state === 'unpublished' ? unpublished : undefined,
+    )
+  }
   const pageIs = (siteId: string, slug: string) =>
     and(eq(pages.siteId, siteId), eq(pages.slug, slug))
 
@@ -120,8 +135,8 @@ export function sitesRepo(db: Db) {
     createSite,
 
     /** Страницы для списка в админке: главная первой, остальные по адресу */
-    listPages(siteId: string) {
-      return db
+    listPages(siteId: string, filters: PageListQuery = {}) {
+      const query = db
         .select({
           slug: pages.slug,
           title: pages.title,
@@ -129,13 +144,22 @@ export function sitesRepo(db: Db) {
           publishedAt: pages.publishedAt,
           // jsonb сравнивается по смыслу, а не по тексту: то же содержимое, сохранённое
           // ещё раз, изменением не считается
-          hasUnpublishedChanges: sql<boolean>`(${pages.published} is null
-            or ${pages.draft} is distinct from ${pages.published}
-            or ${pages.title} is distinct from ${pages.publishedTitle})`,
+          hasUnpublishedChanges: unpublished,
         })
         .from(pages)
-        .where(eq(pages.siteId, siteId))
+        .where(pageListWhere(siteId, filters))
         .orderBy(sql`${pages.slug} <> ${MAIN_PAGE_SLUG}`, asc(pages.slug))
+      return filters.limit === undefined
+        ? query
+        : query.limit(filters.limit).offset(filters.offset ?? 0)
+    },
+
+    async countPages(siteId: string, filters: PageListQuery) {
+      const [row] = await db
+        .select({ total: count() })
+        .from(pages)
+        .where(pageListWhere(siteId, filters))
+      return row?.total ?? 0
     },
 
     async findPage(siteId: string, slug: string) {

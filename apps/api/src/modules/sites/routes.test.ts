@@ -2,10 +2,11 @@ import { demoPageTitle, type PageContentInput } from '@averra/schema'
 import { eq } from 'drizzle-orm'
 import { testClient } from 'hono/testing'
 import { afterAll, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { pages as pagesTable } from '../../db/schema'
 import { createTestApi } from '../../testing'
 
-const { app, db, close, loginAs } = await createTestApi()
+const { app, db, close, loginAs, createSite, createToken } = await createTestApi()
 // Права ролей проверяет auth/access.test.ts, здесь — сами сайты и страницы глазами владельца
 const owner = await loginAs('owner')
 const sites = testClient(app, undefined, undefined, { headers: owner.headers }).api.sites
@@ -18,6 +19,79 @@ afterAll(close)
 const newContent: PageContentInput = {
   blocks: [{ id: 'hero', type: 'hero', props: { title: 'Новый заголовок' } }],
 }
+
+describe('список страниц с фильтрами', () => {
+  it('сохраняет массив без параметров и ограничивает запрос с параметрами', async () => {
+    const id = await createSite('Пагинация API')
+    const draft = { blocks: [] }
+    await db.insert(pagesTable).values([
+      { siteId: id, slug: 'a-search', title: 'Витрина 100%', draft },
+      {
+        siteId: id,
+        slug: 'b-search',
+        title: 'Витрина',
+        draft,
+        published: draft,
+        publishedTitle: 'Витрина',
+        publishedAt: new Date(),
+      },
+      {
+        siteId: id,
+        slug: 'c-search',
+        title: 'Новый заголовок',
+        draft,
+        published: draft,
+        publishedTitle: 'Прежний заголовок',
+        publishedAt: new Date(),
+      },
+    ])
+    const base = `/api/sites/${id}/pages`
+    const headers = { authorization: `Bearer ${(await createToken(id)).token}` }
+    const request = (query = '') => app.request(`${base}${query}`, { headers })
+    const legacy = await request()
+    const rows = z.array(z.object({ slug: z.string() }))
+    const all = rows.parse(await legacy.json())
+    expect(Array.isArray(all)).toBe(true)
+    expect(all.map((item) => item.slug)).toEqual(['index', 'a-search', 'b-search', 'c-search'])
+    const filtered = await request('?q=SEARCH&limit=1&offset=1')
+    expect(filtered.headers.get('X-Total-Count')).toBe('3')
+    expect(rows.parse(await filtered.json()).map((item) => item.slug)).toEqual(['b-search'])
+    for (const [state, total] of [
+      ['draft', 1],
+      ['published', 2],
+      ['unpublished', 2],
+    ]) {
+      const response = await request(`?q=search&state=${state}`)
+      expect(response.headers.get('X-Total-Count')).toBe(String(total))
+    }
+    expect(await (await request('?q=%25')).json()).toHaveLength(1)
+    expect(await (await request('?q=search&offset=99')).json()).toEqual([])
+    expect((await request('?q=search&offset=99')).headers.get('X-Total-Count')).toBe('3')
+    for (const query of [
+      'limit=0',
+      'limit=101',
+      'limit=1.5',
+      'offset=-1',
+      'offset=2147483648',
+      'state=unknown',
+      `q=${'a'.repeat(201)}`,
+    ]) {
+      expect((await request(`?${query}`)).status, query).toBe(400)
+    }
+    expect((await app.request(`/api/sites/${siteId}/pages?limit=1`, { headers })).status).toBe(404)
+    await db.insert(pagesTable).values(
+      Array.from({ length: 21 }, (_, index) => ({
+        siteId: id,
+        slug: `bulk-${index}`,
+        title: 'Ещё страница',
+        draft,
+      })),
+    )
+    const defaultLimit = await request('?q=bulk-')
+    expect(defaultLimit.headers.get('X-Total-Count')).toBe('21')
+    expect(await defaultLimit.json()).toHaveLength(20)
+  })
+})
 
 describe('сайты и страницы', () => {
   it('отдаёт сайт с темой', async () => {
