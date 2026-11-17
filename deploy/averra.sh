@@ -386,6 +386,21 @@ pg_client() {
 # Внешняя база отвечает: 0 — да
 external_db_up() { [[ "$(pg_client psql -X -tAc 'select 1' </dev/null 2>/dev/null | tr -d '[:space:]')" == 1 ]]; }
 
+safety_dump_path() {
+  local prefix="$1" seconds file
+  seconds="$(date -u +%s)"
+  while :; do
+    file="$BACKUP_DIR/$prefix-$(date -u -d "@$seconds" +%Y%m%d-%H%M%S).dump"
+    # В одну секунду могут попасть восстановление и возврат его страховочного дампа.
+    # Имя остаётся совместимым со сроком хранения, а прежний дамп никогда не перезаписывается.
+    if [[ ! -e "$file" && ! -L "$file" && ! -e "$file.tmp" && ! -L "$file.tmp" ]]; then
+      printf '%s' "$file"
+      return
+    fi
+    seconds=$((seconds + 1))
+  done
+}
+
 # Страховочный дамп текущей базы перед восстановлением или откатом: во временный файл, потом на
 # место — оборванный дамп не выдаёт себя за целый. Код 1 — не снялся (база не тронута)
 save_safety_dump() {
@@ -1241,7 +1256,7 @@ restore_external() {
     compose up -d api >/dev/null 2>&1 || true
     restore_fail false 'API не остановился: ничего не менялось' 'API не остановился: ничего не менялось'
   fi
-  safety="$BACKUP_DIR/before-restore-$(stamp).dump"
+  safety="$(safety_dump_path before-restore)"
   if ! save_safety_dump "$safety"; then
     drop_media_stage
     compose up -d api >/dev/null 2>&1 || true
@@ -1364,7 +1379,7 @@ cmd_restore_dump() {
   restore_state in-progress false
   compose stop api ||
     restore_fail false 'API не остановился: база не тронута' 'API не остановился: база не тронута'
-  safety="$BACKUP_DIR/before-restore-$(stamp).dump"
+  safety="$(safety_dump_path before-restore)"
   if ! save_safety_dump "$safety"; then
     compose up -d >/dev/null 2>&1 || true
     restore_fail false 'страховочный дамп текущей базы не снялся: база не тронута' \
@@ -1578,7 +1593,7 @@ rollback_external_db() {
   [[ "$db_restored" != true ]] || return 0
   [[ ! "$before" =~ ^[0-9]+$ || "$after" != "$before" ]] || return 0
   if [[ -z "$kept_dump" ]]; then
-    kept_dump="rolled-back-$(stamp).dump"
+    kept_dump="$(basename -- "$(safety_dump_path rolled-back)")"
     run_set KEPT_DUMP "$kept_dump"
   fi
   say "Миграции новой версии успели примениться ($before → ${after:-?}): восстанавливаю базу из $backup в ту же базу одной транзакцией"

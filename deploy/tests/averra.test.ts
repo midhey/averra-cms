@@ -105,6 +105,8 @@ type Fakes = {
   killSelfAfterOn?: string
   /** Что внешняя база отвечает на show server_version_num (по умолчанию PostgreSQL 18) */
   extServerVersion?: string
+  /** Фиксированное время для проверки совпавших имён страховочных дампов */
+  now?: string
 }
 
 /** curl: запоминает аргументы и кладёт в файл из -o ответ GitHub о последнем релизе */
@@ -231,6 +233,15 @@ function server(options: { env?: string[]; migrations?: number; external?: boole
     chmodSync(join(bin, name), 0o755)
   }
   write('docker', FAKE_DOCKER)
+  write(
+    'date',
+    `#!/usr/bin/env bash
+if [[ -n "\${FAKE_NOW:-}" && ( "$*" == '-u +%s' || "$*" == '-u +%Y%m%d-%H%M%S' ) ]]; then
+  exec /usr/bin/date -u -d "$FAKE_NOW" "\${@: -1}"
+fi
+exec /usr/bin/date "$@"
+`,
+  )
   // Ключи замка запоминаются: доведение после перезагрузки ждёт его (-w), остальные — нет (-n)
   write(
     'flock',
@@ -292,6 +303,7 @@ function server(options: { env?: string[]; migrations?: number; external?: boole
     if (fakes.killAfterOn) env.FAKE_KILL_AFTER_ON = fakes.killAfterOn
     if (fakes.killSelfAfterOn) env.FAKE_KILL_SELF_AFTER_ON = fakes.killSelfAfterOn
     if (fakes.extServerVersion) env.FAKE_EXT_SERVER_VERSION = fakes.extServerVersion
+    if (fakes.now) env.FAKE_NOW = fakes.now
     // Запуск не от терминала: скрипт ничего не спрашивает
     const result = spawnSync(bash, ['-c', inBash, 'bash', posix(join(dir, 'averra.sh')), ...args], {
       encoding: 'utf8',
@@ -2568,6 +2580,31 @@ describe('внешняя база (install.sh --external-db)', () => {
       `Восстановление базы из ${name} оборвалось после загрузки: база уже из него`,
     )
     expect(text).toContain('restore-dump')
+  })
+
+  it('restore-dump в ту же секунду сохраняет исходный дамп и соседние страховочные копии', () => {
+    const srv = server({ external: true })
+    const backups = join(srv.dir, 'backups')
+    mkdirSync(backups)
+    const source = 'before-restore-20261117-120000.dump'
+    const neighbor = 'before-restore-20261117-120001.dump'
+    const partial = 'before-restore-20261117-120002.dump.tmp'
+    writeFileSync(join(backups, source), 'DUMP 17\n')
+    writeFileSync(join(backups, neighbor), 'DUMP 19\n')
+    writeFileSync(join(backups, partial), 'оборванный дамп')
+    for (const migrations of [15, 16]) {
+      writeFileSync(join(srv.fake, 'db-ext'), `${migrations}\n`)
+      const run = srv.run(['restore-dump', join(backups, source), '--yes'], {
+        now: '2026-11-17 12:00:00 UTC',
+      })
+      expect(run.status, run.output).toBe(0)
+      expect(srv.migrations('ext')).toBe('17')
+      expect(readFileSync(join(backups, source), 'utf8')).toBe('DUMP 17\n')
+      expect(readFileSync(join(backups, neighbor), 'utf8')).toBe('DUMP 19\n')
+      expect(readFileSync(join(backups, partial), 'utf8')).toBe('оборванный дамп')
+      expect(run.stdout).toContain('before-restore-20261117-120003.dump')
+      expect(keptDumps(srv)).toEqual([source, neighbor])
+    }
   })
 
   it('restore-dump — только для внешней базы и только с подтверждением', () => {
