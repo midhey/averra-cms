@@ -9,28 +9,41 @@
 
 // На узком экране вкладки прокручиваются внутри полосы, а не раздвигают страницу. Что за краем
 // есть ещё вкладки, показывает тень у края: она видна, пока в ту сторону есть что листать
-// (приём с background-attachment: local — без скриптов, работает и в старых Safari).
+// (края определяются по прокрутке и размерам полосы).
 // Закрывающая заливка — цвет подложки, на которой лежит полоса (по умолчанию фон страницы;
 // другой подложке место задаёт --tabs-backdrop у родителя, как в редакторе). Иначе у краёв видны
 // полосы чужого цвета, даже когда листать нечего
 .list {
   --tabs-cover: var(--tabs-backdrop, var(--color-background));
-  --tabs-shadow: var(--color-control-border);
+  --tabs-shadow-start: transparent;
+  --tabs-shadow-end: transparent;
 
   position: relative;
   display: flex;
   gap: ui.rem(2);
   overflow-x: auto;
-  background:
-    linear-gradient(to right, var(--tabs-cover) 30%, transparent) left center / ui.rem(32) 100%
-      no-repeat local,
-    linear-gradient(to left, var(--tabs-cover) 30%, transparent) right center / ui.rem(32) 100%
-      no-repeat local,
-    linear-gradient(to right, var(--tabs-shadow), transparent) left center / ui.rem(10) 100%
-      no-repeat scroll,
-    linear-gradient(to left, var(--tabs-shadow), transparent) right center / ui.rem(10) 100%
-      no-repeat scroll;
   border-bottom: ui.rem(1) solid var(--color-border);
+
+  &[data-more-start] {
+    --tabs-shadow-start: var(--color-control-border);
+  }
+
+  &[data-more-end] {
+    --tabs-shadow-end: var(--color-control-border);
+  }
+
+  &[data-more-start],
+  &[data-more-end] {
+    background:
+      linear-gradient(to right, var(--tabs-cover) 30%, transparent) left center / ui.rem(32) 100%
+        no-repeat local,
+      linear-gradient(to left, var(--tabs-cover) 30%, transparent) right center / ui.rem(32) 100%
+        no-repeat local,
+      linear-gradient(to right, var(--tabs-shadow-start), transparent) left center / ui.rem(10) 100%
+        no-repeat scroll,
+      linear-gradient(to left, var(--tabs-shadow-end), transparent) right center / ui.rem(10) 100%
+        no-repeat scroll;
+  }
 }
 
 .tab {

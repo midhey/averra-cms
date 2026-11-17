@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import styles from './Tabs.module.scss'
 
 export type TabItem<T extends string> = {
@@ -35,6 +35,26 @@ export function TabList<T extends string>({
 }: TabListProps<T>) {
   const refs = useRef(new Map<T, HTMLButtonElement>())
   const list = useRef<HTMLDivElement>(null)
+  const [moreStart, setMoreStart] = useState(false)
+  const [moreEnd, setMoreEnd] = useState(false)
+
+  useEffect(() => {
+    const strip = list.current
+    if (!strip) return
+    const update = () => {
+      setMoreStart(strip.scrollLeft > 1)
+      setMoreEnd(strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1)
+    }
+    update()
+    strip.addEventListener('scroll', update, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    observer?.observe(strip)
+    for (const tab of Array.from(strip.children)) observer?.observe(tab)
+    return () => {
+      strip.removeEventListener('scroll', update)
+      observer?.disconnect()
+    }
+  }, [items])
 
   // Выбранная вкладка не прячется за краем полосы (телефон: «Пример», «История» дальше экрана).
   // Листаем только саму полосу, страница не прыгает
@@ -67,7 +87,15 @@ export function TabList<T extends string>({
   }
 
   return (
-    <div ref={list} role="tablist" aria-label={label} className={styles.list} onKeyDown={onKeyDown}>
+    <div
+      ref={list}
+      role="tablist"
+      aria-label={label}
+      className={styles.list}
+      onKeyDown={onKeyDown}
+      data-more-start={moreStart || undefined}
+      data-more-end={moreEnd || undefined}
+    >
       {items.map((item) => {
         const selected = item.id === value
         return (

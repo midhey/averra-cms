@@ -38,7 +38,7 @@ export function LeadSummaryView({
   onDaysChange: (days: '7' | '30' | '90') => void
 }) {
   return (
-    <section aria-label="Сводка заявок" className={cardClassName()}>
+    <section aria-label="Сводка заявок" className={`${cardClassName()} ${styles.summary}`}>
       <h2>Сводка заявок</h2>
       <Tabs
         label="Период сводки"
@@ -54,7 +54,7 @@ export function LeadSummaryView({
         <p>
           Заявок всего: <strong>{data.total}</strong>
         </p>
-        <div className={styles.groups}>
+        <div className={data.total === 0 ? styles.emptyGroups : styles.groups}>
           <SummaryTable title="По источнику" rows={data.sources} />
           <SummaryTable title="По странице" rows={data.pages} />
           <SummaryTable
@@ -72,6 +72,9 @@ export function LeadSummaryView({
 }
 
 function SummaryTable({ title, rows }: { title: string; rows: SummaryRow[] }) {
+  if (rows.length === 0) {
+    return <p className={styles.empty}>{title}: заявок за этот период нет</p>
+  }
   return (
     <DataTable
       caption={title}
@@ -84,7 +87,6 @@ function SummaryTable({ title, rows }: { title: string; rows: SummaryRow[] }) {
         { key: 'label', header: 'Название', wrap: 'anywhere', cell: (row) => row.label },
         { key: 'count', header: 'Заявок', align: 'end', cell: (row) => row.count },
       ]}
-      empty={<p>{title}: заявок за этот период нет</p>}
     />
   )
 }

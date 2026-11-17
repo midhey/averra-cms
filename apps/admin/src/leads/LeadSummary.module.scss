@@ -1,10 +1,22 @@
 @use "@averra/ui" as ui;
 
-.groups {
+.summary {
+  --tabs-backdrop: var(--color-surface);
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.groups,
+.emptyGroups {
   display: grid;
   gap: var(--space-4);
   margin-block: var(--space-4);
+}
 
+.groups {
   @include ui.breakpoint(medium) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
