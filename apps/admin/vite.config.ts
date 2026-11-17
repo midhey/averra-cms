@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { fontFilesPlugin } from '@averra/tokens/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -9,7 +10,34 @@ const port = Number(process.env.ADMIN_PORT ?? 5173)
 export default defineConfig({
   // Шрифты темы сайта для предпросмотра (virtual:averra/font-files): все файлы каталога ссылками
   // Vite, браузер грузит только те, что стоят в теме предпросмотра
-  plugins: [react(), fontFilesPlugin({ as: 'url' })],
+  plugins: [
+    react(),
+    fontFilesPlugin({ as: 'url' }),
+    {
+      name: 'shared-preview',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.startsWith('/preview/')) {
+            req.url = '/preview.html'
+            res.setHeader('Referrer-Policy', 'no-referrer')
+            res.setHeader('X-Robots-Tag', 'noindex, nofollow')
+            res.setHeader('Cache-Control', 'no-store')
+          }
+          if (/\.woff2?(\?|$)/.test(req.url ?? ''))
+            res.setHeader('Access-Control-Allow-Origin', '*')
+          next()
+        })
+      },
+    },
+  ],
+  build: {
+    rolldownOptions: {
+      input: {
+        admin: fileURLToPath(new URL('./index.html', import.meta.url)),
+        preview: fileURLToPath(new URL('./preview.html', import.meta.url)),
+      },
+    },
+  },
   server: {
     port,
     // В разработке админка ходит в API через прокси — без CORS

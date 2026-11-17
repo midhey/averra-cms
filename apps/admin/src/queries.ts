@@ -50,7 +50,18 @@ export const queryKeys = {
   mailPreview: (template: string) => ['mail', 'templates', template] as const,
   status: ['status'] as const,
   tokens: ['tokens'] as const,
+  previewLinks: (siteId: string) => ['sites', siteId, 'preview-links'] as const,
 }
+
+export const previewLinksQuery = (siteId: string) =>
+  queryOptions({
+    queryKey: queryKeys.previewLinks(siteId),
+    queryFn: async () => {
+      const res = await api.sites[':siteId']['preview-links'].$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      return res.json()
+    },
+  })
 
 export type SiteRevisionEntity = 'header' | 'footer' | 'theme' | 'script'
 

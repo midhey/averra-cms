@@ -395,6 +395,7 @@ export {
   PageState,
 } from './page-list'
 export { countRu, pluralRu } from './plural'
+export { NewPreviewLink, PreviewLinkParams, PreviewSiteParams, PreviewToken } from './preview'
 export { SITE_BUILD_STATUS_LABELS, SiteBuildStatus } from './publish'
 export {
   canonicalElsewhere,

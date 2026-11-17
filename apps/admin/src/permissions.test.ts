@@ -15,6 +15,7 @@ import {
   canManagePages,
   canPublish,
   canSeeLeads,
+  canSharePreview,
   safeRedirect,
 } from './permissions'
 
@@ -56,6 +57,7 @@ describe('что показывать роли (как access.ts)', () => {
     ['удаление картинок', canDeleteMedia, [true, true, true]],
     ['участники', canInvite, [true, true, false]],
     ['заявки', canSeeLeads, [true, true, false]],
+    ['ссылки на черновики', canSharePreview, [true, true, false]],
     ['письма сайта', canEditMailTemplates, [true, true, false]],
     ['SEO и «Организация»', canEditSeo, [true, true, false]],
     ['шапка и подвал', canEditHeader, [true, true, false]],

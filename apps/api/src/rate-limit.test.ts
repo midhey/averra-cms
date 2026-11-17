@@ -75,7 +75,9 @@ describe('память счётчика', () => {
     expect(limiter.size()).toBe(1)
   })
 
-  it('сто тысяч разовых ключей в одном окне: память ограничена, а запрос не дорожает', { timeout: 60_000 }, () => {
+  it('сто тысяч разовых ключей в одном окне: память ограничена, а запрос не дорожает', {
+    timeout: 60_000,
+  }, () => {
     let time = 0
     const limiter = createRateLimiter({ max: 3, windowMs: 15 * 60_000, now: () => time })
     const started = performance.now()

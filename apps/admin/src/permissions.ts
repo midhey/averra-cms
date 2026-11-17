@@ -13,6 +13,7 @@ const ownerOnly: readonly SiteAccess[] = ['owner']
 
 /** Действия API, от которых зависят экраны, и кому они открыты */
 export const siteRights = {
+  'preview.share': ownerAndAdmin,
   'page.publish': everyone,
   'page.manage': everyone,
   'media.delete': everyone,
@@ -31,6 +32,8 @@ export const siteRights = {
 
 const allowed = (right: keyof typeof siteRights) => (access: SiteAccess) =>
   (siteRights[right] as readonly SiteAccess[]).includes(access)
+
+export const canSharePreview = allowed('preview.share')
 
 /** Создавать, публиковать и удалять страницы — все, кто работает с сайтом */
 export const canPublish = allowed('page.publish')

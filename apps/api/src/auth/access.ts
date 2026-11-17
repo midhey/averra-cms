@@ -48,6 +48,7 @@ export type Actor =
  * удаление и черновики блоков и оформления — только по своим правам (tokenGrants)
  */
 const permissions = {
+  'preview.share': ['owner', 'client'],
   'site.read': ['owner', 'editor', 'client'],
   // Страницы и картинки — у всех, кто работает с сайтом. Администратор сайта (client) — человек
   // заказчика: свой контент он ведёт сам, без студии, поэтому создаёт, публикует и удаляет
@@ -146,6 +147,7 @@ export const tokenOpen: ReadonlySet<Permission> = new Set(['mail.templates.draft
 
 /** Публикация, снятие с сайта и история меняют весь сайт: их решает человек в админке */
 export const tokenDenied: Partial<Record<Permission, string>> = {
+  'preview.share': 'Ссылки на черновики выпускает и отзывает человек в админке',
   'mail.templates': 'Письма публикует человек в админке: токену API доступны только черновики',
   'theme.edit':
     'Публикует и откатывает тему человек в админке: токену API доступны только черновики',
@@ -213,6 +215,7 @@ export function can(role: SiteRole, permission: Permission) {
 
 /** Что не разрешено, человеческим языком — для 403 */
 export const forbiddenMessages: Record<Permission, string> = {
+  'preview.share': 'Делиться черновиками могут владелец и администратор сайта',
   'site.read': 'Нет доступа к сайту',
   'page.edit': 'Править страницы этого сайта нельзя',
   'page.create': 'Создавать страницы этого сайта нельзя',

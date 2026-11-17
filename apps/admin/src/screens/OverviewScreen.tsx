@@ -9,7 +9,14 @@ import { type PageRow, PagesTable, RelativeTime } from '../pages/PagesTable'
 import { PublishOutcome } from '../pages/PublishOutcome'
 import { publishPages, publishQuestion } from '../pages/publish-all'
 import { filterPages, pagesSummary, pagesWithChanges } from '../pages-format'
-import { canEditSeo, canManagePages, canPublish, canSeeLeads } from '../permissions'
+import {
+  canEditSeo,
+  canManagePages,
+  canPublish,
+  canSeeLeads,
+  canSharePreview,
+} from '../permissions'
+import { PreviewLinks } from '../preview/PreviewLinks'
 import { buildSummary, failedBuildOutcome } from '../publish/build-format'
 import { useBuild } from '../publish/use-build'
 import {
@@ -130,6 +137,7 @@ function Overview({ siteId }: { siteId: string }) {
       <PublishOutcome result={publishAll.data} error={publishAll.error} />
 
       <BuildFailure siteId={siteId} />
+      {canSharePreview(site.access) && <PreviewLinks siteId={siteId} />}
 
       {site.hiddenFromSearch && canEditSeo(site.access) && <HiddenFromSearchNote />}
 

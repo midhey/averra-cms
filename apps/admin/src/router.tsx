@@ -11,7 +11,13 @@ import {
 } from '@tanstack/react-router'
 import { publishedDefinitions } from './custom-blocks/custom-block-format'
 import { legacySiteTarget } from './legacy-paths'
-import { canInvite, canManageChannels, canSeeLeads, safeRedirect } from './permissions'
+import {
+  canInvite,
+  canManageChannels,
+  canSeeLeads,
+  canSharePreview,
+  safeRedirect,
+} from './permissions'
 import {
   buildQuery,
   customBlockQuery,
@@ -34,6 +40,7 @@ import {
   pageQuery,
   pagesQuery,
   passwordResetQuery,
+  previewLinksQuery,
   recentLeadsQuery,
   sessionsQuery,
   siteIdOf,
@@ -210,6 +217,9 @@ const overviewRoute = createRoute({
     ])
     if (canSeeLeads(site.access) && site.newLeads !== null) {
       await Promise.allSettled([queryClient.ensureQueryData(recentLeadsQuery(siteId))])
+    }
+    if (canSharePreview(site.access)) {
+      await Promise.allSettled([queryClient.ensureQueryData(previewLinksQuery(siteId))])
     }
   },
   component: OverviewScreen,

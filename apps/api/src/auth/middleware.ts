@@ -33,6 +33,7 @@ export const notFound = (message: string) => ({ error: { code: 'not_found', mess
 // опубликованных страниц для соцсетей (og) берёт рендерер, как снимок. fallback — адреса домена
 // сайта, где нет файла: редирект или 404 для посетителя
 const publicRoutes = [
+  /^\/api\/preview\/[^/]+\/[\s\S]*$/,
   /^\/api\/health(\/ready)?$/,
   /^\/api\/sites\/[^/]+\/snapshot$/,
   /^\/api\/site\/snapshot$/,

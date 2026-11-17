@@ -25,6 +25,7 @@ import { mediaFilesRoutes, mediaRoutes } from './modules/media/routes'
 import { membersRoutes } from './modules/members/routes'
 import { notificationsRoutes, siteNotificationsRoutes } from './modules/notifications/routes'
 import { ogRoutes } from './modules/og/routes'
+import { previewLinksRoutes, publicPreviewRoutes } from './modules/preview/routes'
 import { profileRoutes } from './modules/profile/routes'
 import { revisionsRoutes } from './modules/revisions/routes'
 import { iconsRoutes } from './modules/settings/icons'
@@ -133,13 +134,16 @@ export function createApp(deps: AppDeps) {
     // (/wp-login.php…) со всего интернета, и лог API утонул бы в них. Это не события API
     .use(
       logger((line) => {
-        if (!line.includes(` ${FALLBACK_PREFIX}/`)) log(line)
+        // Секрет предпросмотра находится в пути: в журнал запросов он попадать не должен
+        if (!line.includes(` ${FALLBACK_PREFIX}/`) && !line.includes('/api/preview/')) log(line)
       }),
     )
     .basePath('/api')
     // Закрыто всё, кроме короткого списка в auth/middleware.ts
     .use(authenticate({ db, auth, trustedOrigins }))
     .get('/health', (c) => c.json({ status: 'ok' } as const))
+    .route('/preview', publicPreviewRoutes({ db, siteUrl: deps.siteUrl }))
+    .route('/sites/:siteId/preview-links', previewLinksRoutes({ db, adminUrl }))
     .get('/health/ready', async (c) => {
       try {
         await db.execute(sql`select 1`)

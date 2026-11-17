@@ -108,6 +108,22 @@ export const sites = pgTable(
   ],
 )
 
+export const previewLinks = pgTable(
+  'preview_links',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    siteId: uuid()
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    tokenHash: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    revokedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [index('preview_links_site_id_idx').on(table.siteId)],
+)
+
 export const pages = pgTable(
   'pages',
   {
