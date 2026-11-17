@@ -355,4 +355,16 @@ describe('черновики оформления по праву токена',
     expect(after.published).toEqual(before.published)
     expect(requested).toEqual([])
   })
+
+  it('вид, изменённый токеном, администратор сайта не публикует, владелец — публикует', async () => {
+    const granted = await api.createToken(siteId, 'вид', { designDraft: true })
+    const headers = { authorization: `Bearer ${granted.token}` }
+    await ok(await save({ ...defaultFooter, tone: 'accent' }, headers))
+    const admin = await api.loginAs('client', siteId)
+    const denied = await publish(admin.headers)
+    expect(denied.status).toBe(403)
+    expect(await denied.text()).toContain('Опубликовать его может владелец')
+    expect(requested).toEqual([])
+    expect((await publish()).status).toBe(200)
+  })
 })

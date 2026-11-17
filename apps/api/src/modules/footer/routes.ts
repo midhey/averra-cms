@@ -1,6 +1,7 @@
 import {
   cookieNoticeShown,
   customPlaceIssues,
+  defaultFooter,
   Footer,
   footerContacts,
   legalPages,
@@ -11,7 +12,7 @@ import {
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
-import { can, forbiddenMessages } from '../../auth/access'
+import { can, forbiddenMessages, LOOK_PUBLISH_LOCKED } from '../../auth/access'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { pages } from '../../db/schema'
@@ -136,6 +137,13 @@ export function footerRoutes({ db, publisher, log }: FooterDeps) {
       // Публикация: большому подвалу нужна опубликованная политика — в нём форма с телефоном
       .post('/publish', validate('param', SiteParams), site('header.edit'), async (c) => {
         const { siteId } = c.req.valid('param')
+        // Как у шапки: изменённый вид (его мог положить токен) выпускает на сайт только владелец
+        if (c.var.actor.kind === 'user' && !can(c.var.siteRole, 'header.look')) {
+          const current = await repo.read(siteId)
+          if (current && !sameFooterLook(current.draft, current.published ?? defaultFooter)) {
+            return c.json(lookLocked(LOOK_PUBLISH_LOCKED), 403)
+          }
+        }
         const result = await repo.publish(siteId, c.var.actor)
         if (!result) return c.json(notFound('Сайт не найден'), 404)
         if (result.problem) {

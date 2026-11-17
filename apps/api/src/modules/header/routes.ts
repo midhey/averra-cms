@@ -1,5 +1,6 @@
 import {
   customPlaceIssues,
+  defaultHeader,
   Header,
   headerContacts,
   headerLinkIssues,
@@ -10,7 +11,7 @@ import {
 } from '@averra/schema'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
-import { can, forbiddenMessages } from '../../auth/access'
+import { can, forbiddenMessages, LOOK_PUBLISH_LOCKED } from '../../auth/access'
 import { type AuthEnv, notFound, requireSite } from '../../auth/middleware'
 import type { Db } from '../../db/client'
 import { conflict, lookLocked } from '../../errors'
@@ -127,6 +128,15 @@ export function headerRoutes({ db, publisher, log }: HeaderDeps) {
       // на сайте вышла бы битая ссылка. Логотип мог исчезнуть из медиатеки после сохранения
       .post('/publish', validate('param', SiteParams), site('header.edit'), async (c) => {
         const { siteId } = c.req.valid('param')
+        // Вид в черновик может положить токен с правом designDraft. Администратор сайта не меняет
+        // вид сам — значит, и не выпускает чужую правку вида на сайт: такой черновик публикует
+        // владелец. Сверка — с шапкой на сайте, а до первой публикации — со стандартным видом
+        if (c.var.actor.kind === 'user' && !can(c.var.siteRole, 'header.look')) {
+          const current = await repo.read(siteId)
+          if (current && !sameHeaderLook(current.draft, current.published ?? defaultHeader)) {
+            return c.json(lookLocked(LOOK_PUBLISH_LOCKED), 403)
+          }
+        }
         const result = await repo.publish(
           siteId,
           (draft, targets) => headerLinkIssues(draft, targets, 'published'),
