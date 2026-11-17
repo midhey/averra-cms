@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/midhey/averra-cms/compare/v0.4.0...v0.4.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deploy:** never overwrite a safety dump created in the same second ([ef00bc0](https://github.com/midhey/averra-cms/commit/ef00bc0b3af5499e305e831f5ff7665f1937e16c))
+
 ## [0.4.0](https://github.com/midhey/averra-cms/compare/v0.3.0...v0.4.0) (2026-11-17)
 
 
