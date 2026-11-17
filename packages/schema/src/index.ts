@@ -466,6 +466,7 @@ export {
   TitleTemplate,
   VerificationCode,
 } from './site-settings'
+export * from './site-template'
 export {
   AdminUpdateMode,
   BackupKind,

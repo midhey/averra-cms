@@ -31,6 +31,7 @@ import { readStoredSettings } from '../settings/read'
 import { effectiveSiteUrl } from '../settings/repo'
 import { publishedTheme } from '../theme/read'
 import { sitesRepo } from './repo'
+import { setupChecklist } from './setup'
 import { siteSnapshot } from './snapshot'
 
 const SiteParams = z.object({ siteId: Uuid() })
@@ -51,8 +52,10 @@ export function sitesRoutes({
   publisher,
   log,
   siteUrl,
+  smtpReady,
 }: {
   db: Db
+  smtpReady: () => boolean
   /** Адрес установки (SITE_URL): адрес сайта в снимке, если своего в настройках SEO нет */
   siteUrl: string | undefined
   /** Сборка сайта на сервере после публикации. Нет — публикация только меняет базу */
@@ -123,6 +126,10 @@ export function sitesRoutes({
           access: c.var.siteRole,
           hiddenFromSearch: settings.hideFromSearch,
           seo,
+          setup:
+            c.var.actor.kind === 'user' && can(c.var.siteRole, 'site.settings')
+              ? await setupChecklist(db, found, smtpReady(), siteUrl)
+              : null,
           newLeads: seesLeads ? await leads.countNew(siteId) : null,
         })
       })

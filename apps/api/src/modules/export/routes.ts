@@ -6,6 +6,7 @@ import type { Db } from '../../db/client'
 import type { MediaStorage } from '../../media/storage'
 import { validate } from '../../validate'
 import { siteDataEntries, siteMediaBytes } from './site-data'
+import { TemplateError, templateEntries } from './site-template'
 import { ZIP_MAX_BYTES, type ZipEntry, zipStream } from './zip'
 
 /** Файл текущей версии сайта на сервере: путь внутри версии и чтение по кускам */
@@ -29,6 +30,7 @@ export type ExportDeps = {
   db: Db
   storage: MediaStorage
   version: string
+  siteUrl?: string | undefined
   /** Нет — публикация на сервере выключена (PUBLISH_DIR не задан) */
   published?: PublishedSite
 }
@@ -44,7 +46,7 @@ const tooLarge = () => ({
 })
 
 /** Имя файла: латиница и цифры, без названия сайта (кавычки и кириллица в заголовке ломаются) */
-function fileName(siteId: string, kind: 'site' | 'data', now: Date) {
+function fileName(siteId: string, kind: 'site' | 'data' | 'template', now: Date) {
   const day = now.toISOString().slice(0, 10).replaceAll('-', '')
   return `averra-${siteId.slice(0, 8)}-${kind}-${day}.zip`
 }
@@ -64,8 +66,21 @@ function zipResponse(entries: AsyncIterable<ZipEntry>, name: string) {
  * «Клиент не заложник» (принцип 8): сайт статическим архивом — то, что отдаёт Caddy, его
  * откроет любой веб-сервер, — и все данные сайта (JSON и оригиналы картинок). Оба — ZIP потоком
  */
-export function exportRoutes({ db, storage, version, published }: ExportDeps) {
+export function exportRoutes({ db, storage, version, published, siteUrl }: ExportDeps) {
   return new Hono<AuthEnv>()
+    .get('/template', validate('param', SiteParams), requireSite(db, 'site.export'), async (c) => {
+      const { siteId } = c.req.valid('param')
+      try {
+        const entries = await templateEntries({ db, storage, siteId, version, siteUrl })
+        async function* source() {
+          yield* entries
+        }
+        return zipResponse(source(), fileName(siteId, 'template', new Date()))
+      } catch (error) {
+        if (!(error instanceof TemplateError)) throw error
+        return c.json({ error: { code: 'template_invalid', message: error.message } }, 409)
+      }
+    })
     .get('/static', validate('param', SiteParams), requireSite(db, 'site.read'), async (c) => {
       // Содержимое и так публичное, но программе с токеном (MCP) архив сайта не нужен
       if (c.var.actor.kind === 'token') {

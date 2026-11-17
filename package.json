@@ -33,7 +33,9 @@
     "token:revoke": "pnpm --filter @averra/api token:revoke",
     "token:grant": "pnpm --filter @averra/api token:grant",
     "mail:test": "pnpm --filter @averra/api mail:test",
-    "fleet": "pnpm --filter @averra/deploy fleet"
+    "fleet": "pnpm --filter @averra/deploy fleet",
+    "site:template": "pnpm --filter @averra/api site:template",
+    "site:import-template": "pnpm --filter @averra/api site:import-template"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

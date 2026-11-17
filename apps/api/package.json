@@ -33,7 +33,9 @@
     "token:revoke": "tsx src/cli/token-revoke.ts",
     "token:grant": "tsx src/cli/token-grant.ts",
     "mail:test": "tsx src/cli/mail-test.ts",
-    "status": "tsx src/cli/status.ts"
+    "status": "tsx src/cli/status.ts",
+    "site:template": "tsx src/cli/site-template.ts",
+    "site:import-template": "tsx src/cli/site-import-template.ts"
   },
   "dependencies": {
     "@averra/blocks": "workspace:*",

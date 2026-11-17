@@ -38,6 +38,7 @@ usage() {
                           повторить. Повторный запуск с флагом заменяет весь список
   --no-redirect-domains   убрать все дополнительные домены (список в .env станет пустым)
   --owner-name <имя>      имя владельца в админке, по умолчанию «Владелец»
+  --template <архив>      развернуть новый сайт из шаблона Averra (ZIP, до 256 МБ)
   --site-name <название>  название сайта при первом запуске, по умолчанию домен сайта
   --dir <папка>           папка установки, по умолчанию /opt/averra
   --api-image <образ>     образ API без тега, по умолчанию ghcr.io/midhey/averra-api
@@ -96,6 +97,7 @@ SKIP_PORTS=0
 INSTALL_DOCKER=0
 EXTERNAL_DB=0
 DB_CA_FILE_ARG=''
+TEMPLATE_FILE=''
 ENV_ONLY=0
 DRY_RUN=0
 ASSUME_YES=0
@@ -125,6 +127,7 @@ while [[ $# -gt 0 ]]; do
     # Адрес внешней базы — не значением флага: в нём пароль (история команд, список процессов)
     --external-db) EXTERNAL_DB=1; shift ;;
     --db-ca-file) need_value "$@"; DB_CA_FILE_ARG="$2"; shift 2 ;;
+    --template) need_value "$@"; TEMPLATE_FILE="$2"; shift 2 ;;
     --env-only) ENV_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes | -y) ASSUME_YES=1; shift ;;
@@ -134,6 +137,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 ENV_FILE="$INSTALL_DIR/.env"
+
+if [[ -n "$TEMPLATE_FILE" ]]; then
+  [[ $ENV_ONLY -eq 0 ]] || fail '--template нельзя совместить с --env-only: шаблон требует работающего API'
+  [[ ! -f "$ENV_FILE" ]] || fail '--template — только для новой установки: в папке уже есть .env'
+  [[ -f "$TEMPLATE_FILE" && -r "$TEMPLATE_FILE" ]] || fail "нет читаемого файла шаблона $TEMPLATE_FILE"
+  [[ $(wc -c < "$TEMPLATE_FILE") -le 268435456 ]] || fail 'архив шаблона больше 256 МБ'
+fi
 
 # ── .env: чтение без выполнения ────────────────────────────────────────────────────────────
 # .env не «source»-им: строка в нём не должна выполниться как команда. Берём KEY=VALUE как текст
@@ -726,6 +736,7 @@ if [[ $DRY_RUN -eq 1 ]]; then
   [[ -n "$GHCR_USER" ]] && say "Вход в ghcr.io:    $GHCR_USER" || say 'Вход в ghcr.io:    нет (образы публичные или вход уже есть)'
   # Проверки только читают: Docker, порты и DNS — те же, что перед настоящей установкой
   say ''
+  [[ -z "$TEMPLATE_FILE" ]] || say "Шаблон:            $TEMPLATE_FILE (импорт после готовности API)"
   say 'Проверки:'
   can_write_install_dir || problem "нет прав на запись в $INSTALL_DIR: запустите через sudo" || true
   if [[ $ENV_ONLY -eq 0 ]]; then
@@ -940,6 +951,13 @@ if [[ -z "$OWNER_EMAIL" ]]; then
       fail 'владелец не создан (сообщение выше). Запустите установщик ещё раз'
   fi
   set_env OWNER_EMAIL "$ACME_EMAIL"
+fi
+
+if [[ -n "$TEMPLATE_FILE" ]]; then
+  step 'Импортирую шаблон сайта и собираю сайт'
+  # Через stdin: архив не копируется в том с кодом и не остаётся во временной папке контейнера.
+  compose exec -T api node dist/server/site-import-template.js --file - < "$TEMPLATE_FILE" ||
+    fail 'шаблон не импортирован или сайт не собран (причина выше). Проверьте «Обзор» и журнал сборок в админке'
 fi
 
 step 'Поднимаю Caddy (сертификаты он выпустит сам)'

@@ -145,7 +145,7 @@ type Prepared =
 export const SVG_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"
 
 /** Имя файла только для показа в админке: без управляющих символов и не длиннее 200 */
-function displayName(name: string) {
+export function displayName(name: string) {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: вырезаем именно управляющие символы
   const clean = name.replace(/[\u0000-\u001f\u007f]/g, '').trim()
   return clean.slice(0, 200) || 'картинка'
@@ -156,42 +156,8 @@ const pagePath = (slug: string) => (slug === MAIN_PAGE_SLUG ? '/' : `/${slug}`)
 const usageWhere = ({ draft, published }: MediaUsage) =>
   draft && published ? 'черновик и сайт' : draft ? 'черновик' : 'сайт'
 
-/**
- * Медиатека сайта: монтируется на /sites/:siteId/media. Права — как у страниц: смотреть —
- * чтение сайта, загружать и удалять — все роли сайта (media.upload, media.delete)
- */
-export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
-  const repo = mediaRepo(db)
-
-  /**
-   * Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы. У SVG оригинал
-   * и вариант — один файл
-   */
-  const keysOf = (siteId: string, mediaId: string, files: readonly string[]) =>
-    [...new Set(files)].map((file) => mediaKey(siteId, mediaId, file))
-
-  /** Файлы — в хранилище, потом строка в базе. Не вышло — файлы убираем, мусора не остаётся */
-  async function store(
-    siteId: string,
-    mediaId: string,
-    files: { file: string; data: Uint8Array }[],
-  ) {
-    const keys = keysOf(
-      siteId,
-      mediaId,
-      files.map((file) => file.file),
-    )
-    try {
-      await Promise.all(
-        files.map((file) => storage.put(mediaKey(siteId, mediaId, file.file), file.data)),
-      )
-    } catch (error) {
-      await storage.remove(keys).catch(() => {})
-      throw error
-    }
-    return keys
-  }
-
+/** Одна обработка для медиатеки и импорта: тип определяется содержимым, SVG очищается. */
+export function createMediaPreparer(images: ImageProcessor) {
   /** Растр: проверка и нарезка вариантов (sharp) */
   async function prepareImage(data: Uint8Array): Promise<Prepared> {
     const result = await images.process(data)
@@ -252,6 +218,46 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
     }
   }
 
+  return (data: Uint8Array) => (looksLikeSvg(data) ? prepareSvg(data) : prepareImage(data))
+}
+
+/**
+ * Медиатека сайта: монтируется на /sites/:siteId/media. Права — как у страниц: смотреть —
+ * чтение сайта, загружать и удалять — все роли сайта (media.upload, media.delete)
+ */
+export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
+  const repo = mediaRepo(db)
+  const prepare = createMediaPreparer(images)
+
+  /**
+   * Ключи файлов картинки в хранилище. Id — строчными (Uuid) или прямо из базы. У SVG оригинал
+   * и вариант — один файл
+   */
+  const keysOf = (siteId: string, mediaId: string, files: readonly string[]) =>
+    [...new Set(files)].map((file) => mediaKey(siteId, mediaId, file))
+
+  /** Файлы — в хранилище, потом строка в базе. Не вышло — файлы убираем, мусора не остаётся */
+  async function store(
+    siteId: string,
+    mediaId: string,
+    files: { file: string; data: Uint8Array }[],
+  ) {
+    const keys = keysOf(
+      siteId,
+      mediaId,
+      files.map((file) => file.file),
+    )
+    try {
+      await Promise.all(
+        files.map((file) => storage.put(mediaKey(siteId, mediaId, file.file), file.data)),
+      )
+    } catch (error) {
+      await storage.remove(keys).catch(() => {})
+      throw error
+    }
+    return keys
+  }
+
   return (
     new Hono<AuthEnv>()
       // Лимит размера отдаём вместе с медиатекой: админка проверит файл до отправки. Иначе на
@@ -290,7 +296,7 @@ export function mediaRoutes({ db, storage, images, maxBytes, log }: MediaDeps) {
 
           const data = new Uint8Array(await file.arrayBuffer())
           // Тип — по содержимому: SVG (XML) начинается с «<», растровые форматы — нет
-          const result = looksLikeSvg(data) ? await prepareSvg(data) : await prepareImage(data)
+          const result = await prepare(data)
           if (!result.ok) {
             const { status, code, message } = result.failure
             return c.json({ error: { code, message, issues: [{ path: 'file', message }] } }, status)

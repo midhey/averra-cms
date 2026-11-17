@@ -38,6 +38,8 @@ const entryPoints = {
   'token-grant': 'src/cli/token-grant.ts',
   'mail-test': 'src/cli/mail-test.ts',
   status: 'src/cli/status.ts',
+  'site-template': 'src/cli/site-template.ts',
+  'site-import-template': 'src/cli/site-import-template.ts',
   // Разбор ответа источника релизов: его зовёт averra.sh check-update в контейнере без сети
   'release-info': 'src/cli/release-info.ts',
 }

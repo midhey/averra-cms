@@ -163,7 +163,19 @@ export function createApp(deps: AppDeps) {
     .route('/me', profileRoutes({ db, auth }))
     // Сайт установки без id в адресе: одна установка — один сайт (modules/site)
     .route('/site', siteRoutes({ db, siteUrl: deps.siteUrl, notFoundPage: deps.notFoundPage }))
-    .route('/sites', sitesRoutes({ db, publisher: deps.publisher, log, siteUrl: deps.siteUrl }))
+    .route(
+      '/sites',
+      sitesRoutes({
+        db,
+        publisher: deps.publisher,
+        log,
+        siteUrl: deps.siteUrl,
+        smtpReady: () => {
+          const state = mail.runtime.status()
+          return state.enabled && state.provider.kind === 'smtp'
+        },
+      }),
+    )
     // SEO и настройки сайта — владельцу и администратору сайта; иконки сайта открыты: их берёт
     // рендерер (modules/settings)
     .route(
@@ -220,6 +232,7 @@ export function createApp(deps: AppDeps) {
         storage: deps.storage,
         version: deps.version ?? 'dev',
         published: deps.published,
+        siteUrl: deps.siteUrl,
       }),
     )
     // Состояние установки и «Обновить до X» — только владельцу (modules/status)

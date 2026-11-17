@@ -25,6 +25,15 @@ export async function missingMediaIssues(
     siteId,
     refs.map((ref) => ref.mediaId),
   )
+  return contentMediaIssues(types, content)
+}
+
+/** Та же проверка для архива: картинки ещё не записаны в базу, но их тип уже проверен. */
+export function contentMediaIssues(
+  types: ReadonlyMap<string, string | undefined>,
+  content: PageContent,
+): Issue[] {
+  const refs = collectMediaRefs(content)
   return refs.flatMap((ref) => {
     const type = types.get(ref.mediaId)
     const message =

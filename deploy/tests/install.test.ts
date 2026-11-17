@@ -1539,3 +1539,78 @@ describe('внешняя база (--external-db)', () => {
     expect(shared(script)).toBe(shared(fileURLToPath(new URL('../averra.sh', import.meta.url))))
   })
 })
+
+describe('--template', () => {
+  it('проверяет значение, читаемость архива, новую папку и несовместимость с env-only', () => {
+    expect(install(['--template']).stderr).toContain('нет значения')
+    const dir = posix(join(tempDir(), 'new-install'))
+    expect(
+      install([...required, '--dir', dir, '--template', `${dir}/missing.zip`, '--dry-run']).stderr,
+    ).toContain('нет читаемого файла шаблона')
+    const root = tempDir()
+    const file = join(root, 'template.zip')
+    writeFileSync(file, 'archive')
+    const envOnly = install([...required, '--dir', dir, '--template', posix(file), '--env-only'])
+    expect(envOnly.status).toBe(1)
+    expect(envOnly.stderr).toContain('нельзя совместить с --env-only')
+    writeFileSync(join(root, '.env'), 'OWNER_EMAIL=owner@example.ru\n')
+    const existing = install([
+      ...required,
+      '--dir',
+      posix(root),
+      '--template',
+      posix(file),
+      '--dry-run',
+    ])
+    expect(existing.status).toBe(1)
+    expect(existing.stderr).toContain('только для новой установки')
+  })
+
+  it('сухой прогон сообщает о шаблоне и не вызывает импорт', () => {
+    const root = tempDir()
+    const file = join(root, 'template with spaces.zip')
+    writeFileSync(file, 'archive')
+    const run = install([
+      ...required,
+      '--dir',
+      posix(join(root, 'install')),
+      '--template',
+      posix(file),
+      '--dry-run',
+      '--skip-dns-check',
+      '--skip-port-check',
+    ])
+    expect(run.status).toBe(0)
+    expect(run.stdout).toContain('импорт после готовности API')
+    expect(run.calls()).not.toContain('site-import-template.js')
+  })
+
+  it.skipIf(process.platform !== 'linux')(
+    'передаёт архив команде после готовности API и до Caddy',
+    () => {
+      const root = tempDir()
+      const file = join(root, 'template with spaces.zip')
+      writeFileSync(file, 'archive')
+      const run = install(
+        [
+          ...required,
+          '--dir',
+          posix(join(root, 'install')),
+          '--template',
+          posix(file),
+          '--skip-dns-check',
+          '--skip-port-check',
+          '--yes',
+        ],
+        { env: { AVERRA_OWNER_PASSWORD: 'password-for-test' } },
+      )
+      expect(run.status, run.output).toBe(0)
+      const calls = run.calls()
+      expect(calls).toContain('node dist/server/site-import-template.js --file -')
+      expect(calls.indexOf('site-import-template.js')).toBeGreaterThan(
+        calls.indexOf('health/ready'),
+      )
+      expect(calls.indexOf('site-import-template.js')).toBeLessThan(calls.lastIndexOf(' up -d'))
+    },
+  )
+})

@@ -13,7 +13,7 @@ export async function recordSiteRevision(
   siteId: string,
   entity: SiteRevisionEntity,
   content: Record<string, unknown>,
-  actor: Actor,
+  actor?: Actor,
 ) {
   const scope = and(eq(siteRevisions.siteId, siteId), eq(siteRevisions.entity, entity))
   const [last] = await tx
@@ -26,7 +26,7 @@ export async function recordSiteRevision(
     entity,
     version,
     content,
-    publishedBy: actor.kind === 'user' ? actor.user.id : null,
+    publishedBy: actor?.kind === 'user' ? actor.user.id : null,
     publishedAt: new Date(),
   })
   await tx

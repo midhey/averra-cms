@@ -17,6 +17,7 @@ import { and, asc, count, eq, ilike, isNotNull, isNull, max, or, sql } from 'dri
 import type { Actor } from '../../auth/access'
 import type { Db } from '../../db/client'
 import { pageRevisions, pages, siteMembers, sites } from '../../db/schema'
+import type { Tx } from '../../mail/outbox'
 import { customBlocksRepo } from '../custom-blocks/repo'
 import { cssMediaIds } from '../custom-blocks/service'
 import { publishedFooter } from '../footer/read'
@@ -210,41 +211,7 @@ export function sitesRepo(db: Db) {
      * Одна транзакция: публикации без версии в истории (и наоборот) не бывает
      */
     publish(siteId: string, slug: string, actor: Actor) {
-      return db.transaction(async (tx) => {
-        const [page] = await tx
-          .update(pages)
-          .set({
-            published: sql`${pages.draft}`,
-            publishedTitle: sql`${pages.title}`,
-            publishedAt: new Date(),
-          })
-          .where(pageIs(siteId, slug))
-          .returning()
-        if (!page) return undefined
-        const { published, publishedTitle, publishedAt } = page
-        if (!published || publishedTitle === null || !publishedAt) {
-          throw new Error('База не вернула опубликованную версию страницы')
-        }
-
-        // Номер считаем после UPDATE: он держит блокировку строки страницы, и две
-        // одновременные публикации одной страницы получат номера по очереди
-        const [last] = await tx
-          .select({ version: max(pageRevisions.version) })
-          .from(pageRevisions)
-          .where(eq(pageRevisions.pageId, page.id))
-        await tx.insert(pageRevisions).values({
-          siteId,
-          pageId: page.id,
-          version: (last?.version ?? 0) + 1,
-          // Снимок — из того, что вернул UPDATE: в истории ровно то, что ушло на сайт
-          title: publishedTitle,
-          content: published,
-          publishedBy: actor.kind === 'user' ? actor.user.id : null,
-          publishedByToken: actor.kind === 'token' ? actor.tokenId : null,
-          publishedAt,
-        })
-        return page
-      })
+      return db.transaction((tx) => publishPage(tx, siteId, slug, actor))
     },
 
     /**
@@ -325,4 +292,41 @@ export function sitesRepo(db: Db) {
       ])
     },
   }
+}
+
+/** Публикация из админки и первоначального импорта пишет одинаковую историю. */
+export async function publishPage(tx: Tx, siteId: string, slug: string, actor?: Actor) {
+  const [page] = await tx
+    .update(pages)
+    .set({
+      published: sql`${pages.draft}`,
+      publishedTitle: sql`${pages.title}`,
+      publishedAt: new Date(),
+    })
+    .where(and(eq(pages.siteId, siteId), eq(pages.slug, slug)))
+    .returning()
+  if (!page) return undefined
+  const { published, publishedTitle, publishedAt } = page
+  if (!published || publishedTitle === null || !publishedAt) {
+    throw new Error('База не вернула опубликованную версию страницы')
+  }
+
+  // Номер считаем после UPDATE: он держит блокировку строки страницы, и две
+  // одновременные публикации одной страницы получат номера по очереди
+  const [last] = await tx
+    .select({ version: max(pageRevisions.version) })
+    .from(pageRevisions)
+    .where(eq(pageRevisions.pageId, page.id))
+  await tx.insert(pageRevisions).values({
+    siteId,
+    pageId: page.id,
+    version: (last?.version ?? 0) + 1,
+    // Снимок — из того, что вернул UPDATE: в истории ровно то, что ушло на сайт
+    title: publishedTitle,
+    content: published,
+    publishedBy: actor?.kind === 'user' ? actor.user.id : null,
+    publishedByToken: actor?.kind === 'token' ? actor.tokenId : null,
+    publishedAt,
+  })
+  return page
 }

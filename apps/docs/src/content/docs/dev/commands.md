@@ -97,3 +97,14 @@ pnpm e2e --headed               # с окном браузера
 `averra.sh check-update`, `ExecStopPost` удаляет заявку. Новые юниты ставятся и обновлением из
 нового образа. API не выполняет команд хоста: владелец через `POST /api/status/check-update`
 пишет только заявку `{ requestedAt, requestedBy }`; токену отказ (`installation.update`).
+
+
+## Шаблоны сайта
+
+| Команда | На сервере | Что делает |
+|---|---|---|
+| `pnpm site:template --out <файл.zip>` | `node dist/server/site-template.js --out <файл.zip>` | ZIP с контентом и оформлением без данных установки; существующий файл не заменяет |
+| `pnpm site:import-template --file <файл.zip>` | `node dist/server/site-import-template.js --file <файл.zip>` | импорт только на пустой сайт; `--file -` — stdin; при `PUBLISH_DIR` собирает сайт через работающий API |
+
+Новая установка: `deploy/install.sh --template <архив>` вместе с обычными флагами.
+Формат, ограничения, отказ при наличии контента и порядок запуска — [Сайт из шаблона](/averra-cms/install/template/).

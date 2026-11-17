@@ -81,6 +81,9 @@ function Overview({ siteId }: { siteId: string }) {
   }
 
   const managePages = canManagePages(site.access)
+  // SMTP — настройка всей установки: ссылку на «Почту» видит только её владелец, а не роль на сайте
+  const { data: me } = useQuery(meQuery())
+  const installationOwner = me?.role === 'owner'
   const shown = filterPages(pages, search)
 
   return (
@@ -131,6 +134,25 @@ function Overview({ siteId }: { siteId: string }) {
       {site.hiddenFromSearch && canEditSeo(site.access) && <HiddenFromSearchNote />}
 
       <OtherSitesNote otherSites={otherSites} />
+
+      {canEditSeo(site.access) && site.setup && site.setup.length > 0 && (
+        <Section title="Что заполнить" card>
+          <p className={mutedClassName}>
+            Подготовьте сайт клиента к запуску. Заполненные пункты исчезнут автоматически.
+          </p>
+          <ul>
+            {site.setup.map((item) => (
+              <li key={item.key}>
+                {item.key === 'smtp' && !installationOwner ? (
+                  <>{item.label} — настраивает владелец установки</>
+                ) : (
+                  <Link to={item.to}>{item.label}</Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <section aria-label="Коротко" className={styles.stats}>
         {canSeeLeads(site.access) && site.newLeads !== null && (

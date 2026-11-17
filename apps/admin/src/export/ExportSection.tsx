@@ -35,6 +35,14 @@ export function ExportSection({
     },
   })
 
+  const template = useMutation({
+    mutationFn: async () => {
+      const res = await api.sites[':siteId'].export.template.$get({ param: { siteId } })
+      if (res.status !== 200) throw await apiRequestError(res)
+      await saveResponse(res, 'template.zip')
+    },
+  })
+
   return (
     <Section id={id} title="Выгрузка" card>
       <p className={mutedClassName}>
@@ -52,7 +60,23 @@ export function ExportSection({
             {data.isPending ? 'Готовлю выгрузку…' : 'Выгрузить все данные'}
           </Button>
         )}
+        {canExportData && (
+          <Button icon="download" loading={template.isPending} onClick={() => template.mutate()}>
+            {template.isPending ? 'Готовлю шаблон…' : 'Скачать шаблон сайта'}
+          </Button>
+        )}
       </FormActions>
+      {canExportData && (
+        <p className={mutedClassName}>
+          Шаблон для нового клиента: страницы и оформление, без заявок, получателей и реквизитов
+          организации. Проверьте свои тексты, скрипты и картинки перед передачей.
+        </p>
+      )}
+      {template.error && (
+        <InlineAlert tone="danger">
+          Не удалось скачать шаблон: {messageOf(template.error)}
+        </InlineAlert>
+      )}
       {site.error && (
         <InlineAlert tone="danger">Не удалось скачать сайт: {messageOf(site.error)}</InlineAlert>
       )}
