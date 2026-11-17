@@ -74,11 +74,24 @@ const motion = (reduce: boolean) => (query: string) => ({
 beforeEach(() => {
   document.body.innerHTML = ''
   document.documentElement.removeAttribute('data-window-open')
+  document.documentElement.removeAttribute('data-av-behaviors-ready')
 })
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('окно сайта', () => {
+  it.each([false, true])(
+    'маркер готовности появляется после установки обработчиков (reduce=%s)',
+    (reduce) => {
+      const { dialog, link } = mount()
+      expect(document.documentElement.hasAttribute('data-av-behaviors-ready')).toBe(false)
+      startBehaviors(document, { matchMedia: motion(reduce) })
+      expect(document.documentElement.hasAttribute('data-av-behaviors-ready')).toBe(true)
+      expect(click(link).defaultPrevented).toBe(true)
+      expect(dialog.open).toBe(true)
+    },
+  )
+
   it('ссылка с data-av-window открывает окно: переход отменён, фокус на первом поле, прокрутка заблокирована', () => {
     const { dialog, link } = mount()
     startBehaviors(document, { matchMedia: motion(false) })

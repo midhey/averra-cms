@@ -5,6 +5,70 @@ import { expect, test } from './fixtures'
 // стили, шрифты, кольцо фокуса, клавиатура и ширина телефона
 
 test.describe('витрина компонентов', () => {
+  test('сводка заявок: пустые строки и тени вкладок в обеих темах', async ({ page }, testInfo) => {
+    await page.goto('/dev/ui')
+    const theme = page.getByRole('group', { name: 'Тема админки' })
+    const summary = page.getByRole('region', { name: 'Сводка заявок', exact: true })
+    const strip = summary.getByRole('tablist', { name: 'Период сводки' })
+    for (const label of ['Тёмная', 'Светлая']) {
+      await theme.getByRole('radio', { name: label, exact: true }).check()
+      await summary.getByRole('tab', { name: '7 дней' }).click()
+      await expect(summary.getByRole('table')).toHaveCount(0)
+      await expect(strip).not.toHaveAttribute('data-more-start')
+      await expect(strip).not.toHaveAttribute('data-more-end')
+      await expect(strip).toHaveCSS('background-image', 'none')
+      expect(
+        await strip.evaluate((node) => {
+          const style = node.ownerDocument.defaultView?.getComputedStyle(node)
+          return (
+            !!style &&
+            style.getPropertyValue('--tabs-backdrop') === style.getPropertyValue('--color-surface')
+          )
+        }),
+      ).toBe(true)
+      for (const title of ['По источнику', 'По странице', 'По форме']) {
+        const empty = summary.getByText(`${title}: заявок за этот период нет`, { exact: true })
+        await expect(empty).toBeVisible()
+        await expect(empty).toHaveCSS('border-top-width', '0px')
+        expect(
+          await empty.evaluate((node) => {
+            const doc = node.ownerDocument
+            const view = doc.defaultView
+            if (!view) return false
+            const style = view.getComputedStyle(node)
+            const sample = doc.createElement('span')
+            sample.style.color = 'var(--color-text-muted)'
+            node.append(sample)
+            const matches = style.color === view.getComputedStyle(sample).color
+            sample.remove()
+            return matches
+          }),
+        ).toBe(true)
+      }
+      await summary.screenshot({ path: testInfo.outputPath(`lead-summary-${label}.png`) })
+      const positions = await summary
+        .getByText(/заявок за этот период нет/)
+        .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().top))
+      expect(positions[1]).toBeGreaterThan(positions[0] ?? 0)
+      expect(positions[2]).toBeGreaterThan(positions[1] ?? 0)
+      // Узкая полоса: тень только со стороны скрытых вкладок; после расширения обе исчезают.
+      await strip.evaluate((node) => {
+        node.style.maxWidth = '150px'
+      })
+      await expect(strip).toHaveAttribute('data-more-end', 'true')
+      await expect(strip).not.toHaveAttribute('data-more-start')
+      await strip.evaluate((node) => node.scrollTo({ left: node.scrollWidth }))
+      await expect(strip).toHaveAttribute('data-more-start', 'true')
+      await expect(strip).not.toHaveAttribute('data-more-end')
+      await strip.evaluate((node) => {
+        node.style.maxWidth = ''
+      })
+      await expect(strip).not.toHaveAttribute('data-more-start')
+      await expect(strip).not.toHaveAttribute('data-more-end')
+      await expect(strip).toHaveCSS('background-image', 'none')
+    }
+  })
+
   test('витрина переключателей открывается из /dev/ui и показывает обе темы рядом', async ({
     page,
   }) => {

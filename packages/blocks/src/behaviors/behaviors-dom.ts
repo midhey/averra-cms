@@ -70,9 +70,11 @@ export function startBehaviors(
   startWindows(doc, env)
   // «Уменьшить движение» в системе: эффектов нет вовсе — всё видно и раскрывается сразу
   const calm = env.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  if (calm) return
-  startDetails(doc)
-  startOnScreen(doc, env)
+  if (!calm) {
+    startDetails(doc)
+    startOnScreen(doc, env)
+  }
+  doc.documentElement.setAttribute('data-av-behaviors-ready', '')
 }
 
 // ── Окна ────────────────────────────────────────────────────────────────────────────────────────

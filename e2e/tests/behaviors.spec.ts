@@ -50,6 +50,9 @@ async function visitor(
   return { context, page, violations }
 }
 
+const waitForBehaviors = (page: Page) =>
+  expect(page.locator('html')).toHaveAttribute('data-av-behaviors-ready', '')
+
 const noHorizontalScroll = (page: Page) =>
   page.evaluate('document.documentElement.scrollWidth <= window.innerWidth') as Promise<boolean>
 
@@ -152,6 +155,7 @@ test('окно с формой: Esc, фон, фокус, отправка с у�
     const site = await visitor(browser, width)
     try {
       await site.page.goto(urls.renderer)
+      await waitForBehaviors(site.page)
       const button = site.page.getByRole('link', { name: 'Записаться на урок' })
       const dialog = site.page.getByRole('dialog', { name: 'Пробный урок' })
       await expect(dialog).toBeHidden()
@@ -266,6 +270,7 @@ test('окно с формой: Esc, фон, фокус, отправка с у�
   try {
     const site = await visitor(withBar, 1440)
     await site.page.goto(urls.renderer)
+    await waitForBehaviors(site.page)
     expect(
       await site.page.evaluate('window.innerWidth - document.documentElement.clientWidth'),
     ).toBeGreaterThan(0)
@@ -310,6 +315,7 @@ test('окно с формой: Esc, фон, фокус, отправка с у�
   const ctrl = await visitor(browser, 1440)
   try {
     await ctrl.page.goto(urls.renderer)
+    await waitForBehaviors(ctrl.page)
     const [opened] = await Promise.all([
       ctrl.context.waitForEvent('page'),
       ctrl.page.getByRole('link', { name: 'Записаться на урок' }).click({ modifiers: ['Control'] }),
@@ -334,6 +340,7 @@ test('окно с формой: Esc, фон, фокус, отправка с у�
   try {
     const site = await visitor(browser, 1440)
     await site.page.goto(served.url)
+    await waitForBehaviors(site.page)
     await site.page.getByRole('link', { name: 'Записаться на урок' }).click()
     await expect(site.page.getByRole('dialog', { name: 'Пробный урок' })).toBeVisible()
     await site.page.keyboard.press('Escape')
@@ -357,6 +364,7 @@ test('появление при прокрутке и плавный FAQ: с JS 
   const animated = await visitor(browser, 1440)
   try {
     await animated.page.goto(urls.renderer)
+    await waitForBehaviors(animated.page)
     // Карточки ниже экрана ждут прокрутки
     await expect(cards(animated.page).first()).toHaveAttribute('data-av-pending', '')
     await cards(animated.page).last().scrollIntoViewIfNeeded()
@@ -397,6 +405,7 @@ test('появление при прокрутке и плавный FAQ: с JS 
         await route.fulfill({ response, body })
       })
       await bottom.page.goto(urls.renderer)
+      await waitForBehaviors(bottom.page)
       const last = bottom.page.locator('#last-line')
       await expect(last).toHaveAttribute('data-av-pending', '')
       await bottom.page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
@@ -415,6 +424,7 @@ test('появление при прокрутке и плавный FAQ: с JS 
     const calm = await visitor(browser, 375, options)
     try {
       await calm.page.goto(urls.renderer)
+      if (options.javaScriptEnabled !== false) await waitForBehaviors(calm.page)
       await expect(calm.page.locator('[data-av-pending]')).toHaveCount(0)
       expect(
         await cards(calm.page)
@@ -476,6 +486,7 @@ test('кнопка и пункт меню шапки с «Открывать в 
   const wide = await visitor(browser, 1440)
   try {
     await wide.page.goto(urls.renderer)
+    await waitForBehaviors(wide.page)
     const siteHeader = wide.page.locator('header[data-site-header]')
     const button = siteHeader.getByRole('link', { name: 'Урок бесплатно' })
     await expect(button).toHaveAttribute('data-av-window', '')
@@ -501,6 +512,7 @@ test('кнопка и пункт меню шапки с «Открывать в 
   const narrow = await visitor(browser, 375)
   try {
     await narrow.page.goto(urls.renderer)
+    await waitForBehaviors(narrow.page)
     const burger = narrow.page.locator('header[data-site-header] summary', { hasText: 'Меню' })
     await burger.click()
     await narrow.page
@@ -619,6 +631,7 @@ test('тема и SEO для соцсетей из админки: моно-шр
   const site = await visitor(browser, 1440)
   try {
     await site.page.goto(urls.renderer)
+    await waitForBehaviors(site.page)
     await expect(site.page.locator('meta[name="theme-color"]')).toHaveAttribute(
       'content',
       defaultTheme.colors.accent,

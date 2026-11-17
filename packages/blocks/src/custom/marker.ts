@@ -57,6 +57,7 @@ const RESERVED_DATA = [
   'av-hinted',
   'av-busy',
   'av-shown',
+  'av-behaviors-ready',
 ]
 
 /**
