@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/midhey/averra-cms/compare/v0.3.0...v0.4.0) (2026-11-17)
+
+
+### Features
+
+* **admin:** add switch variants and themed controls showcase ([a2a988a](https://github.com/midhey/averra-cms/commit/a2a988a9e02c31cd3c69431b1f117df294a1145c))
+* **admin:** dark theme ([c5dc506](https://github.com/midhey/averra-cms/commit/c5dc506f071da5e74445ea486345cb177499ff93))
+* **editor:** hide a block on the site without deleting it ([1e623cc](https://github.com/midhey/averra-cms/commit/1e623cc7ee5eb42d8feba1e41cf843520e530b28))
+* **history:** add revision history for site-wide settings ([70b443f](https://github.com/midhey/averra-cms/commit/70b443f08147f13600e74bcc3aad7c25e4d9e7c5))
+* **leads:** record where a lead came from and show a source summary ([b54ee0e](https://github.com/midhey/averra-cms/commit/b54ee0e1a08581fcdc3e3d47f9e6e8b46bfe171d))
+* **mcp:** add page listing and image uploads ([0413d1f](https://github.com/midhey/averra-cms/commit/0413d1f16c7c431ac42d586bfa4a393a5fe2b143))
+* **mcp:** let tokens save theme, header and footer drafts ([d681ca9](https://github.com/midhey/averra-cms/commit/d681ca9c9abbe65ec9749714231eaa8c1a4cce78))
+* **notifications:** alert when the site is down or a certificate expires ([a0c7222](https://github.com/midhey/averra-cms/commit/a0c7222fa49e6ec5a640598349a3a0c970d99f7c))
+
+
+### Bug Fixes
+
+* **header:** only the owner publishes a changed header or footer look ([9fdbd87](https://github.com/midhey/averra-cms/commit/9fdbd8772891ba8bceb107c159ff2b059cc542a5))
+
 ## [0.3.0](https://github.com/midhey/averra-cms/compare/v0.2.1...v0.3.0) (2026-11-16)
 
 
