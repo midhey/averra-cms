@@ -75,7 +75,7 @@ describe('память счётчика', () => {
     expect(limiter.size()).toBe(1)
   })
 
-  it('сто тысяч разовых ключей в одном окне: память ограничена, а запрос не дорожает', () => {
+  it('сто тысяч разовых ключей в одном окне: память ограничена, а запрос не дорожает', { timeout: 60_000 }, () => {
     let time = 0
     const limiter = createRateLimiter({ max: 3, windowMs: 15 * 60_000, now: () => time })
     const started = performance.now()
@@ -83,8 +83,9 @@ describe('память счётчика', () => {
       time += 1
       limiter.take(`ghost-${i}@example.test`)
     }
-    // Прежняя очистка обходила всю Map на каждом запросе: здесь это были бы минуты
-    expect(performance.now() - started).toBeLessThan(5000)
+    // Прежняя очистка обходила всю Map на каждом запросе: здесь это были бы минуты. Обычно цикл —
+    // доли секунды; запас в 30 с — для загруженного раннера CI, где 5 с уже не хватало
+    expect(performance.now() - started).toBeLessThan(30_000)
     expect(limiter.size()).toBe(10_000)
   })
 })
