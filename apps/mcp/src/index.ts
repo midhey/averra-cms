@@ -8,6 +8,7 @@ import { hc } from 'hono/client'
 import { z } from 'zod'
 // Версия продукта одна на всё: её поднимает release-please в корневом package.json
 import averra from '../../../package.json' with { type: 'json' }
+import { registerPrompts } from './prompts'
 import { missingTokenMessage, registerTools } from './tools'
 
 // stdout занят протоколом MCP: всё служебное пишем только в stderr (console.error)
@@ -41,6 +42,7 @@ const api = CMS_API_TOKEN
 const handle = serveStdio(() => {
   const server = new McpServer({ name: 'averra', version: averra.version })
   registerTools(server, api)
+  registerPrompts(server)
   return server
 })
 
