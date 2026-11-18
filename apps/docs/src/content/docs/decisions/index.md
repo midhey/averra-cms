@@ -20,6 +20,7 @@ sidebar:
 - [Секции, а не свободный холст](/averra-cms/decisions/sections/)
 - [Статический сайт, собранный на сервере](/averra-cms/decisions/static-output/)
 - [Посетители сайта — потом](/averra-cms/decisions/visitors-later/)
+- [Ссылка на черновики для заказчика](/averra-cms/decisions/preview-link/)
 - [Роли, участники и профиль](/averra-cms/decisions/roles/)
 - [Заявки видит администратор сайта, а не редактор и не
   нейронка](/averra-cms/decisions/leads-access/)
