@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/midhey/averra-cms/compare/v0.4.1...v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **mcp:** add ready-made prompts for common site tasks ([084ae2d](https://github.com/midhey/averra-cms/commit/084ae2dc674f1398d7c46e90268141193d552fa1))
+* **preview:** share a time-limited link to the site drafts ([7e95650](https://github.com/midhey/averra-cms/commit/7e95650e1f5d4da195fe7d24a45c68aa0a7aebf3))
+* **templates:** start a new client site from a site template ([c0458e2](https://github.com/midhey/averra-cms/commit/c0458e2272d7753ec59746987d62b724c1d0253f))
+
 ## [0.4.1](https://github.com/midhey/averra-cms/compare/v0.4.0...v0.4.1) (2026-11-17)
 
 
