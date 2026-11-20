@@ -24,7 +24,7 @@ function loginForm(page: import('@playwright/test').Page) {
   }
 }
 
-test('без входа ведёт на вход и возвращает туда, где был; «Выйти» закрывает админку', async ({
+test('@smoke без входа ведёт на вход и возвращает туда, где был; «Выйти» закрывает админку', async ({
   page,
   demoSite,
 }) => {

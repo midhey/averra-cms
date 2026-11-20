@@ -2,7 +2,7 @@ import { defaultHeader, demoPage, demoPageTitle } from '@averra/schema'
 import { urls } from '../urls'
 import { expect, sites, test } from './fixtures'
 
-test('заказчик видит черновики без входа; навигация, формы и отзыв ссылки', async ({
+test('@smoke заказчик видит черновики без входа; навигация, формы и отзыв ссылки', async ({
   page,
   browser,
   demoSite,

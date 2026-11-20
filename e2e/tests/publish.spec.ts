@@ -3,7 +3,7 @@ import { demo, editor, expect, openSite, sites, test } from './fixtures'
 
 const published = 'Опубликовано. Обнови сайт, чтобы увидеть'
 
-test('скрыть блок → опубликовать → показать → опубликовать, содержимое сохраняется', async ({
+test('@smoke скрыть блок → опубликовать → показать → опубликовать, содержимое сохраняется', async ({
   page,
   demoSite,
 }) => {

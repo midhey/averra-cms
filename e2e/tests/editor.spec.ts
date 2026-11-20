@@ -25,7 +25,7 @@ test('редактор открывается с демо-лендингом', a
   await expect(ed.publishButton).toBeEnabled()
 })
 
-test('правка заголовка первого экрана сразу видна в предпросмотре', async ({ page }) => {
+test('@smoke правка заголовка первого экрана сразу видна в предпросмотре', async ({ page }) => {
   const ed = editor(page)
   await ed.open()
 

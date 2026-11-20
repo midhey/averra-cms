@@ -123,7 +123,7 @@ async function visitor(browser: Browser, path = '') {
   return { context, page, form: page.getByRole('form', { name: form.example.title }) }
 }
 
-test('форма без JavaScript: посетитель отправляет — видит «Спасибо», заявка в админке, письма ушли', async ({
+test('@smoke форма без JavaScript: посетитель отправляет — видит «Спасибо», заявка в админке, письма ушли', async ({
   page,
   browser,
 }) => {

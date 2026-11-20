@@ -10,7 +10,7 @@ import { expect, sites, test } from './fixtures'
 
 const release = (siteId: string) => join(publishDir, siteId, 'current')
 
-test('история: две публикации темы → вернуть первую в черновик → опубликовать', async ({
+test('@smoke история: две публикации темы → вернуть первую в черновик → опубликовать', async ({
   page,
   demoSite,
 }) => {

@@ -36,7 +36,7 @@ async function createLead(siteId: string, fields: Record<string, string>) {
   }
 }
 
-test('список и карточка рядом: вкладки, «Ответить письмом», «обработана», удаление', async ({
+test('@smoke список и карточка рядом: вкладки, «Ответить письмом», «обработана», удаление', async ({
   page,
   demoSite,
 }) => {

@@ -19,6 +19,12 @@ sidebar:
 `pnpm check` идёт и в CI на каждый push в master и pull request (`.github/workflows/ci.yml`, на
 Linux), и перед выпуском образов. e2e в `pnpm check` не входят: он должен оставаться быстрым.
 
+В CI есть отдельная job `e2e-smoke`. Она запускает сценарии с тегом `@smoke` для входа, правки и
+публикации страницы, отправки формы и просмотра заявки, предпросмотра по ссылке и темы. Для неё
+Chromium устанавливается командой `pnpm --filter @averra/e2e exec playwright install --with-deps
+chromium`. При падении трасса и HTML-отчёт сохраняются из `e2e/test-results` и
+`e2e/playwright-report`.
+
 Тест пишем вместе с кодом, а не «потом».
 
 ## Юнит и интеграционные (Vitest)
