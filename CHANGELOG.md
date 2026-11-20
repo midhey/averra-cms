@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1](https://github.com/midhey/averra-cms/compare/v0.5.0...v0.5.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **admin:** dialog focus, empty search and missing images ([be2e435](https://github.com/midhey/averra-cms/commit/be2e435de9bf52fc03a964f104d5aa55866a0291))
+* **api:** limit body size and rate of public JSON routes ([1e7f67c](https://github.com/midhey/averra-cms/commit/1e7f67c628d5bf70f6c5e6d09d5e776c5836a821))
+* **deploy:** pick the build memory limit from the server RAM ([4ea39b7](https://github.com/midhey/averra-cms/commit/4ea39b7e5db857730a7799ebff465da79488d1d7))
+
+
+### Performance Improvements
+
+* **admin:** load screens on demand ([5f9fb14](https://github.com/midhey/averra-cms/commit/5f9fb14344408411034cbd54d5374faae402c34b))
+
 ## [0.5.0](https://github.com/midhey/averra-cms/compare/v0.4.1...v0.5.0) (2026-11-17)
 
 
