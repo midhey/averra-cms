@@ -188,6 +188,63 @@ function readEnv(dir: string) {
   return env
 }
 
+function fakeMeminfo(totalKb: number, swapKb = 0) {
+  const file = join(tempDir(), 'meminfo')
+  writeFileSync(file, `MemTotal:       ${totalKb} kB\nSwapTotal:      ${swapKb} kB\n`)
+  return posix(file)
+}
+
+describe('лимит памяти сборки', () => {
+  it('выбирает лимит по объёму памяти сервера', () => {
+    const cases = [
+      [1_048_576, '448'],
+      [2_097_152, '768'],
+      [4_194_304, '1024'],
+      [1_258_291, '448'],
+      [2_621_440, '768'],
+      [2_621_441, '1024'],
+    ] as const
+    for (const [totalKb, expected] of cases) {
+      const dir = join(tempDir(), `inst-${expected}`)
+      const run = install([...required, '--dir', posix(dir), '--env-only', '--yes'], {
+        env: { AVERRA_MEMINFO_FILE: fakeMeminfo(totalKb, 1) },
+      })
+      expect(run.status, run.output).toBe(0)
+      expect(readEnv(dir).PUBLISH_MAX_MEMORY_MB).toBe(expected)
+    }
+  })
+
+  it('предупреждает о swap при малом объёме RAM', () => {
+    const dir = join(tempDir(), 'inst-low-memory')
+    const run = install([...required, '--dir', posix(dir), '--env-only', '--yes'], {
+      env: { AVERRA_MEMINFO_FILE: fakeMeminfo(1_048_576) },
+    })
+    expect(run.status, run.output).toBe(0)
+    expect(run.stderr).toContain('нет swap')
+    expect(run.stderr).toContain('fallocate -l 2G /swapfile')
+  })
+
+  it('не меняет заданный вручную лимит памяти', () => {
+    const dir = join(tempDir(), 'inst-custom-memory')
+    const args = [...required, '--dir', posix(dir), '--env-only', '--yes']
+    expect(install(args, { env: { AVERRA_MEMINFO_FILE: fakeMeminfo(1_048_576, 1) } }).status).toBe(
+      0,
+    )
+    const envFile = join(dir, '.env')
+    writeFileSync(
+      envFile,
+      readFileSync(envFile, 'utf8').replace(
+        /^PUBLISH_MAX_MEMORY_MB=.*$/m,
+        'PUBLISH_MAX_MEMORY_MB=512',
+      ),
+    )
+    expect(install(args, { env: { AVERRA_MEMINFO_FILE: fakeMeminfo(4_194_304, 1) } }).status).toBe(
+      0,
+    )
+    expect(readEnv(dir).PUBLISH_MAX_MEMORY_MB).toBe('512')
+  })
+})
+
 describe('флаги', () => {
   it('--help показывает справку', () => {
     const run = install(['--help'])

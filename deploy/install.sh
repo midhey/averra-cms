@@ -158,10 +158,46 @@ env_get() {
   printf '%s' "$line"
 }
 
+meminfo_file="${AVERRA_MEMINFO_FILE:-/proc/meminfo}"
+
+memory_limit_from_ram() {
+  local total_kb
+  total_kb="$(awk '$1 == "MemTotal:" { print $2; exit }' "$meminfo_file" 2>/dev/null || true)"
+  if [[ ! "$total_kb" =~ ^[0-9]+$ ]]; then
+    printf '768'
+  elif (( total_kb <= 1258291 )); then
+    printf '448'
+  elif (( total_kb <= 2621440 )); then
+    printf '768'
+  else
+    printf '1024'
+  fi
+}
+
+warn_if_low_memory_without_swap() {
+  local total_kb swap_kb
+  total_kb="$(awk '$1 == "MemTotal:" { print $2; exit }' "$meminfo_file" 2>/dev/null || true)"
+  swap_kb="$(awk '$1 == "SwapTotal:" { print $2; exit }' "$meminfo_file" 2>/dev/null || true)"
+  if [[ "$total_kb" =~ ^[0-9]+$ && "$swap_kb" =~ ^[0-9]+$ ]] &&
+    (( total_kb < 2097152 && swap_kb == 0 )); then
+    printf '%s\n' 'Предупреждение: на сервере меньше 2 ГиБ RAM и нет swap. Добавьте swap перед сборкой:' >&2
+    printf '%s\n' '  sudo fallocate -l 2G /swapfile' >&2
+    printf '%s\n' '  sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile' >&2
+    printf '%s\n' "  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab" >&2
+  fi
+}
+
+if grep -qE '^PUBLISH_MAX_MEMORY_MB=' "$ENV_FILE" 2>/dev/null; then
+  PUBLISH_MAX_MEMORY_MB="$(env_get PUBLISH_MAX_MEMORY_MB)"
+else
+  PUBLISH_MAX_MEMORY_MB="$(memory_limit_from_ram)"
+fi
+warn_if_low_memory_without_swap
+
 # Ключи, которые ведёт установщик. Остальные строки .env (свои добавки) переносятся как есть
 MANAGED_KEYS=(
   AVERRA_VERSION AVERRA_API_IMAGE AVERRA_WEB_IMAGE SITE_DOMAIN ADMIN_DOMAIN REDIRECT_DOMAINS
-  ACME_EMAIL SITE_NAME OWNER_EMAIL POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
+  ACME_EMAIL SITE_NAME OWNER_EMAIL PUBLISH_MAX_MEMORY_MB POSTGRES_PASSWORD AUTH_SECRET MAIL_ENCRYPTION_KEY BACKUP_PASSPHRASE
 )
 # Внешняя база (--external-db): режим, адрес и образ клиента PostgreSQL вместо пароля своей базы.
 # У своей базы этих ключей нет: .env прежних установок не меняется
