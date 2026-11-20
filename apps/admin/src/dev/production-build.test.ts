@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'vite'
@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  */
 
 const adminDir = resolve(import.meta.dirname, '../..')
+const INITIAL_JS_MAX_BYTES = 600 * 1024
 
 /** Текст в сборке может остаться как есть или стать \uXXXX-последовательностью */
 function forms(text: string) {
@@ -81,5 +82,13 @@ describe('рабочая сборка админки', () => {
       traces.filter((trace) => text.includes(trace)).map((trace) => `${file}: ${trace}`),
     )
     expect(found).toEqual([])
+  })
+
+  it('начальный JS-чанк не превышает 600 КБ', async () => {
+    const html = output.find(({ file }) => file.endsWith('index.html'))?.text
+    const source = html?.match(/<script[^>]+src="([^"]+\.js)"/u)?.[1]
+    expect(source).toBeDefined()
+    const entry = resolve(outDir, source?.replace(/^\//u, '') ?? '')
+    expect((await stat(entry)).size).toBeLessThanOrEqual(INITIAL_JS_MAX_BYTES)
   })
 })

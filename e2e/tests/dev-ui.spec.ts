@@ -354,6 +354,8 @@ test.describe('витрина компонентов', () => {
 
   test('точку «требует внимания» отличает форма: ромб', async ({ page }) => {
     await page.goto('/dev/ui')
+    // Экраны грузятся лениво: ждём витрину, иначе evaluate застанет пустую страницу
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     const clip = (await page.evaluate(`(() => {
       const pill = [...document.querySelectorAll('[class*="warning"]')].find((el) => el.querySelector('[class*="indicator"]'))
       return pill ? getComputedStyle(pill.querySelector('[class*="indicator"]')).clipPath : ''

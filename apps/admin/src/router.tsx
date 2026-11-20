@@ -52,30 +52,9 @@ import {
   themeQuery,
   tokensQuery,
 } from './queries'
-import { CookiesScreen } from './screens/CookiesScreen'
-import { CustomBlockScreen } from './screens/CustomBlockScreen'
-import { CustomBlocksScreen } from './screens/CustomBlocksScreen'
-import { EditorScreen } from './screens/EditorScreen'
-import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
-import { HeaderScreen } from './screens/HeaderScreen'
-import { InstallationScreen } from './screens/InstallationScreen'
-import { InviteScreen } from './screens/InviteScreen'
-import { LeadError, LeadNotFound, LeadScreen, NoLeadSelected } from './screens/LeadScreen'
-import { LeadsScreen } from './screens/LeadsScreen'
 import { LoginScreen } from './screens/LoginScreen'
-import { MailScreen } from './screens/MailScreen'
-import { MediaScreen } from './screens/MediaScreen'
-import { NotificationsScreen } from './screens/NotificationsScreen'
 import { OverviewScreen } from './screens/OverviewScreen'
-import { PagesScreen } from './screens/PagesScreen'
-import { ProfileScreen } from './screens/ProfileScreen'
-import { ResetPasswordScreen } from './screens/ResetPasswordScreen'
-import { SeoScreen } from './screens/SeoScreen'
-import { SiteScriptScreen } from './screens/SiteScriptScreen'
-import { SiteSettingsScreen } from './screens/SiteSettingsScreen'
 import { ErrorScreen, NotFoundScreen, PendingScreen } from './screens/StatusScreens'
-import { ThemeScreen } from './screens/ThemeScreen'
-import { TokensScreen } from './screens/TokensScreen'
 import { AdminLayout } from './shell/AdminLayout'
 
 // Маршруты описаны в коде, без генератора: всё дерево видно здесь.
@@ -97,6 +76,56 @@ const PUBLIC_PATHS = new Set([LOGIN_PATH, '/forgot-password', '/reset-password',
  */
 const DEV_UI_PATH = '/dev/ui'
 const DEV_CONTROLS_PATH = '/dev/controls'
+
+const CookiesScreen = lazyRouteComponent(() => import('./screens/CookiesScreen'), 'CookiesScreen')
+const CustomBlockScreen = lazyRouteComponent(
+  () => import('./screens/CustomBlockScreen'),
+  'CustomBlockScreen',
+)
+const CustomBlocksScreen = lazyRouteComponent(
+  () => import('./screens/CustomBlocksScreen'),
+  'CustomBlocksScreen',
+)
+const EditorScreen = lazyRouteComponent(() => import('./screens/EditorScreen'), 'EditorScreen')
+const ForgotPasswordScreen = lazyRouteComponent(
+  () => import('./screens/ForgotPasswordScreen'),
+  'ForgotPasswordScreen',
+)
+const HeaderScreen = lazyRouteComponent(() => import('./screens/HeaderScreen'), 'HeaderScreen')
+const InstallationScreen = lazyRouteComponent(
+  () => import('./screens/InstallationScreen'),
+  'InstallationScreen',
+)
+const InviteScreen = lazyRouteComponent(() => import('./screens/InviteScreen'), 'InviteScreen')
+const LeadError = lazyRouteComponent(() => import('./screens/LeadScreen'), 'LeadError')
+const LeadNotFound = lazyRouteComponent(() => import('./screens/LeadScreen'), 'LeadNotFound')
+const LeadScreen = lazyRouteComponent(() => import('./screens/LeadScreen'), 'LeadScreen')
+const NoLeadSelected = lazyRouteComponent(() => import('./screens/LeadScreen'), 'NoLeadSelected')
+const LeadsScreen = lazyRouteComponent(() => import('./screens/LeadsScreen'), 'LeadsScreen')
+const MailScreen = lazyRouteComponent(() => import('./screens/MailScreen'), 'MailScreen')
+const MediaScreen = lazyRouteComponent(() => import('./screens/MediaScreen'), 'MediaScreen')
+const NotificationsScreen = lazyRouteComponent(
+  () => import('./screens/NotificationsScreen'),
+  'NotificationsScreen',
+)
+const PagesScreen = lazyRouteComponent(() => import('./screens/PagesScreen'), 'PagesScreen')
+const ProfileScreen = lazyRouteComponent(() => import('./screens/ProfileScreen'), 'ProfileScreen')
+const ResetPasswordScreen = lazyRouteComponent(
+  () => import('./screens/ResetPasswordScreen'),
+  'ResetPasswordScreen',
+)
+const SeoScreen = lazyRouteComponent(() => import('./screens/SeoScreen'), 'SeoScreen')
+const SiteScriptScreen = lazyRouteComponent(
+  () => import('./screens/SiteScriptScreen'),
+  'SiteScriptScreen',
+)
+const SiteSettingsScreen = lazyRouteComponent(
+  () => import('./screens/SiteSettingsScreen'),
+  'SiteSettingsScreen',
+)
+const ThemeScreen = lazyRouteComponent(() => import('./screens/ThemeScreen'), 'ThemeScreen')
+const TokensScreen = lazyRouteComponent(() => import('./screens/TokensScreen'), 'TokensScreen')
+
 if (import.meta.env.DEV) {
   PUBLIC_PATHS.add(DEV_UI_PATH)
   PUBLIC_PATHS.add(DEV_CONTROLS_PATH)
