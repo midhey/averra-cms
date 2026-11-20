@@ -1,6 +1,6 @@
 import { MAIN_PAGE_SLUG, NewPage, type PageTemplate } from '@averra/schema'
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { ApiRequestError, apiRequestError, messageOf } from '../errors'
@@ -10,11 +10,12 @@ import { type PageRow, PagesTable } from '../pages/PagesTable'
 import { filterPages, pagePath, pagesSummary } from '../pages-format'
 import { canManagePages } from '../permissions'
 import { pagesQuery, queryKeys, siteQuery } from '../queries'
-import { Button } from '../ui/Button'
+import { Button, buttonClassName } from '../ui/Button'
 import { cardClassName } from '../ui/Card'
 import { useConfirm } from '../ui/Confirm'
 import { EmptyState } from '../ui/EmptyState'
 import { TextInput } from '../ui/Field'
+import { Icon } from '../ui/Icon'
 import { InlineAlert } from '../ui/InlineAlert'
 import { PageHeader } from '../ui/PageHeader'
 import { formClassName, mutedClassName, Screen, Section } from '../ui/Screen'
@@ -43,6 +44,7 @@ function SitePages({ siteId }: { siteId: string }) {
   // Создавать и удалять страницы сейчас могут все роли (auth/access.ts); проверка остаётся на
   // случай, если таблицу сузят: решает API, экран только не предлагает лишнего
   const managePages = canManagePages(site.access)
+  const query = search.trim()
 
   const confirm = useConfirm()
   const remove = useMutation({
@@ -117,9 +119,35 @@ function SitePages({ siteId }: { siteId: string }) {
           // Клиенту действия недоступны: пустая колонка только сбивала бы с толку
           actions={managePages ? deleteAction : undefined}
           empty={
-            <EmptyState title="Ничего не нашлось" icon="search" headingLevel={3}>
-              Нет страниц, в заголовке или адресе которых есть «{search.trim()}».
-            </EmptyState>
+            query ? (
+              <EmptyState
+                title="Ничего не нашлось"
+                icon="search"
+                headingLevel={3}
+                action={
+                  <Button type="button" onClick={() => setSearch('')}>
+                    Сбросить поиск
+                  </Button>
+                }
+              >
+                Нет страниц, в заголовке или адресе которых есть «{query}».
+              </EmptyState>
+            ) : (
+              <EmptyState
+                title="Страниц пока нет"
+                headingLevel={3}
+                action={
+                  managePages ? (
+                    <Link to="/pages" hash={NEW_PAGE_ANCHOR} className={buttonClassName()}>
+                      <Icon name="plus" />
+                      Создать страницу
+                    </Link>
+                  ) : undefined
+                }
+              >
+                Создайте первую страницу сайта.
+              </EmptyState>
+            )
           }
         />
         {notice?.kind === 'done' && (

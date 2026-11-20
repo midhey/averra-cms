@@ -15,6 +15,7 @@ type SiteHeaderProps = {
   view: SiteHeaderView
   /** Картинки сайта: логотип берёт из справочника адреса вариантов */
   media: MediaMap
+  preview?: boolean
 }
 
 /**
@@ -24,7 +25,7 @@ type SiteHeaderProps = {
  * как только страницу прокрутили, закрывает меню по Esc. Цвета — только переменные темы. Вид
  * (форма и наведение кнопки, пункты, меню телефона) — data-атрибуты по настройкам шапки
  */
-export function SiteHeader({ view, media }: SiteHeaderProps) {
+export function SiteHeader({ view, media, preview }: SiteHeaderProps) {
   const { layout, menu, button, phone, look } = view
   const hasPanel = menu.length > 0
   const topbar = layout === 'double' && (view.address !== '' || phone !== null)
@@ -78,7 +79,13 @@ export function SiteHeader({ view, media }: SiteHeaderProps) {
         )}
         <div className={styles.row}>
           <a className={styles.brand} href="/">
-            <Brand brand={view.brand} siteName={view.siteName} media={media} size="header" />
+            <Brand
+              brand={view.brand}
+              siteName={view.siteName}
+              media={media}
+              size="header"
+              preview={preview}
+            />
           </a>
           {view.short && (
             // Служебная страница: вместо меню и кнопки — дорога на главную

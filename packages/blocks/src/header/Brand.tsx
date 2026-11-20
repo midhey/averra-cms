@@ -10,6 +10,7 @@ type BrandProps = {
   media: MediaMap
   /** В шапке логотип крупнее, в подвале — мельче */
   size: 'header' | 'footer'
+  preview?: boolean
 }
 
 /**
@@ -18,8 +19,8 @@ type BrandProps = {
  * неё подпись или название сайта, как было всегда. Имя для диктора — подпись: знак — украшение
  * (aria-hidden), картинка при подписи — тоже (alt=""), без подписи её alt — название сайта
  */
-export function Brand({ brand, siteName, media, size }: BrandProps) {
-  const image = brand.image && media[brand.image] ? brand.image : null
+export function Brand({ brand, siteName, media, size, preview }: BrandProps) {
+  const image = brand.image && (media[brand.image] || preview) ? brand.image : null
   const text = brand.text ?? (image ? null : siteName)
   const divided = text !== null && (image !== null || brand.mark !== '')
   return (
@@ -32,6 +33,7 @@ export function Brand({ brand, siteName, media, size }: BrandProps) {
           priority={false}
           eager
           className={styles.logo}
+          preview={preview}
         />
       )}
       {!image && brand.mark && (

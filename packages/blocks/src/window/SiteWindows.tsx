@@ -8,6 +8,7 @@ type SiteWindowsProps = {
   windows: readonly SiteWindowView[]
   media?: MediaMap
   customBlocks?: CustomBlockMap
+  preview?: boolean
   /** Номер счётчика Метрики: цель «заявка» из окна. Пусто — без цели */
   metrika?: string
   onCustomBlockError?: (blockId: string, message: string) => void
@@ -23,6 +24,7 @@ export function SiteWindows({
   windows,
   media = {},
   customBlocks = {},
+  preview = false,
   metrika = '',
   onCustomBlockError,
 }: SiteWindowsProps) {
@@ -65,6 +67,7 @@ export function SiteWindows({
               formAction={window.formAction}
               customBlocks={customBlocks}
               onCustomBlockError={onCustomBlockError}
+              preview={preview}
               nested
             />
           </div>

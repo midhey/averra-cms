@@ -360,3 +360,14 @@ describe('Dialog: фокус и Esc', () => {
     expect(document.querySelector('dialog')).toBeNull()
   })
 })
+it('возвращает фокус на открывшую кнопку у постоянно смонтированного диалога', async () => {
+  const user = userEvent.setup()
+  render(<DeleteDialog onClose={vi.fn()} />)
+  const opener = screen.getAllByRole('button')[0]
+  if (!opener) throw new Error('Кнопка открытия не найдена')
+  await user.click(opener)
+  const close = screen.getByRole('dialog').querySelector('button')
+  if (!close) throw new Error('Кнопка закрытия не найдена')
+  await user.click(close)
+  expect(document.activeElement).toBe(opener)
+})

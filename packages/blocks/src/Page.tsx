@@ -106,6 +106,7 @@ function Block({
   pageIds,
   ...common
 }: BlockProps) {
+  const blockProps = { ...common, preview }
   if (isCustomBlock(block)) {
     return (
       <CustomBlock
@@ -121,37 +122,37 @@ function Block({
   }
   switch (block.type) {
     case 'hero':
-      return <Hero id={block.id} data={block.props} {...common} />
+      return <Hero id={block.id} data={block.props} {...blockProps} />
     case 'text-image':
-      return <TextImage id={block.id} data={block.props} {...common} />
+      return <TextImage id={block.id} data={block.props} {...blockProps} />
     case 'features':
-      return <Features id={block.id} data={block.props} {...common} />
+      return <Features id={block.id} data={block.props} {...blockProps} />
     case 'stats':
-      return <Stats id={block.id} data={block.props} {...common} />
+      return <Stats id={block.id} data={block.props} {...blockProps} />
     case 'steps':
-      return <Steps id={block.id} data={block.props} {...common} />
+      return <Steps id={block.id} data={block.props} {...blockProps} />
     case 'pricing':
-      return <Pricing id={block.id} data={block.props} {...common} />
+      return <Pricing id={block.id} data={block.props} {...blockProps} />
     case 'gallery':
-      return <Gallery id={block.id} data={block.props} {...common} />
+      return <Gallery id={block.id} data={block.props} {...blockProps} />
     case 'reviews':
-      return <Reviews id={block.id} data={block.props} {...common} />
+      return <Reviews id={block.id} data={block.props} {...blockProps} />
     case 'clients':
-      return <Clients id={block.id} data={block.props} {...common} />
+      return <Clients id={block.id} data={block.props} {...blockProps} />
     case 'team':
-      return <Team id={block.id} data={block.props} {...common} />
+      return <Team id={block.id} data={block.props} {...blockProps} />
     case 'faq':
-      return <Faq id={block.id} data={block.props} {...common} />
+      return <Faq id={block.id} data={block.props} {...blockProps} />
     case 'text':
-      return <Text id={block.id} data={block.props} {...common} />
+      return <Text id={block.id} data={block.props} {...blockProps} />
     case 'video':
-      return <Video id={block.id} data={block.props} {...common} />
+      return <Video id={block.id} data={block.props} {...blockProps} />
     case 'cta':
-      return <Cta id={block.id} data={block.props} {...common} />
+      return <Cta id={block.id} data={block.props} {...blockProps} />
     case 'form':
-      return <Form id={block.id} data={block.props} {...common} />
+      return <Form id={block.id} data={block.props} {...blockProps} />
     case 'contacts':
-      return <Contacts id={block.id} data={block.props} {...common} />
+      return <Contacts id={block.id} data={block.props} {...blockProps} />
     default: {
       // Появится в схеме блок без компонента — здесь будет ошибка компиляции
       const missing: never = block

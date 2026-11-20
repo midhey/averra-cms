@@ -18,10 +18,11 @@ export function TextImage({
   headingLevel,
   media,
   priority,
+  preview,
 }: BlockComponentProps<'text-image'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   // Картинки нет в справочнике (предпросмотр без медиа) — раскладка как без картинки
-  const image = data.image && media[data.image.mediaId] ? data.image : undefined
+  const image = data.image && (media[data.image.mediaId] || preview) ? data.image : undefined
   return (
     <Section id={id}>
       <div className={styles.layout} data-image={image ? data.imagePosition : 'none'}>
@@ -41,6 +42,7 @@ export function TextImage({
             sizes={IMAGE_SIZES}
             priority={priority}
             className={styles.media}
+            preview={preview}
           />
         )}
       </div>

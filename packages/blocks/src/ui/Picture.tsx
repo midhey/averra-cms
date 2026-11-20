@@ -15,6 +15,8 @@ type PictureProps = {
    */
   eager?: boolean
   className?: string
+  /** Предпросмотр для редактора: показываем удалённую картинку */
+  preview?: boolean
 }
 
 /**
@@ -22,10 +24,29 @@ type PictureProps = {
  * остальных, у каждого формата — набор ширин. width и height — размеры исходника: по ним
  * браузер заранее оставляет место под картинку, и вёрстка не прыгает при загрузке
  */
-export function Picture({ image, media, sizes, priority, eager, className }: PictureProps) {
+export function Picture({
+  image,
+  media,
+  sizes,
+  priority,
+  eager,
+  className,
+  preview,
+}: PictureProps) {
   const file = media[image.mediaId]
   // Ссылку на картинку не из медиатеки сайта не пропустит API. Если всё же нет — без картинки
-  if (!file) return null
+  if (!file) {
+    if (!preview) return null
+    return (
+      <span
+        className={[styles.missing, className].filter(Boolean).join(' ')}
+        role="img"
+        aria-label="Картинка удалена из медиатеки — выберите другую"
+      >
+        Картинка удалена из медиатеки — выберите другую
+      </span>
+    )
+  }
 
   const loading = priority || eager ? 'eager' : 'lazy'
 

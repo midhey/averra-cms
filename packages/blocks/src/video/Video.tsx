@@ -14,7 +14,14 @@ const COVER_SIZES = '(min-width: 72rem) 72rem, 100vw'
  * не обращается: ни iframe, ни обложки площадки, ни preconnect. Рамка 16:9 держит место заранее.
  * Под плеером скрипт показывает ссылку на ролик — на случай, если плеер площадки не загрузится
  */
-export function Video({ id, data, headingLevel, media, priority }: BlockComponentProps<'video'>) {
+export function Video({
+  id,
+  data,
+  headingLevel,
+  media,
+  priority,
+  preview,
+}: BlockComponentProps<'video'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   // Схема пропускает только разбираемые ссылки. Если всё же нет (старые данные) — без плеера
   const ref = parseVideoUrl(data.url)
@@ -35,13 +42,14 @@ export function Video({ id, data, headingLevel, media, priority }: BlockComponen
                 data-video-embed={videoEmbedUrl(ref)}
                 data-video-title={data.title}
               >
-                {data.cover ? (
+                {data.cover && (media[data.cover.mediaId] || preview) ? (
                   <Picture
                     image={data.cover}
                     media={media}
                     sizes={COVER_SIZES}
                     priority={priority}
                     className={styles.picture}
+                    preview={preview}
                   />
                 ) : (
                   <span className={styles.placeholder} aria-hidden="true" />

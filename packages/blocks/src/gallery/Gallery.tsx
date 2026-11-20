@@ -16,7 +16,13 @@ const sizesFor = (columns: number) =>
  * Наши работы: сетка фото с подписями. Фото — ссылка на снимок целиком (без JS лайтбокса нет,
  * браузер откроет файл сам). Фото не выбрано — плашка поверхности на его месте
  */
-export function Gallery({ id, data, headingLevel, media }: BlockComponentProps<'gallery'>) {
+export function Gallery({
+  id,
+  data,
+  headingLevel,
+  media,
+  preview,
+}: BlockComponentProps<'gallery'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   const sizes = sizesFor(data.columns)
   return (
@@ -31,19 +37,20 @@ export function Gallery({ id, data, headingLevel, media }: BlockComponentProps<'
       <ul role="list" className={styles.grid} data-columns={data.columns} data-aspect={data.aspect}>
         {data.items.map((item, index) => {
           const file = item.image ? media[item.image.mediaId] : undefined
+          const image = item.image && (file || preview) ? item.image : undefined
           const full = data.linkToFull && file ? fullSizeUrl(file) : undefined
-          const picture =
-            item.image && file ? (
-              <Picture
-                image={item.image}
-                media={media}
-                sizes={sizes}
-                priority={false}
-                className={styles.photo}
-              />
-            ) : (
-              <span className={styles.placeholder} aria-hidden="true" />
-            )
+          const picture = image ? (
+            <Picture
+              image={image}
+              media={media}
+              sizes={sizes}
+              priority={false}
+              className={styles.photo}
+              preview={preview}
+            />
+          ) : (
+            <span className={styles.placeholder} aria-hidden="true" />
+          )
           return (
             // У фото нет id. Ключ по индексу здесь безопасен: список рендерится статично
             <li key={index}>

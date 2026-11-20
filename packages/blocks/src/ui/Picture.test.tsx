@@ -26,7 +26,7 @@ const lowerAttributes = (html: string) =>
 
 // Имена атрибутов HTML не зависят от регистра, а React пишет их как в JSX (srcSet): сравниваем
 // их в нижнем регистре
-const render = (media: MediaMap, priority = false, eager = false) =>
+const render = (media: MediaMap, priority = false, eager = false, preview = false) =>
   lowerAttributes(
     renderToStaticMarkup(
       <Picture
@@ -35,6 +35,7 @@ const render = (media: MediaMap, priority = false, eager = false) =>
         sizes="100vw"
         priority={priority}
         eager={eager}
+        preview={preview}
       />,
     ),
   )
@@ -84,6 +85,12 @@ describe('Picture', () => {
 
   it('картинки нет в справочнике — ничего не выводит', () => {
     expect(render({})).toBe('')
+  })
+
+  it('в предпросмотре показывает заметную заглушку для удалённой картинки', () => {
+    const html = render({}, false, false, true)
+    expect(html).toContain('Картинка удалена из медиатеки — выберите другую')
+    expect(html).toContain('role="img"')
   })
 
   it('SVG — одним файлом без источников и srcset, с размерами и alt', () => {

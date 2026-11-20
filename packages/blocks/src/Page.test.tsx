@@ -198,6 +198,23 @@ describe('Page', () => {
     expect(html).not.toContain('data-backdrop')
   })
 
+  it('предпросмотр показывает удалённую картинку заметной заглушкой', () => {
+    const content = {
+      blocks: [
+        {
+          id: 'top',
+          type: 'hero',
+          props: { variant: 'split', title: 'Заголовок', image: { mediaId, alt: 'Фото' } },
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <Page content={PageContent.parse(content)} media={{}} preview />,
+    )
+    expect(html).toContain('Картинка удалена из медиатеки — выберите другую')
+    expect(html).toContain('role="img"')
+  })
+
   it('картинку первого блока грузит сразу, картинки ниже — лениво', () => {
     const html = render({ blocks: [splitHero('a', 'Первая'), splitHero('b', 'Вторая')] }, media)
     const [first, second] = [...html.matchAll(/<img[^>]*>/g)].map(([tag]) => tag)

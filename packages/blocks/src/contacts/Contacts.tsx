@@ -12,14 +12,21 @@ const MAP_SIZES = '(min-width: 72rem) 36rem, (min-width: 48rem) 50vw, 100vw'
  * ссылкой на Яндекс Карты или 2ГИС (чужую карту не встраиваем до согласия посетителя), по желанию
  * рядом картинка карты из медиатеки
  */
-export function Contacts({ id, data, headingLevel, media }: BlockComponentProps<'contacts'>) {
+export function Contacts({
+  id,
+  data,
+  headingLevel,
+  media,
+  preview,
+}: BlockComponentProps<'contacts'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   const map = mapUrl({
     service: data.mapService,
     coordinates: data.coordinates,
     address: data.address,
   })
-  const mapImage = data.mapImage && media[data.mapImage.mediaId] ? data.mapImage : undefined
+  const mapImage =
+    data.mapImage && (media[data.mapImage.mediaId] || preview) ? data.mapImage : undefined
   return (
     <Section id={id}>
       <div className={styles.layout} data-map={mapImage ? 'image' : 'none'}>
@@ -75,6 +82,7 @@ export function Contacts({ id, data, headingLevel, media }: BlockComponentProps<
             sizes={MAP_SIZES}
             priority={false}
             className={styles.map}
+            preview={preview}
           />
         )}
       </div>

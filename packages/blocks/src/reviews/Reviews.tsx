@@ -9,7 +9,13 @@ import styles from './Reviews.module.css'
  * Отзывы: figure с цитатой (blockquote) и подписью автора (figcaption) — по HTML подпись стоит
  * вне цитаты: слова автора отдельно, кто он — отдельно
  */
-export function Reviews({ id, data, headingLevel, media }: BlockComponentProps<'reviews'>) {
+export function Reviews({
+  id,
+  data,
+  headingLevel,
+  media,
+  preview,
+}: BlockComponentProps<'reviews'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   return (
     <Section id={id}>
@@ -26,13 +32,14 @@ export function Reviews({ id, data, headingLevel, media }: BlockComponentProps<'
                 ))}
               </blockquote>
               <figcaption className={styles.author}>
-                {item.photo && media[item.photo.mediaId] && (
+                {item.photo && (media[item.photo.mediaId] || preview) && (
                   <Picture
                     image={item.photo}
                     media={media}
                     sizes="3rem"
                     priority={false}
                     className={styles.photo}
+                    preview={preview}
                   />
                 )}
                 <span className={styles.who}>

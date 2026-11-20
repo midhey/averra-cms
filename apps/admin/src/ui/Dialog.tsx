@@ -59,6 +59,11 @@ export function Dialog({
   const descriptionId = useId()
   // Кто был в фокусе до открытия: туда возвращаем фокус, если браузер сам этого не сделает
   const opener = useRef<HTMLElement | null>(null)
+  const restoreFocus = () => {
+    const element = opener.current
+    opener.current = null
+    if (element?.isConnected) element.focus()
+  }
 
   useEffect(() => {
     const dialog = ref.current
@@ -72,7 +77,7 @@ export function Dialog({
     if (!open && dialog.open) {
       dialog.close()
       // Фокус вернул браузер, а дальше им распоряжается экран
-      opener.current = null
+      restoreFocus()
     }
   }, [open, initialFocus])
 
@@ -84,9 +89,7 @@ export function Dialog({
     const dialog = ref.current
     return () => {
       if (dialog?.isConnected) return
-      const element = opener.current
-      opener.current = null
-      if (element?.isConnected) element.focus()
+      restoreFocus()
     }
   }, [])
 
@@ -121,7 +124,7 @@ export function Dialog({
           onEscapeBlocked?.()
           return
         }
-        opener.current = null
+        restoreFocus()
         if (open) onClose()
       }}
     >

@@ -64,6 +64,7 @@ export function SiteFooter({
                         siteName={view.siteName}
                         media={media}
                         size="footer"
+                        preview={preview}
                       />
                     </p>
                   ) : (
@@ -106,7 +107,13 @@ export function SiteFooter({
           <div className={styles.lead}>
             {view.brand && (
               <p className={styles.brandMark}>
-                <Brand brand={view.brand} siteName={view.siteName} media={media} size="footer" />
+                <Brand
+                  brand={view.brand}
+                  siteName={view.siteName}
+                  media={media}
+                  size="footer"
+                  preview={preview}
+                />
               </p>
             )}
             <FooterText view={view} />

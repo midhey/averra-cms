@@ -18,7 +18,7 @@ function sizesFor(columns: number, shape: 'portrait' | 'round') {
 }
 
 /** Команда: фото, имя (заголовок пункта) и должность. Без фото — плашка поверхности */
-export function Team({ id, data, headingLevel, media }: BlockComponentProps<'team'>) {
+export function Team({ id, data, headingLevel, media, preview }: BlockComponentProps<'team'>) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
   const NameHeading = headingLevel === 1 ? 'h2' : 'h3'
   const sizes = sizesFor(data.columns, data.photoShape)
@@ -40,13 +40,14 @@ export function Team({ id, data, headingLevel, media }: BlockComponentProps<'tea
         {data.members.map((member, index) => (
           // У людей нет id. Ключ по индексу здесь безопасен: список рендерится статично
           <li key={index} className={styles.member} {...revealProps(data.reveal, index)}>
-            {member.photo && media[member.photo.mediaId] ? (
+            {member.photo && (media[member.photo.mediaId] || preview) ? (
               <Picture
                 image={member.photo}
                 media={media}
                 sizes={sizes}
                 priority={false}
                 className={styles.photo}
+                preview={preview}
               />
             ) : (
               <span className={styles.placeholder} aria-hidden="true" />

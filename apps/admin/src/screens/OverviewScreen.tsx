@@ -88,6 +88,7 @@ function Overview({ siteId }: { siteId: string }) {
   }
 
   const managePages = canManagePages(site.access)
+  const query = search.trim()
   // SMTP — настройка всей установки: ссылку на «Почту» видит только её владелец, а не роль на сайте
   const { data: me } = useQuery(meQuery())
   const installationOwner = me?.role === 'owner'
@@ -203,9 +204,35 @@ function Overview({ siteId }: { siteId: string }) {
         <PagesTable
           pages={shown}
           empty={
-            <EmptyState title="Ничего не нашлось" icon="search" headingLevel={3}>
-              Нет страниц, в заголовке или адресе которых есть «{search.trim()}».
-            </EmptyState>
+            query ? (
+              <EmptyState
+                title="Ничего не нашлось"
+                icon="search"
+                headingLevel={3}
+                action={
+                  <Button type="button" onClick={() => setSearch('')}>
+                    Сбросить поиск
+                  </Button>
+                }
+              >
+                Нет страниц, в заголовке или адресе которых есть «{query}».
+              </EmptyState>
+            ) : (
+              <EmptyState
+                title="Страниц пока нет"
+                headingLevel={3}
+                action={
+                  managePages ? (
+                    <Link to="/pages" hash="new-page" className={buttonClassName()}>
+                      <Icon name="plus" />
+                      Создать страницу
+                    </Link>
+                  ) : undefined
+                }
+              >
+                Создайте первую страницу сайта.
+              </EmptyState>
+            )
           }
         />
       </Section>

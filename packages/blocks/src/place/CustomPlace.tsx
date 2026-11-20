@@ -92,7 +92,7 @@ type SlotProps<View> = {
 /** Шапка сайта: своя, если её выбрали и она выводится, иначе стандартная */
 export function HeaderSlot(props: SlotProps<SiteHeaderView>) {
   const { view, media } = props
-  if (!view.custom) return <SiteHeader view={view} media={media} />
+  if (!view.custom) return <SiteHeader view={view} media={media} preview={props.preview} />
   const rendered: Rendered =
     props.html !== undefined
       ? { html: props.html }
@@ -108,7 +108,7 @@ export function HeaderSlot(props: SlotProps<SiteHeaderView>) {
           {rendered.problem}. На сайте — стандартная шапка
         </p>
       )}
-      <SiteHeader view={{ ...view, custom: null }} media={media} />
+      <SiteHeader view={{ ...view, custom: null }} media={media} preview={props.preview} />
     </>
   )
 }
