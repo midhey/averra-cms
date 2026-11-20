@@ -78,6 +78,25 @@ describe('вход', () => {
     expect(res.status).toBe(200)
   })
 
+  it('слишком большое тело входа отклоняется до разбора JSON', async () => {
+    const res = await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: testOrigins.admin,
+        'x-forwarded-for': freshIp(),
+      },
+      body: JSON.stringify({ email: owner.email, password: 'x'.repeat(40 * 1024) }),
+    })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'payload_too_large',
+        message: 'Тело запроса слишком большое. Уменьшите данные и повторите попытку',
+      },
+    })
+  })
+
   it('неверный пароль — 401 в формате ApiError, по-русски, без cookie', async () => {
     const res = await signIn(owner.email, 'wrong-password-1')
     expect(res.status).toBe(401)
@@ -101,6 +120,7 @@ describe('вход', () => {
     // Даже с верным паролем: перебор остановлен, а не только неудачи
     const blocked = await signIn(owner.email, TEST_PASSWORD, ip)
     expect(blocked.status).toBe(429)
+    expect(blocked.headers.get('retry-after')).toBeTruthy()
     expect(await blocked.json()).toMatchObject({
       error: { code: 'rate_limited', message: expect.stringMatching(/^Слишком много попыток/) },
     })

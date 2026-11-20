@@ -7,8 +7,10 @@ import {
   roleLabels,
   Uuid,
 } from '@averra/schema'
+import { getIP } from 'better-auth/api'
 import type { Context } from 'hono'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { createMiddleware } from 'hono/factory'
 import { z } from 'zod'
 import { canAssign } from '../../auth/access'
@@ -45,6 +47,38 @@ export const INVITES_PER_ADDRESS = { max: 3, windowMs: HOUR_MS } as const
 
 /** Приглашений от одного владельца: не больше 50 в час (на случай, если увели сессию) */
 export const INVITES_PER_INVITER = { max: 50, windowMs: HOUR_MS } as const
+
+/** Ограничение публичных JSON-запросов приглашений по адресу клиента. */
+export const PUBLIC_INVITATION_REQUESTS_PER_IP = { max: 60, windowMs: 60_000 } as const
+
+/** Ограничение перебора одного токена приглашения. */
+export const INVITATION_LOOKUPS_PER_TOKEN = { max: 10, windowMs: 60_000 } as const
+
+const INVITATION_BODY_LIMIT = 32 * 1024
+
+const tooLarge = (c: Context) =>
+  c.json(
+    {
+      error: {
+        code: 'payload_too_large',
+        message: 'Тело запроса слишком большое. Уменьшите данные и повторите попытку',
+      },
+    },
+    413,
+  )
+
+const tooManyPublic = (c: Context<AuthEnv>, retryAfterMs: number) => {
+  c.header('Retry-After', String(Math.max(1, Math.ceil(retryAfterMs / 1000))))
+  return c.json(
+    {
+      error: {
+        code: 'rate_limited',
+        message: 'Слишком много запросов. Повторите попытку позже',
+      },
+    },
+    429,
+  )
+}
 
 /** 429 на приглашение: чей лимит и через сколько минут можно снова */
 function tooManyInvites(message: string, retryAfterMs: number) {
@@ -198,44 +232,68 @@ export function siteInvitationsRoutes({ db, mail, adminUrl }: InvitationDeps) {
 export function invitationsRoutes({ db, auth }: { db: Db; auth: Auth }) {
   const users = usersRepo(db, auth)
   const gone = (problem: Parameters<typeof invitationError>[0]) => invitationError(problem)
+  const byIp = createRateLimiter(PUBLIC_INVITATION_REQUESTS_PER_IP)
+  const byToken = createRateLimiter(INVITATION_LOOKUPS_PER_TOKEN)
+  const publicIp = createMiddleware<AuthEnv>(async (c, next) => {
+    const result = byIp.take(getIP(c.req.raw, auth.options) ?? 'no-trusted-ip')
+    if (!result.allowed) return tooManyPublic(c, result.retryAfterMs)
+    return next()
+  })
 
   return (
     new Hono<AuthEnv>()
-      .post('/lookup', validate('json', InvitationLookup), async (c) => {
-        const result = await lookupInvitation(db, c.req.valid('json').token)
-        if (!result.ok) {
-          const { status, body } = gone(result.problem)
-          return c.json(body, status)
-        }
-        return c.json(result.invitation, 200)
-      })
-
-      .post('/register', validate('json', InvitationRegister), async (c) => {
-        const { token, name, password } = c.req.valid('json')
-        const result = await registerByInvitation(db, {
-          token,
-          name,
-          password,
-          hashPassword: users.hashPassword,
-        })
-        if (!result.ok) {
-          if (result.problem === 'user_exists') {
-            return c.json(
-              {
-                error: {
-                  code: 'user_exists',
-                  message:
-                    'У этого адреса уже есть вход в админку: войдите своим паролем и примите приглашение',
-                },
-              },
-              409,
-            )
+      .post(
+        '/lookup',
+        bodyLimit({ maxSize: INVITATION_BODY_LIMIT, onError: tooLarge }),
+        publicIp,
+        validate('json', InvitationLookup),
+        async (c) => {
+          const token = c.req.valid('json').token
+          const tokenLimit = byToken.take(token)
+          if (!tokenLimit.allowed) return tooManyPublic(c, tokenLimit.retryAfterMs)
+          const result = await lookupInvitation(db, token)
+          // Причина отказа ничего не раскрывает: токен — длинный секрет, и о его судьбе узнаёт только
+          // тот, у кого он есть. Перебор токенов закрывают лимиты выше
+          if (!result.ok) {
+            const { status, body } = gone(result.problem)
+            return c.json(body, status)
           }
-          const { status, body } = gone(result.problem)
-          return c.json(body, status)
-        }
-        return c.json({ siteId: result.siteId, email: result.email }, 201)
-      })
+          return c.json(result.invitation, 200)
+        },
+      )
+
+      .post(
+        '/register',
+        bodyLimit({ maxSize: INVITATION_BODY_LIMIT, onError: tooLarge }),
+        publicIp,
+        validate('json', InvitationRegister),
+        async (c) => {
+          const { token, name, password } = c.req.valid('json')
+          const result = await registerByInvitation(db, {
+            token,
+            name,
+            password,
+            hashPassword: users.hashPassword,
+          })
+          if (!result.ok) {
+            if (result.problem === 'user_exists') {
+              return c.json(
+                {
+                  error: {
+                    code: 'user_exists',
+                    message:
+                      'У этого адреса уже есть вход в админку: войдите своим паролем и примите приглашение',
+                  },
+                },
+                409,
+              )
+            }
+            const { status, body } = gone(result.problem)
+            return c.json(body, status)
+          }
+          return c.json({ siteId: result.siteId, email: result.email }, 201)
+        },
+      )
 
       // Только после входа (не в списке открытых): принимает тот, под кем вошли
       .post('/accept', validate('json', InvitationAccept), async (c) => {

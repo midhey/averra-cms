@@ -57,6 +57,9 @@ export const RESET_REQUESTS_PER_IP_BACKSTOP = {
   max: RESET_REQUESTS_PER_IP.max * 2,
 } as const
 
+/** Лимит попыток сброса пароля на IP для маршрута с нашей проверкой токена. */
+export const RESET_PASSWORD_REQUESTS_PER_IP = { window: 60, max: 10 } as const
+
 export function createAuth({
   db,
   secret,
@@ -138,7 +141,7 @@ export function createAuth({
         // Лимиты по IP и по адресу — свои, в modules/auth/routes.ts. Этот — запасной
         '/request-password-reset': RESET_REQUESTS_PER_IP_BACKSTOP,
         // Токен из 24 случайных символов не подобрать, но и перебирать его незачем
-        '/reset-password': { window: 60, max: 10 },
+        '/reset-password': RESET_PASSWORD_REQUESTS_PER_IP,
       },
     },
     advanced: {

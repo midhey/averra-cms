@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
-import { type Auth, RESET_REQUESTS_PER_IP } from './auth/auth'
+import { type Auth, RESET_PASSWORD_REQUESTS_PER_IP, RESET_REQUESTS_PER_IP } from './auth/auth'
 import { createPasswordConfirmation } from './auth/confirm-password'
 import { type AuthEnv, authenticate } from './auth/middleware'
 import type { Db } from './db/client'
@@ -124,6 +124,10 @@ export function createApp(deps: AppDeps) {
       windowMs: RESET_REQUESTS_PER_IP.window * 1000,
     }),
     byEmail: createRateLimiter(RESET_REQUESTS_PER_EMAIL),
+    byPasswordIp: createRateLimiter({
+      max: RESET_PASSWORD_REQUESTS_PER_IP.max,
+      windowMs: RESET_PASSWORD_REQUESTS_PER_IP.window * 1000,
+    }),
   }
   // Один счётчик неудач на все пути, которыми вошедший проверяет свой пароль по HTTP:
   // повторный пароль для настроек почты и смена пароля. Двух счётчиков хватило бы на вдвое

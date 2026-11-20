@@ -1,6 +1,10 @@
 import { and, eq, like, sql } from 'drizzle-orm'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { RESET_REQUESTS_PER_IP, RESET_REQUESTS_PER_IP_BACKSTOP } from '../../auth/auth'
+import {
+  RESET_PASSWORD_REQUESTS_PER_IP,
+  RESET_REQUESTS_PER_IP,
+  RESET_REQUESTS_PER_IP_BACKSTOP,
+} from '../../auth/auth'
 import { RESET_STORED_PREFIX } from '../../auth/password-reset'
 import { verifications } from '../../db/schema'
 import type { MemoryMail } from '../../mail/memory-mailer'
@@ -200,7 +204,7 @@ describe('полный цикл', () => {
     // Ответ тот же, что дал бы Better Auth, поэтому отличие видно по лимиту: дошли бы запросы
     // до него — одиннадцатый с этого IP получил бы 429
     const ip = freshIp()
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < RESET_PASSWORD_REQUESTS_PER_IP.max; i++) {
       const res = await api.app.request('/api/auth/reset-password', {
         method: 'POST',
         headers: jsonHeaders(ip),
@@ -209,6 +213,13 @@ describe('полный цикл', () => {
       expect(res.status, `запрос ${i + 1}`).toBe(400)
       expect(await res.json()).toMatchObject({ error: { code: 'invalid_token' } })
     }
+    const limited = await api.app.request('/api/auth/reset-password', {
+      method: 'POST',
+      headers: jsonHeaders(ip),
+      body: JSON.stringify({ token: 'not-a-token-last', newPassword: NEW_PASSWORD }),
+    })
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('retry-after')).toBeTruthy()
   })
 
   it('тело без токена — 400 проверки, токен из строки запроса не подставляется', async () => {

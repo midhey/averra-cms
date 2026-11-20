@@ -1,6 +1,8 @@
+import { getIP } from 'better-auth/api'
 import { createMiddleware } from 'hono/factory'
 import type { Db } from '../db/client'
 import { tokensRepo } from '../modules/tokens/repo'
+import { createRateLimiter } from '../rate-limit'
 import {
   type Actor,
   can,
@@ -54,11 +56,27 @@ const publicPostRoutes = [
   /^\/api\/forms\/[^/]+\/[^/]+\/[^/]+$/,
 ]
 
+/** JSON-ответы без входа: ограничиваем чтение снимков и служебных статусов по IP. */
+const publicJsonRoutes = [
+  /^\/api\/health(\/ready)?$/,
+  /^\/api\/sites\/[^/]+\/snapshot$/,
+  /^\/api\/site\/snapshot$/,
+  /^\/api\/password-reset$/,
+]
+
+export const PUBLIC_JSON_REQUESTS_PER_IP = { max: 120, windowMs: 60_000 } as const
+
 function isPublic(method: string, path: string) {
   // /api/auth/* — эндпоинты Better Auth: что там можно без входа, решает он сам
   if (path === '/api/auth' || path.startsWith('/api/auth/')) return true
   if (method === 'POST') return publicPostRoutes.some((route) => route.test(path))
   return (method === 'GET' || method === 'HEAD') && publicRoutes.some((route) => route.test(path))
+}
+
+function isPublicJson(method: string, path: string) {
+  return (
+    (method === 'GET' || method === 'HEAD') && publicJsonRoutes.some((route) => route.test(path))
+  )
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -76,9 +94,27 @@ type AuthenticateOptions = {
  */
 export function authenticate({ db, auth, trustedOrigins }: AuthenticateOptions) {
   const tokens = tokensRepo(db)
+  const publicJsonRateLimit = createRateLimiter(PUBLIC_JSON_REQUESTS_PER_IP)
 
   return createMiddleware<AuthEnv>(async (c, next) => {
-    if (isPublic(c.req.method, c.req.path)) return next()
+    if (isPublic(c.req.method, c.req.path)) {
+      if (isPublicJson(c.req.method, c.req.path)) {
+        const result = publicJsonRateLimit.take(getIP(c.req.raw, auth.options) ?? 'no-trusted-ip')
+        if (!result.allowed) {
+          c.header('Retry-After', String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))))
+          return c.json(
+            {
+              error: {
+                code: 'rate_limited',
+                message: 'Слишком много запросов. Повторите попытку позже',
+              },
+            },
+            429,
+          )
+        }
+      }
+      return next()
+    }
 
     const authorization = c.req.header('authorization')
     if (authorization !== undefined && /^bearer\s/i.test(authorization)) {

@@ -5,7 +5,12 @@ import type { MemoryMail } from '../../mail/memory-mailer'
 import { processOutbox } from '../../mail/worker'
 import { createTestApi, TEST_PASSWORD, type TestApi, testOrigins } from '../../testing'
 import { invitationsRepo } from './repo'
-import { INVITES_PER_ADDRESS, INVITES_PER_INVITER } from './routes'
+import {
+  INVITATION_LOOKUPS_PER_TOKEN,
+  INVITES_PER_ADDRESS,
+  INVITES_PER_INVITER,
+  PUBLIC_INVITATION_REQUESTS_PER_IP,
+} from './routes'
 import { registerByInvitation } from './service'
 
 // Приглашения на сайт: владелец приглашает, человек по ссылке из письма принимает.
@@ -55,10 +60,10 @@ const revoke = (siteId: string, id: string, headers: Headers = owner.headers) =>
 const resend = (siteId: string, id: string, headers: Headers = owner.headers) =>
   app.request(`${invitationsUrl(siteId)}/${id}/resend`, { method: 'POST', headers })
 
-const lookup = (token: string) =>
+const lookup = (token: string, headers: Headers = {}) =>
   app.request('/api/invitations/lookup', {
     method: 'POST',
-    headers: json(),
+    headers: json(headers),
     body: JSON.stringify({ token }),
   })
 
@@ -120,6 +125,73 @@ const signIn = async (email: string, password: string) => {
 
 const errorCode = async (res: Response) =>
   ((await res.json()) as { error: { code: string } }).error.code
+
+describe('публичные ограничения приглашений', () => {
+  it('отклоняет слишком большое JSON-тело до разбора', async () => {
+    const res = await app.request('/api/invitations/lookup', {
+      method: 'POST',
+      headers: json({ 'x-forwarded-for': '198.51.100.240' }),
+      body: JSON.stringify({ token: 'inv_broken', padding: 'x'.repeat(40 * 1024) }),
+    })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'payload_too_large',
+        message: 'Тело запроса слишком большое. Уменьшите данные и повторите попытку',
+      },
+    })
+  })
+
+  it('публичный register отклоняет слишком большое JSON-тело до разбора', async () => {
+    const res = await app.request('/api/invitations/register', {
+      method: 'POST',
+      headers: json({ 'x-forwarded-for': '198.51.100.244' }),
+      body: JSON.stringify({
+        token: 'inv_broken',
+        name: 'x'.repeat(40 * 1024),
+        password: 'invited-password-1',
+      }),
+    })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'payload_too_large',
+        message: 'Тело запроса слишком большое. Уменьшите данные и повторите попытку',
+      },
+    })
+  })
+
+  it('ограничивает lookup по IP и по токену', async () => {
+    const token = `inv_${crypto.randomUUID()}_${'a'.repeat(64)}`
+    for (let index = 0; index < INVITATION_LOOKUPS_PER_TOKEN.max; index += 1) {
+      expect((await lookup(token, { 'x-forwarded-for': '198.51.100.241' })).status).toBe(404)
+    }
+    const tokenLimited = await lookup(token, { 'x-forwarded-for': '198.51.100.241-token' })
+    expect(tokenLimited.status).toBe(429)
+    expect(tokenLimited.headers.get('retry-after')).toBeTruthy()
+
+    const ip = '198.51.100.242'
+    for (let index = 0; index < PUBLIC_INVITATION_REQUESTS_PER_IP.max; index += 1) {
+      await lookup(`inv_${crypto.randomUUID()}_${'b'.repeat(64)}`, {
+        'x-forwarded-for': ip,
+      })
+    }
+    const ipLimited = await lookup(`inv_${crypto.randomUUID()}_${'c'.repeat(64)}`, {
+      'x-forwarded-for': ip,
+    })
+    expect(ipLimited.status).toBe(429)
+    expect(ipLimited.headers.get('retry-after')).toBeTruthy()
+  })
+
+  it('возвращает приглашение по обычному lookup', async () => {
+    const siteId = await newSite()
+    const email = freshEmail()
+    const { token } = await invited(siteId, email)
+    const res = await lookup(token, { 'x-forwarded-for': '198.51.100.243' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ email, role: 'client' })
+  })
+})
 
 describe('права', () => {
   it('без входа — 401: список, приглашение, отзыв и принятие', async () => {

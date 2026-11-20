@@ -1,6 +1,8 @@
 import { CurrentPassword, ForgotPassword, NewPassword, ResetPasswordToken } from '@averra/schema'
 import { getIP } from 'better-auth/api'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
+import { createMiddleware } from 'hono/factory'
 import { z } from 'zod'
 import { ACCOUNT_DISABLED_MESSAGE, type Auth, CLOSED_AUTH_PATHS } from '../../auth/auth'
 import type { PasswordConfirmations } from '../../auth/confirm-password'
@@ -48,6 +50,19 @@ const fallbackMessages = new Map([
   [404, 'Не найдено'],
 ])
 
+const AUTH_JSON_BODY_LIMIT = 32 * 1024
+
+const bodyTooLarge = (c: Context) =>
+  c.json(
+    {
+      error: {
+        code: 'payload_too_large',
+        message: 'Тело запроса слишком большое. Уменьшите данные и повторите попытку',
+      },
+    },
+    413,
+  )
+
 async function asApiError(res: Response) {
   if (res.status < 400) return res
   const body = BetterAuthError.safeParse(
@@ -61,12 +76,18 @@ async function asApiError(res: Response) {
     messages.get(body.data?.code ?? '') ?? fallbackMessages.get(res.status) ?? 'Ошибка входа'
   if (res.status === 429) {
     code = 'rate_limited'
-    const retryAfter = Number(res.headers.get('x-retry-after')) || 10
+    const retryAfter =
+      Number(res.headers.get('retry-after') ?? res.headers.get('x-retry-after')) || 10
     message = `Слишком много попыток. Подождите ${retryAfter} с и попробуйте снова`
   }
   const headers = new Headers(res.headers)
   headers.set('content-type', 'application/json')
   headers.delete('content-length')
+  if (res.status === 429) {
+    const retryAfter =
+      Number(res.headers.get('retry-after') ?? res.headers.get('x-retry-after')) || 10
+    headers.set('Retry-After', String(Math.max(1, Math.ceil(retryAfter))))
+  }
   return new Response(JSON.stringify({ error: { code, message } }), {
     status: res.status,
     headers,
@@ -94,7 +115,7 @@ type AuthRoutesDeps = {
    * попадает в счётчик, только если IP-лимит запрос пропустил, — иначе один клиент, перебирая
    * адреса, наполнял бы счётчик адресов без ограничения
    */
-  resetLimits: { byIp: RateLimiter; byEmail: RateLimiter }
+  resetLimits: { byIp: RateLimiter; byEmail: RateLimiter; byPasswordIp: RateLimiter }
   /**
    * Запрос сброса отвечает не раньше, чем через столько миллисекунд. Без этого существующий
    * адрес отвечал бы заметно дольше (запись токена и письма), и по времени было бы видно,
@@ -112,6 +133,10 @@ function tooManyResets(whose: string, retryAfterMs: number) {
       message: `Слишком много запросов сброса ${whose}. Подождите ${minutes} мин и попробуйте снова`,
     },
   }
+}
+
+function setRetryAfter(c: Context<AuthEnv>, retryAfterMs: number) {
+  c.header('Retry-After', String(Math.max(1, Math.ceil(retryAfterMs / 1000))))
 }
 
 /**
@@ -205,6 +230,16 @@ export function authRoutes({
   resetLimits,
   resetResponseMs,
 }: AuthRoutesDeps) {
+  const resetPasswordRateLimit = createMiddleware<AuthEnv>(async (c, next) => {
+    const ip = getIP(c.req.raw, auth.options) ?? 'no-trusted-ip'
+    const result = resetLimits.byPasswordIp.take(ip)
+    if (!result.allowed) {
+      setRetryAfter(c, result.retryAfterMs)
+      return c.json(tooManyResets('с вашего адреса', result.retryAfterMs), 429)
+    }
+    return next()
+  })
+
   return (
     new Hono<AuthEnv>()
       // Кто вошёл: имя для шапки админки и роль. Токен в админку не ходит, но ответ
@@ -227,38 +262,48 @@ export function authRoutes({
       // «Забыли пароль?» Перед Better Auth: своя схема (только почта, без redirectTo), почта
       // выключена — 503 для любого адреса, лимиты по IP и на адрес, одинаковый ответ в одно время.
       // Письмо ставит в очередь sendResetPassword (auth/auth.ts)
-      .post('/auth/request-password-reset', validate('json', ForgotPassword), async (c) => {
-        const started = Date.now()
-        const status = mail.runtime.status()
-        if (!status.enabled) return c.json(mailDisabled(status.reason), 503)
-        const { email } = c.req.valid('json')
-        // IP — так же, как его видит лимит Better Auth (X-Forwarded-For ставит index.ts).
-        // Не нашли — общий счётчик, как у Better Auth: лучше общий лимит, чем никакого
-        const ip = getIP(c.req.raw, auth.options) ?? 'no-trusted-ip'
-        const byIp = resetLimits.byIp.take(ip)
-        if (!byIp.allowed) return c.json(tooManyResets('с вашего адреса', byIp.retryAfterMs), 429)
-        // Адрес — только после IP: отбитые по IP запросы счётчик адресов не растят.
-        // Считаем любой адрес, есть он в базе или нет: иначе 429 выдавал бы существующие
-        const byEmail = resetLimits.byEmail.take(email)
-        if (!byEmail.allowed) {
-          return c.json(tooManyResets('для этого адреса', byEmail.retryAfterMs), 429)
-        }
-        // Тело собираем заново: в Better Auth уходит только проверенная почта
-        const res = await asApiError(await auth.handler(withJsonBody(c.req.raw, { email })))
-        const wait = resetResponseMs - (Date.now() - started)
-        if (wait > 0) await sleep(wait)
-        // Запасной лимит Better Auth (auth/auth.ts) выше нашего и сработать не должен. Если всё же
-        // сработал — ответ тот же, что у нашего лимита по IP, а не второй формат. Это отказ
-        // по IP, поэтому попытка адреса возвращается: запрос, отбитый по IP, в счётчик адресов
-        // не попадает, какой бы из двух лимитов его ни отбил
-        if (res.status === 429) {
-          resetLimits.byEmail.refund(email)
-          const retryAfterMs = (Number(res.headers.get('x-retry-after')) || 60) * 1000
-          return c.json(tooManyResets('с вашего адреса', retryAfterMs), 429)
-        }
-        if (!res.ok) return res
-        return c.json(RESET_REQUESTED, 200)
-      })
+      .post(
+        '/auth/request-password-reset',
+        bodyLimit({ maxSize: AUTH_JSON_BODY_LIMIT, onError: bodyTooLarge }),
+        validate('json', ForgotPassword),
+        async (c) => {
+          const started = Date.now()
+          const status = mail.runtime.status()
+          if (!status.enabled) return c.json(mailDisabled(status.reason), 503)
+          const { email } = c.req.valid('json')
+          // IP — так же, как его видит лимит Better Auth (X-Forwarded-For ставит index.ts).
+          // Не нашли — общий счётчик, как у Better Auth: лучше общий лимит, чем никакого
+          const ip = getIP(c.req.raw, auth.options) ?? 'no-trusted-ip'
+          const byIp = resetLimits.byIp.take(ip)
+          if (!byIp.allowed) {
+            setRetryAfter(c, byIp.retryAfterMs)
+            return c.json(tooManyResets('с вашего адреса', byIp.retryAfterMs), 429)
+          }
+          // Адрес — только после IP: отбитые по IP запросы счётчик адресов не растят.
+          // Считаем любой адрес, есть он в базе или нет: иначе 429 выдавал бы существующие
+          const byEmail = resetLimits.byEmail.take(email)
+          if (!byEmail.allowed) {
+            setRetryAfter(c, byEmail.retryAfterMs)
+            return c.json(tooManyResets('для этого адреса', byEmail.retryAfterMs), 429)
+          }
+          // Тело собираем заново: в Better Auth уходит только проверенная почта
+          const res = await asApiError(await auth.handler(withJsonBody(c.req.raw, { email })))
+          const wait = resetResponseMs - (Date.now() - started)
+          if (wait > 0) await sleep(wait)
+          // Запасной лимит Better Auth (auth/auth.ts) выше нашего и сработать не должен. Если всё же
+          // сработал — ответ тот же, что у нашего лимита по IP, а не второй формат. Это отказ
+          // по IP, поэтому попытка адреса возвращается: запрос, отбитый по IP, в счётчик адресов
+          // не попадает, какой бы из двух лимитов его ни отбил
+          if (res.status === 429) {
+            resetLimits.byEmail.refund(email)
+            const retryAfterMs = (Number(res.headers.get('x-retry-after')) || 60) * 1000
+            setRetryAfter(c, retryAfterMs)
+            return c.json(tooManyResets('с вашего адреса', retryAfterMs), 429)
+          }
+          if (!res.ok) return res
+          return c.json(RESET_REQUESTED, 200)
+        },
+      )
 
       // Ссылка Better Auth вида /api/auth/reset-password/<токен> несёт токен в пути, а путь
       // пишется в лог запросов. Наша ссылка ведёт сразу в админку (токен во фрагменте),
@@ -269,49 +314,65 @@ export function authRoutes({
       // Better Auth ищет запись не только по хешу токена, но и по строке как есть (см.
       // auth/password-reset.ts): всё, что не похоже на его токен, до поиска не доходит.
       // Кривой токен для человека — та же мёртвая ссылка, ответ тот же, что у Better Auth
-      .post('/auth/reset-password', validate('json', ResetPasswordBody), async (c) => {
-        const { token, newPassword } = c.req.valid('json')
-        if (!ResetPasswordToken.safeParse(token).success) {
-          return c.json({ error: { code: 'invalid_token', message: INVALID_RESET_LINK } }, 400)
-        }
-        return asApiError(await auth.handler(withJsonBody(c.req.raw, { token, newPassword })))
-      })
+      .post(
+        '/auth/reset-password',
+        bodyLimit({ maxSize: AUTH_JSON_BODY_LIMIT, onError: bodyTooLarge }),
+        resetPasswordRateLimit,
+        validate('json', ResetPasswordBody),
+        async (c) => {
+          const { token, newPassword } = c.req.valid('json')
+          if (!ResetPasswordToken.safeParse(token).success) {
+            return c.json({ error: { code: 'invalid_token', message: INVALID_RESET_LINK } }, 400)
+          }
+          return asApiError(await auth.handler(withJsonBody(c.req.raw, { token, newPassword })))
+        },
+      )
 
       // Смена своего пароля (Better Auth, /change-password). Текущий пароль Better Auth проверяет
       // под общим счётчиком неудач (auth/confirm-password.ts) — тем же, что у повторного пароля
       // для настроек почты: иначе уведённая сессия подбирала бы пароль здесь, с лимитом только
       // по IP. Остальные входы пользователя завершаются, этот получает новую cookie
-      .post('/auth/change-password', validate('json', ChangePasswordBody), async (c) => {
-        // Как у всех наших изменяющих маршрутов с cookie (auth/middleware.ts): только из админки.
-        // Better Auth проверяет Origin и сам, но уже внутри попытки, а в тестах (isTest) — никогда
-        const origin = c.req.header('origin')
-        if (!origin || !trustedOrigins.includes(origin)) {
-          return c.json(forbidden('Запрос пришёл не из админки'), 403)
-        }
-        const { currentPassword, newPassword } = c.req.valid('json')
-        // Кто вошёл — без продления сессии: если пора, её продлит сам Better Auth в ответе
-        const session = await auth.api.getSession({
-          headers: c.req.raw.headers,
-          query: { disableRefresh: true },
-        })
-        if (!session) return c.json(unauthorized(), 401)
-        const outcome = await passwords.attempt(session.user.id, async () => {
-          const res = await auth.handler(
-            withJsonBody(c.req.raw, { currentPassword, newPassword, revokeOtherSessions: true }),
-          )
-          return { wrongPassword: await isWrongPassword(res), result: res }
-        })
-        if (!outcome.ok) return c.json(outcome.body, outcome.status)
-        const res = await asApiError(outcome.result)
-        return res.ok ? withBody(res, PASSWORD_CHANGED) : res
-      })
+      .post(
+        '/auth/change-password',
+        bodyLimit({ maxSize: AUTH_JSON_BODY_LIMIT, onError: bodyTooLarge }),
+        validate('json', ChangePasswordBody),
+        async (c) => {
+          // Как у всех наших изменяющих маршрутов с cookie (auth/middleware.ts): только из админки.
+          // Better Auth проверяет Origin и сам, но уже внутри попытки, а в тестах (isTest) — никогда
+          const origin = c.req.header('origin')
+          if (!origin || !trustedOrigins.includes(origin)) {
+            return c.json(forbidden('Запрос пришёл не из админки'), 403)
+          }
+          const { currentPassword, newPassword } = c.req.valid('json')
+          // Кто вошёл — без продления сессии: если пора, её продлит сам Better Auth в ответе
+          const session = await auth.api.getSession({
+            headers: c.req.raw.headers,
+            query: { disableRefresh: true },
+          })
+          if (!session) return c.json(unauthorized(), 401)
+          const outcome = await passwords.attempt(session.user.id, async () => {
+            const res = await auth.handler(
+              withJsonBody(c.req.raw, { currentPassword, newPassword, revokeOtherSessions: true }),
+            )
+            return { wrongPassword: await isWrongPassword(res), result: res }
+          })
+          if (!outcome.ok) return c.json(outcome.body, outcome.status)
+          const res = await asApiError(outcome.result)
+          return res.ok ? withBody(res, PASSWORD_CHANGED) : res
+        },
+      )
 
       // Вход, выход и сессии — Better Auth (/api/auth/sign-in/email, /api/auth/sign-out и т.д.).
       // Сброс и смена пароля — только через обёртки выше, а закрытые пути (CLOSED_AUTH_PATHS) —
       // никак: варианты их написания сюда не пропускаем
-      .on(['GET', 'POST'], '/auth/*', async (c) => {
-        if (isGuardedPathVariant(c.req.url)) return c.json(notFound('Не найдено'), 404)
-        return asApiError(await auth.handler(c.req.raw))
-      })
+      .on(
+        ['GET', 'POST'],
+        '/auth/*',
+        bodyLimit({ maxSize: AUTH_JSON_BODY_LIMIT, onError: bodyTooLarge }),
+        async (c) => {
+          if (isGuardedPathVariant(c.req.url)) return c.json(notFound('Не найдено'), 404)
+          return asApiError(await auth.handler(c.req.raw))
+        },
+      )
   )
 }
